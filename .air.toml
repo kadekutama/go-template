@@ -15,7 +15,7 @@ tmp_dir = "tmp"
   send_interrupt = false
   kill_delay = "0s"
   include_ext = ["go", "tpl", "tmpl", "html"]
-  exclude_dir = ["bin", "vendor", "test", "docs", "tmp", "assets", "node_modules"]
+  exclude_dir = ["bin", "vendor", "test", "docs", "tmp", "assets", "node_modules", ".git"]
   include_dir = []
   # Extra watched inputs beyond Go sources (E00-T04-R01: config/*.yaml).
   include_file = ["config/.*\\.yaml"]

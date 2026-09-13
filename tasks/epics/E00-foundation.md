@@ -244,6 +244,6 @@ harness-specific memory are not portable coordination mechanisms.
 ## Acceptance Criteria
 
 - [x] E00-T00 … E00-T08 all `completed` (count 14 SP in `tasks/tracking/PROGRESS.md`)
-- [ ] `make build-all` produces 5 binaries; `make lint` is clean (deferred to first CI run — no toolchain in sandbox; see task evidence)
-- [ ] CI lint+build is green on a test PR (deferred — observe at repo Actions page)
-- [ ] SDD gate G1 checks pass — `tasks/tracking/GATES.md#G1` (pending: live build/lint/CI + E01-T02/T03 items)
+- [x] `make build-all` produces 5 binaries; `make lint` is clean (verified with live Go 1.27.1 + golangci-lint v2.13.2 + shellcheck)
+- [x] CI lint+build is green on a test PR (verified on GitHub Actions, PR #1 merged)
+- [ ] SDD gate G1 checks pass — `tasks/tracking/GATES.md#G1` (pending: E01-T02 fx registry + E01-T03 config items)

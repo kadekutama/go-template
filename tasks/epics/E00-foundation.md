@@ -190,7 +190,7 @@ so code tasks can link ADRs and layer docs as they go.
 ---
 
 ### E00-T07: scripts/ automation package (build, test, generate, release, security)
-**Status:** pending
+**Status:** completed
 **Background:** The Makefile (E00-T02) references scripts that must actually
 exist; several epics assume them (db scripts in E07-T05, openapi in E11-T08,
 mocks in E06-T06). Centralizing here prevents each epic inventing its own.

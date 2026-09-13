@@ -102,7 +102,7 @@ later epic and by CI. Standardizes what "done" means for verification steps.
 ---
 
 ### E00-T03: Strict golangci-lint configuration
-**Status:** pending
+**Status:** completed
 **Background:** Code-quality gate enforced in CI from day one (`SPEC.md §16`).
 Catches `errcheck`, `gosec`, races in config, and style drift before they spread;
 the implementation conventions are recorded in `docs/development/go-conventions.md`.

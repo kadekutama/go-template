@@ -1,0 +1,30 @@
+# CODEOWNERS for go-template (E00-T00)
+
+# Owner-approved boundary: standalone `go-template` repository, default branch
+# `main` (owner decision 2026-09-13). Shared origin:
+# https://github.com/kadekutama/go-template
+
+* @kadekutama
+
+# Task coordination (claims serialize concurrent work; earliest merged wins)
+/tasks/claims/ @kadekutama
+/tasks/specs/ @kadekutama
+/tasks/evidence/ @kadekutama
+/tasks/handoffs/ @kadekutama
+/tasks/epics/ @kadekutama
+/tasks/tracking/ @kadekutama
+
+# Ledger-critical: migrations change money-safety boundaries (E07)
+/internal/infrastructure/database/migration/ @kadekutama
+
+# Generated contracts have one source-of-truth owner (consumers do not edit)
+/api/ @kadekutama
+
+# Architecture decisions (deviations require an ADR before implementation)
+/docs/architecture/ @kadekutama
+/docs/ledger-core.md @kadekutama
+SPEC.md @kadekutama
+
+# Delivery and security gates
+/.github/workflows/ @kadekutama
+/deployments/ @kadekutama

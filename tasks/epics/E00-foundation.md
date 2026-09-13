@@ -125,7 +125,7 @@ the implementation conventions are recorded in `docs/development/go-conventions.
 ---
 
 ### E00-T04: Hot-reload and local dev scripts
-**Status:** pending
+**Status:** completed
 **Background:** Developer velocity for `make dev-up` loops used from E01 onward.
 **Files:**
 - Create: `.air.toml`, `scripts/dev/dev-up.sh`, `scripts/dev/dev-down.sh`, `scripts/dev/dev-logs.sh`

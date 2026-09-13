@@ -14,4 +14,9 @@ command -v go >/dev/null 2>&1 || { echo "missing tool: go toolchain (https://go.
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
+if ! find internal pkg -name "*.go" 2>/dev/null | grep -q .; then
+  echo "no test packages in internal/... or pkg/... yet (arriving in E01+)"
+  exit 0
+fi
+
 exec go test ./internal/... ./pkg/... "$@"

@@ -1,3 +1,7 @@
+SHELL := /usr/bin/env bash
+GOPATH_BIN := $(shell go env GOPATH 2>/dev/null)/bin
+export PATH := $(GOPATH_BIN):$(PATH)
+
 # Binaries and tools (override with `make TOOL=...` only in local shell, never committed)
 GO ?= go
 GOLANGCI_LINT ?= golangci-lint

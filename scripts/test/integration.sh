@@ -15,4 +15,9 @@ command -v docker >/dev/null 2>&1 || { echo "missing tool: docker (daemon requir
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
+if ! find test/integration -name "*.go" 2>/dev/null | grep -q .; then
+  echo "no integration test packages in test/integration/... yet (arriving in E07+)"
+  exit 0
+fi
+
 exec go test ./test/integration/... "$@"

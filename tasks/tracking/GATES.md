@@ -11,13 +11,13 @@ the capability is not stable or externally exposed until its gate passes.
 **Status:** pending
 **Promotes capability for:** ledger/domain slice dependencies
 **Checks:**
-- [ ] `make build-all` succeeds (5 stub binaries).
-- [ ] `make lint` clean.
-- [ ] CI lint+build green on a test PR.
+- [x] `make build-all` succeeds (5 stub binaries).
+- [x] `make lint` clean.
+- [x] CI lint+build green on a test PR.
 - [ ] `fx.ValidateApp` passes (no cycles) — `E01-T02`.
 - [ ] Bad config fails with all violations listed — `E01-T03`.
-- [ ] `python3 tasks/scripts/check-tasks.py --format --graph --sdd` passes.
-- [ ] SDD lifecycle fixture tests prove cycle, claim, progress, evidence, and
+- [x] `python3 tasks/scripts/check-tasks.py --format --graph --sdd` passes.
+- [x] SDD lifecycle fixture tests prove cycle, claim, progress, evidence, and
   handoff failures are rejected — `E00-T08`.
 
 ## G2 — Domain complete

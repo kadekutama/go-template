@@ -14,7 +14,7 @@
 ## Tasks
 
 ### E00-T00: Establish repository boundary and shared Git baseline
-**Status:** blocked
+**Status:** completed
 **Background:** The repository owner approved `go-template/` as a standalone
 repository with `main` as its default branch on 2026-09-13 and supplied the
 shared remote `https://github.com/kadekutama/go-template`. Baseline commits

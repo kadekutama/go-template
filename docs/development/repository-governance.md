@@ -18,15 +18,16 @@ from them.
 ## 2. Remote and default branch
 
 ```bash
-git remote add origin https://github.com/kadekutama/go-template
-git push -u origin main
-git remote get-url origin   # must print the owner-approved URL
+git remote get-url origin   # must print https://github.com/kadekutama/go-template
 git rev-parse --verify HEAD # full baseline commit
 git rev-parse --show-toplevel
 ```
 
-The origin above is the shared claim-serialization path. Push/PR workflow and
-multi-harness claim racing activate through it.
+The origin above is the shared claim-serialization path. Pushing requires an
+authenticated GitHub identity (never stored in tracked files). Note: remote
+`main` (`2d7c5b7` "Initial commit") shares no history with the local planning
+baseline (`6eca386`/`b51d5c9`); reconciling the two `main` lines needs an
+explicit owner decision — never force-push without one.
 
 ## 3. Branch and worktree naming
 

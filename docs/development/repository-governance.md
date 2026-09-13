@@ -18,16 +18,15 @@ from them.
 ## 2. Remote and default branch
 
 ```bash
-git remote add origin <owner-remote-url>
+git remote add origin https://github.com/kadekutama/go-template
 git push -u origin main
 git remote get-url origin   # must print the owner-approved URL
 git rev-parse --verify HEAD # full baseline commit
 git rev-parse --show-toplevel
 ```
 
-Until the owner supplies `<owner-remote-url>`, the serialized local `main`
-branch is the approved coordination stub. Push/PR workflow and multi-harness
-claim racing activate once origin exists.
+The origin above is the shared claim-serialization path. Push/PR workflow and
+multi-harness claim racing activate through it.
 
 ## 3. Branch and worktree naming
 
@@ -61,8 +60,8 @@ claim racing activate once origin exists.
 | Delivery | `.github/workflows/`, `deployments/` | repository owner |
 | Everything else (default) | `*` | repository owner |
 
-Replace `@repository-owner` with the real GitHub user/team when origin is
-created. Architectural deviations require an ADR BEFORE implementation; never
+Replace `@kadekutama` with an additional GitHub user/team if merge authority
+is ever delegated. Architectural deviations require an ADR BEFORE implementation; never
 let code be the only record of a decision.
 
 ## 6. Fresh-checkout proof (E00-T00-R05/S02)

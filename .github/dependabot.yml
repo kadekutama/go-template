@@ -1,0 +1,8 @@
+# Weekly Go-module dependency updates (E00-T05). No auto-merge.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

@@ -143,7 +143,7 @@ the implementation conventions are recorded in `docs/development/go-conventions.
 ---
 
 ### E00-T05: Minimal CI gate (lint + build) + dependency automation
-**Status:** pending
+**Status:** completed
 **Background:** The full pipeline comes in E17, but lint+build must gate PRs
 from the first code change. Dependency automation keeps the reproducible target
 pins current and reviewable from day one.

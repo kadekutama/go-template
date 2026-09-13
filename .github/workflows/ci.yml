@@ -1,0 +1,44 @@
+# Minimal CI gate: lint + build on every PR (E00-T05).
+#
+# NOTE (E17): the full pipeline matrix (integration, contract, security, SBOM,
+# staging deploy) EXTENDS this file. Do NOT create a second workflow file.
+
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  lint:
+    name: lint+build gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.1"
+          cache: true
+
+      - name: Verify modules
+        run: go mod verify
+
+      - name: Check module tidiness
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
+      - name: Lint
+        run: make lint
+
+      - name: Build all binaries
+        run: make build-all

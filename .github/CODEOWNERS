@@ -1,0 +1,31 @@
+# CODEOWNERS for go-template (E00-T00)
+
+# Owner-approved boundary: standalone `go-template` repository, default branch
+# `main` (owner decision 2026-09-13). Replace `@repository-owner` with the real
+# GitHub user/team when the shared origin is created; until then the serialized
+# local `main` branch plus the task-claim policy is the merge authority.
+
+* @repository-owner
+
+# Task coordination (claims serialize concurrent work; earliest merged wins)
+/tasks/claims/ @repository-owner
+/tasks/specs/ @repository-owner
+/tasks/evidence/ @repository-owner
+/tasks/handoffs/ @repository-owner
+/tasks/epics/ @repository-owner
+/tasks/tracking/ @repository-owner
+
+# Ledger-critical: migrations change money-safety boundaries (E07)
+/internal/infrastructure/database/migration/ @repository-owner
+
+# Generated contracts have one source-of-truth owner (consumers do not edit)
+/api/ @repository-owner
+
+# Architecture decisions (deviations require an ADR before implementation)
+/docs/architecture/ @repository-owner
+/docs/ledger-core.md @repository-owner
+SPEC.md @repository-owner
+
+# Delivery and security gates
+/.github/workflows/ @repository-owner
+/deployments/ @repository-owner

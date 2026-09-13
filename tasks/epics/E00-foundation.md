@@ -14,11 +14,11 @@
 ## Tasks
 
 ### E00-T00: Establish repository boundary and shared Git baseline
-**Status:** pending
+**Status:** blocked
 **Background:** The repository owner approved `go-template/` as a standalone
-repository with `main` as its default branch on 2026-09-13. The checkout still
-has no resolvable baseline commit or remote, and the current Git metadata mount
-is read-only, so task claims and takeovers cannot yet name a trustworthy base.
+repository with `main` as its default branch on 2026-09-13. Baseline commits
+`6eca386`/`b51d5c9` exist; the shared remote URL is still pending from the
+owner, so the claim-race exercise (S03) is the remaining completion step.
 **Files:**
 - Create/maintain after the boundary decision: `.github/CODEOWNERS`,
   `docs/development/repository-governance.md`; configure Git metadata outside

@@ -170,7 +170,7 @@ pins current and reviewable from day one.
 ---
 
 ### E00-T06: Seed the docs skeleton for later epics
-**Status:** pending
+**Status:** completed
 **Background:** E18 fills content, but directories + index files must exist now
 so code tasks can link ADRs and layer docs as they go.
 **Files:**

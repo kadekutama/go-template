@@ -16,13 +16,13 @@ linters:
     - goconst
     - gocritic
     - gocyclo
-    - gofmt
-    - goimports
     - ineffassign
     - misspell
     - unconvert
     - unparam
     - unused
+    # NOTE (v2 schema): gofmt/goimports are formatters, not linters — they
+    # are enforced in the `formatters:` section below, not here.
   settings:
     gocyclo:
       min-complexity: 12
@@ -35,7 +35,8 @@ run:
   tests: false
 output:
   formats:
-    - colored-line-number
+    colored-line-number:
+      path: stdout
 formatters:
   enable:
     - gofmt

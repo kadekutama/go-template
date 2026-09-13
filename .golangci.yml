@@ -1,0 +1,45 @@
+# golangci-lint strict configuration (E00-T03).
+# Referenced by `make lint` and `.github/workflows/ci.yml` (E00-T05).
+# Schema: golangci-lint v2 (`linters:` mapping). Zero exclusions by policy:
+# any future exclusion MUST name its owning task/ADR.
+version: "2"
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - gosec
+    - bodyclose
+    - noctx
+    - rowserrcheck
+    - sqlclosecheck
+    - goconst
+    - gocritic
+    - gocyclo
+    - gofmt
+    - goimports
+    - ineffassign
+    - misspell
+    - unconvert
+    - unparam
+    - unused
+  settings:
+    gocyclo:
+      min-complexity: 12
+issues:
+  # Every issue fails the run: no warnings-only mode.
+  max-issues-per-linter: 0
+  max-same-issues: 0
+run:
+  timeout: 10m
+  tests: false
+output:
+  formats:
+    - colored-line-number
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes: example.com/go-template

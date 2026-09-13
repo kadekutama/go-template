@@ -1,0 +1,30 @@
+{
+  "version": "1.0",
+  "permissions": {
+    "domain-expert": {
+      "read": ["AGENTS.md", "internal/domain/**", "SPEC.md", "docs/ledger-core.md", "docs/repository-audit.md", "docs/development/go-conventions.md", "docs/domain/**", "docs/money-flow.md", "docs/domain-events.md", "tasks/SDD.md", "tasks/SDD-INTEROP.md", "tasks/EPICS.md", "tasks/DELIVERY-SLICES.md", "tasks/specs/**", "tasks/claims/**", "tasks/evidence/**", "tasks/handoffs/**", "tasks/epics/E02-ledger-domain.md", "tasks/epics/E03-money-movement.md", "tasks/epics/E04-compliance.md", "tasks/epics/E05-tenancy.md"],
+      "write": ["internal/domain/**", "docs/domain/**", "docs/domain-events.md", "docs/architecture/**", "tasks/specs/**", "tasks/claims/**", "tasks/evidence/**", "tasks/handoffs/**", "tasks/epics/E02-ledger-domain.md", "tasks/epics/E03-money-movement.md", "tasks/epics/E04-compliance.md", "tasks/epics/E05-tenancy.md", "tasks/tracking/PROGRESS.md"],
+      "tools": ["read", "write", "edit", "glob", "grep", "bash"]
+    },
+    "api-designer": {
+      "read": ["AGENTS.md", "cmd/**", "pkg/**", "api/**", "internal/application/**", "SPEC.md", "docs/ledger-core.md", "docs/repository-audit.md", "docs/development/go-conventions.md", "docs/api/**", "docs/api-contracts.md", "tasks/SDD.md", "tasks/SDD-INTEROP.md", "tasks/EPICS.md", "tasks/DELIVERY-SLICES.md", "tasks/specs/**", "tasks/claims/**", "tasks/evidence/**", "tasks/handoffs/**", "tasks/epics/E06-application.md", "tasks/epics/E11-rest-api.md", "tasks/epics/E12-grpc-api.md", "tasks/epics/E13-graphql-api.md", "tasks/epics/E14-workers.md"],
+      "write": ["cmd/**", "pkg/**", "api/**", "internal/application/**", "docs/api/**", "docs/api-contracts.md", "docs/architecture/**", "tasks/specs/**", "tasks/claims/**", "tasks/evidence/**", "tasks/handoffs/**", "tasks/epics/E06-application.md", "tasks/epics/E11-rest-api.md", "tasks/epics/E12-grpc-api.md", "tasks/epics/E13-graphql-api.md", "tasks/epics/E14-workers.md", "tasks/tracking/PROGRESS.md"],
+      "tools": ["read", "write", "edit", "glob", "grep", "bash"]
+    },
+    "db-engineer": {
+      "read": ["AGENTS.md", "internal/infrastructure/**", "config/**", "SPEC.md", "docs/ledger-core.md", "docs/repository-audit.md", "docs/development/go-conventions.md", "docs/data-flow.md", "tasks/SDD.md", "tasks/SDD-INTEROP.md", "tasks/EPICS.md", "tasks/DELIVERY-SLICES.md", "tasks/specs/**", "tasks/claims/**", "tasks/evidence/**", "tasks/handoffs/**", "tasks/epics/E07-persistence.md", "tasks/epics/E08-cache-messaging.md", "tasks/epics/E09-identity-security.md", "tasks/epics/E10-integrations.md"],
+      "write": ["internal/infrastructure/**", "config/**", "docs/data-flow.md", "docs/architecture/**", "tasks/specs/**", "tasks/claims/**", "tasks/evidence/**", "tasks/handoffs/**", "tasks/epics/E07-persistence.md", "tasks/epics/E08-cache-messaging.md", "tasks/epics/E09-identity-security.md", "tasks/epics/E10-integrations.md", "tasks/tracking/PROGRESS.md"],
+      "tools": ["read", "write", "edit", "glob", "grep", "bash"]
+    },
+    "devops-engineer": {
+      "read": ["AGENTS.md", "deployments/**", ".github/**", "scripts/**", "SPEC.md", "docs/ledger-core.md", "docs/repository-audit.md", "docs/development/go-conventions.md", "tasks/SDD.md", "tasks/SDD-INTEROP.md", "tasks/EPICS.md", "tasks/DELIVERY-SLICES.md", "tasks/specs/**", "tasks/claims/**", "tasks/evidence/**", "tasks/handoffs/**", "tasks/epics/E00-foundation.md", "tasks/epics/E01-platform-core.md", "tasks/epics/E15-observability.md", "tasks/epics/E17-delivery.md", "tasks/epics/E19-hardening-release.md"],
+      "write": ["deployments/**", ".github/**", "scripts/**", "docs/development/**", "docs/architecture/**", "tasks/SDD.md", "tasks/SDD-INTEROP.md", "tasks/specs/**", "tasks/claims/**", "tasks/evidence/**", "tasks/handoffs/**", "tasks/scripts/check-tasks.py", "AGENTS.md", ".opencode/agents/**", ".opencode/skills/**", ".opencode/permissions/**", "tasks/epics/E00-foundation.md", "tasks/epics/E01-platform-core.md", "tasks/epics/E15-observability.md", "tasks/epics/E17-delivery.md", "tasks/epics/E19-hardening-release.md", "tasks/tracking/PROGRESS.md"],
+      "tools": ["read", "write", "edit", "glob", "grep", "bash"]
+    },
+    "test-engineer": {
+      "read": ["AGENTS.md", "test/**", "scripts/test/**", "SPEC.md", "docs/ledger-core.md", "docs/repository-audit.md", "docs/development/go-conventions.md", "tasks/SDD.md", "tasks/SDD-INTEROP.md", "tasks/EPICS.md", "tasks/DELIVERY-SLICES.md", "tasks/specs/**", "tasks/claims/**", "tasks/evidence/**", "tasks/handoffs/**", "tasks/tracking/GATES.md", "tasks/epics/E16-verification.md"],
+      "write": ["test/**", "scripts/test/**", "docs/architecture/**", "tasks/specs/**", "tasks/claims/**", "tasks/evidence/**", "tasks/handoffs/**", "tasks/epics/E16-verification.md", "tasks/tracking/PROGRESS.md"],
+      "tools": ["read", "write", "edit", "glob", "grep", "bash"]
+    }
+  }
+}

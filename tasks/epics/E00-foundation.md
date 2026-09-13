@@ -79,7 +79,7 @@ Without this, every agent invents its own layout and imports break.
 ---
 
 ### E00-T02: Makefile with standard targets
-**Status:** pending
+**Status:** completed
 **Background:** One entry point for build/test/lint/dev workflows used by every
 later epic and by CI. Standardizes what "done" means for verification steps.
 **Files:**

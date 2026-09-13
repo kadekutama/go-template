@@ -1,0 +1,108 @@
+# Binaries and tools (override with `make TOOL=...` only in local shell, never committed)
+GO ?= go
+GOLANGCI_LINT ?= golangci-lint
+BIN_DIR := bin
+MIGRATE ?= migrate
+
+# Five binaries from E00-T01 (SPEC.md §4).
+BINARIES := rest-api grpc-api graphql-api cron consumer
+
+# Script-backed targets fail loudly (never silently) while the owning task
+# (E00-T04/E00-T07/E07-T05/...) has not landed its script yet.
+define need-script
+@test -x "$1" || (echo "missing script: $1 (not yet implemented; see tasks/epics)" >&2; exit 1)
+endef
+
+.PHONY: help
+help: ## List every target with a one-line description.
+	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
+
+.PHONY: build
+build: ## Build all packages (no output binaries).
+	$(GO) build ./...
+
+.PHONY: build-all
+build-all: ## Build the 5 binaries into bin/.
+	@mkdir -p $(BIN_DIR)
+	@for b in $(BINARIES); do \
+		$(GO) build -o $(BIN_DIR)/$$b ./cmd/$$b; \
+	done
+
+.PHONY: test
+test: test-unit ## Default test entry point (unit only; see test-all).
+
+.PHONY: test-unit
+test-unit: ## Fast unit tests (domain + application + pkg).
+	$(GO) test ./internal/... ./pkg/...
+
+.PHONY: test-integration
+test-integration: ## Integration tests against testcontainers (needs Docker).
+	$(call need-script,./scripts/test/integration.sh)
+	./scripts/test/integration.sh
+
+.PHONY: test-contract
+test-contract: ## Consumer-driven contract tests (Pact).
+	$(call need-script,./scripts/test/contract.sh)
+	./scripts/test/contract.sh
+
+.PHONY: test-all
+test-all: ## Full suite: unit + integration + contract.
+	$(GO) test ./internal/... ./pkg/... && ./scripts/test/integration.sh && ./scripts/test/contract.sh
+
+.PHONY: lint
+lint: ## Strict lint (golangci-lint) + shellcheck on scripts.
+	$(GOLANGCI_LINT) run ./... && shellcheck scripts/**/*.sh
+
+.PHONY: fmt
+fmt: ## gofmt/goimports over the tree.
+	gofmt -l -w . && goimports -l -w .
+
+.PHONY: vet
+vet: ## go vet over the tree.
+	$(GO) vet ./...
+
+.PHONY: generate
+generate: ## Regenerate mocks, protobuf, GraphQL, OpenAPI artifacts.
+	$(call need-script,./scripts/generate/mocks.sh)
+	$(call need-script,./scripts/generate/proto.sh)
+	$(call need-script,./scripts/generate/gqlgen.sh)
+	$(call need-script,./scripts/generate/openapi.sh)
+	./scripts/generate/mocks.sh && ./scripts/generate/proto.sh && ./scripts/generate/gqlgen.sh && ./scripts/generate/openapi.sh
+
+.PHONY: migrate-up
+migrate-up: ## Apply all pending migrations (DATABASE_URL required).
+	$(call need-script,./scripts/db/migrate.sh)
+	./scripts/db/migrate.sh up
+
+.PHONY: migrate-down
+migrate-down: ## Roll back one migration (DATABASE_URL required).
+	$(call need-script,./scripts/db/migrate.sh)
+	./scripts/db/migrate.sh down 1
+
+.PHONY: migrate-create
+migrate-create: ## Create a new migration pair (usage: make migrate-create NAME=...).
+	$(call need-script,./scripts/db/migrate.sh)
+	./scripts/db/migrate.sh create $(NAME)
+
+.PHONY: dev-up
+dev-up: ## Start the core dependency set (compose).
+	$(call need-script,./scripts/dev/dev-up.sh)
+	./scripts/dev/dev-up.sh
+
+.PHONY: dev-down
+dev-down: ## Stop the core dependency set.
+	$(call need-script,./scripts/dev/dev-down.sh)
+	./scripts/dev/dev-down.sh
+
+.PHONY: dev-logs
+dev-logs: ## Tail dependency service logs.
+	$(call need-script,./scripts/dev/dev-logs.sh)
+	./scripts/dev/dev-logs.sh
+
+.PHONY: docker-build
+docker-build: ## Build all service images (multi-stage Dockerfiles, E17).
+	docker build -f deployments/docker/Dockerfile.rest-api -t go-template/rest-api:dev .
+
+.PHONY: clean
+clean: ## Remove build output and caches (never touches tracked files).
+	rm -rf $(BIN_DIR) coverage/ tmp/

@@ -8,7 +8,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 
 | Epic | Title | SP | Done | Status | Gate |
 |------|-------|----|------|--------|------|
-| E00 | Foundation & repo bootstrap | 14 | 11/14 | pending | G1 |
+| E00 | Foundation & repo bootstrap | 14 | 14/14 | completed | G1 |
 | E01 | Platform core (fx, config, logging, tracing, kernel, resilience) | 17 | 0/17 | pending | G1 |
 | E02 | Ledger domain core | 30 | 0/30 | pending | G2 |
 | E03 | Money-movement domain | 37 | 0/37 | pending | G2 |
@@ -29,7 +29,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | E18 | Docs + DX | 16 | 0/16 | pending | G8 |
 | E19 | Hardening + release | 13 | 0/13 | pending | G8 |
 
-**Total:** 11/432 SP completed.
+**Total:** 14/432 SP completed.
 
 ## Task checklists (tick as epic files flip to completed)
 
@@ -42,7 +42,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 - [x] E00-T05 minimal CI + dependency automation
 - [x] E00-T06 docs skeleton
 - [x] E00-T07 scripts package
-- [ ] E00-T08 harness-neutral SDD control plane
+- [x] E00-T08 harness-neutral SDD control plane
 
 ### E01 — Platform core
 - [ ] E01-T01 go.mod versions

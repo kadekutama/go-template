@@ -4,9 +4,6 @@ GOLANGCI_LINT ?= golangci-lint
 BIN_DIR := bin
 MIGRATE ?= migrate
 
-# Five binaries from E00-T01 (SPEC.md §4).
-BINARIES := rest-api grpc-api graphql-api cron consumer
-
 # Script-backed targets fail loudly (never silently) while the owning task
 # (E00-T04/E00-T07/E07-T05/...) has not landed its script yet.
 define need-script
@@ -23,17 +20,14 @@ build: ## Build all packages (no output binaries).
 
 .PHONY: build-all
 build-all: ## Build the 5 binaries into bin/.
-	@mkdir -p $(BIN_DIR)
-	@for b in $(BINARIES); do \
-		$(GO) build -o $(BIN_DIR)/$$b ./cmd/$$b; \
-	done
+	./scripts/build/build-all.sh
 
 .PHONY: test
 test: test-unit ## Default test entry point (unit only; see test-all).
 
 .PHONY: test-unit
 test-unit: ## Fast unit tests (domain + application + pkg).
-	$(GO) test ./internal/... ./pkg/...
+	./scripts/test/unit.sh
 
 .PHONY: test-integration
 test-integration: ## Integration tests against testcontainers (needs Docker).
@@ -47,7 +41,7 @@ test-contract: ## Consumer-driven contract tests (Pact).
 
 .PHONY: test-all
 test-all: ## Full suite: unit + integration + contract.
-	$(GO) test ./internal/... ./pkg/... && ./scripts/test/integration.sh && ./scripts/test/contract.sh
+	./scripts/test/unit.sh && ./scripts/test/integration.sh && ./scripts/test/contract.sh
 
 .PHONY: lint
 lint: ## Strict lint (golangci-lint) + shellcheck on scripts.

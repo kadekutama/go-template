@@ -40,5 +40,8 @@ jobs:
       - name: Lint
         run: make lint
 
+      - name: Validate task metadata (SDD control plane, E00-T08)
+        run: python3 tasks/scripts/check-tasks.py --format --graph --sdd
+
       - name: Build all binaries
         run: make build-all

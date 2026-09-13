@@ -1,0 +1,32 @@
+# Build output
+bin/
+dist/
+
+# Coverage reports
+coverage/
+*.coverprofile
+*.out
+
+# Logs
+*.log
+
+# Local environment overrides (never commit secrets)
+.env
+.env.local
+.env.*.local
+
+# Air hot-reload local overrides (base .air.toml from E00-T04 is tracked)
+.air.toml.local
+tmp/
+
+# OS / editor noise
+.DS_Store
+.idea/
+.vscode/*
+
+# Go workspace leftovers
+vendor/
+
+# Explicitly keep distributable templates trackable
+!.env.example
+!.env.*.example

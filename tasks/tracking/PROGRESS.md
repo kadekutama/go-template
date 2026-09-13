@@ -8,7 +8,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 
 | Epic | Title | SP | Done | Status | Gate |
 |------|-------|----|------|--------|------|
-| E00 | Foundation & repo bootstrap | 14 | 2/14 | pending | G1 |
+| E00 | Foundation & repo bootstrap | 14 | 3/14 | pending | G1 |
 | E01 | Platform core (fx, config, logging, tracing, kernel, resilience) | 17 | 0/17 | pending | G1 |
 | E02 | Ledger domain core | 30 | 0/30 | pending | G2 |
 | E03 | Money-movement domain | 37 | 0/37 | pending | G2 |
@@ -29,13 +29,13 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | E18 | Docs + DX | 16 | 0/16 | pending | G8 |
 | E19 | Hardening + release | 13 | 0/13 | pending | G8 |
 
-**Total:** 2/432 SP completed.
+**Total:** 3/432 SP completed.
 
 ## Task checklists (tick as epic files flip to completed)
 
 ### E00 — Foundation
 - [x] E00-T00 repository boundary + Git baseline
-- [ ] E00-T01 Go module + folders
+- [x] E00-T01 Go module + folders
 - [ ] E00-T02 Makefile
 - [ ] E00-T03 golangci-lint
 - [ ] E00-T04 hot-reload + dev scripts

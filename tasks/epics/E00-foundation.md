@@ -48,7 +48,7 @@ histories share no merge base).
 ---
 
 ### E00-T01: Initialize Go module and folder structure
-**Status:** pending
+**Status:** completed
 **Background:** Create the module and the exact tree from `SPEC.md §4` so all
 later epics have stable import paths (`internal/...`, `pkg/...`, `cmd/...`).
 Without this, every agent invents its own layout and imports break.

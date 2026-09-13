@@ -15,7 +15,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | E04 | Compliance domain | 16 | 0/16 | pending | G2 |
 | E05 | Tenancy domain | 11 | 0/11 | pending | G2 |
 | E06 | Application layer | 40 | 0/40 | pending | G3 |
-| E07 | Persistence adapters | 33 | 0/33 | pending | G4 |
+| E07 | Persistence adapters | 34 | 0/34 | pending | G4 |
 | E08 | Cache + messaging adapters | 24 | 0/24 | pending | G4 |
 | E09 | Identity + security adapters | 22 | 0/22 | pending | G4 |
 | E10 | Platform integrations | 17 | 0/17 | pending | G4 |
@@ -29,7 +29,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | E18 | Docs + DX | 16 | 0/16 | pending | G8 |
 | E19 | Hardening + release | 13 | 0/13 | pending | G8 |
 
-**Total:** 0/431 SP completed.
+**Total:** 0/432 SP completed.
 
 ## Task checklists (tick as epic files flip to completed)
 

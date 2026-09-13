@@ -1,7 +1,7 @@
 # Epic E07: Persistence Adapters (Postgres, Migrations, RLS, Seed, Outbox)
 
 **Status:** pending
-**Story Points:** 33
+**Story Points:** 34
 **Phase:** 5 (parallel with E08, E09, E10)
 **Dependencies:** Task-level E01–E06 contracts; E07-T01 ledger core precedes extended schema/RLS
 **SDD Gate:** G4
@@ -48,7 +48,7 @@ Workflow/reporting tables are split into E07-T10 so this task is reviewable.
 - [ ] ADR-011 is accepted with workload, latency, contention, rebuild, and
   read-after-write evidence before this task is marked implementation-ready.
 **Story Points:** 5
-**Depends On:** E02-T08, E06-T06
+**Depends On:** E02-T08, E06-T06, E07-T09
 **Related Docs:** `SPEC.md §7.2`, `SPEC.md §2` (GORM v1.31.2, migrate v4.19.1), `docs/data-flow.md §5`, `docs/architecture/ADR-011-balance-materialization.md`
 **SDD Gate:** G4
 
@@ -153,10 +153,17 @@ backup paths, not just docs.
 1. Testcontainers Postgres 18: CRUD per repo, migration up/down/force, RLS adversarial,
    outbox atomicity/redelivery, durable idempotency fingerprint/replay, direct-SQL
    invariant attacks, and concurrent spend serialization with deterministic locks.
-2. Run with `-race -count=3`.
+2. Model-based concurrency test: randomized operation sequences against the posting
+   path must never produce a negative available balance when overdraft is disabled
+   (ledger-core §11 proof requirement).
+3. Fault-injection matrix: crash before/after commit, publish-ack loss, inbox-commit
+   failure, provider timeout → each must resolve to a safe, documented outcome.
+4. Run with `-race -count=3`.
 **Acceptance Criteria:**
 - [ ] All green; deadlock retry covered where applicable.
-**Story Points:** 4
+- [ ] Model-based run completes ≥10k randomized sequences with zero invariant violations.
+- [ ] Every fault-injection row maps to its specified safe outcome (no hangs, no partial postings).
+**Story Points:** 5
 **Depends On:** E07-T01, E07-T02, E07-T03, E07-T09, E07-T10
 **Related Docs:** `SPEC.md §10.3`, `SPEC.md §12`
 **SDD Gate:** G4
@@ -263,7 +270,7 @@ ledger references to the core schema.
 
 ## Acceptance Criteria
 
-- [ ] E07-T01 … E07-T10 all `completed` (count 33 SP in `tasks/tracking/PROGRESS.md`)
+- [ ] E07-T01 … E07-T10 all `completed` (count 34 SP in `tasks/tracking/PROGRESS.md`)
 - [ ] Schema migrates cleanly both directions (up/down/force)
 - [ ] Tenant isolation adversarial-tested; outbox at-least-once + durable inbox effectively-once effects proven
 - [ ] SDD gate G4 checks pass — `tasks/tracking/GATES.md#G4`

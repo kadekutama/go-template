@@ -4,7 +4,7 @@
 `docs/ledger-core.md`, `docs/development/go-conventions.md`,
 `SPEC.md`, `docs/fintech-ledger-features.md`, `docs/api-contracts.md`,
 `docs/money-flow.md`, `docs/data-flow.md`, `docs/user-journeys.md`, `docs/domain-events.md`
-**Total:** 20 epics, 431 story points, 8 promotion gates.
+**Total:** 20 epics, 432 story points, 8 promotion gates.
 
 ## One-liners
 
@@ -17,7 +17,7 @@
 | E04 | Compliance domain: reconciliation rules, breaks, period-close rules, GDPR erasure, AML hooks, regulatory reports, SOX approvals | 16 | 3 | E02 | G2 |
 | E05 | Tenancy domain: tenant aggregate, hierarchies, RLS policies, onboarding, residency, white-label | 11 | 3 | E02 | G2 |
 | E06 | Application layer: core/extended ports, ledger pilot use cases, workflows, reports | 40 | 4 | task-level domain dependencies | G3 |
-| E07 | Persistence adapters: SQL posting path, migrations, RLS, outbox, shared test harness, replicas | 33 | 5 | E06 | G4 |
+| E07 | Persistence adapters: SQL posting path, migrations, RLS, outbox, shared test harness, replicas | 34 | 5 | E06 | G4 |
 | E08 | Cache + messaging adapters: Ristretto, hybrid cache, NATS topology, webhook dispatcher, rate limiter | 24 | 5 | E06 | G4 |
 | E09 | Identity + security adapters: JWT, OAuth2, Casbin, API keys, Bitwarden, envelope crypto, audit log, PII | 22 | 5 | E06 | G4 |
 | E10 | Platform integrations: Unleash, FX provider, payment-processor sandbox, statement parsers, SMTP | 17 | 5 | E06 | G4 |

@@ -1,6 +1,6 @@
 # ADR-010: Structured logging API
 
-**Status:** Accepted  
+**Status:** Superseded (default-backend choice only — superseded by ADR-012 on 2026-09-14; the port design below stands and is implemented unchanged)  
 **Date:** 2026-09-11
 
 ## Context

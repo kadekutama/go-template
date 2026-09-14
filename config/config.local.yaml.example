@@ -1,0 +1,32 @@
+# Local developer overrides (SAMPLE — copy to config.local.yaml, which is
+# gitignored and never committed). The loader reads it only when passed
+# explicitly as an overlay.
+app:
+  name: go-template
+  env: local
+server:
+  host: 127.0.0.1
+  port: 8080
+database:
+  host: 127.0.0.1
+  port: 5432
+  user: postgres
+  password: changeme-local-only
+  name: app
+  sslmode: disable
+cache:
+  host: 127.0.0.1
+  port: 6379
+auth:
+  issuer: http://127.0.0.1:8080
+  access_ttl_min: 15
+  refresh_ttl_days: 7
+nats:
+  url: nats://127.0.0.1:4222
+observability:
+  otlp_endpoint: ""
+  sample_ratio: 1.0
+feature_flags:
+  unleash_url: ""
+secrets:
+  provider: env

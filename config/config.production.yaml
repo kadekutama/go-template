@@ -1,0 +1,30 @@
+# Production overrides (no secret values — references only).
+app:
+  name: go-template
+  env: production
+server:
+  host: 0.0.0.0
+  port: 8080
+database:
+  host: postgres.production.svc
+  port: 5432
+  user: app_production
+  password: "{{ secret:db/production/password }}"
+  name: app
+  sslmode: verify-full
+cache:
+  host: valkey.production.svc
+  port: 6379
+auth:
+  issuer: https://auth.example.com
+  access_ttl_min: 15
+  refresh_ttl_days: 7
+nats:
+  url: nats://nats.production.svc:4222
+observability:
+  otlp_endpoint: https://tempo.production.svc:4317
+  sample_ratio: 0.1
+feature_flags:
+  unleash_url: https://unleash.production.svc:4242
+secrets:
+  provider: bitwarden

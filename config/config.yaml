@@ -1,0 +1,32 @@
+# Base configuration (E01-T03). Safe local-dev defaults only; no secrets.
+# Override per environment: config.staging.yaml, config.production.yaml, then
+# config.local.yaml (gitignored, untracked), then APP_ env vars, then secrets (E09).
+app:
+  name: go-template
+  env: local
+server:
+  host: 127.0.0.1
+  port: 8080
+database:
+  host: 127.0.0.1
+  port: 5432
+  user: postgres
+  password: postgres
+  name: app
+  sslmode: disable
+cache:
+  host: 127.0.0.1
+  port: 6379
+auth:
+  issuer: http://127.0.0.1:8080
+  access_ttl_min: 15
+  refresh_ttl_days: 7
+nats:
+  url: nats://127.0.0.1:4222
+observability:
+  otlp_endpoint: ""
+  sample_ratio: 0.1
+feature_flags:
+  unleash_url: ""
+secrets:
+  provider: env

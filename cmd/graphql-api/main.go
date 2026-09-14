@@ -1,4 +1,18 @@
-// Command graphql-api is the GraphQL API entrypoint (E00-T01 stub: no I/O, no ports).
+// Command graphql-api is the GraphQL API entrypoint (E01-T02: fx composition; resolvers land in E13).
 package main
 
-func main() {}
+import (
+	"example.com/go-template/internal/shared/di"
+
+	"go.uber.org/fx"
+)
+
+func main() {
+	fx.New(
+		di.DomainModule(),
+		di.ApplicationModule(),
+		di.InfrastructureModule(),
+		di.GraphQLModule(),
+		fx.NopLogger,
+	).Run()
+}

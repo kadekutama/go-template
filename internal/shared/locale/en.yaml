@@ -1,0 +1,9 @@
+# Kernel error messages (E01-T06). Keys are apperror codes; E18 owns full coverage.
+VALIDATION_FAILED: "request failed validation"
+NOT_FOUND: "resource not found"
+CONFLICT: "request conflicts with current state"
+UNAUTHORIZED: "authentication required"
+FORBIDDEN: "operation forbidden"
+INTERNAL_ERROR: "internal server error"
+PAYOUT_BLOCKED: "payout blocked by policy"
+OUTCOME_UNKNOWN: "provider outcome unknown; resolve status before retrying"

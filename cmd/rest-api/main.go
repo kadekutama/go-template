@@ -1,4 +1,18 @@
-// Command rest-api is the REST API entrypoint (E00-T01 stub: no I/O, no ports).
+// Command rest-api is the REST API entrypoint (E01-T02: fx composition; handlers land in E11).
 package main
 
-func main() {}
+import (
+	"example.com/go-template/internal/shared/di"
+
+	"go.uber.org/fx"
+)
+
+func main() {
+	fx.New(
+		di.DomainModule(),
+		di.ApplicationModule(),
+		di.InfrastructureModule(),
+		di.RestModule(),
+		fx.NopLogger,
+	).Run()
+}

@@ -28,6 +28,17 @@ fi
 
 cd "${BASE_DIR}"
 
+# Ensure CGO is enabled with available compiler for -race tests
+if [[ -z "${CGO_ENABLED:-}" || "${CGO_ENABLED}" == "0" ]]; then
+    if command -v clang >/dev/null 2>&1; then
+        export CC="${CC:-clang}"
+        export CGO_ENABLED=1
+    elif command -v gcc >/dev/null 2>&1; then
+        export CC="${CC:-gcc}"
+        export CGO_ENABLED=1
+    fi
+fi
+
 echo "=== Gate ${GATE}: ${GATE_NAME} ==="
 echo ""
 

@@ -30,3 +30,6 @@ vendor/
 # Explicitly keep distributable templates trackable
 !.env.example
 !.env.*.example
+
+# Local config overrides (untracked; copy config/config.local.yaml.example, E01-T03)
+config/config.local.yaml

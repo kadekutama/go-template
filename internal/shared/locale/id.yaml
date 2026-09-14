@@ -1,0 +1,9 @@
+# Pesan kesalahan kernel (E01-T06). Kunci adalah kode apperror; E18 memiliki cakupan penuh.
+VALIDATION_FAILED: "permintaan gagal validasi"
+NOT_FOUND: "sumber daya tidak ditemukan"
+CONFLICT: "permintaan bertentangan dengan status saat ini"
+UNAUTHORIZED: "diperlukan autentikasi"
+FORBIDDEN: "operasi dilarang"
+INTERNAL_ERROR: "kesalahan server internal"
+PAYOUT_BLOCKED: "pembayaran keluar diblokir oleh kebijakan"
+OUTCOME_UNKNOWN: "hasil penyedia tidak diketahui; selesaikan status sebelum mencoba lagi"

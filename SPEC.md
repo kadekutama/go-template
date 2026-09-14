@@ -86,9 +86,9 @@ audit date; keep the `go` directive and CI toolchain aligned with it.
 | **Secrets** | Bitwarden SDK | v2.1.0 | Secret Manager |
 | **Circuit Breaker** | gobreaker | v0.5.0 | Sony |
 | **Tracing** | OpenTelemetry | v1.26.0 | Jaeger, Prometheus, OTLP |
-| **Logging** | `log/slog` (stdlib) | Go 1.27.1 | JSON, structured, leveled; Echo v5 native |
+| **Logging** | zerolog | v1.35.1 | JSON, structured, leveled; port in `shared/kernel/log` (ADR-012) |
 | **Validation** | validator | v10.22.0 | Struct tags |
-| **JSON** | `pkg/jsonparser` wrapper | stdlib default; Sonic v1.12.0 optional | One codec seam; benchmark before replacing the stdlib |
+| **JSON** | `pkg/jsonparser` wrapper | Sonic v1.15.4 default (ADR-012); stdlib fallback | One codec seam; benchmark recorded in E01-T07 evidence |
 | **i18n** | go-i18n | v2.7.0 | YAML locale files |
 | **Scheduler** | gocron | v1.5.0 | Valkey Redlock distributed |
 | **Config** | koanf | v2.3.0 | Multi-source, validation |
@@ -583,7 +583,7 @@ type Breaker interface {
 ### 7.9 Observability
 - **Tracing**: OpenTelemetry → Jaeger/Tempo
 - **Metrics**: Prometheus (RED + USE)
-- **Logging**: `log/slog` JSON + correlation ID
+- **Logging**: zerolog JSON + correlation ID (ADR-012; port unchanged)
 - **Health**: Liveness/Readiness/Startup probes
 
 ### 7.10 Third-Party Abstractions (Ports)
@@ -593,7 +593,7 @@ can be swapped without touching business logic (dependency inversion):
 
 | Capability | Port (interface owner) | Default adapter | Swappable with |
 |------------|------------------------|-----------------|----------------|
-| **Logging** | `Logger` (`shared/kernel/log`) | `log/slog` | zerolog, zap |
+| **Logging** | `Logger` (`shared/kernel/log`) | zerolog v1.35.1 (ADR-012; was `log/slog` per ADR-010) | `log/slog`, zap |
 | **Tracing** | `Tracer` (`shared/kernel/observability`) | OTel SDK + Jaeger/Tempo adapter | Datadog, Honeycomb |
 | **Metrics** | `Meter` (`shared/kernel/observability`) | OTel + Prometheus adapter | StatsD, Datadog |
 | **Database** | Intent-specific repository/unit-of-work ports (`domain`/`application`) | GORM + PostgreSQL adapter | sqlx, sqlc, Ent, CockroachDB |
@@ -604,8 +604,8 @@ can be swapped without touching business logic (dependency inversion):
 | **Feature Flags** | `FlagClient` (`application/port`) | OpenFeature + Unleash adapter | LaunchDarkly, Flipt, Redis provider |
 | **Resilience** | `Breaker`/`RetryPolicy` (`shared/kernel/resilience`) | gobreaker + bounded retry adapter | Hystrix-style or provider-native adapter |
 | **Clock** | `Clock` (`shared/kernel`) | System clock | Fixed clock (tests) |
-| **ID Generation** | `IDGenerator` (`shared/kernel`) | ULID | UUID, KSUID, Snowflake |
-| **JSON** | `jsonparser` (`pkg/jsonparser`) | `encoding/json` by default; Sonic behind the wrapper | Alternate codec only with benchmark/compatibility evidence |
+| **ID Generation** | `IDGenerator` (`shared/kernel`) | UUIDv7 (`google/uuid`; ADR-012) | ULID, KSUID, Snowflake |
+| **JSON** | `jsonparser` (`pkg/jsonparser`) | Sonic v1.15.4 default (ADR-012); stdlib fallback | Codec only ever behind the wrapper; benchmark recorded |
 
 **Rules:**
 - Domain and application layers import **only** the port, never the adapter package.
@@ -1238,7 +1238,7 @@ so PAN and sensitive authentication data never enter the ledger service.
 |----------|---------|----------------|
 | HTTP/3 enable default | On/Off | Off (feature flag) |
 | Migration strategy | Up/Down vs Up-only | Up/Down (reversible) |
-| Custom JSON parser | stdlib / Sonic | stdlib first; Sonic only with benchmark evidence |
+| Custom JSON parser | stdlib / Sonic | Sonic default per owner (ADR-012); benchmark recorded in E01-T07 evidence |
 | WebSocket protocol | JSON / Protobuf | JSON (simpler), Protobuf for high-perf |
 | Distributed trace sampling | Always / Probabilistic | Probabilistic (10%) |
 | Log sampling in prod | None / Tail / Adaptive | Tail (ERROR always, WARN sampled) |

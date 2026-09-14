@@ -15,8 +15,8 @@ const (
 	CodeOutcomeUnknown   Code = "OUTCOME_UNKNOWN"
 )
 
-func init() {
-	Register(map[Code]int{
+func defaultCodes() map[Code]int {
+	return map[Code]int{
 		CodeValidationFailed: http.StatusBadRequest,
 		CodeNotFound:         http.StatusNotFound,
 		CodeConflict:         http.StatusConflict,
@@ -25,5 +25,5 @@ func init() {
 		CodeInternalError:    http.StatusInternalServerError,
 		CodePayoutBlocked:    http.StatusUnprocessableEntity,
 		CodeOutcomeUnknown:   http.StatusConflict,
-	})
+	}
 }

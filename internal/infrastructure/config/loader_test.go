@@ -43,6 +43,28 @@ func TestLoadBaseConfig(t *testing.T) {
 	}
 }
 
+func TestLoadNonExistentFile(t *testing.T) {
+	t.Parallel()
+
+	_, err := Load("non-existent-config-file.yaml")
+	if err == nil {
+		t.Fatal("expected error for non-existent file, got nil")
+	}
+	if !strings.Contains(err.Error(), "load config file") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestLoadMalformedYAML(t *testing.T) {
+	t.Parallel()
+
+	malformed := writeTemp(t, "app:\n  name: [unclosed")
+	_, err := Load(malformed)
+	if err == nil {
+		t.Fatal("expected error for malformed yaml, got nil")
+	}
+}
+
 func TestMissingRequiredListsAllViolations(t *testing.T) {
 	t.Parallel()
 
@@ -100,6 +122,23 @@ func TestSecretRefFailsClosed(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "E09-T05") {
 		t.Errorf("error should name E09-T05, got: %v", err)
+	}
+}
+
+func TestSecretRefInArrayFailsClosed(t *testing.T) {
+	t.Parallel()
+
+	body := "app:\n  name: test\ncustom_list:\n  - item1\n  - \"{{ secret:vault/token }}\"\n"
+	_, err := Load(writeTemp(t, body))
+	if err == nil {
+		t.Fatal("expected secret error for array element, got nil")
+	}
+	var secretErr *SecretRefError
+	if !errors.As(err, &secretErr) {
+		t.Fatalf("expected *SecretRefError, got %T: %v", err, err)
+	}
+	if !strings.Contains(err.Error(), "custom_list[1]") {
+		t.Errorf("expected error to name custom_list[1], got: %v", err)
 	}
 }
 

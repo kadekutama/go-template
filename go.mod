@@ -1,4 +1,4 @@
-module example.com/go-template
+module github.com/kadekutama/go-template
 
 go 1.27.1
 

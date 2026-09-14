@@ -7,7 +7,7 @@ import (
 	"golang.org/x/text/language"
 	"gopkg.in/yaml.v3"
 
-	"example.com/go-template/internal/shared/locale"
+	"github.com/kadekutama/go-template/internal/shared/locale"
 )
 
 // localeKey is the context key carrying the request locale.
@@ -52,6 +52,12 @@ func NewTranslator() (*Translator, error) {
 // Translate renders code for the context locale. Unknown codes or missing
 // messages fall back to the AppError message so callers never blank out.
 func (t *Translator) Translate(ctx context.Context, err *AppError) string {
+	if err == nil {
+		return ""
+	}
+	if t == nil || t.bundle == nil {
+		return err.Message
+	}
 	localizer := i18n.NewLocalizer(t.bundle, localeFrom(ctx), "en")
 	msg, locErr := localizer.Localize(&i18n.LocalizeConfig{MessageID: string(err.Code)})
 	if locErr != nil || msg == "" {

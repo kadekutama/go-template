@@ -27,3 +27,22 @@ func TestGraphValidates(t *testing.T) {
 		t.Fatalf("fx graph does not validate: %v", err)
 	}
 }
+
+func TestProvidersConstructInstances(t *testing.T) {
+	t.Parallel()
+
+	logger := ProvideLogger()
+	if logger == nil {
+		t.Error("ProvideLogger returned nil")
+	}
+
+	clock := ProvideClock()
+	if clock == nil || clock.Now().IsZero() {
+		t.Error("ProvideClock returned invalid clock")
+	}
+
+	gen := ProvideIDGenerator()
+	if gen == nil || gen.NewID() == "" {
+		t.Error("ProvideIDGenerator returned invalid generator")
+	}
+}

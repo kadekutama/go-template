@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	kernel "example.com/go-template/internal/shared/kernel/resilience"
+	kernel "github.com/kadekutama/go-template/internal/shared/kernel/resilience"
 )
 
 // SleepFunc waits d or aborts on ctx cancellation. Production passes a real

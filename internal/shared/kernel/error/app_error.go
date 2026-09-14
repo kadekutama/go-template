@@ -37,7 +37,7 @@ var codePattern = regexp.MustCompile(`^[A-Z][A-Z0-9]*(_[A-Z0-9]+)*$`)
 
 var (
 	registryMu sync.RWMutex
-	registry   = map[Code]int{}
+	registry   = defaultCodes()
 )
 
 // Register adds codes with their default HTTP status. It panics on blank,

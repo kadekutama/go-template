@@ -4,14 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os/exec"
+	"go/parser"
+	"go/token"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
 
-	kernel "example.com/go-template/internal/shared/kernel/resilience"
+	kernel "github.com/kadekutama/go-template/internal/shared/kernel/resilience"
 )
 
 // fakeSleep records waits without wall-clock delays and honors cancellation.
@@ -167,6 +169,49 @@ func TestCancelledContextAborts(t *testing.T) {
 	}
 }
 
+func TestRealSleep(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	start := time.Now()
+	if err := RealSleep(ctx, 10*time.Millisecond); err != nil {
+		t.Errorf("RealSleep failed: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed < 5*time.Millisecond {
+		t.Errorf("RealSleep returned too quickly: %v", elapsed)
+	}
+
+	ctxCancel, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := RealSleep(ctxCancel, time.Hour); !errors.Is(err, context.Canceled) {
+		t.Errorf("RealSleep want context.Canceled, got %v", err)
+	}
+}
+
+func TestRetryDefaultClassifier(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeSleep{}
+	calls := 0
+	// classify = nil should default to kernel.DefaultClassifier
+	err := Execute(context.Background(), fake.sleep,
+		kernel.RetryPolicy{MaxAttempts: 2, InitialBackoff: time.Millisecond, MaxBackoff: time.Millisecond, Multiplier: 1},
+		false, "key-1", nil,
+		func(context.Context) error {
+			calls++
+			if calls == 1 {
+				return &kernel.RetryableError{Err: errors.New("temporary")}
+			}
+			return nil
+		})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if calls != 2 {
+		t.Errorf("want 2 calls, got %d", calls)
+	}
+}
+
 func TestPortHasNoGobreakerImport(t *testing.T) {
 	t.Parallel()
 
@@ -174,15 +219,30 @@ func TestPortHasNoGobreakerImport(t *testing.T) {
 	if !ok {
 		t.Fatal("runtime.Caller failed")
 	}
-	root := filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(thisFile))))
-	cmd := exec.CommandContext(t.Context(), "go", "list", "-f", `{{join .Imports " "}}`,
-		"example.com/go-template/internal/shared/kernel/resilience")
-	cmd.Dir = root
-	out, err := cmd.Output()
+	kernelDir := filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(thisFile))), "shared", "kernel", "resilience")
+	entries, err := os.ReadDir(kernelDir)
 	if err != nil {
-		t.Fatalf("go list: %v", err)
+		t.Fatalf("os.ReadDir failed: %v", err)
 	}
-	if strings.Contains(string(out), "sony/gobreaker") {
-		t.Errorf("kernel port must not import gobreaker: %s", out)
+	fset := token.NewFileSet()
+	checkedFiles := 0
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		checkedFiles++
+		filePath := filepath.Join(kernelDir, entry.Name())
+		node, parseErr := parser.ParseFile(fset, filePath, nil, parser.ImportsOnly)
+		if parseErr != nil {
+			t.Fatalf("parser.ParseFile %s failed: %v", filePath, parseErr)
+		}
+		for _, imp := range node.Imports {
+			if strings.Contains(imp.Path.Value, "gobreaker") {
+				t.Errorf("file %s imports %s; kernel port must not import gobreaker", filePath, imp.Path.Value)
+			}
+		}
+	}
+	if checkedFiles == 0 {
+		t.Fatalf("no kernel source files found in %s", kernelDir)
 	}
 }

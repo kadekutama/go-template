@@ -83,6 +83,26 @@ func TestGetTraversal(t *testing.T) {
 	}
 }
 
+func TestMarshalError(t *testing.T) {
+	t.Parallel()
+
+	// Channels cannot be marshaled into JSON.
+	_, err := Marshal(make(chan int))
+	if err == nil {
+		t.Fatal("expected error marshaling channel, got nil")
+	}
+}
+
+func TestUnmarshalError(t *testing.T) {
+	t.Parallel()
+
+	var out map[string]any
+	err := Unmarshal([]byte("{invalid-json"), &out)
+	if err == nil {
+		t.Fatal("expected error unmarshaling malformed json, got nil")
+	}
+}
+
 func BenchmarkMarshal(b *testing.B) {
 	in := moneyShape{AccountID: "acc_bench", AmountMinor: 123456, AssetCode: "USD"}
 	b.ReportAllocs()

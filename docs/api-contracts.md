@@ -731,7 +731,7 @@ package ledger.v1;
 
 import "google/protobuf/timestamp.proto";
 
-option go_package = "example.com/go-template/api/proto/ledger/v1;ledgerv1";
+option go_package = "github.com/kadekutama/go-template/api/proto/ledger/v1;ledgerv1";
 
 service LedgerService {
   // Account operations

@@ -3,12 +3,13 @@ package logging
 import (
 	"bytes"
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
-	"example.com/go-template/internal/shared/kernel/log"
-	"example.com/go-template/internal/shared/kernel/safe"
+	"github.com/kadekutama/go-template/internal/shared/kernel/log"
+	"github.com/kadekutama/go-template/internal/shared/kernel/safe"
 )
 
 const testDebugLevel = "debug"
@@ -76,16 +77,6 @@ func TestUnknownLevelFallsBackToInfo(t *testing.T) {
 	}
 }
 
-func TestDiscardSatisfiesPort(t *testing.T) {
-	t.Parallel()
-
-	logger := Discard()
-	logger.Info(context.Background(), "dropped")
-	if logger.With("k", "v") == nil {
-		t.Error("Discard().With must return a Logger")
-	}
-}
-
 func TestTraceFiltering(t *testing.T) {
 	t.Parallel()
 
@@ -133,7 +124,7 @@ func TestPanicRecoverableViaSafeGo(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	reported := make(chan safe.Panic, 1)
-	safe.Go(ctx, func(p safe.Panic) { reported <- p }, func(context.Context) {
+	safe.Go(ctx, logger, func(p safe.Panic) { reported <- p }, func(context.Context) {
 		logger.Panic(context.Background(), "via-safe-go")
 	})
 
@@ -148,7 +139,7 @@ func TestPanicRecoverableViaSafeGo(t *testing.T) {
 }
 
 func TestFatalStubsExit(t *testing.T) {
-	t.Parallel()
+	// Do NOT call t.Parallel() here: this test mutates global osExit.
 
 	oldExit := osExit
 	defer func() { osExit = oldExit }()
@@ -179,5 +170,63 @@ func TestOddArgsPreserved(t *testing.T) {
 	out := buf.String()
 	if !strings.Contains(out, `"k1":"v1"`) || !strings.Contains(out, `"!EXTRA_ARG":"orphan"`) {
 		t.Errorf("expected odd arg to be preserved under !EXTRA_ARG, got: %s", out)
+	}
+}
+
+func TestStandardizedFields(t *testing.T) {
+	t.Parallel()
+
+	type sampleRequest struct {
+		AccountID string `json:"account_id"`
+		Amount    int64  `json:"amount"`
+	}
+
+	var buf bytes.Buffer
+	logger := New(&buf, Config{Level: testDebugLevel})
+	ctx := context.Background()
+
+	// 1. log.Err(err) attaches canonical "error" key.
+	err := errors.New("network failure")
+	logger.Error(ctx, "payment failed", log.Err(err))
+	out := buf.String()
+	if !strings.Contains(out, `"error":"network failure"`) {
+		t.Errorf("expected canonical error field, got: %s", out)
+	}
+
+	// 2. log.Err(nil) omits "error" key.
+	buf.Reset()
+	logger.Info(ctx, "task completed", log.Err(nil), log.Any("status", "ok"))
+	out = buf.String()
+	if strings.Contains(out, `"error"`) {
+		t.Errorf("expected error field to be omitted when err is nil, got: %s", out)
+	}
+	if !strings.Contains(out, `"status":"ok"`) {
+		t.Errorf("expected status field, got: %s", out)
+	}
+
+	// 3. log.Metadata(struct) serializes struct into "metadata".
+	buf.Reset()
+	req := sampleRequest{AccountID: "acc-100", Amount: 5000}
+	logger.Info(ctx, "processing transfer", log.Metadata(req))
+	out = buf.String()
+	if !strings.Contains(out, `"metadata":{"account_id":"acc-100","amount":5000}`) {
+		t.Errorf("expected serialized metadata struct, got: %s", out)
+	}
+
+	// 4. Mixing log.Field with key-value pairs in the same call.
+	buf.Reset()
+	logger.Info(ctx, "mixed call", log.Metadata(req), "extra_key", "extra_val")
+	out = buf.String()
+	if !strings.Contains(out, `"extra_key":"extra_val"`) || !strings.Contains(out, `"metadata"`) {
+		t.Errorf("expected both metadata and extra_key in mixed call, got: %s", out)
+	}
+
+	// 5. With(log.Field) binds field to child logger.
+	buf.Reset()
+	child := logger.With(log.Metadata(req))
+	child.Info(ctx, "child event")
+	out = buf.String()
+	if !strings.Contains(out, `"metadata"`) {
+		t.Errorf("expected child logger to contain bound metadata field, got: %s", out)
 	}
 }

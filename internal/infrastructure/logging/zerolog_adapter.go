@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"example.com/go-template/internal/shared/kernel/log"
+	"github.com/kadekutama/go-template/internal/shared/kernel/log"
 
 	"github.com/rs/zerolog"
 )
@@ -57,21 +57,34 @@ func New(w io.Writer, cfg Config) log.Logger {
 }
 
 // fields merges context correlation fields (SPEC §9.5) with call args into one
-// map; call args win key collisions.
+// map; call args win key collisions. It recognizes log.Field, key-value pairs,
+// and captures any trailing odd argument under !EXTRA_ARG.
 func fields(ctx context.Context, args []any) map[string]any {
-	merged := make(map[string]any, len(args)/2+4)
+	merged := make(map[string]any, len(args)+4)
 	for key, val := range log.FromContext(ctx) {
 		merged[key] = val
 	}
-	for i := 0; i+1 < len(args); i += 2 {
-		key, ok := args[i].(string)
-		if !ok {
-			key = fmt.Sprintf("%v", args[i])
+	for i := 0; i < len(args); {
+		if f, ok := args[i].(log.Field); ok {
+			if f.Key == log.FieldError && f.Value == nil {
+				i++
+				continue
+			}
+			merged[f.Key] = f.Value
+			i++
+			continue
 		}
-		merged[key] = args[i+1]
-	}
-	if len(args)%2 != 0 {
-		merged["!EXTRA_ARG"] = args[len(args)-1]
+		if i+1 < len(args) {
+			key, ok := args[i].(string)
+			if !ok {
+				key = fmt.Sprintf("%v", args[i])
+			}
+			merged[key] = args[i+1]
+			i += 2
+			continue
+		}
+		merged["!EXTRA_ARG"] = args[i]
+		i++
 	}
 	return merged
 }
@@ -122,22 +135,3 @@ func (l *zerologLogger) Fatal(ctx context.Context, msg string, args ...any) {
 func (l *zerologLogger) With(args ...any) log.Logger {
 	return &zerologLogger{inner: l.inner.With().Fields(fields(context.Background(), args)).Logger()}
 }
-
-// discardLogger drops every line; unit tests use it instead of I/O.
-type discardLogger struct{}
-
-func (discardLogger) Trace(context.Context, string, ...any) {}
-func (discardLogger) Debug(context.Context, string, ...any) {}
-func (discardLogger) Info(context.Context, string, ...any)  {}
-func (discardLogger) Warn(context.Context, string, ...any)  {}
-func (discardLogger) Error(context.Context, string, ...any) {}
-func (discardLogger) Panic(_ context.Context, msg string, _ ...any) {
-	panic(msg)
-}
-func (discardLogger) Fatal(_ context.Context, _ string, _ ...any) {
-	osExit(1)
-}
-func (discardLogger) With(...any) log.Logger { return discardLogger{} }
-
-// Discard returns a Logger that drops every line.
-func Discard() log.Logger { return discardLogger{} }

@@ -48,6 +48,41 @@ explicit owner decision — never force-push without one.
 5. Release a claim (`active` → `released`) only after evidence and handoff are
    complete.
 
+### 4.1 Multi-harness enforcement and collision avoidance
+
+1. **Shared filesystem ≠ permission:** The presence of a local clone or shared
+   workspace does NOT grant an agent or harness permission to edit files. Every
+   agent/harness (e.g. OpenCode, Antigravity, Claude, Codex, or human) MUST verify
+   an active claim (`tasks/claims/<TASK-ID>.md` with `Status: active`) matching its
+   own harness identifier before modifying any code under `internal/`, `pkg/`,
+   `cmd/`, `api/`, or `test/`.
+2. **Working-tree freeze on released claims:** Once all claims for a task or epic
+   are released, the implementation files are frozen. If a post-release review,
+   linter sweep, or polish is needed before PR merge:
+   - Modifying files out-of-band without an active claim is strictly forbidden.
+   - The reviewing agent must either reopen the relevant claim (flipping status to
+     `active`, recording the amendment rationale and updated lease) or create a
+     dedicated review/polish claim (e.g., `feat/<EPIC>-review-polish` following
+     `tasks/SDD.md §4`).
+   - All amended changes must be backed by updated evidence and handoff before
+     re-releasing the claim.
+3. **Historical reconciliation precedent (Epic E02):** In E02, a second harness
+   made un-claimed edits (Hare-Niemeyer allocation fix, linter refactors, module
+   rename to `github.com/kadekutama/go-template`, and kernel hardening) on
+   `feat/E02-ledger-domain` while all claims were released. The repository owner
+   ruled to absorb the changes because all claims were released, no active claim
+   was overridden, and 100% of unit tests and gates passed. However, SDD §6 had
+   no enforcement moment. This precedent formalizes the requirement: starting with
+   E03, un-claimed out-of-band edits are strictly blocked.
+4. **Parallel execution isolation (E03+):** Phase 3 (E03, E04, E05) contains
+   multiple parallel dependency-ready tasks. When multiple harnesses operate
+   concurrently:
+   - Each harness MUST use an isolated git worktree:
+     `git worktree add ../go-template-<TASK-ID> -b feat/<TASK-ID>-<slug>`
+   - Parallel tasks MUST NOT claim overlapping files in `Allowed Change Surface`.
+   - Claims must be committed to git immediately upon creation to prevent race
+     conditions.
+
 ## 5. Merge authority (CODEOWNERS)
 
 `/.github/CODEOWNERS` assigns review/merge authority:

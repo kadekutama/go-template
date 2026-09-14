@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"strings"
 
-	"example.com/go-template/internal/shared/kernel/trace"
+	"github.com/kadekutama/go-template/internal/shared/kernel/trace"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -53,12 +53,12 @@ func Bootstrap(cfg Config) (*Provider, error) {
 	if strings.TrimSpace(cfg.ServiceVersion) == "" {
 		return nil, fmt.Errorf("tracing: ServiceVersion is required")
 	}
-	ratio := cfg.SampleRatio
-	if ratio <= 0 {
-		ratio = DefaultSampleRatio
-	}
-	if ratio < 0 || ratio > 1 {
+	if cfg.SampleRatio < 0 || cfg.SampleRatio > 1 {
 		return nil, fmt.Errorf("tracing: SampleRatio %v out of [0,1]", cfg.SampleRatio)
+	}
+	ratio := cfg.SampleRatio
+	if ratio == 0 {
+		ratio = DefaultSampleRatio
 	}
 
 	var processor sdktrace.SpanProcessor

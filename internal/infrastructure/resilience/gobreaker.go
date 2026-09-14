@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"time"
 
-	kernel "example.com/go-template/internal/shared/kernel/resilience"
+	kernel "github.com/kadekutama/go-template/internal/shared/kernel/resilience"
 
 	"github.com/sony/gobreaker"
 )

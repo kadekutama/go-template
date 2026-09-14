@@ -11,6 +11,9 @@ type contextFields struct {
 
 // WithContext attaches correlation fields to ctx (merging with existing ones).
 func WithContext(ctx context.Context, fields map[string]string) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	merged := map[string]string{}
 	if existing, ok := ctx.Value(contextKey{}).(contextFields); ok {
 		for key, val := range existing.values {
@@ -25,6 +28,9 @@ func WithContext(ctx context.Context, fields map[string]string) context.Context 
 
 // FromContext returns the correlation fields on ctx (empty map when absent).
 func FromContext(ctx context.Context) map[string]string {
+	if ctx == nil {
+		return map[string]string{}
+	}
 	if existing, ok := ctx.Value(contextKey{}).(contextFields); ok {
 		out := make(map[string]string, len(existing.values))
 		for key, val := range existing.values {

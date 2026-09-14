@@ -343,6 +343,10 @@ def check_sdd(all_tasks: dict[str, dict]) -> None:
                 errors.append(
                     f"--sdd: {tid} claim must be {wanted_claim_status} while task is {status}"
                 )
+            for cf in ["Task", "Status", "Owner", "Harness", "Branch/Worktree",
+                       "Base Commit", "Started At", "Lease Until", "Previous Claim"]:
+                if not re.search(r"^\*\*" + re.escape(cf) + r":\*\*", claim_text, re.M):
+                    errors.append(f"--sdd: {tid} claim missing field '{cf}'")
         if not handoff.exists():
             errors.append(f"--sdd: {status} task {tid} has no handoff")
         if status == "completed":

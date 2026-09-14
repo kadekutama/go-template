@@ -2,7 +2,7 @@
 package main
 
 import (
-	"example.com/go-template/internal/shared/di"
+	"github.com/kadekutama/go-template/internal/shared/di"
 
 	"go.uber.org/fx"
 )

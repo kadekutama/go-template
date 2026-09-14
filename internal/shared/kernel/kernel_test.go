@@ -25,6 +25,28 @@ func TestFixedClockReplaysTimes(t *testing.T) {
 	}
 }
 
+func TestFixedClockEmpty(t *testing.T) {
+	t.Parallel()
+
+	clock := NewFixedClock()
+	if got := clock.Now(); !got.IsZero() {
+		t.Errorf("expected zero time for empty fixed clock, got %v", got)
+	}
+}
+
+func TestSystemClockNow(t *testing.T) {
+	t.Parallel()
+
+	clock := SystemClock{}
+	before := time.Now()
+	now := clock.Now()
+	after := time.Now()
+
+	if now.Before(before) || now.After(after) {
+		t.Errorf("SystemClock.Now() = %v, should be between %v and %v", now, before, after)
+	}
+}
+
 func TestUUIDv7UniqueAndVersioned(t *testing.T) {
 	t.Parallel()
 

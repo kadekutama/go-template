@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.com/go-template/config.schema.json",
+  "$id": "https://github.com/kadekutama/go-template/config.schema.json",
   "title": "go-template service configuration (E01-T03)",
   "description": "Mirrors internal/infrastructure/config.Config koanf paths. The alignment test proves every koanf leaf exists here.",
   "type": "object",

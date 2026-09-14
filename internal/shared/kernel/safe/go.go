@@ -11,6 +11,8 @@ import (
 	"context"
 	"fmt"
 	"runtime/debug"
+
+	"github.com/kadekutama/go-template/internal/shared/kernel/log"
 )
 
 // Panic carries a recovered goroutine failure to its owner.
@@ -23,14 +25,29 @@ func (p Panic) Error() string {
 	return fmt.Sprintf("safe: recovered panic: %v", p.Value)
 }
 
-// Go runs fn in a new goroutine bound to ctx. A panic is recovered and
-// delivered to onPanic exactly once; normal return delivers nothing.
-// Callers MUST NOT treat onPanic delivery as completion.
-func Go(ctx context.Context, onPanic func(Panic), fn func(ctx context.Context)) {
+// Go runs fn in a new goroutine bound to ctx. A panic is recovered, logged
+// with stack trace via logger (if non-nil) using standardized error and metadata
+// keys, and delivered to onPanic (if non-nil). Normal return delivers nothing.
+// Callers MUST NOT treat onPanic delivery or recovery as completion.
+func Go(ctx context.Context, logger log.Logger, onPanic func(Panic), fn func(ctx context.Context)) {
+	if fn == nil {
+		return
+	}
 	go func() {
 		defer func() {
 			if recovered := recover(); recovered != nil {
-				onPanic(Panic{Value: recovered, Stack: debug.Stack()})
+				p := Panic{Value: recovered, Stack: debug.Stack()}
+				if logger != nil {
+					logger.Error(ctx, "recovered panic in goroutine",
+						log.Err(p),
+						log.Metadata(map[string]any{
+							"stack": string(p.Stack),
+						}),
+					)
+				}
+				if onPanic != nil {
+					onPanic(p)
+				}
 			}
 		}()
 		fn(ctx)

@@ -29,11 +29,20 @@ func (c MapCarrier) Keys() []string {
 
 // Inject writes the context's span context into carrier.
 func Inject(ctx context.Context, carrier propagation.TextMapCarrier) {
+	if ctx == nil || carrier == nil {
+		return
+	}
 	Propagator().Inject(ctx, carrier)
 }
 
 // Extract returns a context carrying the remote span context from carrier.
 func Extract(ctx context.Context, carrier propagation.TextMapCarrier) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if carrier == nil {
+		return ctx
+	}
 	return Propagator().Extract(ctx, carrier)
 }
 
@@ -52,10 +61,19 @@ func (c headerCarrier) Keys() []string {
 
 // InjectHTTP writes trace context into HTTP headers (E11 middleware).
 func InjectHTTP(ctx context.Context, header http.Header) {
+	if header == nil {
+		return
+	}
 	Inject(ctx, headerCarrier{header: header})
 }
 
 // ExtractHTTP reads trace context from HTTP headers (E11 middleware).
 func ExtractHTTP(ctx context.Context, header http.Header) context.Context {
+	if header == nil {
+		if ctx == nil {
+			return context.Background()
+		}
+		return ctx
+	}
 	return Extract(ctx, headerCarrier{header: header})
 }

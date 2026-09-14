@@ -42,4 +42,4 @@ formatters:
     - goimports
   settings:
     goimports:
-      local-prefixes: example.com/go-template
+      local-prefixes: github.com/kadekutama/go-template

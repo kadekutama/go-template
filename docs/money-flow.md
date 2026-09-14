@@ -548,13 +548,18 @@ Customer              Platform                        Ledger
 ### 2.13 Rounding & Remainder Allocation
 
 When one amount splits into N parts (fees, FX legs, batch allocations),
-per-unit rounding can leave a ±1 minor-unit remainder:
+integer division leaves a non-negative remainder below N units. The ledger
+uses the Hare-Niemeyer (Hamilton) largest-remainder method:
 
-1. Compute each share in minor units, rounding half-even.
-2. `remainder = total − Σ(shares)` is always in (−N, +N) minor units.
-3. Allocate the remainder one unit at a time to the **largest shares first**
-   (ties → lowest index). Record the allocation in entry metadata.
-4. Invariant `AllocationExact`: posted shares always sum exactly to the source
+1. Compute each share as `floor(|total| × weight / Σweights)` in minor units.
+2. `leftover = |total| − Σ(shares)` is always in `[0, N)` minor units.
+3. Award one leftover unit each to the shares with the largest fractional
+   remainders (`(|total| × weight) mod Σweights`), breaking ties by lowest
+   index, so every share stays within one unit of its exact quota (no share
+   hogs multiple remainder units).
+4. Negative totals allocate on the absolute value and restore the sign.
+   Record the allocation in entry metadata.
+5. Invariant `AllocationExact`: posted shares always sum exactly to the source
    amount — enforced as a construction rule alongside `PostingBalancesPerCurrency`.
 
 ---

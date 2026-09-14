@@ -69,9 +69,7 @@ func Load(base string, overlays ...string) (*Config, error) {
 // validate runs every rule and joins all violations into one error.
 func validate(cfg *Config) error {
 	v := validator.New()
-	if err := v.Struct(cfg); err == nil {
-		return nil
-	} else {
+	if err := v.Struct(cfg); err != nil {
 		var verrs validator.ValidationErrors
 		if !errors.As(err, &verrs) {
 			return fmt.Errorf("validate config: %w", err)
@@ -82,6 +80,7 @@ func validate(cfg *Config) error {
 		}
 		return fmt.Errorf("invalid config (%d violation(s)): %s", len(parts), strings.Join(parts, "; "))
 	}
+	return nil
 }
 
 // checkSecretRefs walks the merged raw map and fails on the first secret
@@ -100,6 +99,10 @@ func checkSecretRefs(raw map[string]any) error {
 				if strings.Contains(typed, secretMarker) {
 					return &SecretRefError{Key: path}
 				}
+			case []any:
+				if err := checkSecretSlice(path, typed, walk); err != nil {
+					return err
+				}
 			case map[string]any:
 				if err := walk(path, typed); err != nil {
 					return err
@@ -109,4 +112,19 @@ func checkSecretRefs(raw map[string]any) error {
 		return nil
 	}
 	return walk("", raw)
+}
+
+func checkSecretSlice(path string, items []any, walk func(string, map[string]any) error) error {
+	for i, elem := range items {
+		itemPath := fmt.Sprintf("%s[%d]", path, i)
+		if s, ok := elem.(string); ok && strings.Contains(s, secretMarker) {
+			return &SecretRefError{Key: itemPath}
+		}
+		if m, ok := elem.(map[string]any); ok {
+			if err := walk(itemPath, m); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

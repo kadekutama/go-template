@@ -1,6 +1,10 @@
 package pagination
 
 import (
+	"encoding/base64"
+	"encoding/binary"
+	"hash/crc32"
+	"math"
 	"strings"
 	"testing"
 )
@@ -66,5 +70,36 @@ func TestParseLimitOffsetFallsBack(t *testing.T) {
 	got = ParseLimitOffset("25", "50")
 	if got.Limit != 25 || got.Offset != 50 {
 		t.Errorf("expected 25/50, got %+v", got)
+	}
+}
+
+func TestCursorOffsetOverflow(t *testing.T) {
+	t.Parallel()
+
+	var payload [8]byte
+	binary.BigEndian.PutUint64(payload[:], math.MaxUint64)
+	sum := crc32.Checksum(payload[:], crc32.MakeTable(crc32.Castagnoli))
+	var raw [12]byte
+	copy(raw[:8], payload[:])
+	binary.BigEndian.PutUint32(raw[8:], sum)
+	token := base64.RawURLEncoding.EncodeToString(raw[:])
+
+	if _, err := DecodeCursor(token); err == nil {
+		t.Error("expected error for overflow cursor offset, got nil")
+	}
+}
+
+func TestPageResultShape(t *testing.T) {
+	t.Parallel()
+
+	result := PageResult[string]{
+		Items:  []string{"item1", "item2"},
+		Total:  100,
+		Limit:  50,
+		Offset: 0,
+	}
+
+	if len(result.Items) != 2 || result.Total != 100 || result.Limit != 50 || result.Offset != 0 {
+		t.Errorf("unexpected PageResult: %+v", result)
 	}
 }

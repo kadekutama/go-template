@@ -12,6 +12,9 @@
 > product's core value and its highest-risk logic. Nemotron buried them as
 > sub-bullets of generic "domain services" with no tasks for FX, settlement,
 > returns, linking, templates, or payment methods.
+> Parallel work governance: E03 tasks run concurrently with E04 and E05.
+> All harnesses MUST adhere to SDD §6 and repository-governance §4.1:
+> work in separate Git worktrees and author active claims before editing files.
 
 ## Tasks
 

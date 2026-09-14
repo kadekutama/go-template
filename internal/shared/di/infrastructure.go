@@ -3,9 +3,9 @@ package di
 import (
 	"os"
 
-	"example.com/go-template/internal/infrastructure/logging"
-	"example.com/go-template/internal/shared/kernel"
-	"example.com/go-template/internal/shared/kernel/log"
+	"github.com/kadekutama/go-template/internal/infrastructure/logging"
+	"github.com/kadekutama/go-template/internal/shared/kernel"
+	"github.com/kadekutama/go-template/internal/shared/kernel/log"
 
 	"go.uber.org/fx"
 )

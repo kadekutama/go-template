@@ -10,7 +10,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 |------|-------|----|------|--------|------|
 | E00 | Foundation & repo bootstrap | 14 | 14/14 | completed | G1 |
 | E01 | Platform core (fx, config, logging, tracing, kernel, resilience) | 17 | 17/17 | completed | G1 |
-| E02 | Ledger domain core | 30 | 0/30 | pending | G2 |
+| E02 | Ledger domain core | 30 | 30/30 | completed | G2 |
 | E03 | Money-movement domain | 37 | 0/37 | pending | G2 |
 | E04 | Compliance domain | 16 | 0/16 | pending | G2 |
 | E05 | Tenancy domain | 11 | 0/11 | pending | G2 |
@@ -29,7 +29,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | E18 | Docs + DX | 16 | 0/16 | pending | G8 |
 | E19 | Hardening + release | 13 | 0/13 | pending | G8 |
 
-**Total:** 31/432 SP completed.
+**Total:** 61/432 SP completed.
 
 ## Task checklists (tick as epic files flip to completed)
 
@@ -55,15 +55,15 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 - [x] E01-T08 resilience primitives (breaker/timeout/retry)
 
 ### E02 — Ledger domain
-- [ ] E02-T01 domain event + specification primitives
-- [ ] E02-T02 Money/Currency/IDs
-- [ ] E02-T03 Account aggregate
-- [ ] E02-T04 Posting + Entry + Hold
-- [ ] E02-T05 Journal/Period/sub-ledgers
-- [ ] E02-T06 domain events catalog
-- [ ] E02-T07 specifications catalog
-- [ ] E02-T08 repository ports
-- [ ] E02-T09 domain test suite (G2)
+- [x] E02-T01 domain event + specification primitives
+- [x] E02-T02 Money/Currency/IDs
+- [x] E02-T03 Account aggregate
+- [x] E02-T04 Posting + Entry + Hold
+- [x] E02-T05 Journal/Period/sub-ledgers
+- [x] E02-T06 domain events catalog
+- [x] E02-T07 specifications catalog
+- [x] E02-T08 repository ports
+- [x] E02-T09 domain test suite (G2)
 
 ### E03 — Money movement
 - [ ] E03-T01 transfers (immediate/scheduled/recurring/bulk/templates)

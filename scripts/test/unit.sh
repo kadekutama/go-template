@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Fast unit tests: domain + application + pkg (E00-T07).
+# Fast unit tests: domain + application + pkg (E00-T07) + mirror suites (E02-T09).
 # Usage: ./scripts/test/unit.sh [-- <extra go test args>]
 set -euo pipefail
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   echo "Usage: ./scripts/test/unit.sh [-- <extra go test args>]"
-  echo "Runs: go test ./internal/... ./pkg/..."
+  echo "Runs: go test ./internal/... ./pkg/... ./test/unit/..."
   exit 0
 fi
 
@@ -19,4 +19,4 @@ if ! find internal pkg -name "*.go" 2>/dev/null | grep -q .; then
   exit 0
 fi
 
-exec go test ./internal/... ./pkg/... "$@"
+exec go test ./internal/... ./pkg/... ./test/unit/... "$@"

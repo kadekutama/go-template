@@ -81,6 +81,13 @@ alias, but the required repository checks and artifact paths remain unchanged.
    never evidence.
 5. On interruption, leave a handoff that names the first unverified requirement
    and exact commands to resume.
+6. Shared filesystem is not permission: adapters and harnesses must never modify
+   implementation files without an active claim in `tasks/claims/<TASK-ID>.md`.
+   Once a claim is released, files are frozen; post-release refinements require
+   reopening the claim or following the takeover protocol.
+7. Physical isolation for parallel harnesses: when running concurrent harnesses
+   on parallel tasks (e.g. Phase 3 / E03+), adapters must configure dedicated
+   Git worktrees (`git worktree add`) to prevent working-directory collisions.
 
 ## References
 

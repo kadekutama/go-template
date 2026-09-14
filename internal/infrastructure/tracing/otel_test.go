@@ -5,8 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"example.com/go-template/internal/shared/kernel/trace"
+	"github.com/kadekutama/go-template/internal/shared/kernel/trace"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -64,6 +65,33 @@ func TestRecordErrorMarksSpan(t *testing.T) {
 	}
 }
 
+func TestSpanSetAttributes(t *testing.T) {
+	t.Parallel()
+
+	provider, recorder := recorderProvider()
+	tracer := provider.Tracer("test")
+
+	_, span := tracer.Start(context.Background(), "op")
+	span.SetAttributes(attribute.String("test.key", "test.value"), attribute.Int("num", 42))
+	span.End()
+
+	ended := recorder.Ended()
+	if len(ended) != 1 {
+		t.Fatalf("expected 1 span, got %d", len(ended))
+	}
+	attrs := ended[0].Attributes()
+	foundKey := false
+	for _, attr := range attrs {
+		if attr.Key == "test.key" && attr.Value.AsString() == "test.value" {
+			foundKey = true
+			break
+		}
+	}
+	if !foundKey {
+		t.Errorf("expected test.key attribute not found in %v", attrs)
+	}
+}
+
 // testEnv is the non-production environment used across bootstrap tests.
 const (
 	testServiceName    = "svc"
@@ -113,7 +141,13 @@ func TestBootstrapRequiresServiceIdentity(t *testing.T) {
 	if _, err := Bootstrap(Config{ServiceVersion: testServiceVersion, Env: testEnv}); err == nil {
 		t.Error("expected ServiceName error, got nil")
 	}
+	if _, err := Bootstrap(Config{ServiceName: testServiceName, Env: testEnv}); err == nil {
+		t.Error("expected ServiceVersion error, got nil")
+	}
 	if _, err := Bootstrap(Config{ServiceName: testServiceName, ServiceVersion: testServiceVersion, Env: testEnv, SampleRatio: 9}); err == nil {
-		t.Error("expected SampleRatio error, got nil")
+		t.Error("expected SampleRatio error for ratio > 1, got nil")
+	}
+	if _, err := Bootstrap(Config{ServiceName: testServiceName, ServiceVersion: testServiceVersion, Env: testEnv, SampleRatio: -0.5}); err == nil {
+		t.Error("expected SampleRatio error for ratio < 0, got nil")
 	}
 }

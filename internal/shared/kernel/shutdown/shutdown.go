@@ -5,6 +5,7 @@ package shutdown
 
 import (
 	"context"
+	"errors"
 	"os/signal"
 	"syscall"
 	"time"
@@ -14,11 +15,17 @@ import (
 const DefaultDrainTimeout = 10 * time.Second
 
 // Run blocks in serve until ctx is done or SIGTERM/SIGINT arrives, then runs
-// drain with timeout. A nil timeout selects DefaultDrainTimeout. The drain
-// error (if any) is returned; serve errors are returned immediately.
+// drain with timeout. A nil or non-positive timeout selects DefaultDrainTimeout.
+// The drain error (if any) is returned; serve errors are returned immediately.
 func Run(ctx context.Context, timeout *time.Duration, serve func(ctx context.Context) error, drain func(ctx context.Context) error) error {
+	if serve == nil {
+		return errors.New("shutdown: serve func must not be nil")
+	}
+	if drain == nil {
+		drain = func(context.Context) error { return nil }
+	}
 	drainTimeout := DefaultDrainTimeout
-	if timeout != nil {
+	if timeout != nil && *timeout > 0 {
 		drainTimeout = *timeout
 	}
 

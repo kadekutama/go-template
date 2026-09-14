@@ -81,11 +81,15 @@ Other tasks may use self-review, but must record it explicitly.
 Create `tasks/claims/<TASK-ID>.md` before changing implementation files. A valid
 claim names the owner, harness, branch/worktree, exact base commit, start time,
 and lease expiry. One agent owns one task at a time. Shared filesystem access is
-not permission to edit another task's owned files.
+not permission to edit another task's owned files — nor to edit any implementation
+files without an active claim.
 
 Claim creation must be serialized by the team's shared Git/PR workflow. If two
 claims race, the earliest merged claim wins; the other agent stops and selects a
 different task. Lease takeover requires recording the previous claim and reason.
+Once all claims on an epic/branch are released, the working tree is frozen; any
+subsequent refinement or post-release edit requires reopening a claim or following
+the takeover protocol (§4).
 
 ### 3.3 Implement
 
@@ -155,13 +159,28 @@ control when a capability may be depended on or exposed.
 
 ## 6. Parallel Work Rules
 
-- One branch/worktree per task; branch names include the task ID.
-- Avoid two active tasks owning the same files. If unavoidable, designate one
-  owner and make the other consume a committed contract/stub.
-- Generated files have one source-of-truth owner; consumers do not edit them.
-- Database migration numbers are reserved in the claim before authoring.
-- Contract changes land before or atomically with consumers.
-- Merge order follows task dependencies, not completion timestamps.
+- **Shared filesystem ≠ permission:** An agent or harness operating in a shared
+  repository workspace MUST NOT modify files without an active, non-expired claim
+  owning that task.
+- **Physical worktree isolation:** When multiple agents or harnesses run in
+  parallel (e.g. Phase 3 parallel tasks across E03, E04, E05), each harness MUST
+  operate in an isolated Git worktree:
+  `git worktree add ../go-template-<TASK-ID> -b feat/<TASK-ID>-short-name`.
+  Two active harnesses must NEVER share an uncommitted working directory.
+- **Branch and claim naming:** One branch/worktree per task; branch names include
+  the task ID.
+- **Strict Change Surface isolation:** Avoid two active tasks declaring overlapping
+  files in `Allowed Change Surface`. If unavoidable, designate one owner and make
+  the other consume a committed contract/stub.
+- **Generated files:** Generated files have one source-of-truth owner; consumers
+  do not edit them.
+- **Migrations:** Database migration numbers are reserved in the claim before authoring.
+- **Contracts:** Contract changes land before or atomically with consumers.
+- **Merge order:** Merge order follows task dependencies, not completion timestamps.
+- **Working-tree freeze on release:** When all claims for a branch/epic are
+  released, the branch files are frozen. Out-of-band edits without an active claim
+  are prohibited; post-release refinements require reopening the claim or a formal
+  takeover (§4).
 
 ## 7. Required Checks
 

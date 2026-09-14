@@ -16,6 +16,19 @@ handoff files are durable state; conversation history is not. Harness-specific
 profiles may add operating instructions but cannot override the task packet,
 accepted ADRs, or `docs/ledger-core.md`.
 
+**Multi-Harness Governance & Collision Avoidance:**
+- **Shared filesystem is NEVER permission to edit:** Access to the local workspace
+  or repository clone does not grant permission to modify files without an active
+  claim in `tasks/claims/<TASK-ID>.md` (`Status: active`) that matches the agent's
+  harness identifier.
+- **No out-of-band edits:** When all task claims in an epic/branch are released,
+  the working tree is frozen. Post-release polish or review fixes require either
+  reopening the claim (transitioning to `active` with amendment rationale) or
+  recording a formal takeover claim under `tasks/SDD.md §4`.
+- **Parallel Work Isolation:** For parallel tasks (e.g. Phase 3 / E03+), harnesses
+  MUST operate in separate Git worktrees (`git worktree add ../go-template-<TASK-ID>`)
+  and must not declare overlapping change surfaces.
+
 The phrase **Specification-Driven Delivery** refers to this repository workflow.
 The **Specification pattern** refers only to executable domain business rules.
 
@@ -126,14 +139,16 @@ The audit and open risks are recorded in `docs/repository-audit.md`.
 - CI must pass before merge
 
 ## Phase Tracking
-Current Phase: **0. Repository Bootstrap & Tooling** (`tasks/epics/E00-foundation.md`)
+Current Phase: **Phase 2 Complete / Phase 3 Start** (E00, E01, E02 completed; next: `tasks/epics/E03-money-movement.md`, `tasks/epics/E04-compliance.md`, `tasks/epics/E05-tenancy.md`)
 
 Agents should:
-1. Follow `tasks/SDD.md` and claim one dependency-ready task.
+1. Follow `tasks/SDD.md` and select one dependency-ready task (`python3 tasks/scripts/check-tasks.py --ready`).
 2. Read its approved task packet and exact normative references.
-3. Implement and record requirement-level evidence.
-4. Maintain a repository-visible handoff so another harness can resume.
-5. Create an ADR for architectural deviations before implementing them.
+3. Verify that no other harness is claiming the task, and create an active claim in `tasks/claims/<TASK-ID>.md` before touching code.
+4. If working in parallel with another harness, isolate the workspace using a dedicated Git worktree.
+5. Implement and record requirement-level evidence in `tasks/evidence/<TASK-ID>.md`.
+6. Maintain a repository-visible handoff in `tasks/handoffs/<TASK-ID>.md` so another harness can resume.
+7. Create an ADR for architectural deviations before implementing them.
 
 ## Key Files to Reference
 - `SPEC.md` - Master specification (source of truth)

@@ -51,6 +51,12 @@ func TestBackoffBounds(t *testing.T) {
 	t.Parallel()
 
 	policy := RetryPolicy{MaxAttempts: 5, InitialBackoff: 100 * time.Millisecond, MaxBackoff: 250 * time.Millisecond, Multiplier: 10}.Normalize()
+	if got := policy.BackoffFor(0); got != 100*time.Millisecond {
+		t.Errorf("zero retry backoff = %v, want 100ms", got)
+	}
+	if got := policy.BackoffFor(-1); got != 100*time.Millisecond {
+		t.Errorf("negative retry backoff = %v, want 100ms", got)
+	}
 	if got := policy.BackoffFor(1); got != 100*time.Millisecond {
 		t.Errorf("first backoff = %v", got)
 	}
@@ -60,5 +66,33 @@ func TestBackoffBounds(t *testing.T) {
 	zero := RetryPolicy{}.Normalize()
 	if zero.MaxAttempts != DefaultMaxAttempts || zero.Multiplier != DefaultMultiplier {
 		t.Errorf("zero policy not defaulted: %+v", zero)
+	}
+}
+
+func TestErrorWrappers(t *testing.T) {
+	t.Parallel()
+
+	inner := errors.New("underlying issue")
+
+	retryable := &RetryableError{Err: inner}
+	if retryable.Error() != "underlying issue" {
+		t.Errorf("got %q, want %q", retryable.Error(), "underlying issue")
+	}
+	if !errors.Is(retryable, inner) {
+		t.Errorf("errors.Is failed for retryable unwrap")
+	}
+	if retryable.Unwrap() != inner {
+		t.Errorf("Unwrap() got %v, want %v", retryable.Unwrap(), inner)
+	}
+
+	permanent := &PermanentError{Err: inner}
+	if permanent.Error() != "underlying issue" {
+		t.Errorf("got %q, want %q", permanent.Error(), "underlying issue")
+	}
+	if !errors.Is(permanent, inner) {
+		t.Errorf("errors.Is failed for permanent unwrap")
+	}
+	if permanent.Unwrap() != inner {
+		t.Errorf("Unwrap() got %v, want %v", permanent.Unwrap(), inner)
 	}
 }

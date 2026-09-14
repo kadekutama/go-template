@@ -57,8 +57,8 @@ Without this, every agent invents its own layout and imports break.
   appears only when a dependency requires it
 - Create dirs: `cmd/{rest-api,grpc-api,graphql-api,cron,consumer}`, `internal/{domain,application,interface/{rest,grpc,cron,consumer},infrastructure,shared}`, `pkg/{httpserver,grpcserver,graphql,scheduler,jsonparser}`, `api/{proto,openapi,graphql}`, `config/`, `deployments/{docker,k8s}`, `docs/{architecture,domain,application,infrastructure,api,development}`, `scripts/{build,dev,test,db,generate,release,security}`, `test/{unit,integration,performance,chaos,contract,fixtures,mock,testcontainers}`, `.github/workflows/`, `.opencode/{agents,skills,permissions}/`
 **Steps:**
-1. `go mod init example.com/go-template` with `go 1.27.1` directive. The reserved
-   `example.com` path is the canonical reference-template identity; the E18
+1. `go mod init github.com/kadekutama/go-template` with `go 1.27.1` directive. The
+   `github.com/kadekutama/go-template` path is the repository module identity; the E18
    scaffolder replaces it for consumers. Do not invent an organization path.
 2. Create the directory tree above (empty `.gitkeep` where needed).
 3. Write `.gitignore` covering `bin/`, `coverage/`, `*.log`, `.env*`, and

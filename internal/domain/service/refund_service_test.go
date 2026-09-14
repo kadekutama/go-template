@@ -241,9 +241,7 @@ func TestValidateRefund(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := service.ValidateRefund(tc.req, tc.originalExists, tc.accounts)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)

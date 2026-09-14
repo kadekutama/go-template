@@ -122,9 +122,7 @@ func TestOpenDispute(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := service.OpenDispute(tc.req)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -186,9 +184,7 @@ func TestMarkEvidenceDue(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := service.MarkEvidenceDue(tc.d)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -260,9 +256,7 @@ func TestSubmitEvidence(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := service.SubmitEvidence(tc.d, tc.at)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -334,9 +328,7 @@ func TestRepresentmentAllowed(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			err := service.RepresentmentAllowed(tc.d, tc.policy)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -425,9 +417,7 @@ func TestCloseDispute(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := service.CloseDispute(tc.d, tc.outcome)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -485,9 +475,7 @@ func TestSealDispute(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := service.SealDispute(tc.d)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -524,9 +512,7 @@ func TestEarlyWarningRecommend(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult := service.EarlyWarningRecommend(tc.refundCostMinor, tc.expectedDisputeCostMinor, tc.feeMinor)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -619,9 +605,7 @@ func TestAuthorize(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := service.Authorize(tc.id, tc.amountMinor, tc.holdID, tc.now, tc.expiryDays, tc.multipleCaptures)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -738,9 +722,7 @@ func TestCapture(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := service.Capture(tc.a, tc.amountMinor)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -823,9 +805,7 @@ func TestSweepExpired(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult1, actualResult2 := service.SweepExpired(tc.auths, tc.now)
 			assert.Equal(t, tc.expectedResult1, actualResult1)
 			assert.Equal(t, tc.expectedResult2, actualResult2)
@@ -886,9 +866,7 @@ func TestRequireAction(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := service.RequireAction(tc.a)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -958,9 +936,7 @@ func TestResolveAction(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := service.ResolveAction(tc.a, tc.succeeded)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)

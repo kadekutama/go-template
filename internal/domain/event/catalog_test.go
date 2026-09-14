@@ -179,9 +179,7 @@ func TestCatalogEventTypes(t *testing.T) {
 		t.Fatalf("catalog table has %d entries, want 49", len(testCases))
 	}
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.expectedType, func(t *testing.T) {
-			t.Parallel()
 			evt, err := tc.make()
 			if err != nil {
 				t.Fatalf("constructor: %v", err)
@@ -255,9 +253,7 @@ func TestCatalogValidation(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			err := tc.call()
 			if tc.expectedError {
 				if err == nil {
@@ -572,9 +568,7 @@ func TestCatalogValidationMatrix(t *testing.T) {
 		}},
 	}
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			if err := tc.call(); err == nil {
 				t.Errorf("expected error, got nil")
 			}

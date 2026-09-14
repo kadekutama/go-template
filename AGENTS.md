@@ -150,7 +150,7 @@ All unit tests across this repository must follow our strict table-driven patter
      },
      ```
 4. **Multi-Line Formatting**: Every test case entry in `testCases` must span multiple lines with standard indentation. Never write dense one-liners.
-5. **Parallel Safety**: Invoke `t.Parallel()` in parent tests and inside subtests (`tc := tc; t.Parallel()`), and ensure test fixtures or generators are thread-safe.
+5. **Parallel Safety & Modern Loop Scoping**: Invoke `t.Parallel()` at the top of parent test functions. Do NOT include `tc := tc` (obsolete in Go 1.22+) and do NOT invoke `t.Parallel()` inside subtest loops (`t.Run`), keeping subtests clean, sequential, and deterministic.
 6. **Edge-Case Rigor**: Thoroughly cover zero, negative, maximum boundary values (`math.MaxInt64`, arithmetic overflow), empty/whitespace strings, and illegal state transitions.
 
 #### Complete Unit Test Examples
@@ -223,9 +223,7 @@ func TestSettlementBatchValidate(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			err := tc.batch.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -302,9 +300,7 @@ func TestAssessTransactionFee(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := service.AssessTransactionFee(tc.amountMinor, tc.bps, tc.floorMinor, tc.capMinor)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -369,9 +365,7 @@ func TestPaymentServiceAuthorize(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			svc := NewPaymentService()
 			res, err := svc.Authorize(tc.ctx, tc.req)
 			assert.Equal(t, tc.expectedResult, res)

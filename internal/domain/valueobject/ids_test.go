@@ -95,7 +95,6 @@ func TestOtherIDTypes(t *testing.T) {
 	}
 	for _, tc := range types {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			if err := tc.parse(gen.NewID()); err != nil {
 				t.Errorf("valid %s must parse: %v", tc.name, err)
 			}

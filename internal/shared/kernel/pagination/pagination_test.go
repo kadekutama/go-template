@@ -40,9 +40,7 @@ func TestCursorEncode(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			token, err := tc.c.Encode()
 			if tc.expectedError != nil {
 				assert.Equal(t, tc.expectedError, err)
@@ -108,9 +106,7 @@ func TestDecodeCursor(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			got, err := DecodeCursor(tc.token)
 			if tc.expectedError != nil {
 				assert.Equal(t, tc.expectedError, err)
@@ -160,9 +156,7 @@ func TestPageRequestNormalize(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult := tc.r.Normalize()
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -210,9 +204,7 @@ func TestParseLimitOffset(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult := ParseLimitOffset(tc.limitStr, tc.offsetStr)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})

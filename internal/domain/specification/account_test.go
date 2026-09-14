@@ -89,9 +89,7 @@ func TestAccountActiveMatrix(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			res := specification.AccountActive().Evaluate(tc.ctx, tc.account)
 			assert.Equal(t, tc.expectedPassed, res.Passed())
 			if tc.expectedViolationCode != "" {
@@ -144,9 +142,7 @@ func TestSameTenant(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			res := specification.SameTenant().Evaluate(tc.ctx, tc.pair)
 			assert.Equal(t, tc.expectedPassed, res.Passed())
 			if tc.expectedViolationCode != "" {

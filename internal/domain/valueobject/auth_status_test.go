@@ -71,9 +71,7 @@ func TestParseAuthStatus(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := valueobject.ParseAuthStatus(tc.s)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -185,9 +183,7 @@ func TestCanTransitionAuth(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult := valueobject.CanTransitionAuth(tc.from, tc.to)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})

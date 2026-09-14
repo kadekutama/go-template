@@ -66,9 +66,7 @@ func TestFromContext(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			got := log.FromContext(tc.ctx)
 			assert.NotNil(t, got)
 			assert.Equal(t, tc.expectedFields, got)
@@ -105,9 +103,7 @@ func TestWithContext(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			resCtx := log.WithContext(tc.ctx, tc.fields)
 			assert.NotNil(t, resCtx)
 			extracted := log.FromContext(resCtx)

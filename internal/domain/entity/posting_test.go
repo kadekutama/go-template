@@ -110,9 +110,7 @@ func TestEntryValidate(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			err := tc.entry.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -248,9 +246,7 @@ func TestPostingDataValidate(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			err := tc.posting.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -408,9 +404,7 @@ func TestHoldDataValidate(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			err := tc.hold.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})

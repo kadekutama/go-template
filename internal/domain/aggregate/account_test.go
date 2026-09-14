@@ -227,9 +227,7 @@ func TestNormalSideTable(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			assert.Equal(t, tc.expectedResult, tc.class.NormalSide())
 		})
 	}
@@ -352,9 +350,7 @@ func TestOpenValidation(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			_, err := aggregate.OpenAccount(tc.params)
 			if tc.expectedError {
 				assert.Error(t, err)
@@ -392,9 +388,7 @@ func TestCloseRequiresReason(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			a := openTestAccount(t, "a-9")
 			err := a.Close(tc.params)
 			assert.Error(t, err)

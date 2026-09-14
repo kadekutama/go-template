@@ -43,9 +43,7 @@ func TestFixedClock(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			clock := NewFixedClock(tc.times...)
 			for i := 0; i < tc.calls; i++ {
 				got := clock.Now()

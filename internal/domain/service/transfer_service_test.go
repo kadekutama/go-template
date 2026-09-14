@@ -215,9 +215,7 @@ func TestValidateImmediate(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := service.ValidateImmediate(tc.req, tc.accounts, tc.sourceAvailableMinor)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -338,9 +336,7 @@ func TestValidateSchedule(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			err := service.ValidateSchedule(tc.req, tc.accounts, tc.now)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -409,9 +405,7 @@ func TestValidateExecution(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := service.ValidateExecution(tc.req, tc.accounts, tc.sourceAvailableMinor)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -462,9 +456,7 @@ func TestExpandRecurrence(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := service.ExpandRecurrence(tc.root, tc.n)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -582,9 +574,7 @@ func TestEvaluateBatch(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult := service.EvaluateBatch(tc.batchID, tc.items, tc.fn)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -617,9 +607,7 @@ func TestBatchItemKey(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult := service.BatchItemKey(tc.batchID, tc.itemKey)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -726,9 +714,7 @@ func TestValidateTemplate(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			err := service.ValidateTemplate(tc.template)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -798,9 +784,7 @@ func TestApplyTemplate(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := service.ApplyTemplate(tc.template, tc.amountMinor, tc.fxRatePresent)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)

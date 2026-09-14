@@ -97,9 +97,7 @@ func TestBelongsToSubLedger(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult := service.BelongsToSubLedger(tc.entry, tc.accounts, tc.key)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -140,9 +138,7 @@ func TestSubLedgerKeyMatches(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult := tc.key.Matches(tc.tenant, tc.ledger, tc.asset)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -260,9 +256,7 @@ func TestValidateOpeningBalance(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualError := service.ValidateOpeningBalance(tc.period, tc.lines, tc.ev)
 			assert.Equal(t, tc.expectedError, actualError)
 		})

@@ -52,9 +52,7 @@ func TestTransferAmountPositive(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			res := specification.TransferAmountPositive().Evaluate(tc.ctx, tc.candidate)
 			assert.Equal(t, tc.expectedPassed, res.Passed())
 			if tc.expectedViolationCode != "" {
@@ -112,9 +110,7 @@ func TestSufficientFunds(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			res := spec.Evaluate(tc.ctx, tc.amount)
 			assert.Equal(t, tc.expectedPassed, res.Passed())
 			if tc.expectedViolationCode != "" {
@@ -181,9 +177,7 @@ func TestCaptureAmountValid(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			res := specification.CaptureAmountValid().Evaluate(tc.ctx, tc.req)
 			assert.Equal(t, tc.expectedPassed, res.Passed())
 			if tc.expectedViolationCode != "" {
@@ -249,9 +243,7 @@ func TestAllocationExact(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			res := specification.AllocationExact().Evaluate(tc.ctx, tc.allocation)
 			assert.Equal(t, tc.expectedPassed, res.Passed())
 			if tc.expectedViolationCode != "" {

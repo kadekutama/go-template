@@ -86,9 +86,7 @@ func TestAll(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			res := tc.spec.Evaluate(tc.ctx, tc.candidate)
 			if tc.expectedPassed != res.Passed() {
 				t.Fatalf("expected passed %v, got %v", tc.expectedPassed, res.Passed())
@@ -140,9 +138,7 @@ func TestAny(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			res := tc.spec.Evaluate(tc.ctx, tc.candidate)
 			if tc.expectedPassed != res.Passed() {
 				t.Fatalf("expected passed %v, got %v", tc.expectedPassed, res.Passed())
@@ -188,9 +184,7 @@ func TestNot(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			res := tc.spec.Evaluate(tc.ctx, tc.candidate)
 			if tc.expectedPassed != res.Passed() {
 				t.Fatalf("expected passed %v, got %v", tc.expectedPassed, res.Passed())
@@ -266,9 +260,7 @@ func TestNilSafety(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			defer func() {
 				if r := recover(); r != nil {
 					t.Fatalf("unexpected panic: %v", r)

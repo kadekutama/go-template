@@ -87,9 +87,7 @@ func TestMoneyScalarEdges(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			got, err := tc.op(tc.money)
 			if tc.expectedError {
 				assert.Error(t, err)
@@ -144,9 +142,7 @@ func TestMoneyCompareAndPredicates(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			c, err := tc.m1.Compare(tc.m2)
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expectedResult, c)
@@ -195,9 +191,7 @@ func TestMoneyFormatNegative(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			s, formatErr := tc.money.Format(reg)
 			assert.NoError(t, formatErr)
 			assert.Equal(t, tc.expectedResult, s)
@@ -248,9 +242,7 @@ func TestAllocateEdges(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			shares, err := valueobject.AllocateLargestRemainder(tc.total, tc.weights)
 			if tc.expectedError {
 				assert.Error(t, err)
@@ -357,9 +349,7 @@ func TestAllIDTypesTable(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			gen := &seqIDs{}
 			a, b := gen.NewID(), gen.NewID()
 			assert.NotEqual(t, a, b, "generated ids must be unique")
@@ -474,9 +464,7 @@ func TestParseRejectsAlternateUUIDForms(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			_, err := valueobject.ParseAccountID(tc.raw)
 			assert.Error(t, err, "ParseAccountID must reject non-canonical form")
 		})

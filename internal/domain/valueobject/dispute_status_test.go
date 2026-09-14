@@ -71,9 +71,7 @@ func TestParseDisputeStatus(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := valueobject.ParseDisputeStatus(tc.s)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -161,9 +159,7 @@ func TestCanTransitionDispute(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult := valueobject.CanTransitionDispute(tc.from, tc.to)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})

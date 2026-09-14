@@ -70,9 +70,7 @@ func TestLoadFailures(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			_, err := Load(tc.filePath())
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tc.expectedError)
@@ -147,9 +145,7 @@ func TestSecretRefValidation(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			_, err := Load(writeTemp(t, tc.yamlBody))
 			var secretErr *SecretRefError
 			assert.ErrorAs(t, err, &secretErr)
@@ -178,9 +174,7 @@ func TestStagingAndProductionFailOnSecretRefs(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			_, err := Load(repoConfig("config.yaml"), repoConfig(tc.configFile))
 			var secretErr *SecretRefError
 			assert.ErrorAs(t, err, &secretErr)

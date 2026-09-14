@@ -201,9 +201,7 @@ func TestRealSleep(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			err := RealSleep(tc.ctx(), tc.d)
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)

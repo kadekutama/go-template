@@ -50,9 +50,7 @@ func TestDomainError(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			assert.Equal(t, tc.expectedCode, tc.err.Code)
 			assert.Equal(t, tc.expectedMessage, tc.err.Message)
 			assert.Equal(t, tc.expectedString, tc.err.Error())
@@ -131,9 +129,7 @@ func TestNewLedger(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			ledger, err := entity.NewLedger(tc.id, tc.tenantID, tc.nameField, tc.assetCode, tc.chartVersion)
 			if tc.expectedError != nil {
 				assert.Equal(t, tc.expectedError, err)
@@ -257,9 +253,7 @@ func TestAccountDataValidate(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			err := tc.account.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})

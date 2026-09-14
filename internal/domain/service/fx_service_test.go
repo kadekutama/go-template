@@ -107,9 +107,7 @@ func TestConvert(t *testing.T) {
 		},
 	}
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := service.Convert(tc.amountMinor, tc.rate, tc.at)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -146,9 +144,7 @@ func TestGainLoss(t *testing.T) {
 		},
 	}
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult := service.GainLoss(tc.authorizeQuoteMinor, tc.settleQuoteMinor)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -199,9 +195,7 @@ func TestLotsBalance(t *testing.T) {
 		},
 	}
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			err := service.LotsBalance(tc.lots)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -241,9 +235,7 @@ func TestNewFxPair(t *testing.T) {
 		},
 	}
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := valueobject.NewFxPair(tc.base, tc.quote)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)

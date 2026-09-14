@@ -95,7 +95,7 @@ Every test suite in this repository adheres to a strict table-driven pattern opt
 - Field names must match the target function's parameter names (e.g. `amountMinor`, `rate`, `from`, `to`) and return types (`expectedResult`, `expectedResult1`, `expectedResult2`, `expectedError`). Do not use vague names like `param1`, `arg`, or `expect`.
 
 ### 2. Zero single-use variables outside `testCases`
-- **Anti-pattern:** Declaring single-use variant structs (`noID`, `negAmount`, `brokenRate`, `underReview`) before `testCases := []testCase{ ... }`. This pollutes the function scope, creates long jumps when investigating test failures, and risks shared-state mutation across parallel subtests.
+- **Anti-pattern:** Declaring single-use variant structs (`noID`, `negAmount`, `brokenRate`, `underReview`) before `testCases := []testCase{ ... }`. This pollutes the function scope, creates long jumps when investigating test failures, and risks shared-state mutation across subtests.
 - **Required pattern:** Inline all test-specific inputs directly within the test case entry. When deriving a variant from a base template, use an immediately-invoked anonymous closure:
   ```go
   {
@@ -115,6 +115,7 @@ Every test suite in this repository adheres to a strict table-driven pattern opt
 
 ### 4. Concurrency & Determinism
 - Parent tests must invoke `t.Parallel()`.
+- Do NOT use `tc := tc` (obsolete in Go 1.22+) and do NOT invoke `t.Parallel()` inside subtests (`t.Run`), keeping subtests clean, sequential, and deterministic.
 - Test helpers and generators must be strictly thread-safe (e.g., using `sync.Mutex` or atomics for sequential counters).
 - No global state or package-level shared mutable fixtures.
 
@@ -193,9 +194,7 @@ func TestSettlementBatchValidate(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			err := tc.batch.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -272,9 +271,7 @@ func TestAssessTransactionFee(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := service.AssessTransactionFee(tc.amountMinor, tc.bps, tc.floorMinor, tc.capMinor)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -339,9 +336,7 @@ func TestPaymentServiceAuthorize(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			svc := NewPaymentService()
 			res, err := svc.Authorize(tc.ctx, tc.req)
 			assert.Equal(t, tc.expectedResult, res)

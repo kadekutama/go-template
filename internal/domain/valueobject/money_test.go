@@ -67,9 +67,7 @@ func TestMoneyAdd(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			got, err := tc.a.Add(tc.b)
 			if tc.expectedError != nil {
 				assert.Error(t, err)
@@ -122,9 +120,7 @@ func TestCrossCurrencyMismatch(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			opErr := tc.op(usd(t, 100), eurMoney)
 			assert.Error(t, opErr)
 			assert.Contains(t, opErr.Error(), tc.expectedError)
@@ -172,9 +168,7 @@ func TestOverflowRejected(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			err := tc.op()
 			assert.Error(t, err)
 		})
@@ -233,9 +227,7 @@ func TestMoneyJSONShape(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			money, err := valueobject.MoneyFromDTO(tc.dto)
 			if tc.expectedError != nil {
 				assert.Error(t, err)
@@ -296,9 +288,7 @@ func TestMoneyFormat(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			got, formatErr := tc.money.Format(reg)
 			if tc.expectedError != nil {
 				assert.Error(t, formatErr)
@@ -381,9 +371,7 @@ func TestAllocateLargestRemainder(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			got, err := valueobject.AllocateLargestRemainder(tc.total, tc.weights)
 			if tc.expectedError {
 				assert.Error(t, err)

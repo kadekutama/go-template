@@ -12,13 +12,43 @@ import (
 )
 
 func TestMapCarrier(t *testing.T) {
+	t.Parallel()
+
 	c := MapCarrier{}
 	c.Set("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
 	c.Set("custom", "val")
 
-	assert.Equal(t, "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01", c.Get("traceparent"))
-	assert.Equal(t, "val", c.Get("custom"))
-	assert.Empty(t, c.Get("nonexistent"))
+	type testCase struct {
+		name          string
+		key           string
+		expectedValue string
+	}
+
+	testCases := []testCase{
+		{
+			name:          "existing traceparent key",
+			key:           "traceparent",
+			expectedValue: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+		},
+		{
+			name:          "custom key",
+			key:           "custom",
+			expectedValue: "val",
+		},
+		{
+			name:          "nonexistent key",
+			key:           "nonexistent",
+			expectedValue: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tc.expectedValue, c.Get(tc.key))
+		})
+	}
 
 	keys := c.Keys()
 	sort.Strings(keys)
@@ -26,12 +56,38 @@ func TestMapCarrier(t *testing.T) {
 }
 
 func TestHeaderCarrier(t *testing.T) {
+	t.Parallel()
+
 	h := make(http.Header)
 	c := headerCarrier{header: h}
 	c.Set("x-custom-key", "custom-val")
 
-	assert.Equal(t, "custom-val", c.Get("x-custom-key"))
-	assert.Empty(t, c.Get("nonexistent"))
+	type testCase struct {
+		name          string
+		key           string
+		expectedValue string
+	}
+
+	testCases := []testCase{
+		{
+			name:          "existing custom header",
+			key:           "x-custom-key",
+			expectedValue: "custom-val",
+		},
+		{
+			name:          "nonexistent header",
+			key:           "nonexistent",
+			expectedValue: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tc.expectedValue, c.Get(tc.key))
+		})
+	}
 
 	keys := c.Keys()
 	assert.Equal(t, []string{"X-Custom-Key"}, keys)

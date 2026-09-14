@@ -110,8 +110,14 @@ Completion requires all of the following:
 
 1. Every requirement maps to at least one passing test, static check, inspection,
    or explicitly justified manual proof.
-2. The task commands and all affected lower-level gate commands pass from a clean
-   checkout. Record command, commit, environment, exit status, and artifact link
+2. The task commands, static analysis checks, and all affected lower-level gate commands pass from a clean
+   checkout:
+   - Code formatting: `gofmt -s -w .` and `goimports -l -w .`.
+   - Strict linting: `make lint` (`golangci-lint run ./...` with 0 issues).
+   - Race-detector tests: `CGO_ENABLED=1 CC=clang go test -v -race ./...` (zero races).
+   - Target gate check: `./tasks/scripts/gate-check.sh <GATE>` (e.g. `G2`).
+   - Repository structural check: `python3 tasks/scripts/check-tasks.py --format --graph --sdd --specs --events --codes`.
+   Record command, commit, environment (including Pixi/CGO toolchain), exit status, and terminal output
    in `tasks/evidence/<TASK-ID>.md`.
 3. The reviewer verifies high-risk changes against the task packet rather than
    only reviewing the diff.

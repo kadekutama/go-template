@@ -86,6 +86,283 @@ database splitting or event sourcing:
   and the configured linter. Generated code is reproducible and is never edited
   by hand.
 
+## Unit testing conventions
+
+Every test suite in this repository adheres to a strict table-driven pattern optimized for readability, test case isolation, and parallel thread safety:
+
+### 1. Locally scoped table schema
+- Declare `type testCase struct` directly inside the test function (never at package level).
+- Field names must match the target function's parameter names (e.g. `amountMinor`, `rate`, `from`, `to`) and return types (`expectedResult`, `expectedResult1`, `expectedResult2`, `expectedError`). Do not use vague names like `param1`, `arg`, or `expect`.
+
+### 2. Zero single-use variables outside `testCases`
+- **Anti-pattern:** Declaring single-use variant structs (`noID`, `negAmount`, `brokenRate`, `underReview`) before `testCases := []testCase{ ... }`. This pollutes the function scope, creates long jumps when investigating test failures, and risks shared-state mutation across parallel subtests.
+- **Required pattern:** Inline all test-specific inputs directly within the test case entry. When deriving a variant from a base template, use an immediately-invoked anonymous closure:
+  ```go
+  {
+      name: "zero amount",
+      req: func() service.TransferRequest {
+          r := baseReq
+          r.AmountMinor = 0
+          return r
+      }(),
+      expectedResult: service.TransferLines{},
+      expectedError:  entity.NewError("INVALID_TRANSFER_AMOUNT", "transfer amount must be positive"),
+  },
+  ```
+
+### 3. Multi-line formatting
+- Every test case entry in `testCases` must be formatted across multiple lines using standard Go indentation. Never condense test cases into dense one-liners.
+
+### 4. Concurrency & Determinism
+- Parent tests must invoke `t.Parallel()`.
+- Test helpers and generators must be strictly thread-safe (e.g., using `sync.Mutex` or atomics for sequential counters).
+- No global state or package-level shared mutable fixtures.
+
+### 5. Edge-case rigor
+- Coverage is a secondary metric to correctness. Test cases must explicitly explore:
+  - Zero, negative, and maximum boundary values (`math.MaxInt64`, arithmetic overflow cases).
+  - Empty, whitespace, illegal character, and length boundary strings.
+  - State machine illegal and legal transitions.
+  - Expired, stale, or unverified preconditions.
+
+### 6. Complete Unit Test Examples
+
+#### Example A: Method on Struct / Entity Returning `error`
+Tested signature: `func (b SettlementBatch) Validate() error`
+
+```go
+package entity_test
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/kadekutama/go-template/internal/domain/entity"
+)
+
+func TestSettlementBatchValidate(t *testing.T) {
+	t.Parallel()
+
+	baseBatch := entity.SettlementBatch{
+		BatchID:         "b-1",
+		ProviderBatchID: "pb-1",
+		ProviderTraceID: "pt-1",
+		AssetCode:       "USD",
+		GrossMinor:      10000,
+		FeeMinor:        290,
+		NetMinor:        9710,
+		CoverageStart:   "2026-09-01T00:00:00Z",
+		CoverageEnd:     "2026-09-02T00:00:00Z",
+		Items: []entity.SettlementItem{
+			{PaymentID: "p-1", Status: entity.SettleItemSettled, AmountMinor: 5000},
+			{PaymentID: "p-2", Status: entity.SettleItemPending, AmountMinor: 4710},
+		},
+	}
+
+	type testCase struct {
+		name          string
+		batch         entity.SettlementBatch
+		expectedError error
+	}
+
+	testCases := []testCase{
+		{
+			name:          "valid batch",
+			batch:         baseBatch,
+			expectedError: nil,
+		},
+		{
+			name: "missing batch id",
+			batch: func() entity.SettlementBatch {
+				b := baseBatch
+				b.BatchID = ""
+				return b
+			}(),
+			expectedError: entity.NewError("BATCH_ID_REQUIRED", "settlement batch requires batch and provider batch ids"),
+		},
+		{
+			name: "negative gross",
+			batch: func() entity.SettlementBatch {
+				b := baseBatch
+				b.GrossMinor = -1
+				return b
+			}(),
+			expectedError: entity.NewError("INVALID_ENTRY_AMOUNT", "gross amount must be non-negative"),
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err := tc.batch.Validate()
+			assert.Equal(t, tc.expectedError, err)
+		})
+	}
+}
+```
+
+#### Example B: Function with Multiple Scalar Parameters and Multiple Returns
+Tested signature: `func AssessTransactionFee(amountMinor, bps, floorMinor, capMinor int64) (int64, error)`
+
+```go
+package service_test
+
+import (
+	"math"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/kadekutama/go-template/internal/domain/entity"
+	"github.com/kadekutama/go-template/internal/domain/service"
+)
+
+func TestAssessTransactionFee(t *testing.T) {
+	t.Parallel()
+
+	type testCase struct {
+		name           string
+		amountMinor    int64
+		bps            int64
+		floorMinor     int64
+		capMinor       int64
+		expectedResult int64
+		expectedError  error
+	}
+
+	testCases := []testCase{
+		{
+			name:           "within bounds",
+			amountMinor:    10000,
+			bps:            290,
+			floorMinor:     30,
+			capMinor:       500,
+			expectedResult: int64(290),
+			expectedError:  nil,
+		},
+		{
+			name:           "floor applied",
+			amountMinor:    100,
+			bps:            290,
+			floorMinor:     30,
+			capMinor:       500,
+			expectedResult: int64(30),
+			expectedError:  nil,
+		},
+		{
+			name:           "zero amount error",
+			amountMinor:    0,
+			bps:            290,
+			floorMinor:     30,
+			capMinor:       500,
+			expectedResult: int64(0),
+			expectedError:  &entity.Error{Code: "INVALID_FEE_AMOUNT", Message: "fee amount must be positive"},
+		},
+		{
+			name:           "arithmetic overflow",
+			amountMinor:    math.MaxInt64,
+			bps:            2,
+			floorMinor:     0,
+			capMinor:       0,
+			expectedResult: int64(0),
+			expectedError:  &entity.Error{Code: "FEE_OVERFLOW", Message: "fee computation overflowed"},
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			actualResult, err := service.AssessTransactionFee(tc.amountMinor, tc.bps, tc.floorMinor, tc.capMinor)
+			assert.Equal(t, tc.expectedResult, actualResult)
+			assert.Equal(t, tc.expectedError, err)
+		})
+	}
+}
+```
+
+#### Example C: Context-Aware Function with Request and Response DTOs
+Tested signature: `func (s *PaymentService) Authorize(ctx context.Context, req AuthorizeRequest) (AuthorizeResponse, error)`
+
+```go
+func TestPaymentServiceAuthorize(t *testing.T) {
+	t.Parallel()
+
+	baseReq := AuthorizeRequest{
+		AccountID:   "acct-123",
+		AmountMinor: 5000,
+		Currency:    "USD",
+	}
+
+	type testCase struct {
+		name           string
+		ctx            context.Context
+		req            AuthorizeRequest
+		expectedResult AuthorizeResponse
+		expectedError  error
+	}
+
+	testCases := []testCase{
+		{
+			name: "successful authorization",
+			ctx:  context.Background(),
+			req:  baseReq,
+			expectedResult: AuthorizeResponse{
+				Status: "AUTHORIZED",
+			},
+			expectedError: nil,
+		},
+		{
+			name: "canceled context",
+			ctx: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx
+			}(),
+			req:            baseReq,
+			expectedResult: AuthorizeResponse{},
+			expectedError:  context.Canceled,
+		},
+		{
+			name: "invalid amount",
+			ctx:  context.Background(),
+			req: func() AuthorizeRequest {
+				r := baseReq
+				r.AmountMinor = -100
+				return r
+			}(),
+			expectedResult: AuthorizeResponse{},
+			expectedError:  entity.NewError("INVALID_AMOUNT", "amount must be positive"),
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			svc := NewPaymentService()
+			res, err := svc.Authorize(tc.ctx, tc.req)
+			assert.Equal(t, tc.expectedResult, res)
+			assert.Equal(t, tc.expectedError, err)
+		})
+	}
+}
+```
+
+### 7. Canonical Reference Test Files in Codebase
+
+| Function Signature Pattern | Canonical Reference File | Tested Behaviors & Key Patterns |
+| :--- | :--- | :--- |
+| **Entity / Struct Validation** `(e Entity) Validate() error` | [`internal/domain/entity/settlement_batch_test.go`](../../internal/domain/entity/settlement_batch_test.go) | Base struct template, inline closures for field mutations, multi-line table |
+| **Entity Validation with Slices & Enums** `(p PaymentLink) Validate() error` | [`internal/domain/entity/payment_link_test.go`](../../internal/domain/entity/payment_link_test.go) | Boundary strings, enum validity, slice empty/populated checks |
+| **Pure Computation with Bounds** `Func(amount, bps, floor, cap) (result, error)` | [`internal/domain/service/fee_interest_test.go`](../../internal/domain/service/fee_interest_test.go) | Exact scalar parameter mapping, math overflow, inverted bounds |
+| **Complex Domain Service with Maps** `ValidateRefund(req, exists, accts) (Lines, error)` | [`internal/domain/service/refund_service_test.go`](../../internal/domain/service/refund_service_test.go) | In-memory lookup maps, complex DTO structs, timestamp derivation |
+| **Value Object Parser / Validator** `ValidateDescriptor(s, network) error` | [`internal/domain/valueobject/descriptor_test.go`](../../internal/domain/valueobject/descriptor_test.go) | String length limits, ASCII control characters, network-specific rules |
+| **Value Object Decimal Math / Factory** `NewFXRate(base, quote, rate) (FXRate, error)` | [`internal/domain/valueobject/fx_rate_test.go`](../../internal/domain/valueobject/fx_rate_test.go) | String decimal precision parsing, invert calculation, zero rate check |
+| **State Machine Transition Matrix** `CanTransitionPayment(from, to) bool` | [`internal/domain/valueobject/payment_status_test.go`](../../internal/domain/valueobject/payment_status_test.go) | Exhaustive state transition pairs, terminal state assertions |
+
 ## Ledger-specific rules
 
 - Amounts are checked integer minor units (`int64` at the edge, wider checked
@@ -108,13 +385,20 @@ Every task packet must name the relevant checks. At minimum, implementation
 changes run:
 
 ```bash
+# Ensure Pixi toolchain and CGO compiler are available:
+export PATH="$HOME/.pixi/bin:$PATH"
+export CGO_ENABLED=1
+export CC=clang
+
+# Verification pipeline:
 go mod verify
 go mod tidy -diff
-gofmt -w <changed-go-files>
-go test ./...
-go test -race ./...
+gofmt -s -w .
+make lint
+go test -v -race ./...
 go vet ./...
-python3 tasks/scripts/check-tasks.py --format --graph --sdd
+./tasks/scripts/gate-check.sh <GATE>
+python3 tasks/scripts/check-tasks.py --format --graph --sdd --specs --events --codes
 ```
 
 Financial or external-boundary changes also run the packet's integration,
@@ -127,3 +411,4 @@ by a command, test, or review assertion must be recorded as an explicit risk.
 - [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments)
 - [Effective Go](https://go.dev/doc/effective_go)
 - [Echo v5 context and handler API](https://echo.labstack.com/guide/context/)
+

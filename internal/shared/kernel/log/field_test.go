@@ -12,32 +12,63 @@ import (
 func TestFieldConstructors(t *testing.T) {
 	t.Parallel()
 
-	err := errors.New("sample error")
-	fErr := log.Err(err)
-	assert.Equal(t, log.FieldError, fErr.Key)
-	assert.Equal(t, err, fErr.Value)
-
-	fNilErr := log.Err(nil)
-	assert.Equal(t, log.FieldError, fNilErr.Key)
-	assert.Nil(t, fNilErr.Value)
-
 	type dummyMeta struct {
 		ID int
 	}
-	meta := dummyMeta{ID: 42}
-	fMeta := log.Metadata(meta)
-	assert.Equal(t, log.FieldMetadata, fMeta.Key)
-	assert.Equal(t, meta, fMeta.Value)
+	sampleErr := errors.New("sample error")
 
-	fReq := log.Request("req-data")
-	assert.Equal(t, log.FieldRequest, fReq.Key)
-	assert.Equal(t, "req-data", fReq.Value)
+	type testCase struct {
+		name          string
+		field         log.Field
+		expectedKey   string
+		expectedValue any
+	}
 
-	fResp := log.Response("resp-data")
-	assert.Equal(t, log.FieldResponse, fResp.Key)
-	assert.Equal(t, "resp-data", fResp.Value)
+	testCases := []testCase{
+		{
+			name:          "error field with err",
+			field:         log.Err(sampleErr),
+			expectedKey:   log.FieldError,
+			expectedValue: sampleErr,
+		},
+		{
+			name:          "error field with nil",
+			field:         log.Err(nil),
+			expectedKey:   log.FieldError,
+			expectedValue: nil,
+		},
+		{
+			name:          "metadata field",
+			field:         log.Metadata(dummyMeta{ID: 42}),
+			expectedKey:   log.FieldMetadata,
+			expectedValue: dummyMeta{ID: 42},
+		},
+		{
+			name:          "request field",
+			field:         log.Request("req-data"),
+			expectedKey:   log.FieldRequest,
+			expectedValue: "req-data",
+		},
+		{
+			name:          "response field",
+			field:         log.Response("resp-data"),
+			expectedKey:   log.FieldResponse,
+			expectedValue: "resp-data",
+		},
+		{
+			name:          "any field",
+			field:         log.Any("custom_key", 123),
+			expectedKey:   "custom_key",
+			expectedValue: 123,
+		},
+	}
 
-	fAny := log.Any("custom_key", 123)
-	assert.Equal(t, "custom_key", fAny.Key)
-	assert.Equal(t, 123, fAny.Value)
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tc.expectedKey, tc.field.Key)
+			assert.Equal(t, tc.expectedValue, tc.field.Value)
+		})
+	}
 }

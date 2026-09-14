@@ -5,6 +5,8 @@ import (
 	"math"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/kadekutama/go-template/internal/domain/specification"
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
 )
@@ -15,68 +17,247 @@ func mustMoney(minor int64, asset valueobject.AssetCode) valueobject.Money {
 
 func TestTransferAmountPositive(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
-	good := specification.TransferCandidate{From: testAccount1, To: testAccount2, Amount: mustMoney(50, testUSD)}
-	if res := specification.TransferAmountPositive().Evaluate(ctx, good); !res.Passed() {
-		t.Fatalf("positive must pass: %+v", res)
+
+	type testCase struct {
+		name                  string
+		ctx                   context.Context
+		candidate             specification.TransferCandidate
+		expectedPassed        bool
+		expectedViolationCode string
 	}
-	zero := specification.TransferCandidate{From: testAccount1, To: testAccount2, Amount: mustMoney(0, testUSD)}
-	if res := specification.TransferAmountPositive().Evaluate(ctx, zero); res.Passed() || res.Violations[0].Code != "INVALID_TRANSFER_AMOUNT" {
-		t.Fatalf("zero = %+v", res)
+
+	testCases := []testCase{
+		{
+			name: "positive amount passes",
+			ctx:  context.Background(),
+			candidate: specification.TransferCandidate{
+				From:   testAccount1,
+				To:     testAccount2,
+				Amount: mustMoney(50, testUSD),
+			},
+			expectedPassed:        true,
+			expectedViolationCode: "",
+		},
+		{
+			name: "zero amount rejected",
+			ctx:  context.Background(),
+			candidate: specification.TransferCandidate{
+				From:   testAccount1,
+				To:     testAccount2,
+				Amount: mustMoney(0, testUSD),
+			},
+			expectedPassed:        false,
+			expectedViolationCode: "INVALID_TRANSFER_AMOUNT",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			res := specification.TransferAmountPositive().Evaluate(tc.ctx, tc.candidate)
+			assert.Equal(t, tc.expectedPassed, res.Passed())
+			if tc.expectedViolationCode != "" {
+				assert.NotEmpty(t, res.Violations)
+				assert.Equal(t, tc.expectedViolationCode, res.Violations[0].Code)
+			}
+		})
 	}
 }
 
 func TestSufficientFunds(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
-	spec := specification.SufficientFunds(specification.BalanceSnapshot{Available: mustMoney(100, testUSD)})
-	if res := spec.Evaluate(ctx, mustMoney(100, testUSD)); !res.Passed() {
-		t.Fatalf("exact available must pass: %+v", res)
+
+	spec := specification.SufficientFunds(specification.BalanceSnapshot{
+		Available: mustMoney(100, testUSD),
+	})
+
+	type testCase struct {
+		name                  string
+		ctx                   context.Context
+		amount                valueobject.Money
+		expectedPassed        bool
+		expectedViolationCode string
+		expectedDetails       map[string]string
 	}
-	res := spec.Evaluate(ctx, mustMoney(101, testUSD))
-	if res.Passed() || res.Violations[0].Code != "INSUFFICIENT_FUNDS" {
-		t.Fatalf("overspend = %+v", res)
+
+	testCases := []testCase{
+		{
+			name:                  "exact available amount passes",
+			ctx:                   context.Background(),
+			amount:                mustMoney(100, testUSD),
+			expectedPassed:        true,
+			expectedViolationCode: "",
+			expectedDetails:       nil,
+		},
+		{
+			name:                  "amount exceeds available funds rejected",
+			ctx:                   context.Background(),
+			amount:                mustMoney(101, testUSD),
+			expectedPassed:        false,
+			expectedViolationCode: "INSUFFICIENT_FUNDS",
+			expectedDetails: map[string]string{
+				"available": "100",
+				"required":  "101",
+			},
+		},
+		{
+			name:                  "cross-asset currency mismatch rejected",
+			ctx:                   context.Background(),
+			amount:                mustMoney(50, testEUR),
+			expectedPassed:        false,
+			expectedViolationCode: "CURRENCY_MISMATCH",
+			expectedDetails:       nil,
+		},
 	}
-	if res.Violations[0].Details["available"] != "100" || res.Violations[0].Details["required"] != "101" {
-		t.Fatalf("details = %+v", res.Violations[0])
-	}
-	res = spec.Evaluate(ctx, mustMoney(50, testEUR))
-	if res.Passed() || res.Violations[0].Code != "CURRENCY_MISMATCH" {
-		t.Fatalf("cross-asset = %+v", res)
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			res := spec.Evaluate(tc.ctx, tc.amount)
+			assert.Equal(t, tc.expectedPassed, res.Passed())
+			if tc.expectedViolationCode != "" {
+				assert.NotEmpty(t, res.Violations)
+				assert.Equal(t, tc.expectedViolationCode, res.Violations[0].Code)
+				if tc.expectedDetails != nil {
+					for k, v := range tc.expectedDetails {
+						assert.Equal(t, v, res.Violations[0].Details[k])
+					}
+				}
+			}
+		})
 	}
 }
 
 func TestCaptureAmountValid(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
-	ok := specification.CaptureRequest{AuthorizedMinor: 100, CapturedTotalMinor: 60, CaptureMinor: 40, Asset: testUSD}
-	if res := specification.CaptureAmountValid().Evaluate(ctx, ok); !res.Passed() {
-		t.Fatalf("exact capture must pass: %+v", res)
+
+	type testCase struct {
+		name                  string
+		ctx                   context.Context
+		req                   specification.CaptureRequest
+		expectedPassed        bool
+		expectedViolationCode string
 	}
-	over := specification.CaptureRequest{AuthorizedMinor: 100, CapturedTotalMinor: 60, CaptureMinor: 41, Asset: testUSD}
-	if res := specification.CaptureAmountValid().Evaluate(ctx, over); res.Passed() || res.Violations[0].Code != "CAPTURE_EXCEEDS_AUTHORIZED" {
-		t.Fatalf("over-capture = %+v", res)
+
+	testCases := []testCase{
+		{
+			name: "exact capture amount passes",
+			ctx:  context.Background(),
+			req: specification.CaptureRequest{
+				AuthorizedMinor:    100,
+				CapturedTotalMinor: 60,
+				CaptureMinor:       40,
+				Asset:              testUSD,
+			},
+			expectedPassed:        true,
+			expectedViolationCode: "",
+		},
+		{
+			name: "over-capture rejected",
+			ctx:  context.Background(),
+			req: specification.CaptureRequest{
+				AuthorizedMinor:    100,
+				CapturedTotalMinor: 60,
+				CaptureMinor:       41,
+				Asset:              testUSD,
+			},
+			expectedPassed:        false,
+			expectedViolationCode: "CAPTURE_EXCEEDS_AUTHORIZED",
+		},
+		{
+			name: "negative capture rejected closed",
+			ctx:  context.Background(),
+			req: specification.CaptureRequest{
+				AuthorizedMinor:    100,
+				CapturedTotalMinor: 0,
+				CaptureMinor:       -1,
+				Asset:              testUSD,
+			},
+			expectedPassed:        false,
+			expectedViolationCode: "CAPTURE_EXCEEDS_AUTHORIZED",
+		},
 	}
-	neg := specification.CaptureRequest{AuthorizedMinor: 100, CapturedTotalMinor: 0, CaptureMinor: -1, Asset: testUSD}
-	if res := specification.CaptureAmountValid().Evaluate(ctx, neg); res.Passed() {
-		t.Fatal("negative capture must fail closed")
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			res := specification.CaptureAmountValid().Evaluate(tc.ctx, tc.req)
+			assert.Equal(t, tc.expectedPassed, res.Passed())
+			if tc.expectedViolationCode != "" {
+				assert.NotEmpty(t, res.Violations)
+				assert.Equal(t, tc.expectedViolationCode, res.Violations[0].Code)
+			}
+		})
 	}
 }
 
 func TestAllocationExact(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
-	if res := specification.AllocationExact().Evaluate(ctx, specification.Allocation{Source: 100, Shares: []int64{34, 33, 33}}); !res.Passed() {
-		t.Fatal("exact shares must pass")
+
+	type testCase struct {
+		name                  string
+		ctx                   context.Context
+		allocation            specification.Allocation
+		expectedPassed        bool
+		expectedViolationCode string
 	}
-	if res := specification.AllocationExact().Evaluate(ctx, specification.Allocation{Source: 100, Shares: []int64{34, 33, 32}}); res.Passed() || res.Violations[0].Code != "UNBALANCED_TRANSACTION" {
-		t.Fatalf("off-by-one = %+v", res)
+
+	testCases := []testCase{
+		{
+			name: "exact shares pass",
+			ctx:  context.Background(),
+			allocation: specification.Allocation{
+				Source: 100,
+				Shares: []int64{34, 33, 33},
+			},
+			expectedPassed:        true,
+			expectedViolationCode: "",
+		},
+		{
+			name: "off-by-one under-allocated rejected",
+			ctx:  context.Background(),
+			allocation: specification.Allocation{
+				Source: 100,
+				Shares: []int64{34, 33, 32},
+			},
+			expectedPassed:        false,
+			expectedViolationCode: "UNBALANCED_TRANSACTION",
+		},
+		{
+			name: "empty shares rejected",
+			ctx:  context.Background(),
+			allocation: specification.Allocation{
+				Source: 0,
+				Shares: nil,
+			},
+			expectedPassed:        false,
+			expectedViolationCode: "UNBALANCED_TRANSACTION",
+		},
+		{
+			name: "overflowing sum rejected without wrapping",
+			ctx:  context.Background(),
+			allocation: specification.Allocation{
+				Source: 1,
+				Shares: []int64{math.MaxInt64, math.MaxInt64},
+			},
+			expectedPassed:        false,
+			expectedViolationCode: "UNBALANCED_TRANSACTION",
+		},
 	}
-	if res := specification.AllocationExact().Evaluate(ctx, specification.Allocation{Source: 0}); res.Passed() {
-		t.Fatal("empty shares must fail")
-	}
-	overflow := specification.Allocation{Source: 1, Shares: []int64{math.MaxInt64, math.MaxInt64}}
-	if res := specification.AllocationExact().Evaluate(ctx, overflow); res.Passed() {
-		t.Fatal("overflowing sum must fail, not wrap to pass")
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			res := specification.AllocationExact().Evaluate(tc.ctx, tc.allocation)
+			assert.Equal(t, tc.expectedPassed, res.Passed())
+			if tc.expectedViolationCode != "" {
+				assert.NotEmpty(t, res.Violations)
+				assert.Equal(t, tc.expectedViolationCode, res.Violations[0].Code)
+			}
+		})
 	}
 }

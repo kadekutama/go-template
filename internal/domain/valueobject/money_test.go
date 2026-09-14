@@ -2,11 +2,12 @@ package valueobject_test
 
 import (
 	"encoding/json"
+	"errors"
 	"math"
 	"math/rand/v2"
-	"slices"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
 )
@@ -20,56 +21,169 @@ func usd(t *testing.T, minor int64) valueobject.Money {
 	return m
 }
 
-func TestTenthPlusFifthEqualsThreeTenths(t *testing.T) {
+func TestMoneyAdd(t *testing.T) {
 	t.Parallel()
-	a := usd(t, 10)
-	b := usd(t, 20)
-	sum, err := a.Add(b)
-	if err != nil {
-		t.Fatalf("Add: %v", err)
+
+	type testCase struct {
+		name           string
+		a              valueobject.Money
+		b              valueobject.Money
+		expectedResult valueobject.Money
+		expectedError  error
 	}
-	if sum.AmountMinor() != 30 {
-		t.Fatalf("0.1+0.2 = %d minor, want 30", sum.AmountMinor())
+
+	testCases := []testCase{
+		{
+			name:           "exact tenth plus fifth equals three tenths",
+			a:              usd(t, 10),
+			b:              usd(t, 20),
+			expectedResult: usd(t, 30),
+			expectedError:  nil,
+		},
+		{
+			name:           "negative plus positive",
+			a:              usd(t, -50),
+			b:              usd(t, 100),
+			expectedResult: usd(t, 50),
+			expectedError:  nil,
+		},
+		{
+			name: "currency mismatch",
+			a:    usd(t, 100),
+			b: func() valueobject.Money {
+				m, _ := valueobject.NewMoney(50, testEUR)
+				return m
+			}(),
+			expectedResult: valueobject.Money{},
+			expectedError:  errors.New("money: CURRENCY_MISMATCH"),
+		},
+		{
+			name:           "overflow on add",
+			a:              usd(t, math.MaxInt64),
+			b:              usd(t, 1),
+			expectedResult: valueobject.Money{},
+			expectedError:  errors.New("money: arithmetic overflow"),
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := tc.a.Add(tc.b)
+			if tc.expectedError != nil {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError.Error())
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedResult, got)
+			}
+		})
 	}
 }
 
 func TestCrossCurrencyMismatch(t *testing.T) {
 	t.Parallel()
-	a := usd(t, 100)
-	e, err := valueobject.NewMoney(50, "EUR")
-	if err != nil {
-		t.Fatalf("NewMoney: %v", err)
+
+	eurMoney, err := valueobject.NewMoney(50, testEUR)
+	assert.NoError(t, err)
+
+	type testCase struct {
+		name          string
+		op            func(a, b valueobject.Money) error
+		expectedError string
 	}
-	if _, err := a.Add(e); err == nil || !strings.Contains(err.Error(), "CURRENCY_MISMATCH") {
-		t.Errorf("Add cross-currency err = %v, want CURRENCY_MISMATCH", err)
+
+	testCases := []testCase{
+		{
+			name: "Add cross-currency",
+			op: func(a, b valueobject.Money) error {
+				_, opErr := a.Add(b)
+				return opErr
+			},
+			expectedError: "CURRENCY_MISMATCH",
+		},
+		{
+			name: "Sub cross-currency",
+			op: func(a, b valueobject.Money) error {
+				_, opErr := a.Sub(b)
+				return opErr
+			},
+			expectedError: "CURRENCY_MISMATCH",
+		},
+		{
+			name: "Compare cross-currency",
+			op: func(a, b valueobject.Money) error {
+				_, opErr := a.Compare(b)
+				return opErr
+			},
+			expectedError: "CURRENCY_MISMATCH",
+		},
 	}
-	if _, err := a.Sub(e); err == nil || !strings.Contains(err.Error(), "CURRENCY_MISMATCH") {
-		t.Errorf("Sub cross-currency err = %v, want CURRENCY_MISMATCH", err)
-	}
-	if _, err := a.Compare(e); err == nil || !strings.Contains(err.Error(), "CURRENCY_MISMATCH") {
-		t.Errorf("Compare cross-currency err = %v, want CURRENCY_MISMATCH", err)
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			opErr := tc.op(usd(t, 100), eurMoney)
+			assert.Error(t, opErr)
+			assert.Contains(t, opErr.Error(), tc.expectedError)
+		})
 	}
 }
 
 func TestOverflowRejected(t *testing.T) {
 	t.Parallel()
-	max := usd(t, math.MaxInt64)
-	if _, err := max.Add(usd(t, 1)); err == nil {
-		t.Error("MaxInt64+1 must overflow")
+
+	type testCase struct {
+		name string
+		op   func() error
 	}
-	if _, err := max.MulScalar(2); err == nil {
-		t.Error("MaxInt64*2 must overflow")
+
+	testCases := []testCase{
+		{
+			name: "MaxInt64+1 overflow",
+			op: func() error {
+				_, err := usd(t, math.MaxInt64).Add(usd(t, 1))
+				return err
+			},
+		},
+		{
+			name: "MaxInt64*2 overflow",
+			op: func() error {
+				_, err := usd(t, math.MaxInt64).MulScalar(2)
+				return err
+			},
+		},
+		{
+			name: "MinInt64-1 overflow",
+			op: func() error {
+				_, err := usd(t, math.MinInt64).Sub(usd(t, 1))
+				return err
+			},
+		},
+		{
+			name: "division by zero",
+			op: func() error {
+				_, err := usd(t, 1).DivScalar(0)
+				return err
+			},
+		},
 	}
-	if _, err := usd(t, math.MinInt64).Sub(usd(t, 1)); err == nil {
-		t.Error("MinInt64-1 must overflow")
-	}
-	if _, err := usd(t, 1).DivScalar(0); err == nil {
-		t.Error("division by zero must error")
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err := tc.op()
+			assert.Error(t, err)
+		})
 	}
 }
 
 func TestArithmeticProperties(t *testing.T) {
 	t.Parallel()
+
 	// #nosec G404 -- deterministic pseudo-random generator for property testing
 	rng := rand.New(rand.NewPCG(42, 100))
 	vals := make([]int64, 0, 64)
@@ -83,126 +197,205 @@ func TestArithmeticProperties(t *testing.T) {
 		abc1, _ := ab.Add(mc)
 		bc, _ := mb.Add(mc)
 		abc2, _ := ma.Add(bc)
-		if abc1.AmountMinor() != abc2.AmountMinor() {
-			t.Fatalf("associativity broke for %d %d %d", a, b, c)
-		}
+		assert.Equal(t, abc1.AmountMinor(), abc2.AmountMinor(), "associativity failed")
+
 		ba, _ := mb.Add(ma)
-		if ab.AmountMinor() != ba.AmountMinor() {
-			t.Fatalf("commutativity broke for %d %d", a, b)
-		}
+		assert.Equal(t, ab.AmountMinor(), ba.AmountMinor(), "commutativity failed")
 	}
 }
 
 func TestMoneyJSONShape(t *testing.T) {
 	t.Parallel()
-	// The domain owns the canonical shape; byte marshaling happens outside
-	// (test-only encoding/json use is exempt from the E01-T07 codec seam,
-	// which checks non-test imports).
+
+	type testCase struct {
+		name          string
+		dto           valueobject.MoneyDTO
+		expectedError error
+	}
+
+	testCases := []testCase{
+		{
+			name: "valid DTO round-trip",
+			dto: valueobject.MoneyDTO{
+				AmountMinor: 1050,
+				AssetCode:   testUSD,
+			},
+			expectedError: nil,
+		},
+		{
+			name: "missing asset code",
+			dto: valueobject.MoneyDTO{
+				AmountMinor: 10,
+				AssetCode:   "",
+			},
+			expectedError: errors.New("money: asset required"),
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			money, err := valueobject.MoneyFromDTO(tc.dto)
+			if tc.expectedError != nil {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.dto.AmountMinor, money.AmountMinor())
+				assert.Equal(t, tc.dto.AssetCode, money.Asset())
+			}
+		})
+	}
+
+	// JSON encoding check: ensure exact int64 and no exponent notation
 	data, err := json.Marshal(usd(t, 1050).DTO())
-	if err != nil {
-		t.Fatalf("Marshal: %v", err)
-	}
-	if !strings.Contains(string(data), `"amount_minor":1050`) || !strings.Contains(string(data), `"asset_code":"`+testUSD+`"`) {
-		t.Fatalf("unexpected json: %s", data)
-	}
-	var dto valueobject.MoneyDTO
-	if err := json.Unmarshal(data, &dto); err != nil {
-		t.Fatalf("Unmarshal: %v", err)
-	}
-	back, err := valueobject.MoneyFromDTO(dto)
-	if err != nil {
-		t.Fatalf("MoneyFromDTO: %v", err)
-	}
-	if back.AmountMinor() != 1050 || back.Asset() != testUSD {
-		t.Fatalf("round-trip = %+v", back)
-	}
+	assert.NoError(t, err)
+	assert.Contains(t, string(data), `"amount_minor":1050`)
+	assert.Contains(t, string(data), `"asset_code":"`+testUSD+`"`)
+
 	var bad valueobject.MoneyDTO
-	if err := json.Unmarshal([]byte(`{"amount_minor":10.5,"asset_code":"`+testUSD+`"}`), &bad); err == nil {
-		t.Error("float quantity must not decode into int64")
-	}
-	if _, err := valueobject.MoneyFromDTO(valueobject.MoneyDTO{AmountMinor: 10}); err == nil {
-		t.Error("empty asset must error")
-	}
+	err = json.Unmarshal([]byte(`{"amount_minor":10.5,"asset_code":"`+testUSD+`"}`), &bad)
+	assert.Error(t, err, "float quantity must not decode into int64")
 }
 
 func TestMoneyFormat(t *testing.T) {
 	t.Parallel()
+
 	reg, err := valueobject.NewRegistry(
 		valueobject.AssetInfo{Code: testUSD, Exponent: 2, Kind: valueobject.AssetKindFiat},
 		valueobject.AssetInfo{Code: "JPY", Exponent: 0, Kind: valueobject.AssetKindFiat},
 	)
-	if err != nil {
-		t.Fatalf("NewRegistry: %v", err)
+	assert.NoError(t, err)
+
+	type testCase struct {
+		name           string
+		money          valueobject.Money
+		expectedResult string
+		expectedError  error
 	}
-	s, err := usd(t, 1050).Format(reg)
-	if err != nil || s != "10.50" {
-		t.Errorf("Format = %q, %v; want 10.50", s, err)
+
+	testCases := []testCase{
+		{
+			name:           "standard USD two decimals",
+			money:          usd(t, 1050),
+			expectedResult: "10.50",
+			expectedError:  nil,
+		},
+		{
+			name:           "zero-exponent JPY no decimals",
+			money:          valueobject.MustMoney(100, "JPY"),
+			expectedResult: "100",
+			expectedError:  nil,
+		},
+		{
+			name:           "unregistered currency format fails",
+			money:          valueobject.MustMoney(1, "EUR"),
+			expectedResult: "",
+			expectedError:  errors.New("format: unregistered currency"),
+		},
 	}
-	s, err = valueobject.MustMoney(100, "JPY").Format(reg)
-	if err != nil || s != "100" {
-		t.Errorf("Format JPY = %q, %v; want 100", s, err)
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, formatErr := tc.money.Format(reg)
+			if tc.expectedError != nil {
+				assert.Error(t, formatErr)
+			} else {
+				assert.NoError(t, formatErr)
+				assert.Equal(t, tc.expectedResult, got)
+			}
+		})
 	}
-	if _, err := valueobject.MustMoney(1, "EUR").Format(reg); err == nil {
-		t.Error("Format of unregistered code must error")
-	}
-	_ = math.MaxInt64
 }
 
 func TestAllocateLargestRemainder(t *testing.T) {
 	t.Parallel()
-	shares, err := valueobject.AllocateLargestRemainder(100, []int64{50, 30, 20})
-	if err != nil {
-		t.Fatalf("Allocate: %v", err)
+
+	type testCase struct {
+		name           string
+		total          int64
+		weights        []int64
+		expectedResult []int64
+		expectedError  bool
 	}
-	var sum int64
-	for _, s := range shares {
-		sum += s
+
+	testCases := []testCase{
+		{
+			name:           "standard split 50 30 20",
+			total:          100,
+			weights:        []int64{50, 30, 20},
+			expectedResult: []int64{50, 30, 20},
+			expectedError:  false,
+		},
+		{
+			name:           "three-way split with remainder 34 33 33",
+			total:          100,
+			weights:        []int64{1, 1, 1},
+			expectedResult: []int64{34, 33, 33},
+			expectedError:  false,
+		},
+		{
+			name:           "Hare-Niemeyer ranking unequal weights 2 5 4",
+			total:          11,
+			weights:        []int64{100, 300, 200},
+			expectedResult: []int64{2, 5, 4},
+			expectedError:  false,
+		},
+		{
+			name:           "Hare-Niemeyer ranking 2 3 5",
+			total:          10,
+			weights:        []int64{1, 2, 3},
+			expectedResult: []int64{2, 3, 5},
+			expectedError:  false,
+		},
+		{
+			name:           "nil weights",
+			total:          100,
+			weights:        nil,
+			expectedResult: nil,
+			expectedError:  true,
+		},
+		{
+			name:           "empty weights",
+			total:          100,
+			weights:        []int64{},
+			expectedResult: nil,
+			expectedError:  true,
+		},
+		{
+			name:           "negative weight",
+			total:          100,
+			weights:        []int64{1, -1},
+			expectedResult: nil,
+			expectedError:  true,
+		},
+		{
+			name:           "min int64 total overflow",
+			total:          math.MinInt64,
+			weights:        []int64{1, 1},
+			expectedResult: nil,
+			expectedError:  true,
+		},
 	}
-	if sum != 100 {
-		t.Fatalf("shares %v sum to %d, want 100", shares, sum)
-	}
-	// 100 split 3 ways: 34/33/33 with remainder to the first (tie → lowest index).
-	shares, err = valueobject.AllocateLargestRemainder(100, []int64{1, 1, 1})
-	if err != nil {
-		t.Fatalf("Allocate: %v", err)
-	}
-	if !slices.Equal(shares, []int64{34, 33, 33}) {
-		t.Fatalf("equal split = %v, want [34 33 33]", shares)
-	}
-	// Hare-Niemeyer ranking by fractional remainders with unequal weights:
-	// Total: 11, Weights: [100, 300, 200], Sum: 600.
-	// Initial integer quotients: [1, 5, 3] (sum 9, leftover 2).
-	// Remainders: [500, 300, 400] / 600.
-	// Highest remainders: index 0 (500) and index 2 (400) receive +1 each -> [2, 5, 4].
-	shares, err = valueobject.AllocateLargestRemainder(11, []int64{100, 300, 200})
-	if err != nil {
-		t.Fatalf("Allocate: %v", err)
-	}
-	if !slices.Equal(shares, []int64{2, 5, 4}) {
-		t.Fatalf("Hare-Niemeyer split = %v, want [2 5 4]", shares)
-	}
-	// Total: 10, Weights: [1, 2, 3], Sum: 6.
-	// Initial quotients: [1, 3, 5] (sum 9, leftover 1).
-	// Remainders: [4, 2, 0].
-	// Highest remainder: index 0 (4) receives +1 -> [2, 3, 5].
-	shares, err = valueobject.AllocateLargestRemainder(10, []int64{1, 2, 3})
-	if err != nil {
-		t.Fatalf("Allocate: %v", err)
-	}
-	if !slices.Equal(shares, []int64{2, 3, 5}) {
-		t.Fatalf("Hare-Niemeyer split = %v, want [2 3 5]", shares)
-	}
-	for _, bad := range []struct {
-		total   int64
-		weights []int64
-	}{
-		{100, nil},
-		{100, []int64{}},
-		{100, []int64{1, -1}},
-		{math.MinInt64, []int64{1, 1}},
-	} {
-		if _, err := valueobject.AllocateLargestRemainder(bad.total, bad.weights); err == nil {
-			t.Errorf("Allocate(%d, %v) must error", bad.total, bad.weights)
-		}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := valueobject.AllocateLargestRemainder(tc.total, tc.weights)
+			if tc.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedResult, got)
+				var sum int64
+				for _, s := range got {
+					sum += s
+				}
+				assert.Equal(t, tc.total, sum)
+			}
+		})
 	}
 }

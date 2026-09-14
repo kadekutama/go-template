@@ -14,7 +14,20 @@ command -v go >/dev/null 2>&1 || { echo "missing tool: go toolchain (https://go.
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-if ! find internal pkg -name "*.go" 2>/dev/null | grep -q .; then
+# Ensure Pixi toolchain and compiler are on PATH if available
+if [[ -d "${HOME}/.pixi/bin" && ":${PATH}:" != *":${HOME}/.pixi/bin:"* ]]; then
+  export PATH="${HOME}/.pixi/bin:${PATH}"
+fi
+
+if [[ -z "${CC:-}" ]]; then
+  if command -v clang >/dev/null 2>&1; then
+    export CC=clang
+  elif command -v gcc >/dev/null 2>&1; then
+    export CC=gcc
+  fi
+fi
+
+if [ -z "$(find internal pkg -name "*.go" -print -quit 2>/dev/null)" ]; then
   echo "no test packages in internal/... or pkg/... yet (arriving in E01+)"
   exit 0
 fi

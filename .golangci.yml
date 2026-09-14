@@ -26,6 +26,8 @@ linters:
   settings:
     gocyclo:
       min-complexity: 12
+    goconst:
+      ignore-tests: true
 issues:
   # Every issue fails the run: no warnings-only mode.
   max-issues-per-linter: 0

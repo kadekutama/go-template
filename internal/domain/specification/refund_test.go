@@ -5,44 +5,142 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/kadekutama/go-template/internal/domain/specification"
 )
 
 func TestRefundWindowValid(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+
 	posted := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
-	inside := specification.RefundWindow{OriginalPostedAt: posted, Now: posted.Add(24 * time.Hour), Window: 30 * 24 * time.Hour}
-	if res := specification.RefundWindowValid().Evaluate(ctx, inside); !res.Passed() {
-		t.Fatalf("inside window must pass: %+v", res)
+
+	type testCase struct {
+		name                  string
+		ctx                   context.Context
+		window                specification.RefundWindow
+		expectedPassed        bool
+		expectedViolationCode string
 	}
-	outside := specification.RefundWindow{OriginalPostedAt: posted, Now: posted.Add(31 * 24 * time.Hour), Window: 30 * 24 * time.Hour}
-	if res := specification.RefundWindowValid().Evaluate(ctx, outside); res.Passed() || res.Violations[0].Code != "REFUND_WINDOW_EXPIRED" {
-		t.Fatalf("outside window = %+v", res)
+
+	testCases := []testCase{
+		{
+			name: "inside window passes",
+			ctx:  context.Background(),
+			window: specification.RefundWindow{
+				OriginalPostedAt: posted,
+				Now:              posted.Add(24 * time.Hour),
+				Window:           30 * 24 * time.Hour,
+			},
+			expectedPassed:        true,
+			expectedViolationCode: "",
+		},
+		{
+			name: "outside window rejected",
+			ctx:  context.Background(),
+			window: specification.RefundWindow{
+				OriginalPostedAt: posted,
+				Now:              posted.Add(31 * 24 * time.Hour),
+				Window:           30 * 24 * time.Hour,
+			},
+			expectedPassed:        false,
+			expectedViolationCode: "REFUND_WINDOW_EXPIRED",
+		},
+		{
+			name:                  "zero candidate rejected without panic",
+			ctx:                   context.Background(),
+			window:                specification.RefundWindow{},
+			expectedPassed:        false,
+			expectedViolationCode: "REFUND_WINDOW_EXPIRED",
+		},
 	}
-	zero := specification.RefundWindow{}
-	if res := specification.RefundWindowValid().Evaluate(ctx, zero); res.Passed() {
-		t.Fatal("zero candidate must fail, not panic")
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			res := specification.RefundWindowValid().Evaluate(tc.ctx, tc.window)
+			assert.Equal(t, tc.expectedPassed, res.Passed())
+			if tc.expectedViolationCode != "" {
+				assert.NotEmpty(t, res.Violations)
+				assert.Equal(t, tc.expectedViolationCode, res.Violations[0].Code)
+			}
+		})
 	}
 }
 
 func TestRefundAmountValid(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
-	exact := specification.RefundAmounts{OriginalMinor: 100, PreviousRefundsMinor: 40, RequestedMinor: 60, Asset: testUSD}
-	if res := specification.RefundAmountValid().Evaluate(ctx, exact); !res.Passed() {
-		t.Fatalf("exact remainder must pass: %+v", res)
+
+	type testCase struct {
+		name                  string
+		ctx                   context.Context
+		amounts               specification.RefundAmounts
+		expectedPassed        bool
+		expectedViolationCode string
 	}
-	over := specification.RefundAmounts{OriginalMinor: 100, PreviousRefundsMinor: 40, RequestedMinor: 61, Asset: testUSD}
-	if res := specification.RefundAmountValid().Evaluate(ctx, over); res.Passed() || res.Violations[0].Code != "REFUND_EXCEEDS_ORIGINAL" {
-		t.Fatalf("exceeding = %+v", res)
+
+	testCases := []testCase{
+		{
+			name: "exact remainder passes",
+			ctx:  context.Background(),
+			amounts: specification.RefundAmounts{
+				OriginalMinor:        100,
+				PreviousRefundsMinor: 40,
+				RequestedMinor:       60,
+				Asset:                testUSD,
+			},
+			expectedPassed:        true,
+			expectedViolationCode: "",
+		},
+		{
+			name: "exceeding unrefunded remainder rejected",
+			ctx:  context.Background(),
+			amounts: specification.RefundAmounts{
+				OriginalMinor:        100,
+				PreviousRefundsMinor: 40,
+				RequestedMinor:       61,
+				Asset:                testUSD,
+			},
+			expectedPassed:        false,
+			expectedViolationCode: "REFUND_EXCEEDS_ORIGINAL",
+		},
+		{
+			name: "over-refunded history rejected",
+			ctx:  context.Background(),
+			amounts: specification.RefundAmounts{
+				OriginalMinor:        100,
+				PreviousRefundsMinor: 120,
+				RequestedMinor:       1,
+				Asset:                testUSD,
+			},
+			expectedPassed:        false,
+			expectedViolationCode: "REFUND_EXCEEDS_ORIGINAL",
+		},
+		{
+			name: "negative requested amount rejected",
+			ctx:  context.Background(),
+			amounts: specification.RefundAmounts{
+				OriginalMinor:        100,
+				PreviousRefundsMinor: 0,
+				RequestedMinor:       -1,
+				Asset:                testUSD,
+			},
+			expectedPassed:        false,
+			expectedViolationCode: "REFUND_EXCEEDS_ORIGINAL",
+		},
 	}
-	prior := specification.RefundAmounts{OriginalMinor: 100, PreviousRefundsMinor: 120, RequestedMinor: 1, Asset: testUSD}
-	if res := specification.RefundAmountValid().Evaluate(ctx, prior); res.Passed() {
-		t.Fatal("over-refunded history must fail")
-	}
-	neg := specification.RefundAmounts{OriginalMinor: 100, PreviousRefundsMinor: 0, RequestedMinor: -1, Asset: testUSD}
-	if res := specification.RefundAmountValid().Evaluate(ctx, neg); res.Passed() {
-		t.Fatal("negative request must fail closed")
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			res := specification.RefundAmountValid().Evaluate(tc.ctx, tc.amounts)
+			assert.Equal(t, tc.expectedPassed, res.Passed())
+			if tc.expectedViolationCode != "" {
+				assert.NotEmpty(t, res.Violations)
+				assert.Equal(t, tc.expectedViolationCode, res.Violations[0].Code)
+			}
+		})
 	}
 }

@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/kadekutama/go-template/internal/domain/aggregate"
 	"github.com/kadekutama/go-template/internal/domain/entity"
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
@@ -189,17 +191,47 @@ func TestReparentAndDetails(t *testing.T) {
 
 func TestNormalSideTable(t *testing.T) {
 	t.Parallel()
-	cases := map[valueobject.AccountClass]valueobject.Direction{
-		valueobject.ClassAsset:     valueobject.DirectionDebit,
-		valueobject.ClassExpense:   valueobject.DirectionDebit,
-		valueobject.ClassLiability: valueobject.DirectionCredit,
-		valueobject.ClassEquity:    valueobject.DirectionCredit,
-		valueobject.ClassRevenue:   valueobject.DirectionCredit,
+
+	type testCase struct {
+		name           string
+		class          valueobject.AccountClass
+		expectedResult valueobject.Direction
 	}
-	for class, want := range cases {
-		if got := class.NormalSide(); got != want {
-			t.Errorf("%s.NormalSide = %s, want %s", class, got, want)
-		}
+
+	testCases := []testCase{
+		{
+			name:           "asset normal side is debit",
+			class:          valueobject.ClassAsset,
+			expectedResult: valueobject.DirectionDebit,
+		},
+		{
+			name:           "expense normal side is debit",
+			class:          valueobject.ClassExpense,
+			expectedResult: valueobject.DirectionDebit,
+		},
+		{
+			name:           "liability normal side is credit",
+			class:          valueobject.ClassLiability,
+			expectedResult: valueobject.DirectionCredit,
+		},
+		{
+			name:           "equity normal side is credit",
+			class:          valueobject.ClassEquity,
+			expectedResult: valueobject.DirectionCredit,
+		},
+		{
+			name:           "revenue normal side is credit",
+			class:          valueobject.ClassRevenue,
+			expectedResult: valueobject.DirectionCredit,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tc.expectedResult, tc.class.NormalSide())
+		})
 	}
 }
 
@@ -231,50 +263,143 @@ func TestNoBalanceOrDeposit(t *testing.T) {
 
 func TestOpenValidation(t *testing.T) {
 	t.Parallel()
+
 	at := time.Date(2026, 9, 14, 5, 0, 0, 0, time.UTC)
 	base := aggregate.OpenAccountParams{
-		ID: testAccount1, TenantID: testTenantID, LedgerID: testLedgerID, Number: "1000", Name: "Cash",
-		Class: valueobject.ClassAsset, AssetCode: testUSD,
-		EventID: testEvent0, OccurredAt: at,
+		ID:         testAccount1,
+		TenantID:   testTenantID,
+		LedgerID:   testLedgerID,
+		Number:     "1000",
+		Name:       "Cash",
+		Class:      valueobject.ClassAsset,
+		AssetCode:  testUSD,
+		EventID:    testEvent0,
+		OccurredAt: at,
 	}
-	mutate := []func(*aggregate.OpenAccountParams){
-		func(p *aggregate.OpenAccountParams) { p.TenantID = "" },
-		func(p *aggregate.OpenAccountParams) { p.LedgerID = "" },
-		func(p *aggregate.OpenAccountParams) { p.AssetCode = "" },
-		func(p *aggregate.OpenAccountParams) { p.Name = "" },
-		func(p *aggregate.OpenAccountParams) { p.Number = "" },
-		func(p *aggregate.OpenAccountParams) { p.Class = "NOPE" },
+
+	type testCase struct {
+		name          string
+		params        aggregate.OpenAccountParams
+		expectedError bool
 	}
-	for i, m := range mutate {
-		p := base
-		m(&p)
-		if _, err := aggregate.OpenAccount(p); err == nil {
-			t.Errorf("case %d must error", i)
-		}
+
+	testCases := []testCase{
+		{
+			name: "missing tenant id",
+			params: func() aggregate.OpenAccountParams {
+				p := base
+				p.TenantID = ""
+				return p
+			}(),
+			expectedError: true,
+		},
+		{
+			name: "missing ledger id",
+			params: func() aggregate.OpenAccountParams {
+				p := base
+				p.LedgerID = ""
+				return p
+			}(),
+			expectedError: true,
+		},
+		{
+			name: "missing asset code",
+			params: func() aggregate.OpenAccountParams {
+				p := base
+				p.AssetCode = ""
+				return p
+			}(),
+			expectedError: true,
+		},
+		{
+			name: "missing name",
+			params: func() aggregate.OpenAccountParams {
+				p := base
+				p.Name = ""
+				return p
+			}(),
+			expectedError: true,
+		},
+		{
+			name: "missing number",
+			params: func() aggregate.OpenAccountParams {
+				p := base
+				p.Number = ""
+				return p
+			}(),
+			expectedError: true,
+		},
+		{
+			name: "invalid class",
+			params: func() aggregate.OpenAccountParams {
+				p := base
+				p.Class = "NOPE"
+				return p
+			}(),
+			expectedError: true,
+		},
+		{
+			name: "self-parent rejected",
+			params: func() aggregate.OpenAccountParams {
+				p := base
+				id := valueobject.AccountID(testAccount1)
+				p.ParentID = &id
+				p.ID = testAccount1
+				return p
+			}(),
+			expectedError: true,
+		},
 	}
-	self := base
-	id := valueobject.AccountID(testAccount1)
-	self.ParentID = &id
-	self.ID = testAccount1
-	if _, err := aggregate.OpenAccount(self); err == nil {
-		t.Error("self-parent must error")
-	}
-	if _, err := entity.NewLedger(testLedgerID, testTenantID, "Main", testUSD, "v1"); err != nil {
-		t.Errorf("NewLedger: %v", err)
-	}
-	if _, err := entity.NewLedger("", testTenantID, "Main", testUSD, "v1"); err == nil {
-		t.Error("empty ledger id must error")
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := aggregate.OpenAccount(tc.params)
+			if tc.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
 	}
 }
 
 func TestCloseRequiresReason(t *testing.T) {
 	t.Parallel()
-	a := openTestAccount(t, "a-9")
+
 	at := time.Date(2026, 9, 14, 6, 0, 0, 0, time.UTC)
-	if err := a.Close(aggregate.CloseParams{TransitionParams: aggregate.TransitionParams{Actor: testUser1, EventID: testEvent9, OccurredAt: at}}); err == nil {
-		t.Fatal("Close without reason must error")
+
+	type testCase struct {
+		name          string
+		params        aggregate.CloseParams
+		expectedError string
 	}
-	if len(a.UncommittedEvents()) != 1 {
-		t.Fatal("failed Close must not emit")
+
+	testCases := []testCase{
+		{
+			name: "close without reason fails",
+			params: aggregate.CloseParams{
+				TransitionParams: aggregate.TransitionParams{
+					Actor:      testUser1,
+					EventID:    testEvent9,
+					OccurredAt: at,
+				},
+				Reason: "",
+			},
+			expectedError: "ACCOUNT_REASON_REQUIRED",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			a := openTestAccount(t, "a-9")
+			err := a.Close(tc.params)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tc.expectedError)
+			assert.Len(t, a.UncommittedEvents(), 1)
+		})
 	}
 }

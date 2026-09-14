@@ -1,8 +1,9 @@
 package jsonparser
 
 import (
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // moneyShape mirrors ledger integer-minor amounts: exact int64 round-trip is
@@ -18,19 +19,14 @@ func TestRoundTripMinorMoney(t *testing.T) {
 
 	in := moneyShape{AccountID: "acc_01", AmountMinor: 9_007_199_254_740_993, AssetCode: "USD"}
 	data, err := Marshal(in)
-	if err != nil {
-		t.Fatalf("Marshal: %v", err)
-	}
-	if strings.Contains(string(data), "e+") || strings.Contains(string(data), "E+") {
-		t.Fatalf("amount must not use exponent notation: %s", data)
-	}
+	assert.NoError(t, err)
+	assert.NotContains(t, string(data), "e+")
+	assert.NotContains(t, string(data), "E+")
+
 	var out moneyShape
-	if err := Unmarshal(data, &out); err != nil {
-		t.Fatalf("Unmarshal: %v", err)
-	}
-	if out != in {
-		t.Errorf("round-trip mismatch: %+v != %+v", out, in)
-	}
+	err = Unmarshal(data, &out)
+	assert.NoError(t, err)
+	assert.Equal(t, in, out)
 }
 
 func TestRoundTripLargePayload(t *testing.T) {
@@ -41,65 +37,160 @@ func TestRoundTripLargePayload(t *testing.T) {
 		in = append(in, moneyShape{AccountID: "acc", AmountMinor: int64(i), AssetCode: "IDR"})
 	}
 	data, err := Marshal(in)
-	if err != nil {
-		t.Fatalf("Marshal: %v", err)
-	}
-	if len(data) < 1<<20 {
-		t.Fatalf("expected ≥1MB payload, got %d bytes", len(data))
-	}
+	assert.NoError(t, err)
+	assert.GreaterOrEqual(t, len(data), 1<<20)
+
 	var out []moneyShape
-	if err := Unmarshal(data, &out); err != nil {
-		t.Fatalf("Unmarshal: %v", err)
-	}
-	if len(out) != len(in) || out[19999].AmountMinor != 19999 {
-		t.Errorf("large payload mismatch: len %d", len(out))
-	}
+	err = Unmarshal(data, &out)
+	assert.NoError(t, err)
+	assert.Equal(t, len(in), len(out))
+	assert.Equal(t, int64(19999), out[19999].AmountMinor)
 }
 
-func TestGetTraversal(t *testing.T) {
+func TestGet(t *testing.T) {
 	t.Parallel()
 
 	doc := []byte(`{"entries":[{"amount_minor":1500,"asset":"USD"}],"meta":{"tenant":"t1"}}`)
 
-	leaf, err := Get(doc, "entries", "0", "amount_minor")
-	if err != nil {
-		t.Fatalf("Get: %v", err)
-	}
-	if string(leaf) != "1500" {
-		t.Errorf("unexpected leaf: %s", leaf)
+	type testCase struct {
+		name           string
+		data           []byte
+		path           []string
+		expectedResult string
+		expectedError  bool
 	}
 
-	if _, err := Get(doc, "entries", "3", "amount_minor"); err == nil {
-		t.Error("expected out-of-range error, got nil")
+	testCases := []testCase{
+		{
+			name:           "valid array element field traversal",
+			data:           doc,
+			path:           []string{"entries", "0", "amount_minor"},
+			expectedResult: "1500",
+			expectedError:  false,
+		},
+		{
+			name:           "out-of-range array index rejected",
+			data:           doc,
+			path:           []string{"entries", "3", "amount_minor"},
+			expectedResult: "",
+			expectedError:  true,
+		},
+		{
+			name:           "missing map key rejected",
+			data:           doc,
+			path:           []string{"meta", "missing"},
+			expectedResult: "",
+			expectedError:  true,
+		},
+		{
+			name:           "descending into scalar rejected",
+			data:           doc,
+			path:           []string{"meta", "tenant", "deep"},
+			expectedResult: "",
+			expectedError:  true,
+		},
+		{
+			name:           "malformed json document rejected",
+			data:           []byte(`{oops`),
+			path:           []string{"a"},
+			expectedResult: "",
+			expectedError:  true,
+		},
 	}
-	if _, err := Get(doc, "meta", "missing"); err == nil {
-		t.Error("expected missing-key error, got nil")
-	}
-	if _, err := Get(doc, "meta", "tenant", "deep"); err == nil {
-		t.Error("expected descend-into-scalar error, got nil")
-	}
-	if _, err := Get([]byte(`{oops`), "a"); err == nil {
-		t.Error("expected invalid-document error, got nil")
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := Get(tc.data, tc.path...)
+			if tc.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedResult, string(got))
+			}
+		})
 	}
 }
 
-func TestMarshalError(t *testing.T) {
+func TestMarshal(t *testing.T) {
 	t.Parallel()
 
-	// Channels cannot be marshaled into JSON.
-	_, err := Marshal(make(chan int))
-	if err == nil {
-		t.Fatal("expected error marshaling channel, got nil")
+	type testCase struct {
+		name          string
+		v             any
+		expectedError bool
+	}
+
+	testCases := []testCase{
+		{
+			name: "valid struct round-trip",
+			v: moneyShape{
+				AccountID:   "acc_01",
+				AmountMinor: 9_007_199_254_740_993,
+				AssetCode:   "USD",
+			},
+			expectedError: false,
+		},
+		{
+			name:          "unsupported channel type fails",
+			v:             make(chan int),
+			expectedError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			data, err := Marshal(tc.v)
+			if tc.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.NotContains(t, string(data), "e+")
+				assert.NotContains(t, string(data), "E+")
+			}
+		})
 	}
 }
 
-func TestUnmarshalError(t *testing.T) {
+func TestUnmarshal(t *testing.T) {
 	t.Parallel()
 
-	var out map[string]any
-	err := Unmarshal([]byte("{invalid-json"), &out)
-	if err == nil {
-		t.Fatal("expected error unmarshaling malformed json, got nil")
+	type testCase struct {
+		name          string
+		data          []byte
+		target        any
+		expectedError bool
+	}
+
+	testCases := []testCase{
+		{
+			name:          "valid json unmarshals",
+			data:          []byte(`{"account_id":"acc_01","amount_minor":100,"asset_code":"USD"}`),
+			target:        &moneyShape{},
+			expectedError: false,
+		},
+		{
+			name:          "malformed json fails",
+			data:          []byte("{invalid-json"),
+			target:        &map[string]any{},
+			expectedError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err := Unmarshal(tc.data, tc.target)
+			if tc.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
 	}
 }
 

@@ -3,6 +3,7 @@ package di
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"go.uber.org/fx"
 )
 
@@ -23,26 +24,45 @@ func TestGraphValidates(t *testing.T) {
 		ConsumerModule(),
 		fx.NopLogger,
 	)
-	if err != nil {
-		t.Fatalf("fx graph does not validate: %v", err)
-	}
+	assert.NoError(t, err)
 }
 
 func TestProvidersConstructInstances(t *testing.T) {
 	t.Parallel()
 
-	logger := ProvideLogger()
-	if logger == nil {
-		t.Error("ProvideLogger returned nil")
+	type testCase struct {
+		name     string
+		validate func() bool
 	}
 
-	clock := ProvideClock()
-	if clock == nil || clock.Now().IsZero() {
-		t.Error("ProvideClock returned invalid clock")
+	testCases := []testCase{
+		{
+			name: "logger provider returns non-nil",
+			validate: func() bool {
+				return ProvideLogger() != nil
+			},
+		},
+		{
+			name: "clock provider returns valid clock",
+			validate: func() bool {
+				clk := ProvideClock()
+				return clk != nil && !clk.Now().IsZero()
+			},
+		},
+		{
+			name: "id generator provider returns valid generator",
+			validate: func() bool {
+				gen := ProvideIDGenerator()
+				return gen != nil && gen.NewID() != ""
+			},
+		},
 	}
 
-	gen := ProvideIDGenerator()
-	if gen == nil || gen.NewID() == "" {
-		t.Error("ProvideIDGenerator returned invalid generator")
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			assert.True(t, tc.validate())
+		})
 	}
 }

@@ -4,81 +4,126 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/kadekutama/go-template/internal/shared/kernel/log"
 )
 
-func TestContextCorrelationFields(t *testing.T) {
+func TestFromContext(t *testing.T) {
 	t.Parallel()
 
-	// Empty context returns empty map, not nil
-	empty := log.FromContext(context.Background())
-	if len(empty) != 0 {
-		t.Errorf("empty context should have 0 fields, got: %v", empty)
+	type testCase struct {
+		name           string
+		ctx            context.Context
+		expectedFields map[string]string
 	}
 
-	// Add fields one by one
-	ctx := context.Background()
-	ctx = log.WithRequestID(ctx, "req-123")
-	ctx = log.WithTraceID(ctx, "trace-456")
-	ctx = log.WithTenantID(ctx, "tenant-789")
-	ctx = log.WithUserID(ctx, "user-001")
+	testCases := []testCase{
+		{
+			name:           "empty background context",
+			ctx:            context.Background(),
+			expectedFields: map[string]string{},
+		},
+		{
+			name:           "nil context returns empty map",
+			ctx:            nil,
+			expectedFields: map[string]string{},
+		},
+		{
+			name: "context with correlation IDs",
+			ctx: func() context.Context {
+				ctx := context.Background()
+				ctx = log.WithRequestID(ctx, "req-123")
+				ctx = log.WithTraceID(ctx, "trace-456")
+				ctx = log.WithTenantID(ctx, "tenant-789")
+				ctx = log.WithUserID(ctx, "user-001")
+				return ctx
+			}(),
+			expectedFields: map[string]string{
+				log.FieldRequestID: "req-123",
+				log.FieldTraceID:   "trace-456",
+				log.FieldTenantID:  "tenant-789",
+				log.FieldUserID:    "user-001",
+			},
+		},
+		{
+			name: "context with overrides merged",
+			ctx: func() context.Context {
+				ctx := context.Background()
+				ctx = log.WithRequestID(ctx, "req-initial")
+				ctx = log.WithTraceID(ctx, "trace-456")
+				return log.WithContext(ctx, map[string]string{
+					log.FieldRequestID: "req-overridden",
+					"custom_key":       "custom_val",
+				})
+			}(),
+			expectedFields: map[string]string{
+				log.FieldRequestID: "req-overridden",
+				log.FieldTraceID:   "trace-456",
+				"custom_key":       "custom_val",
+			},
+		},
+	}
 
-	fields := log.FromContext(ctx)
-	if fields[log.FieldRequestID] != "req-123" {
-		t.Errorf("FieldRequestID = %q, want %q", fields[log.FieldRequestID], "req-123")
-	}
-	if fields[log.FieldTraceID] != "trace-456" {
-		t.Errorf("FieldTraceID = %q, want %q", fields[log.FieldTraceID], "trace-456")
-	}
-	if fields[log.FieldTenantID] != "tenant-789" {
-		t.Errorf("FieldTenantID = %q, want %q", fields[log.FieldTenantID], "tenant-789")
-	}
-	if fields[log.FieldUserID] != "user-001" {
-		t.Errorf("FieldUserID = %q, want %q", fields[log.FieldUserID], "user-001")
-	}
-
-	// WithContext merges with existing fields and allows overwriting
-	overrides := map[string]string{
-		log.FieldRequestID: "req-overridden",
-		"custom_key":       "custom_val",
-	}
-	ctx = log.WithContext(ctx, overrides)
-	merged := log.FromContext(ctx)
-	if merged[log.FieldRequestID] != "req-overridden" {
-		t.Errorf("FieldRequestID = %q, want %q", merged[log.FieldRequestID], "req-overridden")
-	}
-	if merged[log.FieldTraceID] != "trace-456" {
-		t.Errorf("FieldTraceID preserved = %q, want %q", merged[log.FieldTraceID], "trace-456")
-	}
-	if merged["custom_key"] != "custom_val" {
-		t.Errorf("custom_key = %q, want %q", merged["custom_key"], "custom_val")
-	}
-
-	// Mutating returned map does not affect context
-	merged["injected"] = "mutated"
-	fresh := log.FromContext(ctx)
-	if _, exists := fresh["injected"]; exists {
-		t.Error("FromContext returned map must not leak back into context")
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := log.FromContext(tc.ctx)
+			assert.NotNil(t, got)
+			assert.Equal(t, tc.expectedFields, got)
+		})
 	}
 }
 
-func TestNilContextSafety(t *testing.T) {
+func TestWithContext(t *testing.T) {
 	t.Parallel()
 
-	var nilCtx context.Context
-	// FromContext with nil must return empty map without panicking
-	got := log.FromContext(nilCtx)
-	if got == nil || len(got) != 0 {
-		t.Errorf("FromContext(nil) = %v, want empty non-nil map", got)
+	type testCase struct {
+		name          string
+		ctx           context.Context
+		fields        map[string]string
+		expectedKey   string
+		expectedValue string
 	}
 
-	// WithContext with nil must create valid context without panicking
-	ctx := log.WithContext(nilCtx, map[string]string{log.FieldRequestID: "req-nil"})
-	if ctx == nil {
-		t.Fatal("WithContext(nil, ...) returned nil context")
+	testCases := []testCase{
+		{
+			name:          "nil context creates valid context with fields",
+			ctx:           nil,
+			fields:        map[string]string{log.FieldRequestID: "req-nil"},
+			expectedKey:   log.FieldRequestID,
+			expectedValue: "req-nil",
+		},
+		{
+			name:          "existing context receives fields",
+			ctx:           context.Background(),
+			fields:        map[string]string{"custom_key": "custom_val"},
+			expectedKey:   "custom_key",
+			expectedValue: "custom_val",
+		},
 	}
-	fields := log.FromContext(ctx)
-	if fields[log.FieldRequestID] != "req-nil" {
-		t.Errorf("FieldRequestID = %q, want req-nil", fields[log.FieldRequestID])
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			resCtx := log.WithContext(tc.ctx, tc.fields)
+			assert.NotNil(t, resCtx)
+			extracted := log.FromContext(resCtx)
+			assert.Equal(t, tc.expectedValue, extracted[tc.expectedKey])
+		})
 	}
+}
+
+func TestFromContextImmutability(t *testing.T) {
+	t.Parallel()
+
+	ctx := log.WithRequestID(context.Background(), "req-orig")
+	extracted := log.FromContext(ctx)
+	extracted["injected"] = "mutated"
+
+	fresh := log.FromContext(ctx)
+	assert.NotContains(t, fresh, "injected")
+	assert.Equal(t, "req-orig", fresh[log.FieldRequestID])
 }

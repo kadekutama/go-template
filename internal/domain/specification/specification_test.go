@@ -46,108 +46,242 @@ func equalCodes(a, b []string) bool {
 	return slices.Equal(a, b)
 }
 
-func TestAllAggregatesEveryViolationInOrder(t *testing.T) {
+func TestAll(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
-	res := specification.All[string](passSpec(), failSpec(testCodeEA), failSpec(testCodeEB)).Evaluate(ctx, "c")
-	if res.Passed() {
-		t.Fatal("All with failures must not pass")
+
+	type testCase struct {
+		name                   string
+		ctx                    context.Context
+		spec                   specification.Specification[string]
+		candidate              string
+		expectedPassed         bool
+		expectedViolationCodes []string
 	}
-	if got, want := violationCodes(res), []string{testCodeEA, testCodeEB}; !equalCodes(got, want) {
-		t.Fatalf("All violations = %v, want %v (every child, in order)", got, want)
+
+	testCases := []testCase{
+		{
+			name:                   "every child passes",
+			ctx:                    context.Background(),
+			spec:                   specification.All[string](passSpec(), passSpec()),
+			candidate:              "c",
+			expectedPassed:         true,
+			expectedViolationCodes: nil,
+		},
+		{
+			name:                   "aggregates every violation in order",
+			ctx:                    context.Background(),
+			spec:                   specification.All[string](passSpec(), failSpec(testCodeEA), failSpec(testCodeEB)),
+			candidate:              "c",
+			expectedPassed:         false,
+			expectedViolationCodes: []string{testCodeEA, testCodeEB},
+		},
+		{
+			name:                   "empty all passes",
+			ctx:                    context.Background(),
+			spec:                   specification.All[string](),
+			candidate:              "c",
+			expectedPassed:         true,
+			expectedViolationCodes: nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			res := tc.spec.Evaluate(tc.ctx, tc.candidate)
+			if tc.expectedPassed != res.Passed() {
+				t.Fatalf("expected passed %v, got %v", tc.expectedPassed, res.Passed())
+			}
+			if !equalCodes(violationCodes(res), tc.expectedViolationCodes) {
+				t.Fatalf("expected violation codes %v, got %v", tc.expectedViolationCodes, violationCodes(res))
+			}
+		})
 	}
 }
 
-func TestAllPassesWhenEveryChildPasses(t *testing.T) {
+func TestAny(t *testing.T) {
 	t.Parallel()
-	res := specification.All[string](passSpec(), passSpec()).Evaluate(context.Background(), "c")
-	if !res.Passed() || len(res.Violations) != 0 {
-		t.Fatalf("All of passes = %+v, want pass", res)
+
+	type testCase struct {
+		name                   string
+		ctx                    context.Context
+		spec                   specification.Specification[string]
+		candidate              string
+		expectedPassed         bool
+		expectedViolationCodes []string
+	}
+
+	testCases := []testCase{
+		{
+			name:                   "short-circuits on first pass",
+			ctx:                    context.Background(),
+			spec:                   specification.Any[string](failSpec("E_A"), failSpec("E_B"), passSpec()),
+			candidate:              "c",
+			expectedPassed:         true,
+			expectedViolationCodes: nil,
+		},
+		{
+			name:                   "aggregates when all fail",
+			ctx:                    context.Background(),
+			spec:                   specification.Any[string](failSpec("E_A"), failSpec("E_B")),
+			candidate:              "c",
+			expectedPassed:         false,
+			expectedViolationCodes: []string{"E_A", "E_B"},
+		},
+		{
+			name:                   "empty any fails with explicit violation",
+			ctx:                    context.Background(),
+			spec:                   specification.Any[string](),
+			candidate:              "c",
+			expectedPassed:         false,
+			expectedViolationCodes: []string{"SPEC_EMPTY_ANY"},
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			res := tc.spec.Evaluate(tc.ctx, tc.candidate)
+			if tc.expectedPassed != res.Passed() {
+				t.Fatalf("expected passed %v, got %v", tc.expectedPassed, res.Passed())
+			}
+			if !equalCodes(violationCodes(res), tc.expectedViolationCodes) {
+				t.Fatalf("expected violation codes %v, got %v", tc.expectedViolationCodes, violationCodes(res))
+			}
+		})
 	}
 }
 
-func TestAnyShortCircuitsOnFirstPass(t *testing.T) {
+func TestNot(t *testing.T) {
 	t.Parallel()
-	res := specification.Any[string](failSpec("E_A"), failSpec("E_B"), passSpec()).Evaluate(context.Background(), "c")
-	if !res.Passed() || len(res.Violations) != 0 {
-		t.Fatalf("Any with a passing child = %+v, want pass with zero violations", res)
-	}
-}
 
-func TestAnyAggregatesWhenAllFail(t *testing.T) {
-	t.Parallel()
-	res := specification.Any[string](failSpec("E_A"), failSpec("E_B")).Evaluate(context.Background(), "c")
-	if res.Passed() {
-		t.Fatal("Any with all failures must not pass")
-	}
-	if got, want := violationCodes(res), []string{"E_A", "E_B"}; !equalCodes(got, want) {
-		t.Fatalf("Any violations = %v, want %v", got, want)
-	}
-}
-
-func TestNotInvertsChild(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
 	explicit := specification.Violation{Code: "NOT_OK", Message: "must not satisfy child"}
-	if res := specification.Not[string](failSpec("E_X"), explicit).Evaluate(ctx, "c"); !res.Passed() {
-		t.Fatalf("Not(failing) = %+v, want pass", res)
+
+	type testCase struct {
+		name                   string
+		ctx                    context.Context
+		spec                   specification.Specification[string]
+		candidate              string
+		expectedPassed         bool
+		expectedViolationCodes []string
 	}
-	res := specification.Not[string](passSpec(), explicit).Evaluate(ctx, "c")
-	if res.Passed() {
-		t.Fatal("Not(passing) must fail")
+
+	testCases := []testCase{
+		{
+			name:                   "inverts failing child to pass",
+			ctx:                    context.Background(),
+			spec:                   specification.Not[string](failSpec("E_X"), explicit),
+			candidate:              "c",
+			expectedPassed:         true,
+			expectedViolationCodes: nil,
+		},
+		{
+			name:                   "inverts passing child to fail",
+			ctx:                    context.Background(),
+			spec:                   specification.Not[string](passSpec(), explicit),
+			candidate:              "c",
+			expectedPassed:         false,
+			expectedViolationCodes: []string{"NOT_OK"},
+		},
 	}
-	if got := violationCodes(res); !equalCodes(got, []string{"NOT_OK"}) {
-		t.Fatalf("Not(passing) violations = %v, want [NOT_OK]", got)
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			res := tc.spec.Evaluate(tc.ctx, tc.candidate)
+			if tc.expectedPassed != res.Passed() {
+				t.Fatalf("expected passed %v, got %v", tc.expectedPassed, res.Passed())
+			}
+			if !equalCodes(violationCodes(res), tc.expectedViolationCodes) {
+				t.Fatalf("expected violation codes %v, got %v", tc.expectedViolationCodes, violationCodes(res))
+			}
+		})
 	}
 }
 
-func TestEmptySemantics(t *testing.T) {
+func TestNilSafety(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
-	if res := specification.All[string]().Evaluate(ctx, "c"); !res.Passed() {
-		t.Fatalf("All() empty = %+v, want pass", res)
-	}
-	res := specification.Any[string]().Evaluate(ctx, "c")
-	if res.Passed() || len(res.Violations) != 1 {
-		t.Fatalf("Any() empty = %+v, want exactly one explicit violation", res)
-	}
-}
 
-func TestNilChildIsViolationNotPanic(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	defer func() {
-		if r := recover(); r != nil {
-			t.Fatalf("nil child panicked: %v", r)
-		}
-	}()
-	if res := specification.All[string](nil).Evaluate(ctx, "c"); res.Passed() {
-		t.Error("All(nil) must fail")
-	}
-	if res := specification.Any[string](nil).Evaluate(ctx, "c"); res.Passed() {
-		t.Error("Any(nil) must fail")
-	}
-	if res := specification.Not[string](nil, specification.Violation{Code: "N"}).Evaluate(ctx, "c"); res.Passed() {
-		t.Error("Not(nil) must fail")
-	}
-}
-
-func TestNilCandidateDoesNotPanic(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	defer func() {
-		if r := recover(); r != nil {
-			t.Fatalf("nil candidate panicked: %v", r)
-		}
-	}()
 	nilSafe := specification.NewFuncSpec[*string]("NIL_SAFE", "nil rejected", func(_ context.Context, s *string) bool {
 		return s != nil && *s != ""
 	})
-	if res := nilSafe.Evaluate(ctx, nil); res.Passed() {
-		t.Error("nil candidate must fail the predicate, not pass")
+
+	type testCase struct {
+		name                   string
+		ctx                    context.Context
+		eval                   func(ctx context.Context) specification.SpecResult
+		expectedPassed         bool
+		expectedViolationCodes []string
 	}
-	if res := specification.All[*string](nilSafe).Evaluate(ctx, nil); res.Passed() {
-		t.Error("All with nil candidate must fail, not panic")
+
+	testCases := []testCase{
+		{
+			name: "All with nil child",
+			ctx:  context.Background(),
+			eval: func(ctx context.Context) specification.SpecResult {
+				return specification.All[string](nil).Evaluate(ctx, "c")
+			},
+			expectedPassed:         false,
+			expectedViolationCodes: []string{"SPEC_NIL_CHILD"},
+		},
+		{
+			name: "Any with nil child",
+			ctx:  context.Background(),
+			eval: func(ctx context.Context) specification.SpecResult {
+				return specification.Any[string](nil).Evaluate(ctx, "c")
+			},
+			expectedPassed:         false,
+			expectedViolationCodes: []string{"SPEC_NIL_CHILD"},
+		},
+		{
+			name: "Not with nil child",
+			ctx:  context.Background(),
+			eval: func(ctx context.Context) specification.SpecResult {
+				return specification.Not[string](nil, specification.Violation{Code: "N"}).Evaluate(ctx, "c")
+			},
+			expectedPassed:         false,
+			expectedViolationCodes: []string{"SPEC_NIL_CHILD"},
+		},
+		{
+			name: "nil candidate on predicate fails without panic",
+			ctx:  context.Background(),
+			eval: func(ctx context.Context) specification.SpecResult {
+				return nilSafe.Evaluate(ctx, nil)
+			},
+			expectedPassed:         false,
+			expectedViolationCodes: []string{"NIL_SAFE"},
+		},
+		{
+			name: "All with nil candidate fails without panic",
+			ctx:  context.Background(),
+			eval: func(ctx context.Context) specification.SpecResult {
+				return specification.All[*string](nilSafe).Evaluate(ctx, nil)
+			},
+			expectedPassed:         false,
+			expectedViolationCodes: []string{"NIL_SAFE"},
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("unexpected panic: %v", r)
+				}
+			}()
+			res := tc.eval(tc.ctx)
+			if tc.expectedPassed != res.Passed() {
+				t.Fatalf("expected passed %v, got %v", tc.expectedPassed, res.Passed())
+			}
+			if !equalCodes(violationCodes(res), tc.expectedViolationCodes) {
+				t.Fatalf("expected violation codes %v, got %v", tc.expectedViolationCodes, violationCodes(res))
+			}
+		})
 	}
 }
 

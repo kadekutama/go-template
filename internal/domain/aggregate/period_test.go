@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/kadekutama/go-template/internal/domain/aggregate"
 	"github.com/kadekutama/go-template/internal/domain/entity"
 )
@@ -87,27 +89,104 @@ func TestPeriodCloseBlocked(t *testing.T) {
 
 func TestPeriodReopenOnOpenFails(t *testing.T) {
 	t.Parallel()
-	p := openTestPeriod(t)
+
 	at := time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC)
-	if err := p.Reopen(aggregate.ReopenPeriodParams{ApprovedBy: "cfo", Reason: "x", Actor: "a", EventID: "ev-9", OccurredAt: at}); err == nil {
-		t.Fatal("reopen on open must fail")
+
+	type testCase struct {
+		name          string
+		params        aggregate.ReopenPeriodParams
+		expectedError bool
+	}
+
+	testCases := []testCase{
+		{
+			name: "reopen open period fails",
+			params: aggregate.ReopenPeriodParams{
+				ApprovedBy: "cfo",
+				Reason:     "x",
+				Actor:      "a",
+				EventID:    "ev-9",
+				OccurredAt: at,
+			},
+			expectedError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			p := openTestPeriod(t)
+			err := p.Reopen(tc.params)
+			if tc.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
 	}
 }
 
 func TestOpenPeriodValidation(t *testing.T) {
 	t.Parallel()
+
 	start := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 	end := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 	at := time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC)
-	base := aggregate.OpenPeriodParams{ID: "pd-9", TenantID: testTenantID, LedgerID: testLedgerID, Start: start, End: end, Timezone: "UTC", Actor: testUser1, EventID: testEvent0, OccurredAt: at}
-	bad := base
-	bad.Start, bad.End = end, start
-	if _, err := aggregate.OpenPeriod(bad); err == nil {
-		t.Error("inverted bounds must fail")
+	base := aggregate.OpenPeriodParams{
+		ID:         "pd-9",
+		TenantID:   testTenantID,
+		LedgerID:   testLedgerID,
+		Start:      start,
+		End:        end,
+		Timezone:   "UTC",
+		Actor:      testUser1,
+		EventID:    testEvent0,
+		OccurredAt: at,
 	}
-	bad = base
-	bad.Timezone = ""
-	if _, err := aggregate.OpenPeriod(bad); err == nil {
-		t.Error("empty timezone must fail")
+
+	type testCase struct {
+		name          string
+		params        aggregate.OpenPeriodParams
+		expectedError bool
+	}
+
+	testCases := []testCase{
+		{
+			name:          "valid period params pass",
+			params:        base,
+			expectedError: false,
+		},
+		{
+			name: "inverted bounds rejected",
+			params: func() aggregate.OpenPeriodParams {
+				p := base
+				p.Start, p.End = end, start
+				return p
+			}(),
+			expectedError: true,
+		},
+		{
+			name: "empty timezone rejected",
+			params: func() aggregate.OpenPeriodParams {
+				p := base
+				p.Timezone = ""
+				return p
+			}(),
+			expectedError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := aggregate.OpenPeriod(tc.params)
+			if tc.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
 	}
 }

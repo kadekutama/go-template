@@ -375,7 +375,7 @@ def check_format() -> None:
         if not sep2:
             errors.append(f"--format: {ep.name} missing '## Acceptance Criteria' section")
             continue
-        if "- [ ]" not in tail:
+        if not re.search(r"-\s*\[[ xX]\]", tail):
             errors.append(f"--format: {ep.name} '## Acceptance Criteria' has no checkboxes")
         gate_m = re.search(r"\*\*SDD Gate:\*\*\s*(G\d)", head)
         if gate_m and gate_m.group(1) not in tail:

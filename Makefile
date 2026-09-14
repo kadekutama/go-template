@@ -101,6 +101,11 @@ dev-logs: ## Tail dependency service logs.
 docker-build: ## Build all service images (multi-stage Dockerfiles, E17).
 	docker build -f deployments/docker/Dockerfile.rest-api -t go-template/rest-api:dev .
 
+.PHONY: validate-config
+validate-config: ## Validate config YAMLs against the loader + JSON schema (E01-T03).
+	$(call need-script,./scripts/config/validate.sh)
+	./scripts/config/validate.sh
+
 .PHONY: clean
 clean: ## Remove build output and caches (never touches tracked files).
 	rm -rf $(BIN_DIR) coverage/ tmp/

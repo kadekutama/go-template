@@ -1,0 +1,30 @@
+# Staging overrides (no secret values — references only).
+app:
+  name: go-template
+  env: staging
+server:
+  host: 0.0.0.0
+  port: 8080
+database:
+  host: postgres.staging.svc
+  port: 5432
+  user: app_staging
+  password: "{{ secret:db/staging/password }}"
+  name: app
+  sslmode: require
+cache:
+  host: valkey.staging.svc
+  port: 6379
+auth:
+  issuer: https://auth.staging.example.com
+  access_ttl_min: 15
+  refresh_ttl_days: 7
+nats:
+  url: nats://nats.staging.svc:4222
+observability:
+  otlp_endpoint: https://tempo.staging.svc:4317
+  sample_ratio: 0.1
+feature_flags:
+  unleash_url: https://unleash.staging.svc:4242
+secrets:
+  provider: bitwarden

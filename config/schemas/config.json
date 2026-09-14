@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/go-template/config.schema.json",
+  "title": "go-template service configuration (E01-T03)",
+  "description": "Mirrors internal/infrastructure/config.Config koanf paths. The alignment test proves every koanf leaf exists here.",
+  "type": "object",
+  "required": ["app", "server", "database", "cache", "auth", "nats"],
+  "properties": {
+    "app": {
+      "type": "object",
+      "required": ["name", "env"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "env": { "type": "string", "enum": ["local", "staging", "production"] }
+      }
+    },
+    "server": {
+      "type": "object",
+      "required": ["host", "port"],
+      "properties": {
+        "host": { "type": "string", "minLength": 1 },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+      }
+    },
+    "database": {
+      "type": "object",
+      "required": ["host", "port", "user", "password", "name", "sslmode"],
+      "properties": {
+        "host": { "type": "string", "minLength": 1 },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "user": { "type": "string", "minLength": 1 },
+        "password": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "sslmode": { "type": "string", "enum": ["disable", "require", "verify-full"] }
+      }
+    },
+    "cache": {
+      "type": "object",
+      "required": ["host", "port"],
+      "properties": {
+        "host": { "type": "string", "minLength": 1 },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+      }
+    },
+    "auth": {
+      "type": "object",
+      "required": ["issuer", "access_ttl_min", "refresh_ttl_days"],
+      "properties": {
+        "issuer": { "type": "string", "minLength": 1 },
+        "access_ttl_min": { "type": "integer", "minimum": 1 },
+        "refresh_ttl_days": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "nats": {
+      "type": "object",
+      "required": ["url"],
+      "properties": {
+        "url": { "type": "string", "minLength": 1 }
+      }
+    },
+    "observability": {
+      "type": "object",
+      "properties": {
+        "otlp_endpoint": { "type": "string" },
+        "sample_ratio": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "feature_flags": {
+      "type": "object",
+      "properties": {
+        "unleash_url": { "type": "string" }
+      }
+    },
+    "secrets": {
+      "type": "object",
+      "properties": {
+        "provider": { "type": "string", "enum": ["bitwarden", "env", ""] }
+      }
+    }
+  }
+}

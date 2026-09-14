@@ -1,6 +1,6 @@
 # Progress Dashboard (single source of truth for progress)
 
-**Last updated:** 2026-09-13
+**Last updated:** 2026-09-14
 **How to update:** flip task `**Status:**` in the epic file, then tick the box here.
 Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 
@@ -9,7 +9,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | Epic | Title | SP | Done | Status | Gate |
 |------|-------|----|------|--------|------|
 | E00 | Foundation & repo bootstrap | 14 | 14/14 | completed | G1 |
-| E01 | Platform core (fx, config, logging, tracing, kernel, resilience) | 17 | 0/17 | pending | G1 |
+| E01 | Platform core (fx, config, logging, tracing, kernel, resilience) | 17 | 17/17 | completed | G1 |
 | E02 | Ledger domain core | 30 | 0/30 | pending | G2 |
 | E03 | Money-movement domain | 37 | 0/37 | pending | G2 |
 | E04 | Compliance domain | 16 | 0/16 | pending | G2 |
@@ -29,7 +29,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | E18 | Docs + DX | 16 | 0/16 | pending | G8 |
 | E19 | Hardening + release | 13 | 0/13 | pending | G8 |
 
-**Total:** 14/432 SP completed.
+**Total:** 31/432 SP completed.
 
 ## Task checklists (tick as epic files flip to completed)
 
@@ -45,14 +45,14 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 - [x] E00-T08 harness-neutral SDD control plane
 
 ### E01 — Platform core
-- [ ] E01-T01 go.mod versions
-- [ ] E01-T02 fx registry
-- [ ] E01-T03 koanf config
-- [ ] E01-T04 logging port + slog
-- [ ] E01-T05 tracing port + OTel
-- [ ] E01-T06 kernel (errors/i18n/pagination/shutdown/safe/clock/ID)
-- [ ] E01-T07 JSON codec wrapper
-- [ ] E01-T08 resilience primitives (breaker/timeout/retry)
+- [x] E01-T01 go.mod versions
+- [x] E01-T02 fx registry
+- [x] E01-T03 koanf config
+- [x] E01-T04 logging port + zerolog (ADR-012)
+- [x] E01-T05 tracing port + OTel
+- [x] E01-T06 kernel (errors/i18n/pagination/shutdown/safe/clock/UUIDv7)
+- [x] E01-T07 JSON codec wrapper (Sonic, ADR-012)
+- [x] E01-T08 resilience primitives (breaker/timeout/retry)
 
 ### E02 — Ledger domain
 - [ ] E02-T01 domain event + specification primitives
@@ -217,7 +217,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 
 | Gate | Status | Promotes capability for |
 |------|--------|-------------------------|
-| G1 | pending | E02 |
+| G1 | completed | E02 |
 | G2 | pending | E06 |
 | G3 | pending | E07–E10 |
 | G4 | pending | E11–E14 |

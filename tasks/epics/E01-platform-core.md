@@ -1,6 +1,6 @@
 # Epic E01: Platform Core (fx, Config, Logging, Tracing, Shared Kernel)
 
-**Status:** pending
+**Status:** completed
 **Story Points:** 17
 **Phase:** 1
 **Dependencies:** E00
@@ -16,7 +16,7 @@
 ## Tasks
 
 ### E01-T01: Pin go.mod dependencies to SPEC §2 versions
-**Status:** pending
+**Status:** completed
 **Background:** All later code compiles against these exact versions
 (Go 1.27.1, fx v1.24.0, Echo v5.3.1, GORM v1.31.2, go-redis v9.22.0,
 OTel v1.26.0, and the codec wrapper policy). Version drift is the top cause of
@@ -39,7 +39,7 @@ OTel v1.26.0, and the codec wrapper policy). Version drift is the top cause of
 ---
 
 ### E01-T02: fx module registry (no global state)
-**Status:** pending
+**Status:** completed
 **Background:** Runtime DI with lifecycle (`SPEC.md §3.2`). Every layer registers
 an `fx.Option`; each `cmd/*/main.go` composes them. No globals, no init().
 **Files:**
@@ -60,7 +60,7 @@ an `fx.Option`; each `cmd/*/main.go` composes them. No globals, no init().
 ---
 
 ### E01-T03: Layered configuration with validation (koanf)
-**Status:** pending
+**Status:** completed
 **Background:** Single validated `Config` struct loaded base → env → local →
 env-vars → secrets (`SPEC.md §7.1`). Fails fast on missing required fields.
 **Files:**
@@ -85,7 +85,7 @@ env-vars → secrets (`SPEC.md §7.1`). Fails fast on missing required fields.
 ---
 
 ### E01-T04: Structured logging port + slog adapter
-**Status:** pending
+**Status:** completed
 **Background:** JSON logs with correlation IDs (`SPEC.md §7.9`, `§9.5`). The
 `Logger` port lives in the kernel so domain/app never import a logging backend
 (`SPEC.md §7.10`).
@@ -109,7 +109,7 @@ env-vars → secrets (`SPEC.md §7.1`). Fails fast on missing required fields.
 ---
 
 ### E01-T05: Tracing port + OpenTelemetry SDK bootstrap
-**Status:** pending
+**Status:** completed
 **Background:** W3C TraceContext propagation end-to-end (`SPEC.md §7.9`).
 Middleware in E11/E12/E13 consumes the `Tracer` port defined here.
 **Files:**
@@ -132,7 +132,7 @@ Middleware in E11/E12/E13 consumes the `Tracer` port defined here.
 ---
 
 ### E01-T06: Shared kernel — errors, i18n, pagination, lifecycle helpers
-**Status:** pending
+**Status:** completed
 **Background:** The error envelope, translated messages, shutdown and goroutine
 helpers every epic depends on (`SPEC.md §9.1`, `§9.2`, `§9.6`, `§9.7`).
 **Files:**
@@ -166,7 +166,7 @@ helpers every epic depends on (`SPEC.md §9.1`, `§9.2`, `§9.6`, `§9.7`).
 ---
 
 ### E01-T07: JSON codec wrapper package
-**Status:** pending
+**Status:** completed
 **Background:** Single choke point for JSON so the codec stays swappable. The
 standard library is the default; Sonic is optional after compatibility and
 benchmark evidence (`SPEC.md §2`).
@@ -192,7 +192,7 @@ benchmark evidence (`SPEC.md §2`).
 ---
 
 ### E01-T08: Resilience primitives — breaker, timeout, and retry policy
-**Status:** pending
+**Status:** completed
 **Background:** Every outbound provider/client needs one reviewable resilience
 policy. E10 adapters must not each invent retry semantics or retry a possibly
 committed money operation blindly (`SPEC.md §7.8`, `docs/ledger-core.md §8`).
@@ -220,7 +220,7 @@ committed money operation blindly (`SPEC.md §7.8`, `docs/ledger-core.md §8`).
 
 ## Acceptance Criteria
 
-- [ ] E01-T01 … E01-T08 all `completed` (count 17 SP in `tasks/tracking/PROGRESS.md`)
-- [ ] `make build-all` + `make lint` green; `fx.ValidateApp` passes (no cycles)
-- [ ] Invalid config fails with every violation listed; no global state in `di/`
-- [ ] SDD gate G1 checks pass — `tasks/tracking/GATES.md#G1` (`tasks/scripts/gate-check.sh G1`)
+- [x] E01-T01 … E01-T08 all `completed` (count 17 SP in `tasks/tracking/PROGRESS.md`; T04/T06/T07 reworked 2026-09-14 per ADR-012, re-verified)
+- [x] `make build-all` + `make lint` green; `fx.ValidateApp` passes (no cycles)
+- [x] Invalid config fails with every violation listed; no global state in `di/`
+- [x] SDD gate G1 checks pass — `tasks/tracking/GATES.md#G1` (`tasks/scripts/gate-check.sh G1`)

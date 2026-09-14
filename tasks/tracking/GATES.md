@@ -8,14 +8,14 @@ later-numbered epic. Scheduling follows the acyclic task dependency graph in
 the capability is not stable or externally exposed until its gate passes.
 
 ## G1 — Bootstrap + platform core compile
-**Status:** pending
+**Status:** completed
 **Promotes capability for:** ledger/domain slice dependencies
 **Checks:**
 - [x] `make build-all` succeeds (5 stub binaries).
 - [x] `make lint` clean.
 - [x] CI lint+build green on a test PR.
-- [ ] `fx.ValidateApp` passes (no cycles) — `E01-T02`.
-- [ ] Bad config fails with all violations listed — `E01-T03`.
+- [x] `fx.ValidateApp` passes (no cycles) — `E01-T02`.
+- [x] Bad config fails with all violations listed — `E01-T03`.
 - [x] `python3 tasks/scripts/check-tasks.py --format --graph --sdd` passes.
 - [x] SDD lifecycle fixture tests prove cycle, claim, progress, evidence, and
   handoff failures are rejected — `E00-T08`.

@@ -120,9 +120,7 @@ func TestNewBaseEventAccessors(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			evt, err := event.NewBaseEvent(
 				tc.eventID,
 				tc.aggregateID,
@@ -285,9 +283,7 @@ func TestNewBaseEventValidationMatrix(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			_, err := event.NewBaseEvent(
 				tc.eventID,
 				tc.aggregateID,
@@ -351,9 +347,7 @@ func TestBaseEventOccurredAtNormalizedUTC(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			evt, err := event.NewBaseEvent("evt-01", "agg-01", "Account", "account.created.v1", tc.occurredAt, 1, 0, nil, meta)
 			if err != nil {
 				t.Fatalf("NewBaseEvent returned error: %v", err)

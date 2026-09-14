@@ -65,9 +65,7 @@ func TestParsePayoutStatus(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := valueobject.ParsePayoutStatus(tc.s)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -155,9 +153,7 @@ func TestPayoutCanTransition(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult := valueobject.CanTransition(tc.from, tc.to)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -202,9 +198,7 @@ func TestCanCancelPayout(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult := valueobject.CanCancel(tc.s)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})

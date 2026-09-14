@@ -53,9 +53,7 @@ func TestNewFxPair(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := valueobject.NewFxPair(tc.base, tc.quote)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -185,9 +183,7 @@ func TestFxRateValidate(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			err := tc.rate.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -244,9 +240,7 @@ func TestFxRateIsStale(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult := tc.rate.IsStale(tc.at)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})

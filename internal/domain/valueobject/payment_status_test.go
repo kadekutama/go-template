@@ -83,9 +83,7 @@ func TestParsePaymentStatus(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := valueobject.ParsePaymentStatus(tc.s)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -203,9 +201,7 @@ func TestCanTransitionPayment(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult := valueobject.CanTransitionPayment(tc.from, tc.to)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})

@@ -82,9 +82,7 @@ func TestEntryAmountPositive(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			res := specification.EntryAmountPositive().Evaluate(tc.ctx, tc.entry)
 			assert.Equal(t, tc.expectedPassed, res.Passed())
 			if tc.expectedViolationCode != "" {
@@ -142,9 +140,7 @@ func TestPostingBalancesPerCurrency(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			res := specification.PostingBalancesPerCurrency().Evaluate(tc.ctx, tc.posting)
 			assert.Equal(t, tc.expectedPassed, res.Passed())
 			if tc.expectedViolationCode != "" {
@@ -229,9 +225,7 @@ func TestPostingTemplateAllowed(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			spec := specification.PostingTemplateAllowed(tc.template, tc.accounts)
 			res := spec.Evaluate(tc.ctx, tc.posting)
 			assert.Equal(t, tc.expectedPassed, res.Passed())
@@ -289,9 +283,7 @@ func TestValidCurrency(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			res := specification.ValidCurrency().Evaluate(tc.ctx, tc.check)
 			assert.Equal(t, tc.expectedPassed, res.Passed())
 			if tc.expectedViolationCode != "" {
@@ -337,9 +329,7 @@ func TestOriginalExists(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			res := specification.OriginalExists().Evaluate(tc.ctx, tc.ref)
 			assert.Equal(t, tc.expectedPassed, res.Passed())
 			if tc.expectedViolationCode != "" {

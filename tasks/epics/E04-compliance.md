@@ -1,6 +1,6 @@
 # Epic E04: Compliance Domain (Reconciliation, Periods, GDPR, AML, Approvals)
 
-**Status:** pending
+**Status:** completed
 **Story Points:** 16
 **Phase:** 3 (parallel with E03, E05)
 **Dependencies:** E02
@@ -15,7 +15,7 @@
 ## Tasks
 
 ### E04-T01: Reconciliation matching rules + break taxonomy
-**Status:** pending
+**Status:** completed
 **Background:** 3-way match (ledger ↔ statement) and the four break types
 (money-flow §6, journeys §2.3, features §4.2).
 **Files:**
@@ -44,7 +44,7 @@
 ---
 
 ### E04-T02: Break resolution + approval workflow rules
-**Status:** pending
+**Status:** completed
 **Background:** Investigation → adjustment/acknowledge/escalate with SOX
 segregation of duties (features §4.1 SOX, money-flow §6 break resolution).
 **Files:**
@@ -68,7 +68,7 @@ segregation of duties (features §4.1 SOX, money-flow §6 break resolution).
 ---
 
 ### E04-T03: Period-close validation rules
-**Status:** pending
+**Status:** completed
 **Background:** Journeys §2.6 gate conditions as pure rules (no unresolved workflows,
 breaks resolved/acknowledged, sub-ledgers balanced, FX revalued).
 **Files:**
@@ -90,7 +90,7 @@ breaks resolved/acknowledged, sub-ledgers balanced, FX revalued).
 ---
 
 ### E04-T04: GDPR/CCPA erasure + data-portability domain service
-**Status:** pending
+**Status:** completed
 **Background:** Features §4.1 (right to erasure, portability) vs immutable
 ledger — the classic conflict. Rule: personal data erased, ledger integrity kept.
 **Files:**
@@ -114,7 +114,7 @@ ledger — the classic conflict. Rule: personal data erased, ledger integrity ke
 ---
 
 ### E04-T05: AML/KYC hooks + regulatory report definitions
-**Status:** pending
+**Status:** completed
 **Background:** Features §4.1 (AML/KYC, call reports, 1099, FATCA, CRS).
 Transaction monitoring hooks + report field definitions (rendering is E06/E18).
 **Files:**

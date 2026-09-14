@@ -113,9 +113,7 @@ func TestPeriodReopenOnOpenFails(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			p := openTestPeriod(t)
 			err := p.Reopen(tc.params)
 			if tc.expectedError {
@@ -178,9 +176,7 @@ func TestOpenPeriodValidation(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			_, err := aggregate.OpenPeriod(tc.params)
 			if tc.expectedError {
 				assert.Error(t, err)

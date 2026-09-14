@@ -102,9 +102,7 @@ func TestHoldLateCaptureExpired(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			h := openTestHold(t, "h-4", base.Add(time.Hour))
 			err := h.Capture(tc.captureAt)
 			assert.Error(t, err)
@@ -171,9 +169,7 @@ func TestHoldValidation(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			_, err := aggregate.OpenHold(tc.params)
 			if tc.expectedError {
 				assert.Error(t, err)

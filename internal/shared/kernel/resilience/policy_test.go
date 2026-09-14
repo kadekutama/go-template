@@ -36,9 +36,7 @@ func TestDefaultClassifier(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult := DefaultClassifier(tc.err)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -102,9 +100,7 @@ func TestShouldRetry(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult := ShouldRetry(tc.class, tc.idempotent, tc.key)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -151,9 +147,7 @@ func TestBackoffFor(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult := policy.BackoffFor(tc.attempt)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -183,9 +177,7 @@ func TestNormalizePolicy(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult := tc.policy.Normalize()
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -220,9 +212,7 @@ func TestErrorWrappers(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			assert.Equal(t, tc.expectedError, tc.err.Error())
 			assert.ErrorIs(t, tc.err, tc.expectedUnwrap)
 			if unwrap, ok := tc.err.(interface{ Unwrap() error }); ok {

@@ -55,9 +55,7 @@ func TestPeriodOpen(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			res := specification.PeriodOpen().Evaluate(tc.ctx, tc.period)
 			assert.Equal(t, tc.expectedPassed, res.Passed())
 			if tc.expectedViolationCode != "" {
@@ -106,9 +104,7 @@ func TestSpecComposition(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			res := combined.Evaluate(tc.ctx, tc.posting)
 			assert.Equal(t, tc.expectedPassed, res.Passed())
 			assert.Len(t, res.Violations, tc.expectedViolationCount)

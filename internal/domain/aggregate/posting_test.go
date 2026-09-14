@@ -202,9 +202,7 @@ func TestConstructPosting(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			res, err := aggregate.ConstructPosting(tc.p)
 			assert.Equal(t, tc.expectedError, err)
 			if tc.expectedError == nil {
@@ -289,9 +287,7 @@ func TestReversePosting(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			rev, err := aggregate.ReversePosting(tc.original, tc.accounts, tc.p)
 			assert.Equal(t, tc.expectedError, err)
 			if tc.expectedError == nil {

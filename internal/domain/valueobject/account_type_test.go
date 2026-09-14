@@ -47,9 +47,7 @@ func TestParseDirection(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			got, err := valueobject.ParseDirection(tc.raw)
 			assert.Equal(t, tc.expectedResult, got)
 			if tc.expectedError != nil {
@@ -117,9 +115,7 @@ func TestParseAccountClass(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			got, err := valueobject.ParseAccountClass(tc.raw)
 			assert.Equal(t, tc.expectedResult, got)
 			if tc.expectedError != nil {
@@ -169,9 +165,7 @@ func TestNormalSide(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			got := tc.class.NormalSide()
 			assert.Equal(t, tc.expectedResult, got)
 		})
@@ -222,9 +216,7 @@ func TestParseAccountStatus(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			got, err := valueobject.ParseAccountStatus(tc.raw)
 			assert.Equal(t, tc.expectedResult, got)
 			if tc.expectedError != nil {

@@ -12,7 +12,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | E01 | Platform core (fx, config, logging, tracing, kernel, resilience) | 17 | 17/17 | completed | G1 |
 | E02 | Ledger domain core | 30 | 30/30 | completed | G2 |
 | E03 | Money-movement domain | 37 | 34/37 | pending | G2 |
-| E04 | Compliance domain | 16 | 0/16 | pending | G2 |
+| E04 | Compliance domain | 16 | 16/16 | completed | G2 |
 | E05 | Tenancy domain | 11 | 0/11 | pending | G2 |
 | E06 | Application layer | 40 | 0/40 | pending | G3 |
 | E07 | Persistence adapters | 34 | 0/34 | pending | G4 |
@@ -29,7 +29,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | E18 | Docs + DX | 16 | 0/16 | pending | G8 |
 | E19 | Hardening + release | 13 | 0/13 | pending | G8 |
 
-**Total:** 95/432 SP completed.
+**Total:** 111/432 SP completed.
 
 ## Task checklists (tick as epic files flip to completed)
 
@@ -79,11 +79,11 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 - [x] E03-T11 payout eligibility + negative-balance recovery
 
 ### E04 — Compliance
-- [ ] E04-T01 matching + break taxonomy
-- [ ] E04-T02 resolution + SoD approvals
-- [ ] E04-T03 period-close rules
-- [ ] E04-T04 GDPR erasure + portability
-- [ ] E04-T05 AML hooks + regulatory reports
+- [x] E04-T01 matching + break taxonomy
+- [x] E04-T02 resolution + SoD approvals
+- [x] E04-T03 period-close rules
+- [x] E04-T04 GDPR erasure + portability
+- [x] E04-T05 AML hooks + regulatory reports
 
 ### E05 — Tenancy
 - [ ] E05-T01 tenant + onboarding

@@ -89,9 +89,7 @@ func TestValidateDescriptor(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			err := valueobject.ValidateDescriptor(tc.s, tc.network)
 			assert.Equal(t, tc.expectedError, err)
 		})

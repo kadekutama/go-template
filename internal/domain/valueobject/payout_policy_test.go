@@ -100,9 +100,7 @@ func TestPayoutPolicyValidate(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			err := tc.policy.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})

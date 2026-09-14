@@ -238,9 +238,7 @@ func TestStandardizedFields(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			var buf bytes.Buffer
 			logger := New(&buf, Config{Level: testDebugLevel})
 			tc.logAction(logger, context.Background())

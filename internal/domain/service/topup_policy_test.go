@@ -96,9 +96,7 @@ func TestValidateTopup(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := service.ValidateTopup(tc.req)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -203,9 +201,7 @@ func TestSettleTopup(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult1, actualResult2, err := service.SettleTopup(tc.status, tc.funding, tc.bankCash, tc.traceID, tc.succeeded)
 			assert.Equal(t, tc.expectedResult1, actualResult1)
 			assert.Equal(t, tc.expectedResult2, actualResult2)
@@ -240,9 +236,7 @@ func TestCancelTopup(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := service.CancelTopup(tc.status)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -393,9 +387,7 @@ func TestEvaluateEligibility(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := service.EvaluateEligibility(tc.in)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -426,9 +418,7 @@ func TestBlockedError(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult := tc.result.BlockedError()
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -556,9 +546,7 @@ func TestStartRecovery(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := service.StartRecovery(tc.existing, tc.attempt, tc.fingerprint)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -619,9 +607,7 @@ func TestResolveRecoveryOutcome(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult := service.ResolveRecoveryOutcome(tc.attempt, tc.confirmed, tc.traceID)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -754,9 +740,7 @@ func TestConfirmRecovery(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult1, actualResult2, err := service.ConfirmRecovery(tc.attempt, tc.debit, tc.credit, tc.auditRef)
 			assert.Equal(t, tc.expectedResult1, actualResult1)
 			assert.Equal(t, tc.expectedResult2, actualResult2)
@@ -818,9 +802,7 @@ func TestCancelRecovery(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := service.CancelRecovery(tc.attempt)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -860,9 +842,7 @@ func TestRecoveryKey(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult := service.RecoveryKey(tc.tenant, tc.account, tc.asset, tc.key)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})

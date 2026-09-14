@@ -130,9 +130,7 @@ func TestNewJournal(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			j, err := entity.NewJournal(tc.id, tc.tenantID, tc.ledgerID, tc.periodID, tc.postings, tc.nameField, tc.metadata, tc.createdAt)
 			assert.Equal(t, tc.expectedError, err)
 			if tc.expectedError == nil {
@@ -211,9 +209,7 @@ func TestPeriodDataValidate(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			err := tc.period.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -265,9 +261,7 @@ func TestPeriodDataContains(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult := tc.period.Contains(tc.t)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})

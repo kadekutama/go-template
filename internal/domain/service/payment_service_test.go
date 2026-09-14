@@ -55,9 +55,7 @@ func TestValidateRefundToOriginalMethod(t *testing.T) {
 		},
 	}
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			err := service.ValidateRefundToOriginalMethod(tc.m)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -90,9 +88,7 @@ func TestTransitionPayment(t *testing.T) {
 		},
 	}
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := service.TransitionPayment(tc.from, tc.to)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -243,9 +239,7 @@ func TestDispositionFor(t *testing.T) {
 		},
 	}
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult, err := service.DispositionFor(tc.code)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -296,9 +290,7 @@ func TestAddLink(t *testing.T) {
 		},
 	}
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			err := service.AddLink(tc.existing, tc.link)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -318,9 +310,7 @@ func TestResolveTimeout(t *testing.T) {
 		},
 	}
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult := service.ResolveTimeout()
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -356,9 +346,7 @@ func TestRequireStatusLookup(t *testing.T) {
 		},
 	}
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			err := service.RequireStatusLookup(tc.outcome, tc.lookupConfirmed)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -429,9 +417,7 @@ func TestDuplicateDelivery(t *testing.T) {
 		},
 	}
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			actualResult1, actualResult2, err := service.DuplicateDelivery(tc.existing, tc.link)
 			assert.Equal(t, tc.expectedResult1, actualResult1)
 			assert.Equal(t, tc.expectedResult2, actualResult2)

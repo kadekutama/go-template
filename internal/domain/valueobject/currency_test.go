@@ -71,9 +71,7 @@ func TestRegistryLookup(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			got, lookupErr := reg.Lookup(tc.code)
 			assert.Equal(t, tc.expectedResult, got)
 			if tc.expectedError != nil {
@@ -147,9 +145,7 @@ func TestRegistryRegister(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			reg, err := valueobject.NewRegistry(tc.initialAssets...)
 			assert.NoError(t, err)
 			regErr := reg.Register(tc.info)
@@ -186,9 +182,7 @@ func TestNoSettersOnValueObjects(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			for i := 0; i < tc.typ.NumMethod(); i++ {
 				assert.False(t, strings.HasPrefix(tc.typ.Method(i).Name, "Set"), "type has setter: "+tc.typ.Method(i).Name)
 			}
@@ -214,9 +208,7 @@ func TestNoFloatsInValueObjects(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			for i := 0; i < tc.typ.NumField(); i++ {
 				k := tc.typ.Field(i).Type.Kind()
 				assert.NotEqual(t, reflect.Float32, k, "field uses float32: "+tc.typ.Field(i).Name)

@@ -99,9 +99,7 @@ func TestGet(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			got, err := Get(tc.data, tc.path...)
 			if tc.expectedError {
 				assert.Error(t, err)
@@ -140,9 +138,7 @@ func TestMarshal(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			data, err := Marshal(tc.v)
 			if tc.expectedError {
 				assert.Error(t, err)
@@ -181,9 +177,7 @@ func TestUnmarshal(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			err := Unmarshal(tc.data, tc.target)
 			if tc.expectedError {
 				assert.Error(t, err)

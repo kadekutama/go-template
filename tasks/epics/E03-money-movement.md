@@ -19,7 +19,7 @@
 ## Tasks
 
 ### E03-T01: Transfer domain service (immediate + scheduled + recurring + bulk rules)
-**Status:** pending
+**Status:** completed
 **Background:** Implements money-flow §2.3/§2.8/§2.9 and journeys §2.2. Covers
 features §3.1 fully: internal, cross-currency, scheduled, bulk, templates.
 **Files:**
@@ -50,7 +50,7 @@ features §3.1 fully: internal, cross-currency, scheduled, bulk, templates.
 ---
 
 ### E03-T02: Refund domain service (window, amount, reversal linkage)
-**Status:** pending
+**Status:** completed
 **Background:** Journeys §2.4, money-flow §2.4. Partial/full refunds, window
 expiry, reversal linkage for audit.
 **Files:**
@@ -74,7 +74,7 @@ expiry, reversal linkage for audit.
 ---
 
 ### E03-T03: Payout domain rules (methods, states, settlement tracking)
-**Status:** pending
+**Status:** completed
 **Background:** Money-flow §2.2 (two-stage settlement), features §3.2 + §7.1 payouts.
 **Files:**
 - Create: `internal/domain/service/payout_service.go`,
@@ -100,7 +100,7 @@ expiry, reversal linkage for audit.
 ---
 
 ### E03-T04: Fee calculation + interest accrual domain rules
-**Status:** pending
+**Status:** completed
 **Background:** Cron jobs §9 (Fee monthly, Interest daily) need pure calculation
 rules here; scheduling lives in E14.
 **Files:**
@@ -124,7 +124,7 @@ rules here; scheduling lives in E14.
 ---
 
 ### E03-T05: FX value objects, rates, and gain/loss rules
-**Status:** pending
+**Status:** completed
 **Background:** Multi-currency (features §2.1, journeys §2.5, money-flow §2.7).
 **Files:**
 - Create: `internal/domain/valueobject/{fx_rate.go,fx_pair.go}`,
@@ -148,7 +148,7 @@ rules here; scheduling lives in E14.
 ---
 
 ### E03-T06: Payment methods, settlement batches, returns, linking
-**Status:** pending
+**Status:** completed
 **Background:** Remaining features §3.2 rows Nemotron never tasked: methods
 (ACH/Wire/RTP/Card/Crypto/Wallet), push/pull initiation, return/reject R-codes
 with auto-reversal, payment linking to invoices/orders/subscriptions, and
@@ -186,7 +186,7 @@ provider settlement-batch identity.
 ---
 
 ### E03-T07: Dispute domain service (evidence, representment, fees)
-**Status:** pending
+**Status:** completed
 **Background:** Features §3.3 + money-flow §2.11 + journeys §2.7. Holds, network
 deadlines, network-configured representment stages, and explicit fee policy.
 **Files:**
@@ -215,7 +215,7 @@ deadlines, network-configured representment stages, and explicit fee policy.
 ---
 
 ### E03-T08: Authorization lifecycle + descriptors + SCA states
-**Status:** pending
+**Status:** completed
 **Background:** Money-flow §2.12: authorize now, capture later (full/partial),
 expiry auto-void; SCA/3DS challenge states; network descriptor rules.
 **Files:**
@@ -265,7 +265,7 @@ fee at charge time, settle net to the connected account (with FX if needed).
 ---
 
 ### E03-T10: Top-ups (platform funding from bank)
-**Status:** pending
+**Status:** completed
 **Background:** Features §3.4: reverse-payout flow crediting platform/merchant
 balance from a verified bank account.
 **Files:**
@@ -286,7 +286,7 @@ balance from a verified bank account.
 ---
 
 ### E03-T11: Payout eligibility, reserves, and negative-balance recovery
-**Status:** pending
+**Status:** completed
 **Background:** P0 payout controls in features §3.4 and money-flow §5 need an
 explicit policy owner. A ledger can become negative after a return, dispute, or
 fee; blocking payouts and recovering the amount must be durable workflows, not

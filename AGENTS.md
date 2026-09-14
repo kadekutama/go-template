@@ -127,6 +127,300 @@ The audit and open risks are recorded in `docs/repository-audit.md`.
 - Contract tests for API boundaries
 - Run: `make test-all` before committing
 
+### Unit Test Structure and Scoping Policy
+
+All unit tests across this repository must follow our strict table-driven pattern. Any AI model, subagent, or human engineer writing unit tests must adhere to these conventions:
+
+#### Core Rules
+
+1. **Locally Scoped `type testCase struct`**: Declare it inside the test function body, never at package scope.
+2. **Exact Parameter & Return Field Names**: Field names in `testCase` must match the exact signature of the tested function (e.g. `amountMinor`, `bps`, `floorMinor`, `capMinor`, `expectedResult`, `expectedError`). Never use vague field names like `param`, `arg`, `input`, or `want`.
+3. **No Single-Use Variables Declared Outside `testCases`**:
+   - **Anti-pattern**: Declaring single-use variants (`noID`, `negAmount`, `brokenRate`, `lost`, `under`) before `testCases`.
+   - **Mandatory pattern**: Inline all test-specific inputs directly inside each `testCase`. If deriving a variant from a base template, use an immediately-invoked anonymous closure:
+     ```go
+     {
+         name: "zero amount",
+         dispute: func() entity.Dispute {
+             d := base
+             d.AmountMinor = 0
+             return d
+         }(),
+         expectedError: entity.NewError("INVALID_AMOUNT", "amount must be positive"),
+     },
+     ```
+4. **Multi-Line Formatting**: Every test case entry in `testCases` must span multiple lines with standard indentation. Never write dense one-liners.
+5. **Parallel Safety**: Invoke `t.Parallel()` in parent tests and inside subtests (`tc := tc; t.Parallel()`), and ensure test fixtures or generators are thread-safe.
+6. **Edge-Case Rigor**: Thoroughly cover zero, negative, maximum boundary values (`math.MaxInt64`, arithmetic overflow), empty/whitespace strings, and illegal state transitions.
+
+#### Complete Unit Test Examples
+
+Below are complete, canonical examples covering different function signatures:
+
+##### Example 1: Entity / Method on Struct Returning `error`
+Tested signature: `func (b SettlementBatch) Validate() error`
+
+```go
+package entity_test
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/kadekutama/go-template/internal/domain/entity"
+)
+
+func TestSettlementBatchValidate(t *testing.T) {
+	t.Parallel()
+
+	baseBatch := entity.SettlementBatch{
+		BatchID:         "b-1",
+		ProviderBatchID: "pb-1",
+		ProviderTraceID: "pt-1",
+		AssetCode:       "USD",
+		GrossMinor:      10000,
+		FeeMinor:        290,
+		NetMinor:        9710,
+		CoverageStart:   "2026-09-01T00:00:00Z",
+		CoverageEnd:     "2026-09-02T00:00:00Z",
+		Items: []entity.SettlementItem{
+			{PaymentID: "p-1", Status: entity.SettleItemSettled, AmountMinor: 5000},
+			{PaymentID: "p-2", Status: entity.SettleItemPending, AmountMinor: 4710},
+		},
+	}
+
+	type testCase struct {
+		name          string
+		batch         entity.SettlementBatch
+		expectedError error
+	}
+
+	testCases := []testCase{
+		{
+			name:          "valid batch",
+			batch:         baseBatch,
+			expectedError: nil,
+		},
+		{
+			name: "missing batch id",
+			batch: func() entity.SettlementBatch {
+				b := baseBatch
+				b.BatchID = ""
+				return b
+			}(),
+			expectedError: entity.NewError("BATCH_ID_REQUIRED", "settlement batch requires batch and provider batch ids"),
+		},
+		{
+			name: "negative gross",
+			batch: func() entity.SettlementBatch {
+				b := baseBatch
+				b.GrossMinor = -1
+				return b
+			}(),
+			expectedError: entity.NewError("INVALID_ENTRY_AMOUNT", "gross amount must be non-negative"),
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err := tc.batch.Validate()
+			assert.Equal(t, tc.expectedError, err)
+		})
+	}
+}
+```
+
+##### Example 2: Domain Function with Multiple Scalar Parameters and Multiple Returns
+Tested signature: `func AssessTransactionFee(amountMinor, bps, floorMinor, capMinor int64) (int64, error)`
+
+```go
+package service_test
+
+import (
+	"math"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/kadekutama/go-template/internal/domain/entity"
+	"github.com/kadekutama/go-template/internal/domain/service"
+)
+
+func TestAssessTransactionFee(t *testing.T) {
+	t.Parallel()
+
+	type testCase struct {
+		name           string
+		amountMinor    int64
+		bps            int64
+		floorMinor     int64
+		capMinor       int64
+		expectedResult int64
+		expectedError  error
+	}
+
+	testCases := []testCase{
+		{
+			name:           "within bounds",
+			amountMinor:    10000,
+			bps:            290,
+			floorMinor:     30,
+			capMinor:       500,
+			expectedResult: int64(290),
+			expectedError:  nil,
+		},
+		{
+			name:           "floor applied",
+			amountMinor:    100,
+			bps:            290,
+			floorMinor:     30,
+			capMinor:       500,
+			expectedResult: int64(30),
+			expectedError:  nil,
+		},
+		{
+			name:           "zero amount error",
+			amountMinor:    0,
+			bps:            290,
+			floorMinor:     30,
+			capMinor:       500,
+			expectedResult: int64(0),
+			expectedError:  &entity.Error{Code: "INVALID_FEE_AMOUNT", Message: "fee amount must be positive"},
+		},
+		{
+			name:           "arithmetic overflow",
+			amountMinor:    math.MaxInt64,
+			bps:            2,
+			floorMinor:     0,
+			capMinor:       0,
+			expectedResult: int64(0),
+			expectedError:  &entity.Error{Code: "FEE_OVERFLOW", Message: "fee computation overflowed"},
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			actualResult, err := service.AssessTransactionFee(tc.amountMinor, tc.bps, tc.floorMinor, tc.capMinor)
+			assert.Equal(t, tc.expectedResult, actualResult)
+			assert.Equal(t, tc.expectedError, err)
+		})
+	}
+}
+```
+
+##### Example 3: Context-Aware Function with Request and Response DTOs
+Tested signature: `func (s *PaymentService) Authorize(ctx context.Context, req AuthorizeRequest) (AuthorizeResponse, error)`
+
+```go
+func TestPaymentServiceAuthorize(t *testing.T) {
+	t.Parallel()
+
+	baseReq := AuthorizeRequest{
+		AccountID:   "acct-123",
+		AmountMinor: 5000,
+		Currency:    "USD",
+	}
+
+	type testCase struct {
+		name           string
+		ctx            context.Context
+		req            AuthorizeRequest
+		expectedResult AuthorizeResponse
+		expectedError  error
+	}
+
+	testCases := []testCase{
+		{
+			name: "successful authorization",
+			ctx:  context.Background(),
+			req:  baseReq,
+			expectedResult: AuthorizeResponse{
+				Status: "AUTHORIZED",
+			},
+			expectedError: nil,
+		},
+		{
+			name: "canceled context",
+			ctx: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx
+			}(),
+			req:            baseReq,
+			expectedResult: AuthorizeResponse{},
+			expectedError:  context.Canceled,
+		},
+		{
+			name: "invalid amount",
+			ctx:  context.Background(),
+			req: func() AuthorizeRequest {
+				r := baseReq
+				r.AmountMinor = -100
+				return r
+			}(),
+			expectedResult: AuthorizeResponse{},
+			expectedError:  entity.NewError("INVALID_AMOUNT", "amount must be positive"),
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			svc := NewPaymentService()
+			res, err := svc.Authorize(tc.ctx, tc.req)
+			assert.Equal(t, tc.expectedResult, res)
+			assert.Equal(t, tc.expectedError, err)
+		})
+	}
+}
+```
+
+#### Canonical Reference Test Files
+
+When implementing tests for different function signatures, inspect these reference files in the repository:
+
+| Function Signature Pattern | Canonical Reference File | Tested Behaviors & Key Patterns |
+| :--- | :--- | :--- |
+| **Entity / Struct Validation** `(e Entity) Validate() error` | [`internal/domain/entity/settlement_batch_test.go`](internal/domain/entity/settlement_batch_test.go) | Base struct template, inline closures for field mutations, multi-line table |
+| **Entity Validation with Slices & Enums** `(p PaymentLink) Validate() error` | [`internal/domain/entity/payment_link_test.go`](internal/domain/entity/payment_link_test.go) | Boundary strings, enum validity, slice empty/populated checks |
+| **Pure Computation with Bounds** `Func(amount, bps, floor, cap) (result, error)` | [`internal/domain/service/fee_interest_test.go`](internal/domain/service/fee_interest_test.go) | Exact scalar parameter mapping, math overflow, inverted bounds |
+| **Complex Domain Service with Maps** `ValidateRefund(req, exists, accts) (Lines, error)` | [`internal/domain/service/refund_service_test.go`](internal/domain/service/refund_service_test.go) | In-memory lookup maps, complex DTO structs, timestamp derivation |
+| **Value Object Parser / Validator** `ValidateDescriptor(s, network) error` | [`internal/domain/valueobject/descriptor_test.go`](internal/domain/valueobject/descriptor_test.go) | String length limits, ASCII control characters, network-specific rules |
+| **Value Object Decimal Math / Factory** `NewFXRate(base, quote, rate) (FXRate, error)` | [`internal/domain/valueobject/fx_rate_test.go`](internal/domain/valueobject/fx_rate_test.go) | String decimal precision parsing, invert calculation, zero rate check |
+| **State Machine Transition Matrix** `CanTransitionPayment(from, to) bool` | [`internal/domain/valueobject/payment_status_test.go`](internal/domain/valueobject/payment_status_test.go) | Exhaustive state transition pairs, terminal state assertions |
+
+
+### Mandatory Pre-Commit & Verification Protocol
+
+No task claim may be released (`Status: released`) and no work may be considered complete without running and passing the full verification pipeline:
+
+1. **Environment Setup (Pixi & CGO)**:
+   - Tool binaries (`clang`, `golangci-lint`, `pixi`) reside in `/home/kadekutama/.pixi/bin`.
+   - Ensure PATH is exported: `export PATH="$HOME/.pixi/bin:$PATH"`.
+   - The Go race detector (`-race`) requires a C compiler and CGO: always export `export CGO_ENABLED=1 CC=clang`.
+2. **Formatting**:
+   - Run `gofmt -s -w .` and `goimports -l -w .`.
+3. **Strict Linting**:
+   - Run `make lint` (executes `golangci-lint run ./...` with strict rules: `gocyclo <= 12`, `goconst`, `unparam`, `revive`, etc., and `shellcheck`).
+   - Must exit with **0 issues**.
+4. **Race-Detector Test Suite**:
+   - Run `CGO_ENABLED=1 CC=clang go test -v -race ./...` (or for domain: `CGO_ENABLED=1 CC=clang go test -v -race ./internal/domain/...`).
+   - Must pass with **zero data races**.
+5. **Gate Check**:
+   - Run `./tasks/scripts/gate-check.sh <GATE>` (e.g., `G2` for domain layer).
+   - Statement coverage must meet or exceed the gate threshold (Domain >= 90%).
+6. **SDD Specification Validation**:
+   - Run `python3 tasks/scripts/check-tasks.py --format --graph --sdd --specs --events --codes`.
+   - Must report `OK: structural checks passed`.
+7. **Durable Evidence**:
+   - The terminal output and exit status of each command above must be documented in `tasks/evidence/<TASK-ID>.md`.
+
 ### Documentation
 - Update relevant `.md` files in `docs/` with changes
 - Record ADRs in `docs/architecture/` for architectural decisions

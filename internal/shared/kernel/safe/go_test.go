@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/kadekutama/go-template/internal/shared/kernel/log"
 )
 
@@ -130,10 +132,35 @@ func TestGoSilentOnSuccess(t *testing.T) {
 func TestPanicError(t *testing.T) {
 	t.Parallel()
 
-	p := Panic{Value: "something went wrong"}
-	expected := "safe: recovered panic: something went wrong"
-	if p.Error() != expected {
-		t.Errorf("got %q, want %q", p.Error(), expected)
+	type testCase struct {
+		name           string
+		p              Panic
+		expectedResult string
+	}
+
+	testCases := []testCase{
+		{
+			name: "string panic value",
+			p: Panic{
+				Value: "something went wrong",
+			},
+			expectedResult: "safe: recovered panic: something went wrong",
+		},
+		{
+			name: "integer panic value",
+			p: Panic{
+				Value: 404,
+			},
+			expectedResult: "safe: recovered panic: 404",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tc.expectedResult, tc.p.Error())
+		})
 	}
 }
 

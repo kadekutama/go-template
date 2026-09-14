@@ -3,89 +3,219 @@ package pagination
 import (
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
 	"hash/crc32"
 	"math"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-func TestCursorRoundTrip(t *testing.T) {
+func TestCursorEncode(t *testing.T) {
 	t.Parallel()
 
-	token, err := Cursor{Offset: 120}.Encode()
-	if err != nil {
-		t.Fatalf("Encode: %v", err)
+	type testCase struct {
+		name          string
+		c             Cursor
+		expectedError error
 	}
-	if strings.Contains(token, "120") {
-		t.Errorf("token should be opaque, got %q", token)
+
+	testCases := []testCase{
+		{
+			name:          "valid positive offset",
+			c:             Cursor{Offset: 120},
+			expectedError: nil,
+		},
+		{
+			name:          "zero offset",
+			c:             Cursor{Offset: 0},
+			expectedError: nil,
+		},
+		{
+			name:          "negative offset fails",
+			c:             Cursor{Offset: -1},
+			expectedError: errors.New("pagination: negative offset"),
+		},
 	}
-	got, err := DecodeCursor(token)
-	if err != nil {
-		t.Fatalf("DecodeCursor: %v", err)
-	}
-	if got.Offset != 120 {
-		t.Errorf("got offset %d, want 120", got.Offset)
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			token, err := tc.c.Encode()
+			if tc.expectedError != nil {
+				assert.Equal(t, tc.expectedError, err)
+				assert.Empty(t, token)
+			} else {
+				assert.NoError(t, err)
+				assert.NotEmpty(t, token)
+				assert.False(t, strings.Contains(token, "120"))
+			}
+		})
 	}
 }
 
-func TestCursorRejectsForgery(t *testing.T) {
+func TestDecodeCursor(t *testing.T) {
 	t.Parallel()
 
-	token, err := Cursor{Offset: 7}.Encode()
-	if err != nil {
-		t.Fatalf("Encode: %v", err)
+	validToken, err := Cursor{Offset: 120}.Encode()
+	assert.NoError(t, err)
+
+	type testCase struct {
+		name           string
+		token          string
+		expectedResult Cursor
+		expectedError  error
 	}
-	tampered := token[:len(token)-2] + "AA"
-	if _, err := DecodeCursor(tampered); err == nil {
-		t.Error("expected error for tampered token, got nil")
+
+	testCases := []testCase{
+		{
+			name:           "valid encoded cursor",
+			token:          validToken,
+			expectedResult: Cursor{Offset: 120},
+			expectedError:  nil,
+		},
+		{
+			name: "tampered checksum rejected",
+			token: func() string {
+				tok, _ := Cursor{Offset: 7}.Encode()
+				return tok[:len(tok)-2] + "AA"
+			}(),
+			expectedResult: Cursor{},
+			expectedError:  errors.New("pagination: cursor checksum mismatch"),
+		},
+		{
+			name:           "malformed non-base64 garbage rejected",
+			token:          "!!!",
+			expectedResult: Cursor{},
+			expectedError:  errors.New("pagination: malformed cursor"),
+		},
+		{
+			name: "overflow cursor offset rejected",
+			token: func() string {
+				var payload [8]byte
+				binary.BigEndian.PutUint64(payload[:], math.MaxUint64)
+				sum := crc32.Checksum(payload[:], crc32.MakeTable(crc32.Castagnoli))
+				var raw [12]byte
+				copy(raw[:8], payload[:])
+				binary.BigEndian.PutUint32(raw[8:], sum)
+				return base64.RawURLEncoding.EncodeToString(raw[:])
+			}(),
+			expectedResult: Cursor{},
+			expectedError:  errors.New("pagination: cursor offset overflow"),
+		},
 	}
-	if _, err := DecodeCursor("!!!"); err == nil {
-		t.Error("expected error for garbage token, got nil")
-	}
-	_, encodeErr := Cursor{Offset: -1}.Encode()
-	if encodeErr == nil {
-		t.Error("expected error for negative offset, got nil")
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := DecodeCursor(tc.token)
+			if tc.expectedError != nil {
+				assert.Equal(t, tc.expectedError, err)
+				assert.Equal(t, tc.expectedResult, got)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedResult, got)
+			}
+		})
 	}
 }
 
-func TestNormalizeBounds(t *testing.T) {
+func TestPageRequestNormalize(t *testing.T) {
 	t.Parallel()
 
-	got := PageRequest{Limit: 9999, Offset: -5}.Normalize()
-	if got.Limit != MaxLimit || got.Offset != 0 {
-		t.Errorf("unexpected normalization: %+v", got)
+	type testCase struct {
+		name           string
+		r              PageRequest
+		expectedResult PageRequest
 	}
-	if got := (PageRequest{}).Normalize(); got.Limit != DefaultLimit {
-		t.Errorf("expected default limit %d, got %+v", DefaultLimit, got)
+
+	testCases := []testCase{
+		{
+			name: "excessive limit and negative offset clamped",
+			r:    PageRequest{Limit: 9999, Offset: -5},
+			expectedResult: PageRequest{
+				Limit:  MaxLimit,
+				Offset: 0,
+			},
+		},
+		{
+			name: "empty request defaulted",
+			r:    PageRequest{},
+			expectedResult: PageRequest{
+				Limit:  DefaultLimit,
+				Offset: 0,
+			},
+		},
+		{
+			name: "valid request preserved",
+			r:    PageRequest{Limit: 25, Offset: 50},
+			expectedResult: PageRequest{
+				Limit:  25,
+				Offset: 50,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			actualResult := tc.r.Normalize()
+			assert.Equal(t, tc.expectedResult, actualResult)
+		})
 	}
 }
 
-func TestParseLimitOffsetFallsBack(t *testing.T) {
+func TestParseLimitOffset(t *testing.T) {
 	t.Parallel()
 
-	got := ParseLimitOffset("abc", "-3")
-	if got.Limit != DefaultLimit || got.Offset != 0 {
-		t.Errorf("expected defaults, got %+v", got)
+	type testCase struct {
+		name           string
+		limitStr       string
+		offsetStr      string
+		expectedResult PageRequest
 	}
-	got = ParseLimitOffset("25", "50")
-	if got.Limit != 25 || got.Offset != 50 {
-		t.Errorf("expected 25/50, got %+v", got)
+
+	testCases := []testCase{
+		{
+			name:      "non-numeric strings fall back to defaults",
+			limitStr:  "abc",
+			offsetStr: "-3",
+			expectedResult: PageRequest{
+				Limit:  DefaultLimit,
+				Offset: 0,
+			},
+		},
+		{
+			name:      "valid numeric values parsed",
+			limitStr:  "25",
+			offsetStr: "50",
+			expectedResult: PageRequest{
+				Limit:  25,
+				Offset: 50,
+			},
+		},
+		{
+			name:      "empty strings fall back to defaults",
+			limitStr:  "",
+			offsetStr: "",
+			expectedResult: PageRequest{
+				Limit:  DefaultLimit,
+				Offset: 0,
+			},
+		},
 	}
-}
 
-func TestCursorOffsetOverflow(t *testing.T) {
-	t.Parallel()
-
-	var payload [8]byte
-	binary.BigEndian.PutUint64(payload[:], math.MaxUint64)
-	sum := crc32.Checksum(payload[:], crc32.MakeTable(crc32.Castagnoli))
-	var raw [12]byte
-	copy(raw[:8], payload[:])
-	binary.BigEndian.PutUint32(raw[8:], sum)
-	token := base64.RawURLEncoding.EncodeToString(raw[:])
-
-	if _, err := DecodeCursor(token); err == nil {
-		t.Error("expected error for overflow cursor offset, got nil")
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			actualResult := ParseLimitOffset(tc.limitStr, tc.offsetStr)
+			assert.Equal(t, tc.expectedResult, actualResult)
+		})
 	}
 }
 
@@ -99,7 +229,8 @@ func TestPageResultShape(t *testing.T) {
 		Offset: 0,
 	}
 
-	if len(result.Items) != 2 || result.Total != 100 || result.Limit != 50 || result.Offset != 0 {
-		t.Errorf("unexpected PageResult: %+v", result)
-	}
+	assert.Len(t, result.Items, 2)
+	assert.Equal(t, int64(100), result.Total)
+	assert.Equal(t, 50, result.Limit)
+	assert.Equal(t, 0, result.Offset)
 }

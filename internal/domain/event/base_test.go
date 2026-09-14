@@ -39,12 +39,6 @@ const (
 	testOrigPosting = "p-0"
 )
 
-func validArgs() (eventID, aggregateID, aggregateType, eventType string, at time.Time, version, seq int64, meta event.EventMetadata) {
-	return "evt-01", "agg-01", "Account", "account.created.v1",
-		time.Date(2026, 9, 14, 3, 0, 0, 0, time.UTC), 3, 7,
-		event.EventMetadata{TenantID: testTenantID, LedgerID: testLedgerID}
-}
-
 func verifyBaseAccessors(t *testing.T, evt event.BaseEvent, eventID, aggregateID, aggregateType, eventType string, at time.Time, version, seq int64) {
 	t.Helper()
 	if evt.EventID() != eventID {
@@ -83,48 +77,230 @@ func verifyBaseMetadata(t *testing.T, got event.EventMetadata) {
 
 func TestNewBaseEventAccessors(t *testing.T) {
 	t.Parallel()
-	eventID, aggregateID, aggregateType, eventType, at, version, seq, meta := validArgs()
-	meta.CausationID = testCmdID
-	meta.CorrelationID = testCorrID
-	meta.UserID = testUserID
-	meta.TraceID = testTraceID
-	meta.Custom = map[string]string{"k": "v"}
-	payload := map[string]string{"field": "value"}
 
-	evt, err := event.NewBaseEvent(eventID, aggregateID, aggregateType, eventType, at, version, seq, payload, meta)
-	if err != nil {
-		t.Fatalf("NewBaseEvent returned error: %v", err)
+	at := time.Date(2026, 9, 14, 3, 0, 0, 0, time.UTC)
+	baseMeta := event.EventMetadata{
+		TenantID:      testTenantID,
+		LedgerID:      testLedgerID,
+		CausationID:   testCmdID,
+		CorrelationID: testCorrID,
+		UserID:        testUserID,
+		TraceID:       testTraceID,
+		Custom:        map[string]string{"k": "v"},
 	}
-	var _ event.DomainEvent = evt
-	verifyBaseAccessors(t, evt, eventID, aggregateID, aggregateType, eventType, at, version, seq)
-	verifyBaseMetadata(t, evt.Metadata())
+
+	type testCase struct {
+		name             string
+		eventID          string
+		aggregateID      string
+		aggregateType    string
+		eventType        string
+		occurredAt       time.Time
+		aggregateVersion int64
+		sequence         int64
+		payload          any
+		meta             event.EventMetadata
+		expectedError    error
+	}
+
+	testCases := []testCase{
+		{
+			name:             "valid base event with all accessors",
+			eventID:          "evt-01",
+			aggregateID:      "agg-01",
+			aggregateType:    "Account",
+			eventType:        "account.created.v1",
+			occurredAt:       at,
+			aggregateVersion: 3,
+			sequence:         7,
+			payload:          map[string]string{"field": "value"},
+			meta:             baseMeta,
+			expectedError:    nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			evt, err := event.NewBaseEvent(
+				tc.eventID,
+				tc.aggregateID,
+				tc.aggregateType,
+				tc.eventType,
+				tc.occurredAt,
+				tc.aggregateVersion,
+				tc.sequence,
+				tc.payload,
+				tc.meta,
+			)
+			if tc.expectedError != nil {
+				if err == nil || err.Error() != tc.expectedError.Error() {
+					t.Fatalf("expected error %v, got %v", tc.expectedError, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			var _ event.DomainEvent = evt
+			verifyBaseAccessors(t, evt, tc.eventID, tc.aggregateID, tc.aggregateType, tc.eventType, tc.occurredAt, tc.aggregateVersion, tc.sequence)
+			verifyBaseMetadata(t, evt.Metadata())
+			if payload, ok := evt.Payload().(map[string]string); !ok || payload["field"] != "value" {
+				t.Errorf("Payload = %v, want map[field:value]", evt.Payload())
+			}
+		})
+	}
 }
 
 func TestNewBaseEventValidationMatrix(t *testing.T) {
 	t.Parallel()
-	eventID, aggregateID, aggregateType, eventType, at, version, seq, _ := validArgs()
-	custom := event.EventMetadata{TenantID: testTenantID, Custom: map[string]string{"k": "v"}}
 
-	cases := []struct {
-		name   string
-		mutate func(*string, *string, *string, *string, *time.Time, *int64, *int64, *event.EventMetadata)
-	}{
-		{"empty event_id", func(eid, _, _, _ *string, _ *time.Time, _, _ *int64, _ *event.EventMetadata) { *eid = "" }},
-		{"empty aggregate_id", func(_, aid, _, _ *string, _ *time.Time, _, _ *int64, _ *event.EventMetadata) { *aid = "" }},
-		{"empty aggregate_type", func(_, _, aty, _ *string, _ *time.Time, _, _ *int64, _ *event.EventMetadata) { *aty = "" }},
-		{"empty event_type", func(_, _, _, ety *string, _ *time.Time, _, _ *int64, _ *event.EventMetadata) { *ety = "" }},
-		{"empty tenant_id", func(_, _, _, _ *string, _ *time.Time, _, _ *int64, m *event.EventMetadata) { m.TenantID = "" }},
-		{"zero time", func(_, _, _, _ *string, tm *time.Time, _, _ *int64, _ *event.EventMetadata) { *tm = time.Time{} }},
-		{"negative version", func(_, _, _, _ *string, _ *time.Time, v, _ *int64, _ *event.EventMetadata) { *v = -1 }},
-		{"negative sequence", func(_, _, _, _ *string, _ *time.Time, _, s *int64, _ *event.EventMetadata) { *s = -1 }},
+	at := time.Date(2026, 9, 14, 3, 0, 0, 0, time.UTC)
+	baseMeta := event.EventMetadata{TenantID: testTenantID, Custom: map[string]string{"k": "v"}}
+
+	type testCase struct {
+		name             string
+		eventID          string
+		aggregateID      string
+		aggregateType    string
+		eventType        string
+		occurredAt       time.Time
+		aggregateVersion int64
+		sequence         int64
+		payload          any
+		meta             event.EventMetadata
+		expectedError    string
 	}
-	for _, tc := range cases {
+
+	testCases := []testCase{
+		{
+			name:             "empty event_id",
+			eventID:          "",
+			aggregateID:      "agg-01",
+			aggregateType:    "Account",
+			eventType:        "account.created.v1",
+			occurredAt:       at,
+			aggregateVersion: 1,
+			sequence:         0,
+			payload:          nil,
+			meta:             baseMeta,
+			expectedError:    "event: event_id is required",
+		},
+		{
+			name:             "empty aggregate_id",
+			eventID:          "evt-01",
+			aggregateID:      "",
+			aggregateType:    "Account",
+			eventType:        "account.created.v1",
+			occurredAt:       at,
+			aggregateVersion: 1,
+			sequence:         0,
+			payload:          nil,
+			meta:             baseMeta,
+			expectedError:    "event: aggregate_id is required",
+		},
+		{
+			name:             "empty aggregate_type",
+			eventID:          "evt-01",
+			aggregateID:      "agg-01",
+			aggregateType:    "",
+			eventType:        "account.created.v1",
+			occurredAt:       at,
+			aggregateVersion: 1,
+			sequence:         0,
+			payload:          nil,
+			meta:             baseMeta,
+			expectedError:    "event: aggregate_type is required",
+		},
+		{
+			name:             "empty event_type",
+			eventID:          "evt-01",
+			aggregateID:      "agg-01",
+			aggregateType:    "Account",
+			eventType:        "",
+			occurredAt:       at,
+			aggregateVersion: 1,
+			sequence:         0,
+			payload:          nil,
+			meta:             baseMeta,
+			expectedError:    "event: event_type is required",
+		},
+		{
+			name:             "empty tenant_id",
+			eventID:          "evt-01",
+			aggregateID:      "agg-01",
+			aggregateType:    "Account",
+			eventType:        "account.created.v1",
+			occurredAt:       at,
+			aggregateVersion: 1,
+			sequence:         0,
+			payload:          nil,
+			meta: func() event.EventMetadata {
+				m := baseMeta
+				m.TenantID = ""
+				return m
+			}(),
+			expectedError: "event: metadata tenant_id is required",
+		},
+		{
+			name:             "zero time",
+			eventID:          "evt-01",
+			aggregateID:      "agg-01",
+			aggregateType:    "Account",
+			eventType:        "account.created.v1",
+			occurredAt:       time.Time{},
+			aggregateVersion: 1,
+			sequence:         0,
+			payload:          nil,
+			meta:             baseMeta,
+			expectedError:    "event: occurred_at is required",
+		},
+		{
+			name:             "negative version",
+			eventID:          "evt-01",
+			aggregateID:      "agg-01",
+			aggregateType:    "Account",
+			eventType:        "account.created.v1",
+			occurredAt:       at,
+			aggregateVersion: -1,
+			sequence:         0,
+			payload:          nil,
+			meta:             baseMeta,
+			expectedError:    "event: aggregate_version must not be negative",
+		},
+		{
+			name:             "negative sequence",
+			eventID:          "evt-01",
+			aggregateID:      "agg-01",
+			aggregateType:    "Account",
+			eventType:        "account.created.v1",
+			occurredAt:       at,
+			aggregateVersion: 1,
+			sequence:         -1,
+			payload:          nil,
+			meta:             baseMeta,
+			expectedError:    "event: sequence must not be negative",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			eid, aid, aty, ety, tm, v, s, m := eventID, aggregateID, aggregateType, eventType, at, version, seq, custom
-			tc.mutate(&eid, &aid, &aty, &ety, &tm, &v, &s, &m)
-			if _, err := event.NewBaseEvent(eid, aid, aty, ety, tm, v, s, nil, m); err == nil {
-				t.Errorf("expected error for %s, got nil", tc.name)
+			_, err := event.NewBaseEvent(
+				tc.eventID,
+				tc.aggregateID,
+				tc.aggregateType,
+				tc.eventType,
+				tc.occurredAt,
+				tc.aggregateVersion,
+				tc.sequence,
+				tc.payload,
+				tc.meta,
+			)
+			if err == nil || err.Error() != tc.expectedError {
+				t.Fatalf("expected error %q, got %v", tc.expectedError, err)
 			}
 		})
 	}
@@ -132,10 +308,11 @@ func TestNewBaseEventValidationMatrix(t *testing.T) {
 
 func TestBaseEventImmutability(t *testing.T) {
 	t.Parallel()
-	eventID, aggregateID, aggregateType, eventType, at, version, seq, _ := validArgs()
+
+	at := time.Date(2026, 9, 14, 3, 0, 0, 0, time.UTC)
 	input := event.EventMetadata{TenantID: testTenantID, Custom: map[string]string{"k": "v"}}
 
-	evt, err := event.NewBaseEvent(eventID, aggregateID, aggregateType, eventType, at, version, seq, nil, input)
+	evt, err := event.NewBaseEvent("evt-01", "agg-01", "Account", "account.created.v1", at, 1, 0, nil, input)
 	if err != nil {
 		t.Fatalf("NewBaseEvent returned error: %v", err)
 	}
@@ -156,18 +333,37 @@ func TestBaseEventImmutability(t *testing.T) {
 
 func TestBaseEventOccurredAtNormalizedUTC(t *testing.T) {
 	t.Parallel()
-	eventID, aggregateID, aggregateType, eventType, _, version, seq, meta := validArgs()
+
 	eastern := time.FixedZone("EST", -5*60*60)
 	local := time.Date(2026, 9, 14, 10, 0, 0, 0, eastern)
+	meta := event.EventMetadata{TenantID: testTenantID}
 
-	evt, err := event.NewBaseEvent(eventID, aggregateID, aggregateType, eventType, local, version, seq, nil, meta)
-	if err != nil {
-		t.Fatalf("NewBaseEvent returned error: %v", err)
+	type testCase struct {
+		name       string
+		occurredAt time.Time
 	}
-	if evt.OccurredAt().Location() != time.UTC {
-		t.Errorf("OccurredAt location = %v, want UTC", evt.OccurredAt().Location())
+
+	testCases := []testCase{
+		{
+			name:       "eastern timezone converted to utc",
+			occurredAt: local,
+		},
 	}
-	if !evt.OccurredAt().Equal(local) {
-		t.Errorf("OccurredAt = %v, want instant %v", evt.OccurredAt(), local)
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			evt, err := event.NewBaseEvent("evt-01", "agg-01", "Account", "account.created.v1", tc.occurredAt, 1, 0, nil, meta)
+			if err != nil {
+				t.Fatalf("NewBaseEvent returned error: %v", err)
+			}
+			if evt.OccurredAt().Location() != time.UTC {
+				t.Errorf("OccurredAt location = %v, want UTC", evt.OccurredAt().Location())
+			}
+			if !evt.OccurredAt().Equal(tc.occurredAt) {
+				t.Errorf("OccurredAt = %v, want instant %v", evt.OccurredAt(), tc.occurredAt)
+			}
+		})
 	}
 }

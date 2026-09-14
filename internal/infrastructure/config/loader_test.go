@@ -1,7 +1,6 @@
 package config
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -11,6 +10,7 @@ import (
 	"github.com/knadh/koanf/parsers/json"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
+	"github.com/stretchr/testify/assert"
 )
 
 // repoConfig anchors tests to the committed config/ tree regardless of where
@@ -43,25 +43,40 @@ func TestLoadBaseConfig(t *testing.T) {
 	}
 }
 
-func TestLoadNonExistentFile(t *testing.T) {
+func TestLoadFailures(t *testing.T) {
 	t.Parallel()
 
-	_, err := Load("non-existent-config-file.yaml")
-	if err == nil {
-		t.Fatal("expected error for non-existent file, got nil")
+	type testCase struct {
+		name          string
+		filePath      func() string
+		expectedError string
 	}
-	if !strings.Contains(err.Error(), "load config file") {
-		t.Errorf("unexpected error message: %v", err)
+
+	testCases := []testCase{
+		{
+			name: "non-existent config file fails",
+			filePath: func() string {
+				return "non-existent-config-file.yaml"
+			},
+			expectedError: "load config file",
+		},
+		{
+			name: "malformed yaml fails",
+			filePath: func() string {
+				return writeTemp(t, "app:\n  name: [unclosed")
+			},
+			expectedError: "yaml:",
+		},
 	}
-}
 
-func TestLoadMalformedYAML(t *testing.T) {
-	t.Parallel()
-
-	malformed := writeTemp(t, "app:\n  name: [unclosed")
-	_, err := Load(malformed)
-	if err == nil {
-		t.Fatal("expected error for malformed yaml, got nil")
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := Load(tc.filePath())
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tc.expectedError)
+		})
 	}
 }
 
@@ -109,48 +124,67 @@ func TestOverlayWins(t *testing.T) {
 	}
 }
 
-func TestSecretRefFailsClosed(t *testing.T) {
+func TestSecretRefValidation(t *testing.T) {
 	t.Parallel()
 
-	_, err := Load(writeTemp(t, "database:\n  password: \"{{ secret:db/x }}\"\n"))
-	if err == nil {
-		t.Fatal("expected secret error, got nil")
+	type testCase struct {
+		name          string
+		yamlBody      string
+		expectedError string
 	}
-	var secretErr *SecretRefError
-	if !errors.As(err, &secretErr) {
-		t.Fatalf("expected *SecretRefError, got %T: %v", err, err)
-	}
-	if !strings.Contains(err.Error(), "E09-T05") {
-		t.Errorf("error should name E09-T05, got: %v", err)
-	}
-}
 
-func TestSecretRefInArrayFailsClosed(t *testing.T) {
-	t.Parallel()
+	testCases := []testCase{
+		{
+			name:          "scalar secret ref rejected with E09-T05",
+			yamlBody:      "database:\n  password: \"{{ secret:db/x }}\"\n",
+			expectedError: "E09-T05",
+		},
+		{
+			name:          "array element secret ref rejected with path",
+			yamlBody:      "app:\n  name: test\ncustom_list:\n  - item1\n  - \"{{ secret:vault/token }}\"\n",
+			expectedError: "custom_list[1]",
+		},
+	}
 
-	body := "app:\n  name: test\ncustom_list:\n  - item1\n  - \"{{ secret:vault/token }}\"\n"
-	_, err := Load(writeTemp(t, body))
-	if err == nil {
-		t.Fatal("expected secret error for array element, got nil")
-	}
-	var secretErr *SecretRefError
-	if !errors.As(err, &secretErr) {
-		t.Fatalf("expected *SecretRefError, got %T: %v", err, err)
-	}
-	if !strings.Contains(err.Error(), "custom_list[1]") {
-		t.Errorf("expected error to name custom_list[1], got: %v", err)
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := Load(writeTemp(t, tc.yamlBody))
+			var secretErr *SecretRefError
+			assert.ErrorAs(t, err, &secretErr)
+			assert.Contains(t, err.Error(), tc.expectedError)
+		})
 	}
 }
 
 func TestStagingAndProductionFailOnSecretRefs(t *testing.T) {
 	t.Parallel()
 
-	for _, name := range []string{"config.staging.yaml", "config.production.yaml"} {
-		_, err := Load(repoConfig("config.yaml"), repoConfig(name))
-		var secretErr *SecretRefError
-		if !errors.As(err, &secretErr) {
-			t.Errorf("%s: expected *SecretRefError (no secret values may load pre-E09), got %v", name, err)
-		}
+	type testCase struct {
+		name       string
+		configFile string
+	}
+
+	testCases := []testCase{
+		{
+			name:       "staging config fails on secret refs",
+			configFile: "config.staging.yaml",
+		},
+		{
+			name:       "production config fails on secret refs",
+			configFile: "config.production.yaml",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := Load(repoConfig("config.yaml"), repoConfig(tc.configFile))
+			var secretErr *SecretRefError
+			assert.ErrorAs(t, err, &secretErr)
+		})
 	}
 }
 

@@ -6,134 +6,304 @@ import (
 	"net/http"
 	"sync/atomic"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var testCodeCounter atomic.Int64
 
-func TestNewRejectsUnregisteredCode(t *testing.T) {
+func TestNew(t *testing.T) {
 	t.Parallel()
 
-	if _, err := New("NOPE_X", "nope"); err == nil {
-		t.Fatal("expected registry error, got nil")
+	type testCase struct {
+		name           string
+		code           Code
+		message        string
+		opts           []Option
+		expectedStatus int
+		expectedError  bool
+	}
+
+	testCases := []testCase{
+		{
+			name:           "valid registered envelope",
+			code:           CodeValidationFailed,
+			message:        "bad input",
+			opts:           []Option{WithDetails(map[string]any{"field": "email"})},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  false,
+		},
+		{
+			name:           "custom http status override",
+			code:           CodeInternalError,
+			message:        "timed out",
+			opts:           []Option{WithHTTPStatus(http.StatusGatewayTimeout)},
+			expectedStatus: http.StatusGatewayTimeout,
+			expectedError:  false,
+		},
+		{
+			name:           "unregistered code rejected",
+			code:           "NOPE_X",
+			message:        "nope",
+			opts:           nil,
+			expectedStatus: 0,
+			expectedError:  true,
+		},
+		{
+			name:           "empty code rejected",
+			code:           "",
+			message:        "empty",
+			opts:           nil,
+			expectedStatus: 0,
+			expectedError:  true,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err, newErr := New(tc.code, tc.message, tc.opts...)
+			if tc.expectedError {
+				assert.Error(t, newErr)
+				assert.Nil(t, err)
+			} else {
+				assert.NoError(t, newErr)
+				assert.NotNil(t, err)
+				assert.Equal(t, tc.code, err.Code)
+				assert.Equal(t, tc.message, err.Message)
+				assert.Equal(t, tc.expectedStatus, err.HTTPStatus)
+			}
+		})
 	}
 }
 
-func TestNewBuildsRegisteredEnvelope(t *testing.T) {
+func TestRegisterValidation(t *testing.T) {
 	t.Parallel()
 
-	err, newErr := New(CodeValidationFailed, "bad input", WithDetails(map[string]any{"field": "email"}))
-	if newErr != nil {
-		t.Fatalf("New: %v", newErr)
-	}
-	if err.Code != CodeValidationFailed || err.HTTPStatus != http.StatusBadRequest {
-		t.Errorf("unexpected envelope: %+v", err)
-	}
-	if err.Details["field"] != "email" {
-		t.Errorf("details lost: %+v", err.Details)
-	}
-}
-
-func TestRegisterRejectsMalformedAndDuplicate(t *testing.T) {
-	t.Parallel()
-
-	defer func() {
-		if recover() == nil {
-			t.Error("expected panic for malformed code")
-		}
-	}()
-	Register(map[Code]int{"lower_snake": http.StatusBadRequest})
-}
-
-func TestRegisterRejectsDuplicate(t *testing.T) {
-	t.Parallel()
-
-	defer func() {
-		if recover() == nil {
-			t.Error("expected panic for duplicate code")
-		}
-	}()
-	Register(map[Code]int{CodeNotFound: http.StatusNotFound})
-}
-
-func TestTranslateEnAndId(t *testing.T) {
-	t.Parallel()
-
-	translator, err := NewTranslator()
-	if err != nil {
-		t.Fatalf("NewTranslator: %v", err)
-	}
-	appErr := MustNew(CodeValidationFailed, "fallback")
-
-	en := translator.Translate(WithLocale(context.Background(), "en"), appErr)
-	id := translator.Translate(WithLocale(context.Background(), "id"), appErr)
-
-	if en != "request failed validation" {
-		t.Errorf("unexpected EN message: %q", en)
-	}
-	if id != "permintaan gagal validasi" {
-		t.Errorf("unexpected ID message: %q", id)
-	}
-}
-
-func TestTranslateFallsBackToMessage(t *testing.T) {
-	t.Parallel()
-
-	translator, err := NewTranslator()
-	if err != nil {
-		t.Fatalf("NewTranslator: %v", err)
-	}
-	// Unknown locale tag falls back to English; unregistered codes cannot be
-	// constructed, so fallback covers missing-catalog cases only.
-	appErr := MustNew(CodeNotFound, "gone")
-	if got := translator.Translate(context.Background(), appErr); got != "resource not found" {
-		t.Errorf("default locale should be EN, got %q", got)
-	}
-}
-
-func TestAppErrorFormattingAndUnwrap(t *testing.T) {
-	t.Parallel()
-
-	simple := MustNew(CodeConflict, "conflict occurred")
-	if simple.Error() != "CONFLICT: conflict occurred" {
-		t.Errorf("Error() = %q, want CONFLICT: conflict occurred", simple.Error())
-	}
-	if simple.Unwrap() != nil {
-		t.Errorf("simple error unwrap want nil, got %v", simple.Unwrap())
+	type testCase struct {
+		name          string
+		codes         map[Code]int
+		expectedPanic bool
 	}
 
-	cause := http.ErrHandlerTimeout
-	wrapped := MustNew(CodeInternalError, "timed out", WithCause(cause), WithHTTPStatus(http.StatusGatewayTimeout))
-	if wrapped.Error() != "INTERNAL_ERROR: timed out: http: Handler timeout" {
-		t.Errorf("wrapped Error() = %q", wrapped.Error())
+	testCases := []testCase{
+		{
+			name:          "empty code",
+			codes:         map[Code]int{"": http.StatusBadRequest},
+			expectedPanic: true,
+		},
+		{
+			name:          "starts with number",
+			codes:         map[Code]int{"123_STARTS_WITH_NUMBER": http.StatusBadRequest},
+			expectedPanic: true,
+		},
+		{
+			name:          "lowercase code",
+			codes:         map[Code]int{"lowercase_code": http.StatusBadRequest},
+			expectedPanic: true,
+		},
+		{
+			name:          "trailing underscore",
+			codes:         map[Code]int{"TRAILING_UNDERSCORE_": http.StatusBadRequest},
+			expectedPanic: true,
+		},
+		{
+			name:          "dash not allowed",
+			codes:         map[Code]int{"DASH-NOT-ALLOWED": http.StatusBadRequest},
+			expectedPanic: true,
+		},
+		{
+			name:          "leading underscore",
+			codes:         map[Code]int{"_LEADING_UNDERSCORE": http.StatusBadRequest},
+			expectedPanic: true,
+		},
+		{
+			name:          "duplicate code",
+			codes:         map[Code]int{CodeNotFound: http.StatusNotFound},
+			expectedPanic: true,
+		},
 	}
-	if wrapped.Unwrap() != cause {
-		t.Errorf("Unwrap() = %v, want %v", wrapped.Unwrap(), cause)
-	}
-	if wrapped.HTTPStatus != http.StatusGatewayTimeout {
-		t.Errorf("HTTPStatus = %d, want %d", wrapped.HTTPStatus, http.StatusGatewayTimeout)
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if tc.expectedPanic {
+				assert.Panics(t, func() {
+					Register(tc.codes)
+				})
+			} else {
+				assert.NotPanics(t, func() {
+					Register(tc.codes)
+				})
+			}
+		})
 	}
 }
 
 func TestHTTPStatusFor(t *testing.T) {
 	t.Parallel()
 
-	if got := HTTPStatusFor(CodeNotFound); got != http.StatusNotFound {
-		t.Errorf("HTTPStatusFor(NOT_FOUND) = %d, want %d", got, http.StatusNotFound)
+	type testCase struct {
+		name           string
+		code           Code
+		expectedResult int
 	}
-	if got := HTTPStatusFor("UNKNOWN_NONEXISTENT_CODE"); got != http.StatusInternalServerError {
-		t.Errorf("HTTPStatusFor(unknown) = %d, want %d", got, http.StatusInternalServerError)
+
+	testCases := []testCase{
+		{
+			name:           "not found code",
+			code:           CodeNotFound,
+			expectedResult: http.StatusNotFound,
+		},
+		{
+			name:           "validation failed code",
+			code:           CodeValidationFailed,
+			expectedResult: http.StatusBadRequest,
+		},
+		{
+			name:           "conflict code",
+			code:           CodeConflict,
+			expectedResult: http.StatusConflict,
+		},
+		{
+			name:           "unauthorized code",
+			code:           CodeUnauthorized,
+			expectedResult: http.StatusUnauthorized,
+		},
+		{
+			name:           "unknown code falls back to internal server error",
+			code:           "UNKNOWN_NONEXISTENT_CODE",
+			expectedResult: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			actualResult := HTTPStatusFor(tc.code)
+			assert.Equal(t, tc.expectedResult, actualResult)
+		})
+	}
+}
+
+func TestTranslatorTranslate(t *testing.T) {
+	t.Parallel()
+
+	translator, err := NewTranslator()
+	assert.NoError(t, err)
+
+	type testCase struct {
+		name           string
+		ctx            context.Context
+		err            *AppError
+		expectedResult string
+	}
+
+	testCases := []testCase{
+		{
+			name:           "english locale translation",
+			ctx:            WithLocale(context.Background(), "en"),
+			err:            MustNew(CodeValidationFailed, "fallback"),
+			expectedResult: "request failed validation",
+		},
+		{
+			name:           "indonesian locale translation",
+			ctx:            WithLocale(context.Background(), "id"),
+			err:            MustNew(CodeValidationFailed, "fallback"),
+			expectedResult: "permintaan gagal validasi",
+		},
+		{
+			name:           "default context falls back to english catalog",
+			ctx:            context.Background(),
+			err:            MustNew(CodeNotFound, "gone"),
+			expectedResult: "resource not found",
+		},
+		{
+			name:           "nil error returns empty string",
+			ctx:            context.Background(),
+			err:            nil,
+			expectedResult: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			actualResult := translator.Translate(tc.ctx, tc.err)
+			assert.Equal(t, tc.expectedResult, actualResult)
+		})
+	}
+}
+
+func TestAppErrorFormatting(t *testing.T) {
+	t.Parallel()
+
+	sentinel := http.ErrHandlerTimeout
+
+	type testCase struct {
+		name           string
+		err            *AppError
+		expectedError  string
+		expectedUnwrap error
+	}
+
+	testCases := []testCase{
+		{
+			name:           "simple error without cause",
+			err:            MustNew(CodeConflict, "conflict occurred"),
+			expectedError:  "CONFLICT: conflict occurred",
+			expectedUnwrap: nil,
+		},
+		{
+			name:           "wrapped error with cause",
+			err:            MustNew(CodeInternalError, "timed out", WithCause(sentinel), WithHTTPStatus(http.StatusGatewayTimeout)),
+			expectedError:  "INTERNAL_ERROR: timed out: http: Handler timeout",
+			expectedUnwrap: sentinel,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tc.expectedError, tc.err.Error())
+			assert.Equal(t, tc.expectedUnwrap, tc.err.Unwrap())
+		})
 	}
 }
 
 func TestMustNewPanicsOnUnregistered(t *testing.T) {
 	t.Parallel()
 
-	defer func() {
-		if recover() == nil {
-			t.Error("MustNew with unregistered code must panic")
-		}
-	}()
-	_ = MustNew("UNKNOWN_CODE", "message")
+	type testCase struct {
+		name          string
+		code          Code
+		message       string
+		expectedPanic bool
+	}
+
+	testCases := []testCase{
+		{
+			name:          "unregistered code panics",
+			code:          "UNKNOWN_CODE",
+			message:       "message",
+			expectedPanic: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Panics(t, func() {
+				_ = MustNew(tc.code, tc.message)
+			})
+		})
+	}
 }
 
 func TestRegisterValidCustomCode(t *testing.T) {
@@ -142,58 +312,16 @@ func TestRegisterValidCustomCode(t *testing.T) {
 	Register(map[Code]int{customCode: http.StatusGatewayTimeout})
 
 	err, newErr := New(customCode, "timed out at provider")
-	if newErr != nil {
-		t.Fatalf("expected registered code to succeed, got: %v", newErr)
-	}
-	if err.Code != customCode || err.HTTPStatus != http.StatusGatewayTimeout {
-		t.Errorf("unexpected custom envelope: %+v", err)
-	}
-	if got := HTTPStatusFor(customCode); got != http.StatusGatewayTimeout {
-		t.Errorf("HTTPStatusFor(%s) = %d, want %d", customCode, got, http.StatusGatewayTimeout)
-	}
+	assert.NoError(t, newErr)
+	assert.Equal(t, customCode, err.Code)
+	assert.Equal(t, http.StatusGatewayTimeout, err.HTTPStatus)
+	assert.Equal(t, http.StatusGatewayTimeout, HTTPStatusFor(customCode))
 }
 
-func TestRegisterRejectsMalformedVariations(t *testing.T) {
+func TestNilTranslatorSafety(t *testing.T) {
 	t.Parallel()
 
-	malformed := []Code{
-		"",
-		"123_STARTS_WITH_NUMBER",
-		"lowercase_code",
-		"TRAILING_UNDERSCORE_",
-		"DASH-NOT-ALLOWED",
-		"_LEADING_UNDERSCORE",
-	}
-
-	for _, bad := range malformed {
-		func() {
-			defer func() {
-				if recover() == nil {
-					t.Errorf("expected panic for malformed code %q", bad)
-				}
-			}()
-			Register(map[Code]int{bad: http.StatusBadRequest})
-		}()
-	}
-}
-
-func TestTranslateNilSafety(t *testing.T) {
-	t.Parallel()
-
-	translator, err := NewTranslator()
-	if err != nil {
-		t.Fatalf("NewTranslator: %v", err)
-	}
-
-	// Nil error must return empty string without panicking
-	if got := translator.Translate(context.Background(), nil); got != "" {
-		t.Errorf("Translate(ctx, nil) = %q, want empty string", got)
-	}
-
-	// Nil translator must fall back to err.Message without panicking
 	appErr := MustNew(CodeValidationFailed, "fallback message")
 	var nilTranslator *Translator
-	if got := nilTranslator.Translate(context.Background(), appErr); got != "fallback message" {
-		t.Errorf("nilTranslator.Translate = %q, want fallback message", got)
-	}
+	assert.Equal(t, "fallback message", nilTranslator.Translate(context.Background(), appErr))
 }

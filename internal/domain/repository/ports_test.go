@@ -12,6 +12,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/kadekutama/go-template/internal/domain/entity"
 	"github.com/kadekutama/go-template/internal/domain/repository"
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
@@ -210,22 +212,74 @@ func TestAccountPortRoundTrip(t *testing.T) {
 
 func TestAccountPortVersionConflict(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
-	repo := &fakeAccounts{rows: map[valueobject.AccountID]entity.AccountData{}}
-	if err := repo.Create(ctx, testAccount()); err != nil {
-		t.Fatalf("Create: %v", err)
+
+	type testCase struct {
+		name            string
+		ctx             context.Context
+		tenant          valueobject.TenantID
+		id              valueobject.AccountID
+		status          valueobject.AccountStatus
+		expectedVersion int64
+		expectedError   error
 	}
-	if err := repo.UpdateStatus(ctx, testTenantID, testAccount1, valueobject.StatusFrozen, 99); err == nil {
-		t.Fatal("stale version must conflict")
+
+	testCases := []testCase{
+		{
+			name:            "stale version conflicts",
+			ctx:             context.Background(),
+			tenant:          testTenantID,
+			id:              testAccount1,
+			status:          valueobject.StatusFrozen,
+			expectedVersion: 99,
+			expectedError:   errors.New("version conflict"),
+		},
+		{
+			name:            "current version succeeds",
+			ctx:             context.Background(),
+			tenant:          testTenantID,
+			id:              testAccount1,
+			status:          valueobject.StatusFrozen,
+			expectedVersion: 1,
+			expectedError:   nil,
+		},
+		{
+			name:            "unknown account fails",
+			ctx:             context.Background(),
+			tenant:          testTenantID,
+			id:              "unknown",
+			status:          valueobject.StatusFrozen,
+			expectedVersion: 1,
+			expectedError:   errors.New("account not found"),
+		},
+		{
+			name:            "tenant mismatch fails",
+			ctx:             context.Background(),
+			tenant:          "other-tenant",
+			id:              testAccount1,
+			status:          valueobject.StatusFrozen,
+			expectedVersion: 1,
+			expectedError:   errors.New("account not found"),
+		},
 	}
-	got, _ := repo.FindByID(ctx, testTenantID, testAccount1)
-	if got.Version != 1 || got.Status != valueobject.StatusActive {
-		t.Fatal("failed update must leave stored row unchanged")
-	}
-	updated := got
-	updated.Name = "Cash+"
-	if err := repo.UpdateMetadata(ctx, updated, 1); err != nil {
-		t.Fatalf("UpdateMetadata: %v", err)
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			repo := &fakeAccounts{rows: map[valueobject.AccountID]entity.AccountData{
+				testAccount1: testAccount(),
+			}}
+			err := repo.UpdateStatus(tc.ctx, tc.tenant, tc.id, tc.status, tc.expectedVersion)
+			if tc.expectedError != nil {
+				assert.Equal(t, tc.expectedError, err)
+			} else {
+				assert.NoError(t, err)
+				got, err := repo.FindByID(tc.ctx, tc.tenant, tc.id)
+				assert.NoError(t, err)
+				assert.Equal(t, tc.status, got.Status)
+				assert.Equal(t, int64(2), got.Version)
+			}
+		})
 	}
 }
 

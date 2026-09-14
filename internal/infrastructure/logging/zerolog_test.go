@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/kadekutama/go-template/internal/shared/kernel/log"
 	"github.com/kadekutama/go-template/internal/shared/kernel/safe"
 )
@@ -181,52 +183,74 @@ func TestStandardizedFields(t *testing.T) {
 		Amount    int64  `json:"amount"`
 	}
 
-	var buf bytes.Buffer
-	logger := New(&buf, Config{Level: testDebugLevel})
-	ctx := context.Background()
-
-	// 1. log.Err(err) attaches canonical "error" key.
-	err := errors.New("network failure")
-	logger.Error(ctx, "payment failed", log.Err(err))
-	out := buf.String()
-	if !strings.Contains(out, `"error":"network failure"`) {
-		t.Errorf("expected canonical error field, got: %s", out)
-	}
-
-	// 2. log.Err(nil) omits "error" key.
-	buf.Reset()
-	logger.Info(ctx, "task completed", log.Err(nil), log.Any("status", "ok"))
-	out = buf.String()
-	if strings.Contains(out, `"error"`) {
-		t.Errorf("expected error field to be omitted when err is nil, got: %s", out)
-	}
-	if !strings.Contains(out, `"status":"ok"`) {
-		t.Errorf("expected status field, got: %s", out)
-	}
-
-	// 3. log.Metadata(struct) serializes struct into "metadata".
-	buf.Reset()
 	req := sampleRequest{AccountID: "acc-100", Amount: 5000}
-	logger.Info(ctx, "processing transfer", log.Metadata(req))
-	out = buf.String()
-	if !strings.Contains(out, `"metadata":{"account_id":"acc-100","amount":5000}`) {
-		t.Errorf("expected serialized metadata struct, got: %s", out)
+	sampleErr := errors.New("network failure")
+
+	type testCase struct {
+		name          string
+		logAction     func(l log.Logger, ctx context.Context)
+		expectedParts []string
+		rejectedParts []string
 	}
 
-	// 4. Mixing log.Field with key-value pairs in the same call.
-	buf.Reset()
-	logger.Info(ctx, "mixed call", log.Metadata(req), "extra_key", "extra_val")
-	out = buf.String()
-	if !strings.Contains(out, `"extra_key":"extra_val"`) || !strings.Contains(out, `"metadata"`) {
-		t.Errorf("expected both metadata and extra_key in mixed call, got: %s", out)
+	testCases := []testCase{
+		{
+			name: "log.Err attaches canonical error key",
+			logAction: func(l log.Logger, ctx context.Context) {
+				l.Error(ctx, "payment failed", log.Err(sampleErr))
+			},
+			expectedParts: []string{`"error":"network failure"`},
+			rejectedParts: nil,
+		},
+		{
+			name: "log.Err nil omits error key",
+			logAction: func(l log.Logger, ctx context.Context) {
+				l.Info(ctx, "task completed", log.Err(nil), log.Any("status", "ok"))
+			},
+			expectedParts: []string{`"status":"ok"`},
+			rejectedParts: []string{`"error"`},
+		},
+		{
+			name: "log.Metadata serializes struct",
+			logAction: func(l log.Logger, ctx context.Context) {
+				l.Info(ctx, "processing transfer", log.Metadata(req))
+			},
+			expectedParts: []string{`"metadata":{"account_id":"acc-100","amount":5000}`},
+			rejectedParts: nil,
+		},
+		{
+			name: "mixing log.Field with key-value pairs",
+			logAction: func(l log.Logger, ctx context.Context) {
+				l.Info(ctx, "mixed call", log.Metadata(req), "extra_key", "extra_val")
+			},
+			expectedParts: []string{`"extra_key":"extra_val"`, `"metadata"`},
+			rejectedParts: nil,
+		},
+		{
+			name: "With log.Field binds field to child logger",
+			logAction: func(l log.Logger, ctx context.Context) {
+				child := l.With(log.Metadata(req))
+				child.Info(ctx, "child event")
+			},
+			expectedParts: []string{`"metadata"`},
+			rejectedParts: nil,
+		},
 	}
 
-	// 5. With(log.Field) binds field to child logger.
-	buf.Reset()
-	child := logger.With(log.Metadata(req))
-	child.Info(ctx, "child event")
-	out = buf.String()
-	if !strings.Contains(out, `"metadata"`) {
-		t.Errorf("expected child logger to contain bound metadata field, got: %s", out)
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var buf bytes.Buffer
+			logger := New(&buf, Config{Level: testDebugLevel})
+			tc.logAction(logger, context.Background())
+			out := buf.String()
+			for _, exp := range tc.expectedParts {
+				assert.Contains(t, out, exp)
+			}
+			for _, rej := range tc.rejectedParts {
+				assert.NotContains(t, out, rej)
+			}
+		})
 	}
 }

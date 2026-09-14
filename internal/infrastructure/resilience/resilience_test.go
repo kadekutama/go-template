@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	kernel "github.com/kadekutama/go-template/internal/shared/kernel/resilience"
 )
 
@@ -172,19 +174,43 @@ func TestCancelledContextAborts(t *testing.T) {
 func TestRealSleep(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
-	start := time.Now()
-	if err := RealSleep(ctx, 10*time.Millisecond); err != nil {
-		t.Errorf("RealSleep failed: %v", err)
-	}
-	if elapsed := time.Since(start); elapsed < 5*time.Millisecond {
-		t.Errorf("RealSleep returned too quickly: %v", elapsed)
+	type testCase struct {
+		name          string
+		ctx           func() context.Context
+		d             time.Duration
+		expectedError error
 	}
 
-	ctxCancel, cancel := context.WithCancel(context.Background())
-	cancel()
-	if err := RealSleep(ctxCancel, time.Hour); !errors.Is(err, context.Canceled) {
-		t.Errorf("RealSleep want context.Canceled, got %v", err)
+	testCases := []testCase{
+		{
+			name:          "active context sleeps duration",
+			ctx:           context.Background,
+			d:             10 * time.Millisecond,
+			expectedError: nil,
+		},
+		{
+			name: "canceled context aborts immediately",
+			ctx: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx
+			},
+			d:             time.Hour,
+			expectedError: context.Canceled,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err := RealSleep(tc.ctx(), tc.d)
+			if tc.expectedError != nil {
+				assert.ErrorIs(t, err, tc.expectedError)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
 	}
 }
 

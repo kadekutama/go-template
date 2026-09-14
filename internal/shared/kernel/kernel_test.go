@@ -5,32 +5,53 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 )
 
-func TestFixedClockReplaysTimes(t *testing.T) {
+func TestFixedClock(t *testing.T) {
 	t.Parallel()
 
-	first := time.Date(2026, 9, 14, 0, 0, 0, 0, time.UTC)
-	second := first.Add(time.Hour)
-	clock := NewFixedClock(first, second)
+	t1 := time.Date(2026, 9, 14, 0, 0, 0, 0, time.UTC)
+	t2 := t1.Add(time.Hour)
 
-	if got := clock.Now(); !got.Equal(first) {
-		t.Errorf("got %v, want %v", got, first)
+	type testCase struct {
+		name          string
+		times         []time.Time
+		calls         int
+		expectedTimes []time.Time
 	}
-	if got := clock.Now(); !got.Equal(second) {
-		t.Errorf("got %v, want %v", got, second)
-	}
-	if got := clock.Now(); !got.Equal(second) {
-		t.Errorf("last time should repeat, got %v", got)
-	}
-}
 
-func TestFixedClockEmpty(t *testing.T) {
-	t.Parallel()
+	testCases := []testCase{
+		{
+			name:  "replays specified sequence and repeats last",
+			times: []time.Time{t1, t2},
+			calls: 3,
+			expectedTimes: []time.Time{
+				t1,
+				t2,
+				t2,
+			},
+		},
+		{
+			name:  "empty fixed clock returns zero time",
+			times: nil,
+			calls: 1,
+			expectedTimes: []time.Time{
+				{},
+			},
+		},
+	}
 
-	clock := NewFixedClock()
-	if got := clock.Now(); !got.IsZero() {
-		t.Errorf("expected zero time for empty fixed clock, got %v", got)
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			clock := NewFixedClock(tc.times...)
+			for i := 0; i < tc.calls; i++ {
+				got := clock.Now()
+				assert.Equal(t, tc.expectedTimes[i], got)
+			}
+		})
 	}
 }
 

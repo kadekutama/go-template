@@ -62,7 +62,8 @@ case "${GATE}" in
             exit 1
         fi
         python3 "${TASK_CHECK}" --specs --events || { echo "FAIL: domain documentation traceability failed"; exit 1; }
-        if go list -deps ./internal/domain/... | grep -q '^github.com/\|^go.uber.org/\|^golang.org/'; then
+        MODULE=$(go list -m)
+        if go list -deps ./internal/domain/... | grep -v "^${MODULE}" | grep -q '^github.com/\|^go.uber.org/\|^golang.org/'; then
             echo "FAIL: domain imports external modules"
             exit 1
         fi

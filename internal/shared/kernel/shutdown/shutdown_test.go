@@ -6,6 +6,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestRunDrainsOnCancel(t *testing.T) {
@@ -36,78 +38,105 @@ func TestRunDrainsOnCancel(t *testing.T) {
 	}
 }
 
-func TestRunReturnsServeErrorImmediately(t *testing.T) {
+func TestRun(t *testing.T) {
 	t.Parallel()
 
-	sentinel := errors.New("serve boom")
-	err := Run(context.Background(), nil, func(context.Context) error {
-		return sentinel
-	}, func(context.Context) error {
-		t.Error("drain must not run when serve fails first")
-		return nil
-	})
-	if !errors.Is(err, sentinel) {
-		t.Fatalf("got %v, want sentinel", err)
+	sentinelServeErr := errors.New("serve boom")
+	sentinelDrainErr := errors.New("drain failure")
+	shortTimeout := 20 * time.Millisecond
+
+	type testCase struct {
+		name          string
+		ctx           func() context.Context
+		timeout       *time.Duration
+		serve         func(context.Context) error
+		drain         func(context.Context) error
+		expectedError error
 	}
-}
 
-func TestRunNilServeReturnsError(t *testing.T) {
-	t.Parallel()
-
-	err := Run(context.Background(), nil, nil, nil)
-	if err == nil {
-		t.Fatal("expected error for nil serve, got nil")
+	testCases := []testCase{
+		{
+			name:          "nil serve returns error",
+			ctx:           context.Background,
+			timeout:       nil,
+			serve:         nil,
+			drain:         nil,
+			expectedError: errors.New("shutdown: serve func must not be nil"),
+		},
+		{
+			name:    "serve returns error immediately",
+			ctx:     context.Background,
+			timeout: nil,
+			serve: func(context.Context) error {
+				return sentinelServeErr
+			},
+			drain: func(context.Context) error {
+				return nil
+			},
+			expectedError: sentinelServeErr,
+		},
+		{
+			name: "nil drain succeeds after cancel",
+			ctx: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx
+			},
+			timeout: nil,
+			serve: func(ctx context.Context) error {
+				<-ctx.Done()
+				return nil
+			},
+			drain:         nil,
+			expectedError: nil,
+		},
+		{
+			name: "drain returns error",
+			ctx: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx
+			},
+			timeout: nil,
+			serve: func(ctx context.Context) error {
+				<-ctx.Done()
+				return nil
+			},
+			drain: func(context.Context) error {
+				return sentinelDrainErr
+			},
+			expectedError: sentinelDrainErr,
+		},
+		{
+			name: "drain timeout returns DeadlineExceeded",
+			ctx: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx
+			},
+			timeout: &shortTimeout,
+			serve: func(ctx context.Context) error {
+				<-ctx.Done()
+				return nil
+			},
+			drain: func(ctx context.Context) error {
+				<-ctx.Done()
+				return ctx.Err()
+			},
+			expectedError: context.DeadlineExceeded,
+		},
 	}
-}
 
-func TestRunNilDrainSucceeds(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	err := Run(ctx, nil, func(ctx context.Context) error {
-		<-ctx.Done()
-		return nil
-	}, nil)
-	if err != nil {
-		t.Fatalf("expected nil drain to succeed, got %v", err)
-	}
-}
-
-func TestRunReturnsDrainError(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	drainErr := errors.New("drain failure")
-	err := Run(ctx, nil, func(ctx context.Context) error {
-		<-ctx.Done()
-		return nil
-	}, func(context.Context) error {
-		return drainErr
-	})
-	if !errors.Is(err, drainErr) {
-		t.Fatalf("got %v, want drainErr %v", err, drainErr)
-	}
-}
-
-func TestRunReturnsDrainTimeoutError(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	timeout := 20 * time.Millisecond
-	err := Run(ctx, &timeout, func(ctx context.Context) error {
-		<-ctx.Done()
-		return nil
-	}, func(ctx context.Context) error {
-		<-ctx.Done()
-		return ctx.Err()
-	})
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("expected context.DeadlineExceeded, got %v", err)
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err := Run(tc.ctx(), tc.timeout, tc.serve, tc.drain)
+			if tc.expectedError != nil {
+				assert.EqualError(t, err, tc.expectedError.Error())
+			} else {
+				assert.NoError(t, err)
+			}
+		})
 	}
 }

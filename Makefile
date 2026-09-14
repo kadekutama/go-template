@@ -1,12 +1,19 @@
 SHELL := /usr/bin/env bash
 GOPATH_BIN := $(shell go env GOPATH 2>/dev/null)/bin
-export PATH := $(GOPATH_BIN):$(PATH)
+PIXI_BIN := $(HOME)/.pixi/bin
+export PATH := $(PIXI_BIN):$(GOPATH_BIN):$(PATH)
 
 # Binaries and tools (override with `make TOOL=...` only in local shell, never committed)
 GO ?= go
 GOLANGCI_LINT ?= golangci-lint
 BIN_DIR := bin
 MIGRATE ?= migrate
+
+# Compiler for CGO / race detector (override Make default 'cc' if clang/gcc present)
+ifeq ($(origin CC),default)
+  CC := $(shell command -v clang 2>/dev/null || command -v gcc 2>/dev/null || echo cc)
+endif
+export CC
 
 # Script-backed targets fail loudly (never silently) while the owning task
 # (E00-T04/E00-T07/E07-T05/...) has not landed its script yet.
@@ -33,6 +40,10 @@ test: test-unit ## Default test entry point (unit only; see test-all).
 test-unit: ## Fast unit tests (domain + application + pkg).
 	./scripts/test/unit.sh
 
+.PHONY: test-race
+test-race: ## Fast unit tests with race detector enabled (requires CGO).
+	CGO_ENABLED=1 CC=$(CC) $(GO) test -v -race ./internal/... ./pkg/...
+
 .PHONY: test-integration
 test-integration: ## Integration tests against testcontainers (needs Docker).
 	$(call need-script,./scripts/test/integration.sh)
@@ -49,11 +60,17 @@ test-all: ## Full suite: unit + integration + contract.
 
 .PHONY: lint
 lint: ## Strict lint (golangci-lint) + shellcheck on scripts.
-	$(GOLANGCI_LINT) run ./... && shellcheck scripts/**/*.sh
+	CGO_ENABLED=0 $(GOLANGCI_LINT) run ./... && shellcheck scripts/**/*.sh
 
 .PHONY: fmt
 fmt: ## gofmt/goimports over the tree.
-	gofmt -l -w . && goimports -l -w .
+	gofmt -s -w .
+	@if command -v goimports >/dev/null 2>&1; then goimports -l -w .; fi
+
+.PHONY: verify
+verify: fmt lint test-race ## Full pre-commit verification: fmt, lint, race tests, and SDD checks.
+	python3 tasks/scripts/check-tasks.py --format --graph --sdd --specs --events --codes
+	@echo "All pre-commit verification checks passed successfully!"
 
 .PHONY: vet
 vet: ## go vet over the tree.

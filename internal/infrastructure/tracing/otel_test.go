@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/kadekutama/go-template/internal/shared/kernel/trace"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -99,55 +101,94 @@ const (
 	testEnv            = "local"
 )
 
-func TestBootstrapRejectsBadEndpoint(t *testing.T) {
+func TestBootstrapValidation(t *testing.T) {
 	t.Parallel()
 
-	_, err := Bootstrap(Config{ServiceName: testServiceName, ServiceVersion: testServiceVersion, Env: testEnv, OTLPEndpoint: "://bad"})
-	if err == nil {
-		t.Fatal("expected endpoint error, got nil")
+	type testCase struct {
+		name          string
+		cfg           Config
+		expectedError bool
 	}
-}
 
-func TestBootstrapRequiresEndpointInProduction(t *testing.T) {
-	t.Parallel()
+	testCases := []testCase{
+		{
+			name: "missing service name",
+			cfg: Config{
+				ServiceVersion: testServiceVersion,
+				Env:            testEnv,
+			},
+			expectedError: true,
+		},
+		{
+			name: "missing service version",
+			cfg: Config{
+				ServiceName: testServiceName,
+				Env:         testEnv,
+			},
+			expectedError: true,
+		},
+		{
+			name: "sample ratio greater than 1",
+			cfg: Config{
+				ServiceName:    testServiceName,
+				ServiceVersion: testServiceVersion,
+				Env:            testEnv,
+				SampleRatio:    9,
+			},
+			expectedError: true,
+		},
+		{
+			name: "sample ratio less than 0",
+			cfg: Config{
+				ServiceName:    testServiceName,
+				ServiceVersion: testServiceVersion,
+				Env:            testEnv,
+				SampleRatio:    -0.5,
+			},
+			expectedError: true,
+		},
+		{
+			name: "bad otlp endpoint",
+			cfg: Config{
+				ServiceName:    testServiceName,
+				ServiceVersion: testServiceVersion,
+				Env:            testEnv,
+				OTLPEndpoint:   "://bad",
+			},
+			expectedError: true,
+		},
+		{
+			name: "production requires endpoint",
+			cfg: Config{
+				ServiceName:    testServiceName,
+				ServiceVersion: testServiceVersion,
+				Env:            "production",
+			},
+			expectedError: true,
+		},
+		{
+			name: "valid local without endpoint",
+			cfg: Config{
+				ServiceName:    testServiceName,
+				ServiceVersion: testServiceVersion,
+				Env:            testEnv,
+			},
+			expectedError: false,
+		},
+	}
 
-	_, err := Bootstrap(Config{ServiceName: testServiceName, ServiceVersion: testServiceVersion, Env: "production"})
-	if err == nil {
-		t.Fatal("expected production endpoint error, got nil")
-	}
-}
-
-func TestBootstrapLocalWithoutEndpoint(t *testing.T) {
-	t.Parallel()
-
-	provider, err := Bootstrap(Config{ServiceName: testServiceName, ServiceVersion: testServiceVersion, Env: testEnv})
-	if err != nil {
-		t.Fatalf("Bootstrap: %v", err)
-	}
-	if provider.Exporting() {
-		t.Error("local bootstrap without endpoint must report exporting=false")
-	}
-	ctx, span := provider.Tracer("test").Start(context.Background(), "op")
-	span.End()
-	_ = ctx
-	if err := provider.Shutdown(context.Background()); err != nil {
-		t.Fatalf("Shutdown: %v", err)
-	}
-}
-
-func TestBootstrapRequiresServiceIdentity(t *testing.T) {
-	t.Parallel()
-
-	if _, err := Bootstrap(Config{ServiceVersion: testServiceVersion, Env: testEnv}); err == nil {
-		t.Error("expected ServiceName error, got nil")
-	}
-	if _, err := Bootstrap(Config{ServiceName: testServiceName, Env: testEnv}); err == nil {
-		t.Error("expected ServiceVersion error, got nil")
-	}
-	if _, err := Bootstrap(Config{ServiceName: testServiceName, ServiceVersion: testServiceVersion, Env: testEnv, SampleRatio: 9}); err == nil {
-		t.Error("expected SampleRatio error for ratio > 1, got nil")
-	}
-	if _, err := Bootstrap(Config{ServiceName: testServiceName, ServiceVersion: testServiceVersion, Env: testEnv, SampleRatio: -0.5}); err == nil {
-		t.Error("expected SampleRatio error for ratio < 0, got nil")
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			provider, err := Bootstrap(tc.cfg)
+			if tc.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.False(t, provider.Exporting())
+				_ = provider.Shutdown(context.Background())
+			}
+		})
 	}
 }

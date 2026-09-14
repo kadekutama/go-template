@@ -11,7 +11,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | E00 | Foundation & repo bootstrap | 14 | 14/14 | completed | G1 |
 | E01 | Platform core (fx, config, logging, tracing, kernel, resilience) | 17 | 17/17 | completed | G1 |
 | E02 | Ledger domain core | 30 | 30/30 | completed | G2 |
-| E03 | Money-movement domain | 37 | 0/37 | pending | G2 |
+| E03 | Money-movement domain | 37 | 34/37 | pending | G2 |
 | E04 | Compliance domain | 16 | 0/16 | pending | G2 |
 | E05 | Tenancy domain | 11 | 0/11 | pending | G2 |
 | E06 | Application layer | 40 | 0/40 | pending | G3 |
@@ -29,7 +29,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | E18 | Docs + DX | 16 | 0/16 | pending | G8 |
 | E19 | Hardening + release | 13 | 0/13 | pending | G8 |
 
-**Total:** 61/432 SP completed.
+**Total:** 95/432 SP completed.
 
 ## Task checklists (tick as epic files flip to completed)
 
@@ -66,17 +66,17 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 - [x] E02-T09 domain test suite (G2)
 
 ### E03 — Money movement
-- [ ] E03-T01 transfers (immediate/scheduled/recurring/bulk/templates)
-- [ ] E03-T02 refunds
-- [ ] E03-T03 payouts + settlement
-- [ ] E03-T04 fees + interest
-- [ ] E03-T05 FX + gain/loss
-- [ ] E03-T06 methods/settlement/returns/linking
-- [ ] E03-T07 disputes (evidence/representment/fees)
-- [ ] E03-T08 auth-capture/descriptors/SCA
+- [x] E03-T01 transfers (immediate/scheduled/recurring/bulk/templates)
+- [x] E03-T02 refunds
+- [x] E03-T03 payouts + settlement
+- [x] E03-T04 fees + interest
+- [x] E03-T05 FX + gain/loss
+- [x] E03-T06 methods/settlement/returns/linking
+- [x] E03-T07 disputes (evidence/representment/fees)
+- [x] E03-T08 auth-capture/descriptors/SCA
 - [ ] E03-T09 platform split (destination charges)
-- [ ] E03-T10 top-ups
-- [ ] E03-T11 payout eligibility + negative-balance recovery
+- [x] E03-T10 top-ups
+- [x] E03-T11 payout eligibility + negative-balance recovery
 
 ### E04 — Compliance
 - [ ] E04-T01 matching + break taxonomy

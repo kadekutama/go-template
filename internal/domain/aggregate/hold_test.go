@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/kadekutama/go-template/internal/domain/aggregate"
 	"github.com/kadekutama/go-template/internal/domain/entity"
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
@@ -82,37 +84,102 @@ func TestHoldReleaseAndExpire(t *testing.T) {
 
 func TestHoldLateCaptureExpired(t *testing.T) {
 	t.Parallel()
+
 	base := time.Date(2026, 9, 14, 9, 0, 0, 0, time.UTC)
-	h := openTestHold(t, "h-4", base.Add(time.Hour))
-	if err := h.Capture(base.Add(2 * time.Hour)); err == nil || !strings.Contains(err.Error(), "HOLD_EXPIRED") {
-		t.Fatalf("late Capture err = %v", err)
+
+	type testCase struct {
+		name          string
+		captureAt     time.Time
+		expectedError string
+	}
+
+	testCases := []testCase{
+		{
+			name:          "capture after expiration fails with HOLD_EXPIRED",
+			captureAt:     base.Add(2 * time.Hour),
+			expectedError: "HOLD_EXPIRED",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			h := openTestHold(t, "h-4", base.Add(time.Hour))
+			err := h.Capture(tc.captureAt)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tc.expectedError)
+		})
 	}
 }
 
 func TestHoldValidation(t *testing.T) {
 	t.Parallel()
+
 	base := time.Date(2026, 9, 14, 9, 0, 0, 0, time.UTC)
 	valid := aggregate.OpenHoldParams{
-		ID: "h-9", TenantID: testTenantID, LedgerID: testLedgerID, AccountID: testAccount1,
-		AssetCode: testUSD, AmountMinor: 100, Kind: "AUTHORIZATION",
-		ExpiresAt: base.Add(time.Hour), CreatedAt: base,
+		ID:          "h-9",
+		TenantID:    testTenantID,
+		LedgerID:    testLedgerID,
+		AccountID:   testAccount1,
+		AssetCode:   testUSD,
+		AmountMinor: 100,
+		Kind:        "AUTHORIZATION",
+		ExpiresAt:   base.Add(time.Hour),
+		CreatedAt:   base,
 	}
-	if _, err := aggregate.OpenHold(valid); err != nil {
-		t.Fatalf("OpenHold: %v", err)
+
+	type testCase struct {
+		name          string
+		params        aggregate.OpenHoldParams
+		expectedError bool
 	}
-	bad := valid
-	bad.AmountMinor = 0
-	if _, err := aggregate.OpenHold(bad); err == nil {
-		t.Error("zero amount must error")
+
+	testCases := []testCase{
+		{
+			name:          "valid hold params pass",
+			params:        valid,
+			expectedError: false,
+		},
+		{
+			name: "zero amount rejected",
+			params: func() aggregate.OpenHoldParams {
+				p := valid
+				p.AmountMinor = 0
+				return p
+			}(),
+			expectedError: true,
+		},
+		{
+			name: "empty kind rejected",
+			params: func() aggregate.OpenHoldParams {
+				p := valid
+				p.Kind = ""
+				return p
+			}(),
+			expectedError: true,
+		},
+		{
+			name: "empty id rejected",
+			params: func() aggregate.OpenHoldParams {
+				p := valid
+				p.ID = ""
+				return p
+			}(),
+			expectedError: true,
+		},
 	}
-	bad = valid
-	bad.Kind = ""
-	if _, err := aggregate.OpenHold(bad); err == nil {
-		t.Error("empty kind must error")
-	}
-	bad = valid
-	bad.ID = ""
-	if _, err := aggregate.OpenHold(bad); err == nil {
-		t.Error("empty id must error")
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := aggregate.OpenHold(tc.params)
+			if tc.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
 	}
 }

@@ -1,60 +1,146 @@
 package entity_test
 
 import (
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/kadekutama/go-template/internal/domain/entity"
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
 )
 
 const (
-	testMain       = "Main"
-	testLedgerID   = "l-1"
-	testTenantID   = "t-1"
-	testUSD        = "USD"
-	testAccount1   = "a-1"
-	testAccount2   = "a-2"
-	testPosting1   = "p-1"
-	testPeriod1    = "pd-1"
-	testJournal1   = "j-1"
-	testEmptyAsset = "empty asset"
-	testEmptyID    = "empty id"
+	testMain     = "Main"
+	testLedgerID = "l-1"
+	testTenantID = "t-1"
+	testUSD      = "USD"
+	testAccount1 = "a-1"
+	testAccount2 = "a-2"
+	testPosting1 = "p-1"
+	testPeriod1  = "pd-1"
+	testJournal1 = "j-1"
 )
 
 func TestDomainError(t *testing.T) {
 	t.Parallel()
-	err := entity.NewError("ACCOUNT_FROZEN", "account is frozen")
-	if err.Error() != "ACCOUNT_FROZEN: account is frozen" {
-		t.Fatalf("Error() = %q", err.Error())
+
+	type testCase struct {
+		name            string
+		err             *entity.Error
+		expectedCode    string
+		expectedMessage string
+		expectedString  string
 	}
-	err = entity.Errorf("E_X", "code %d", 1)
-	if err.Code != "E_X" || err.Message != "code 1" {
-		t.Fatalf("Errorf = %+v", err)
+
+	testCases := []testCase{
+		{
+			name:            "NewError formatted string",
+			err:             entity.NewError("ACCOUNT_FROZEN", "account is frozen"),
+			expectedCode:    "ACCOUNT_FROZEN",
+			expectedMessage: "account is frozen",
+			expectedString:  "ACCOUNT_FROZEN: account is frozen",
+		},
+		{
+			name:            "Errorf formatted message",
+			err:             entity.Errorf("E_X", "code %d", 1),
+			expectedCode:    "E_X",
+			expectedMessage: "code 1",
+			expectedString:  "E_X: code 1",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tc.expectedCode, tc.err.Code)
+			assert.Equal(t, tc.expectedMessage, tc.err.Message)
+			assert.Equal(t, tc.expectedString, tc.err.Error())
+		})
 	}
 }
 
 func TestNewLedger(t *testing.T) {
 	t.Parallel()
-	if _, err := entity.NewLedger(testLedgerID, testTenantID, testMain, testUSD, "v1"); err != nil {
-		t.Fatalf("NewLedger: %v", err)
+
+	type testCase struct {
+		name          string
+		id            valueobject.LedgerID
+		tenantID      valueobject.TenantID
+		nameField     string
+		assetCode     valueobject.AssetCode
+		chartVersion  string
+		expectedError error
 	}
-	cases := []struct {
-		name                  string
-		id, tenant, nm, chart string
-		asset                 valueobject.AssetCode
-	}{
-		{testEmptyID, "", testTenantID, testMain, "v1", testUSD},
-		{"empty tenant", testLedgerID, "", testMain, "v1", testUSD},
-		{"empty name", testLedgerID, testTenantID, "", "v1", testUSD},
-		{testEmptyAsset, testLedgerID, testTenantID, testMain, "v1", ""},
-		{"empty chart", testLedgerID, testTenantID, testMain, "", testUSD},
+
+	testCases := []testCase{
+		{
+			name:          "valid ledger initialization",
+			id:            testLedgerID,
+			tenantID:      testTenantID,
+			nameField:     testMain,
+			assetCode:     testUSD,
+			chartVersion:  "v1",
+			expectedError: nil,
+		},
+		{
+			name:          "empty id",
+			id:            "",
+			tenantID:      testTenantID,
+			nameField:     testMain,
+			assetCode:     testUSD,
+			chartVersion:  "v1",
+			expectedError: entity.NewError("LEDGER_ID_REQUIRED", "ledger id is required"),
+		},
+		{
+			name:          "empty tenant",
+			id:            testLedgerID,
+			tenantID:      "",
+			nameField:     testMain,
+			assetCode:     testUSD,
+			chartVersion:  "v1",
+			expectedError: entity.NewError("TENANT_REQUIRED", "tenant id is required"),
+		},
+		{
+			name:          "empty name",
+			id:            testLedgerID,
+			tenantID:      testTenantID,
+			nameField:     "",
+			assetCode:     testUSD,
+			chartVersion:  "v1",
+			expectedError: entity.NewError("LEDGER_NAME_REQUIRED", "ledger name is required"),
+		},
+		{
+			name:          "empty asset",
+			id:            testLedgerID,
+			tenantID:      testTenantID,
+			nameField:     testMain,
+			assetCode:     "",
+			chartVersion:  "v1",
+			expectedError: entity.NewError("LEDGER_ASSET_REQUIRED", "base asset code is required"),
+		},
+		{
+			name:          "empty chart version",
+			id:            testLedgerID,
+			tenantID:      testTenantID,
+			nameField:     testMain,
+			assetCode:     testUSD,
+			chartVersion:  "",
+			expectedError: entity.NewError("LEDGER_CHART_REQUIRED", "chart version is required"),
+		},
 	}
-	for _, tc := range cases {
+
+	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			if _, err := entity.NewLedger(valueobject.LedgerID(tc.id), valueobject.TenantID(tc.tenant), tc.nm, tc.asset, tc.chart); err == nil {
-				t.Error("must error")
+			ledger, err := entity.NewLedger(tc.id, tc.tenantID, tc.nameField, tc.assetCode, tc.chartVersion)
+			if tc.expectedError != nil {
+				assert.Equal(t, tc.expectedError, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.id, ledger.ID)
+				assert.Equal(t, tc.tenantID, ledger.TenantID)
 			}
 		})
 	}
@@ -62,56 +148,120 @@ func TestNewLedger(t *testing.T) {
 
 func TestAccountDataValidate(t *testing.T) {
 	t.Parallel()
+
 	valid := entity.AccountData{
-		ID: testAccount1, TenantID: testTenantID, LedgerID: testLedgerID, Number: "1000", Name: "Cash",
-		Class: valueobject.ClassAsset, AssetCode: testUSD, Status: valueobject.StatusActive, Version: 1,
+		ID:        testAccount1,
+		TenantID:  testTenantID,
+		LedgerID:  testLedgerID,
+		Number:    "1000",
+		Name:      "Cash",
+		Class:     valueobject.ClassAsset,
+		AssetCode: testUSD,
+		Status:    valueobject.StatusActive,
+		Version:   1,
 	}
-	if err := valid.Validate(); err != nil {
-		t.Fatalf("Validate: %v", err)
+
+	type testCase struct {
+		name          string
+		account       entity.AccountData
+		expectedError error
 	}
-	bad := valid
-	bad.ID = ""
-	if err := bad.Validate(); err == nil || !strings.Contains(err.Error(), "ACCOUNT_ID_REQUIRED") {
-		t.Errorf("empty id err = %v", err)
+
+	testCases := []testCase{
+		{
+			name:          "valid active account",
+			account:       valid,
+			expectedError: nil,
+		},
+		{
+			name: "missing id",
+			account: func() entity.AccountData {
+				a := valid
+				a.ID = ""
+				return a
+			}(),
+			expectedError: entity.NewError("ACCOUNT_ID_REQUIRED", "account id is required"),
+		},
+		{
+			name: "missing tenant id",
+			account: func() entity.AccountData {
+				a := valid
+				a.TenantID = ""
+				return a
+			}(),
+			expectedError: entity.NewError("TENANT_REQUIRED", "tenant id is required"),
+		},
+		{
+			name: "missing ledger id",
+			account: func() entity.AccountData {
+				a := valid
+				a.LedgerID = ""
+				return a
+			}(),
+			expectedError: entity.NewError("LEDGER_REQUIRED", "ledger id is required"),
+		},
+		{
+			name: "missing number",
+			account: func() entity.AccountData {
+				a := valid
+				a.Number = ""
+				return a
+			}(),
+			expectedError: entity.NewError("ACCOUNT_NUMBER_REQUIRED", "account number is required"),
+		},
+		{
+			name: "missing name",
+			account: func() entity.AccountData {
+				a := valid
+				a.Name = ""
+				return a
+			}(),
+			expectedError: entity.NewError("ACCOUNT_NAME_REQUIRED", "account name is required"),
+		},
+		{
+			name: "invalid class",
+			account: func() entity.AccountData {
+				a := valid
+				a.Class = "NOPE"
+				return a
+			}(),
+			expectedError: entity.NewError("ACCOUNT_CLASS_INVALID", "account class is invalid"),
+		},
+		{
+			name: "missing asset code",
+			account: func() entity.AccountData {
+				a := valid
+				a.AssetCode = ""
+				return a
+			}(),
+			expectedError: entity.NewError("ACCOUNT_ASSET_REQUIRED", "asset code is explicit on every postable account"),
+		},
+		{
+			name: "invalid status",
+			account: func() entity.AccountData {
+				a := valid
+				a.Status = "PENDING"
+				return a
+			}(),
+			expectedError: entity.NewError("ACCOUNT_STATUS_INVALID", "account status is invalid"),
+		},
+		{
+			name: "zero version",
+			account: func() entity.AccountData {
+				a := valid
+				a.Version = 0
+				return a
+			}(),
+			expectedError: entity.NewError("ACCOUNT_VERSION_INVALID", "version starts at 1"),
+		},
 	}
-	bad = valid
-	bad.TenantID = ""
-	if err := bad.Validate(); err == nil {
-		t.Error("empty tenant must error")
-	}
-	bad = valid
-	bad.LedgerID = ""
-	if err := bad.Validate(); err == nil {
-		t.Error("empty ledger must error")
-	}
-	bad = valid
-	bad.Number = ""
-	if err := bad.Validate(); err == nil {
-		t.Error("empty number must error")
-	}
-	bad = valid
-	bad.Name = ""
-	if err := bad.Validate(); err == nil {
-		t.Error("empty name must error")
-	}
-	bad = valid
-	bad.Class = "NOPE"
-	if err := bad.Validate(); err == nil {
-		t.Error("bad class must error")
-	}
-	bad = valid
-	bad.AssetCode = ""
-	if err := bad.Validate(); err == nil {
-		t.Error("empty asset must error")
-	}
-	bad = valid
-	bad.Status = "PENDING"
-	if err := bad.Validate(); err == nil {
-		t.Error("bad status must error")
-	}
-	bad = valid
-	bad.Version = 0
-	if err := bad.Validate(); err == nil {
-		t.Error("zero version must error")
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err := tc.account.Validate()
+			assert.Equal(t, tc.expectedError, err)
+		})
 	}
 }

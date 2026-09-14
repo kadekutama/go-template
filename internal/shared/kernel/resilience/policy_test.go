@@ -4,68 +4,191 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestDefaultClassifier(t *testing.T) {
 	t.Parallel()
 
-	if got := DefaultClassifier(&RetryableError{Err: errors.New("x")}); got != Retryable {
-		t.Errorf("want Retryable, got %v", got)
+	type testCase struct {
+		name           string
+		err            error
+		expectedResult Class
 	}
-	if got := DefaultClassifier(&PermanentError{Err: errors.New("x")}); got != Permanent {
-		t.Errorf("want Permanent, got %v", got)
-	}
-	if got := DefaultClassifier(errors.New("x")); got != Unknown {
-		t.Errorf("want Unknown, got %v", got)
-	}
-}
 
-func TestShouldRetryMatrix(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name       string
-		class      Class
-		idempotent bool
-		key        string
-		want       bool
-	}{
-		{"permanent never retries even with key", Permanent, true, "k", false},
-		{"retryable with key retries", Retryable, false, "k", true},
-		{"retryable idempotent retries", Retryable, true, "", true},
-		{"retryable without key or flag never retries", Retryable, false, "", false},
-		{"unknown with key retries", Unknown, false, "k", true},
-		{"unknown without key never retries", Unknown, false, "", false},
+	testCases := []testCase{
+		{
+			name:           "retryable error classified",
+			err:            &RetryableError{Err: errors.New("x")},
+			expectedResult: Retryable,
+		},
+		{
+			name:           "permanent error classified",
+			err:            &PermanentError{Err: errors.New("x")},
+			expectedResult: Permanent,
+		},
+		{
+			name:           "standard error classified as unknown",
+			err:            errors.New("x"),
+			expectedResult: Unknown,
+		},
 	}
-	for _, tc := range cases {
+
+	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			if got := ShouldRetry(tc.class, tc.idempotent, tc.key); got != tc.want {
-				t.Errorf("ShouldRetry = %v, want %v", got, tc.want)
-			}
+			actualResult := DefaultClassifier(tc.err)
+			assert.Equal(t, tc.expectedResult, actualResult)
 		})
 	}
 }
 
-func TestBackoffBounds(t *testing.T) {
+func TestShouldRetry(t *testing.T) {
 	t.Parallel()
 
-	policy := RetryPolicy{MaxAttempts: 5, InitialBackoff: 100 * time.Millisecond, MaxBackoff: 250 * time.Millisecond, Multiplier: 10}.Normalize()
-	if got := policy.BackoffFor(0); got != 100*time.Millisecond {
-		t.Errorf("zero retry backoff = %v, want 100ms", got)
+	type testCase struct {
+		name           string
+		class          Class
+		idempotent     bool
+		key            string
+		expectedResult bool
 	}
-	if got := policy.BackoffFor(-1); got != 100*time.Millisecond {
-		t.Errorf("negative retry backoff = %v, want 100ms", got)
+
+	testCases := []testCase{
+		{
+			name:           "permanent never retries even with key",
+			class:          Permanent,
+			idempotent:     true,
+			key:            "k",
+			expectedResult: false,
+		},
+		{
+			name:           "retryable with key retries",
+			class:          Retryable,
+			idempotent:     false,
+			key:            "k",
+			expectedResult: true,
+		},
+		{
+			name:           "retryable idempotent retries",
+			class:          Retryable,
+			idempotent:     true,
+			key:            "",
+			expectedResult: true,
+		},
+		{
+			name:           "retryable without key or flag never retries",
+			class:          Retryable,
+			idempotent:     false,
+			key:            "",
+			expectedResult: false,
+		},
+		{
+			name:           "unknown with key retries",
+			class:          Unknown,
+			idempotent:     false,
+			key:            "k",
+			expectedResult: true,
+		},
+		{
+			name:           "unknown without key never retries",
+			class:          Unknown,
+			idempotent:     false,
+			key:            "",
+			expectedResult: false,
+		},
 	}
-	if got := policy.BackoffFor(1); got != 100*time.Millisecond {
-		t.Errorf("first backoff = %v", got)
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			actualResult := ShouldRetry(tc.class, tc.idempotent, tc.key)
+			assert.Equal(t, tc.expectedResult, actualResult)
+		})
 	}
-	if got := policy.BackoffFor(4); got != 250*time.Millisecond {
-		t.Errorf("backoff must cap at max, got %v", got)
+}
+
+func TestBackoffFor(t *testing.T) {
+	t.Parallel()
+
+	policy := RetryPolicy{
+		MaxAttempts:    5,
+		InitialBackoff: 100 * time.Millisecond,
+		MaxBackoff:     250 * time.Millisecond,
+		Multiplier:     10,
+	}.Normalize()
+
+	type testCase struct {
+		name           string
+		attempt        int
+		expectedResult time.Duration
 	}
-	zero := RetryPolicy{}.Normalize()
-	if zero.MaxAttempts != DefaultMaxAttempts || zero.Multiplier != DefaultMultiplier {
-		t.Errorf("zero policy not defaulted: %+v", zero)
+
+	testCases := []testCase{
+		{
+			name:           "zero attempt backoff",
+			attempt:        0,
+			expectedResult: 100 * time.Millisecond,
+		},
+		{
+			name:           "negative attempt backoff floors at initial",
+			attempt:        -1,
+			expectedResult: 100 * time.Millisecond,
+		},
+		{
+			name:           "first attempt backoff",
+			attempt:        1,
+			expectedResult: 100 * time.Millisecond,
+		},
+		{
+			name:           "capped at max backoff",
+			attempt:        4,
+			expectedResult: 250 * time.Millisecond,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			actualResult := policy.BackoffFor(tc.attempt)
+			assert.Equal(t, tc.expectedResult, actualResult)
+		})
+	}
+}
+
+func TestNormalizePolicy(t *testing.T) {
+	t.Parallel()
+
+	type testCase struct {
+		name           string
+		policy         RetryPolicy
+		expectedResult RetryPolicy
+	}
+
+	testCases := []testCase{
+		{
+			name:   "zero policy defaulted",
+			policy: RetryPolicy{},
+			expectedResult: RetryPolicy{
+				MaxAttempts:    DefaultMaxAttempts,
+				InitialBackoff: DefaultInitialBackoff,
+				MaxBackoff:     DefaultMaxBackoff,
+				Multiplier:     DefaultMultiplier,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			actualResult := tc.policy.Normalize()
+			assert.Equal(t, tc.expectedResult, actualResult)
+		})
 	}
 }
 
@@ -74,25 +197,37 @@ func TestErrorWrappers(t *testing.T) {
 
 	inner := errors.New("underlying issue")
 
-	retryable := &RetryableError{Err: inner}
-	if retryable.Error() != "underlying issue" {
-		t.Errorf("got %q, want %q", retryable.Error(), "underlying issue")
-	}
-	if !errors.Is(retryable, inner) {
-		t.Errorf("errors.Is failed for retryable unwrap")
-	}
-	if retryable.Unwrap() != inner {
-		t.Errorf("Unwrap() got %v, want %v", retryable.Unwrap(), inner)
+	type testCase struct {
+		name           string
+		err            error
+		expectedError  string
+		expectedUnwrap error
 	}
 
-	permanent := &PermanentError{Err: inner}
-	if permanent.Error() != "underlying issue" {
-		t.Errorf("got %q, want %q", permanent.Error(), "underlying issue")
+	testCases := []testCase{
+		{
+			name:           "retryable error unwraps",
+			err:            &RetryableError{Err: inner},
+			expectedError:  "underlying issue",
+			expectedUnwrap: inner,
+		},
+		{
+			name:           "permanent error unwraps",
+			err:            &PermanentError{Err: inner},
+			expectedError:  "underlying issue",
+			expectedUnwrap: inner,
+		},
 	}
-	if !errors.Is(permanent, inner) {
-		t.Errorf("errors.Is failed for permanent unwrap")
-	}
-	if permanent.Unwrap() != inner {
-		t.Errorf("Unwrap() got %v, want %v", permanent.Unwrap(), inner)
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tc.expectedError, tc.err.Error())
+			assert.ErrorIs(t, tc.err, tc.expectedUnwrap)
+			if unwrap, ok := tc.err.(interface{ Unwrap() error }); ok {
+				assert.Equal(t, tc.expectedUnwrap, unwrap.Unwrap())
+			}
+		})
 	}
 }

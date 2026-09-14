@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/kadekutama/go-template/internal/domain/entity"
 	"github.com/kadekutama/go-template/internal/domain/service"
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
@@ -28,39 +30,135 @@ func periodAccounts() map[valueobject.AccountID]entity.AccountData {
 
 func TestBelongsToSubLedger(t *testing.T) {
 	t.Parallel()
+
 	accounts := periodAccounts()
-	usdEntry := entity.Entry{ID: "e-1", PostingID: "p-1", AccountID: testAccount1, Side: valueobject.DirectionDebit, AmountMinor: 10, AssetCode: testUSD, AccountSeq: 1}
+	usdEntry := entity.Entry{
+		ID:          "e-1",
+		PostingID:   "p-1",
+		AccountID:   testAccount1,
+		Side:        valueobject.DirectionDebit,
+		AmountMinor: 10,
+		AssetCode:   testUSD,
+		AccountSeq:  1,
+	}
 	usdKey := service.Key(testTenant1, testLedger1, testUSD)
 	eurKey := service.Key(testTenant1, testLedger1, testEUR)
-	if !service.BelongsToSubLedger(usdEntry, accounts, usdKey) {
-		t.Error("USD entry must belong to USD key")
+
+	type testCase struct {
+		name           string
+		entry          entity.Entry
+		accounts       map[valueobject.AccountID]entity.AccountData
+		key            service.SubLedgerKey
+		expectedResult bool
 	}
-	if service.BelongsToSubLedger(usdEntry, accounts, eurKey) {
-		t.Error("USD entry must not match EUR key (unlike assets never summed)")
+
+	testCases := []testCase{
+		{
+			name:           "matching sub-ledger key and asset",
+			entry:          usdEntry,
+			accounts:       accounts,
+			key:            usdKey,
+			expectedResult: true,
+		},
+		{
+			name:           "differing asset key (EUR vs USD entry)",
+			entry:          usdEntry,
+			accounts:       accounts,
+			key:            eurKey,
+			expectedResult: false,
+		},
+		{
+			name:           "differing tenant key",
+			entry:          usdEntry,
+			accounts:       accounts,
+			key:            service.Key(testTenant2, testLedger1, testUSD),
+			expectedResult: false,
+		},
+		{
+			name: "unknown account in lookup",
+			entry: entity.Entry{
+				AccountID: "ghost",
+			},
+			accounts:       accounts,
+			key:            usdKey,
+			expectedResult: false,
+		},
+		{
+			name: "entry and account asset mismatch",
+			entry: func() entity.Entry {
+				e := usdEntry
+				e.AssetCode = testEUR
+				return e
+			}(),
+			accounts:       accounts,
+			key:            eurKey,
+			expectedResult: false,
+		},
 	}
-	if service.BelongsToSubLedger(usdEntry, accounts, service.Key(testTenant2, testLedger1, testUSD)) {
-		t.Error("wrong tenant must not match")
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			actualResult := service.BelongsToSubLedger(tc.entry, tc.accounts, tc.key)
+			assert.Equal(t, tc.expectedResult, actualResult)
+		})
 	}
-	if service.BelongsToSubLedger(entity.Entry{AccountID: "ghost"}, accounts, usdKey) {
-		t.Error("unknown account must not match")
+}
+
+func TestSubLedgerKeyMatches(t *testing.T) {
+	t.Parallel()
+
+	usdKey := service.Key(testTenant1, testLedger1, testUSD)
+
+	type testCase struct {
+		name           string
+		key            service.SubLedgerKey
+		tenant         valueobject.TenantID
+		ledger         valueobject.LedgerID
+		asset          valueobject.AssetCode
+		expectedResult bool
 	}
-	// Asset mismatch between entry and its account never matches.
-	mismatch := usdEntry
-	mismatch.AssetCode = testEUR
-	if service.BelongsToSubLedger(mismatch, accounts, eurKey) {
-		t.Error("entry/account asset mismatch must not match")
+
+	testCases := []testCase{
+		{
+			name:           "exact match",
+			key:            usdKey,
+			tenant:         testTenant1,
+			ledger:         testLedger1,
+			asset:          testUSD,
+			expectedResult: true,
+		},
+		{
+			name:           "asset mismatch",
+			key:            usdKey,
+			tenant:         testTenant1,
+			ledger:         testLedger1,
+			asset:          testEUR,
+			expectedResult: false,
+		},
 	}
-	if !usdKey.Matches(testTenant1, testLedger1, testUSD) || usdKey.Matches(testTenant1, testLedger1, testEUR) {
-		t.Error("Matches wrong")
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			actualResult := tc.key.Matches(tc.tenant, tc.ledger, tc.asset)
+			assert.Equal(t, tc.expectedResult, actualResult)
+		})
 	}
 }
 
 func openPeriodData() entity.PeriodData {
 	return entity.PeriodData{
-		ID: "pd-1", TenantID: testTenant1, LedgerID: testLedger1,
+		ID:       "pd-1",
+		TenantID: testTenant1,
+		LedgerID: testLedger1,
 		Start:    time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
 		End:      time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC),
-		Timezone: "UTC", Status: entity.PeriodOpen, Version: 1,
+		Timezone: "UTC",
+		Status:   entity.PeriodOpen,
+		Version:  1,
 	}
 }
 
@@ -77,33 +175,96 @@ func openingEvidence() service.EvidenceRef {
 
 func TestValidateOpeningBalance(t *testing.T) {
 	t.Parallel()
-	if err := service.ValidateOpeningBalance(openPeriodData(), openingLines(), openingEvidence()); err != nil {
-		t.Fatalf("valid import: %v", err)
+
+	basePeriod := openPeriodData()
+	baseLines := openingLines()
+	baseEv := openingEvidence()
+
+	type testCase struct {
+		name          string
+		period        entity.PeriodData
+		lines         []service.OpeningBalanceLine
+		ev            service.EvidenceRef
+		expectedError error
 	}
-	closed := openPeriodData()
-	closed.Status = entity.PeriodClosed
-	if err := service.ValidateOpeningBalance(closed, openingLines(), openingEvidence()); err == nil {
-		t.Error("closed period must fail")
+
+	testCases := []testCase{
+		{
+			name:          "valid opening balance import",
+			period:        basePeriod,
+			lines:         baseLines,
+			ev:            baseEv,
+			expectedError: nil,
+		},
+		{
+			name: "closed period rejected",
+			period: func() entity.PeriodData {
+				p := basePeriod
+				p.Status = entity.PeriodClosed
+				return p
+			}(),
+			lines:         baseLines,
+			ev:            baseEv,
+			expectedError: entity.NewError("PERIOD_CLOSED", "opening balances require an open period"),
+		},
+		{
+			name:   "missing evidence reference",
+			period: basePeriod,
+			lines:  baseLines,
+			ev:     service.EvidenceRef{},
+			expectedError: entity.NewError(
+				"EVIDENCE_REQUIRED",
+				"opening balance requires source, evidence URI, and approver",
+			),
+		},
+		{
+			name:   "unbalanced debit and credit totals",
+			period: basePeriod,
+			lines: func() []service.OpeningBalanceLine {
+				l := append([]service.OpeningBalanceLine(nil), baseLines...)
+				l[1].AmountMinor = 90
+				return l
+			}(),
+			ev:            baseEv,
+			expectedError: entity.Errorf("UNBALANCED_TRANSACTION", "opening lines unbalanced for asset USD"),
+		},
+		{
+			name:          "empty opening balance lines",
+			period:        basePeriod,
+			lines:         nil,
+			ev:            baseEv,
+			expectedError: entity.NewError("OPENING_LINES_REQUIRED", "opening balance requires at least one line"),
+		},
+		{
+			name:   "zero line amount",
+			period: basePeriod,
+			lines: func() []service.OpeningBalanceLine {
+				l := append([]service.OpeningBalanceLine(nil), baseLines...)
+				l[0].AmountMinor = 0
+				return l
+			}(),
+			ev:            baseEv,
+			expectedError: entity.NewError("INVALID_ENTRY_AMOUNT", "opening line amount must be positive"),
+		},
+		{
+			name:   "invalid side",
+			period: basePeriod,
+			lines: func() []service.OpeningBalanceLine {
+				l := append([]service.OpeningBalanceLine(nil), baseLines...)
+				l[0].Side = "SIDEWAYS"
+				return l
+			}(),
+			ev:            baseEv,
+			expectedError: entity.NewError("OPENING_SIDE_INVALID", "opening line side must be DEBIT or CREDIT"),
+		},
 	}
-	if err := service.ValidateOpeningBalance(openPeriodData(), openingLines(), service.EvidenceRef{}); err == nil {
-		t.Error("missing evidence must fail")
-	}
-	bad := openingLines()
-	bad[1].AmountMinor = 90
-	if err := service.ValidateOpeningBalance(openPeriodData(), bad, openingEvidence()); err == nil {
-		t.Error("unbalanced lines must fail")
-	}
-	if err := service.ValidateOpeningBalance(openPeriodData(), nil, openingEvidence()); err == nil {
-		t.Error("empty lines must fail")
-	}
-	bad = openingLines()
-	bad[0].AmountMinor = 0
-	if err := service.ValidateOpeningBalance(openPeriodData(), bad, openingEvidence()); err == nil {
-		t.Error("zero line must fail")
-	}
-	bad = openingLines()
-	bad[0].Side = "SIDEWAYS"
-	if err := service.ValidateOpeningBalance(openPeriodData(), bad, openingEvidence()); err == nil {
-		t.Error("bad side must fail")
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			actualError := service.ValidateOpeningBalance(tc.period, tc.lines, tc.ev)
+			assert.Equal(t, tc.expectedError, actualError)
+		})
 	}
 }

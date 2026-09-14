@@ -2,6 +2,7 @@ package valueobject_test
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
@@ -9,11 +10,16 @@ import (
 
 // seqIDs is a deterministic IDGenerator stub: the domain owns the port, tests
 // (and the kernel UUIDGenerator in production) implement it.
-type seqIDs struct{ n int }
+type seqIDs struct {
+	mu sync.Mutex
+	n  int
+}
 
 var _ valueobject.IDGenerator = (*seqIDs)(nil)
 
 func (s *seqIDs) NewID() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.n++
 	return fmt.Sprintf("00000000-0000-7000-8000-%012x", s.n)
 }

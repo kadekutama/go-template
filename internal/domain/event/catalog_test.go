@@ -22,10 +22,11 @@ func TestCatalogEventTypes(t *testing.T) {
 		{EntryID: "e-1", AccountID: testAccount1, AccountNumber: "1000", Direction: "DEBIT", AmountMinor: 100, AssetCode: testUSD, AccountSeq: 1},
 		{EntryID: "e-2", AccountID: testAccount2, AccountNumber: "2000", Direction: "CREDIT", AmountMinor: 100, AssetCode: testUSD, AccountSeq: 1},
 	}
-	cases := []struct {
-		want string
-		make func() (event.DomainEvent, error)
-	}{
+	type testCase struct {
+		expectedType string
+		make         func() (event.DomainEvent, error)
+	}
+	testCases := []testCase{
 		{"account.created.v1", func() (event.DomainEvent, error) {
 			return event.NewAccountCreated(testEvent1, testAccount1, at, 1, 0, event.AccountCreatedPayload{AccountID: testAccount1, TenantID: testTenantID, AccountNumber: "1000", Name: "Cash", Type: "ASSET", AssetCode: testUSD, Status: "ACTIVE", OpenedBy: testUserID}, meta)
 		}},
@@ -174,18 +175,19 @@ func TestCatalogEventTypes(t *testing.T) {
 			return event.NewTopUpFailed(testEvent1, testTopUp1, at, 1, 0, event.TopUpFailedPayload{TopUpID: testTopUp1, TenantID: testTenantID, Code: "REJECT", Message: "no"}, meta)
 		}},
 	}
-	if len(cases) != 49 {
-		t.Fatalf("catalog table has %d entries, want 49", len(cases))
+	if len(testCases) != 49 {
+		t.Fatalf("catalog table has %d entries, want 49", len(testCases))
 	}
-	for _, tc := range cases {
-		t.Run(tc.want, func(t *testing.T) {
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.expectedType, func(t *testing.T) {
 			t.Parallel()
 			evt, err := tc.make()
 			if err != nil {
 				t.Fatalf("constructor: %v", err)
 			}
-			if evt.EventType() != tc.want {
-				t.Errorf("EventType = %q, want %q", evt.EventType(), tc.want)
+			if evt.EventType() != tc.expectedType {
+				t.Errorf("EventType = %q, want %q", evt.EventType(), tc.expectedType)
 			}
 			if evt.EventID() != testEvent1 || evt.Metadata().TenantID != testTenantID {
 				t.Errorf("envelope broken: %+v", evt)
@@ -199,22 +201,74 @@ func TestCatalogEventTypes(t *testing.T) {
 
 func TestCatalogValidation(t *testing.T) {
 	t.Parallel()
+
 	at, meta := catalogAt(), catalogMeta()
-	if _, err := event.NewAccountCreated(testEvent1, testAccount1, at, 1, 0, event.AccountCreatedPayload{}, meta); err == nil {
-		t.Error("empty account payload must error")
+
+	type testCase struct {
+		name          string
+		call          func() error
+		expectedError bool
 	}
-	if _, err := event.NewTransferCreated(testEvent1, testTransfer1, at, 1, 0, event.TransferCreatedPayload{TransferID: testTransfer1, TenantID: testTenantID, AmountMinor: 0}, meta); err == nil {
-		t.Error("zero transfer amount must error")
+
+	testCases := []testCase{
+		{
+			name: "empty account payload",
+			call: func() error {
+				_, err := event.NewAccountCreated(testEvent1, testAccount1, at, 1, 0, event.AccountCreatedPayload{}, meta)
+				return err
+			},
+			expectedError: true,
+		},
+		{
+			name: "zero transfer amount",
+			call: func() error {
+				_, err := event.NewTransferCreated(testEvent1, testTransfer1, at, 1, 0, event.TransferCreatedPayload{TransferID: testTransfer1, TenantID: testTenantID, AmountMinor: 0}, meta)
+				return err
+			},
+			expectedError: true,
+		},
+		{
+			name: "bad dispute outcome",
+			call: func() error {
+				_, err := event.NewDisputeClosed(testEvent1, testDispute1, at, 1, 0, event.DisputeClosedPayload{DisputeID: testDispute1, TenantID: testTenantID, Outcome: "MAYBE"}, meta)
+				return err
+			},
+			expectedError: true,
+		},
+		{
+			name: "posted transaction without entries",
+			call: func() error {
+				_, err := event.NewTransactionPosted(testEvent1, testPosting1, at, 1, 0, event.TransactionPostedPayload{PostingID: testPosting1, TenantID: testTenantID, LedgerID: testLedgerID}, meta)
+				return err
+			},
+			expectedError: true,
+		},
+		{
+			name: "empty tenant metadata",
+			call: func() error {
+				badMeta := event.EventMetadata{}
+				_, err := event.NewPayoutCreated(testEvent1, testPayout1, at, 1, 0, event.PayoutCreatedPayload{PayoutID: testPayout1, TenantID: testTenantID, AccountID: testAccount1, AmountMinor: 1}, badMeta)
+				return err
+			},
+			expectedError: true,
+		},
 	}
-	if _, err := event.NewDisputeClosed(testEvent1, testDispute1, at, 1, 0, event.DisputeClosedPayload{DisputeID: testDispute1, TenantID: testTenantID, Outcome: "MAYBE"}, meta); err == nil {
-		t.Error("bad dispute outcome must error")
-	}
-	if _, err := event.NewTransactionPosted(testEvent1, testPosting1, at, 1, 0, event.TransactionPostedPayload{PostingID: testPosting1, TenantID: testTenantID, LedgerID: testLedgerID}, meta); err == nil {
-		t.Error("posted transaction without entries must error")
-	}
-	badMeta := event.EventMetadata{}
-	if _, err := event.NewPayoutCreated(testEvent1, testPayout1, at, 1, 0, event.PayoutCreatedPayload{PayoutID: testPayout1, TenantID: testTenantID, AccountID: testAccount1, AmountMinor: 1}, badMeta); err == nil {
-		t.Error("empty tenant metadata must error")
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err := tc.call()
+			if tc.expectedError {
+				if err == nil {
+					t.Errorf("expected error, got nil")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
 	}
 }
 
@@ -255,10 +309,11 @@ func TestCatalogValidationMatrix(t *testing.T) {
 	t.Parallel()
 	at, meta := catalogAt(), catalogMeta()
 	bad := event.EventMetadata{}
-	cases := []struct {
+	type testCase struct {
 		name string
 		call func() error
-	}{
+	}
+	testCases := []testCase{
 		{"account.created empty", func() error {
 			_, err := event.NewAccountCreated(testEvent1, testAccount1, at, 1, 0, event.AccountCreatedPayload{}, meta)
 			return err
@@ -516,7 +571,8 @@ func TestCatalogValidationMatrix(t *testing.T) {
 			return err
 		}},
 	}
-	for _, tc := range cases {
+	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			if err := tc.call(); err == nil {

@@ -380,10 +380,11 @@ Every task packet must name the relevant checks. At minimum, implementation
 changes run:
 
 ```bash
-# Ensure Pixi toolchain and CGO compiler are available:
+# Bootstrap toolchains and dependencies (if any tool is missing):
+./scripts/dev/setup.sh  # or: make setup
+
+# Ensure toolchain is on PATH:
 export PATH="$HOME/.pixi/bin:$PATH"
-export CGO_ENABLED=1
-export CC=clang
 
 # Verification pipeline:
 go mod verify

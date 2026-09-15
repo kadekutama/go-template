@@ -1,6 +1,6 @@
 # Epic E05: Tenancy Domain
 
-**Status:** pending
+**Status:** completed
 **Story Points:** 11
 **Phase:** 3 (parallel with E03, E04)
 **Dependencies:** E02
@@ -15,7 +15,7 @@
 ## Tasks
 
 ### E05-T01: Tenant aggregate + onboarding rules
-**Status:** pending
+**Status:** completed
 **Background:** Self-serve provisioning (features §5) from journeys §2.1:
 tenant + default chart of accounts + API keys, atomically.
 **Files:**
@@ -28,9 +28,9 @@ tenant + default chart of accounts + API keys, atomically.
    (operating + fee + suspense per currency) → API key pair issued → `TenantCreated`.
 3. Name-uniqueness and region-allowlist specs.
 **Acceptance Criteria:**
-- [ ] Onboarding is all-or-nothing at the domain level (checklist test).
-- [ ] Duplicate tenant name rejected (test).
-- [ ] Disallowed region rejected (test).
+- [x] Onboarding is all-or-nothing at the domain level (checklist test).
+- [x] Duplicate tenant name rejected (test).
+- [x] Disallowed region rejected (test).
 **Story Points:** 3
 **Depends On:** E02-T03, E02-T06
 **Related Docs:** `docs/fintech-ledger-features.md §5`, `docs/user-journeys.md §2.1`, `docs/domain-events.md §3` (TenantCreated)
@@ -39,7 +39,7 @@ tenant + default chart of accounts + API keys, atomically.
 ---
 
 ### E05-T02: Tenant hierarchies + consolidated views
-**Status:** pending
+**Status:** completed
 **Background:** Features §5 parent/child tenants with roll-up reporting.
 **Files:**
 - Create: `internal/domain/entity/tenant_hierarchy.go` (or extend tenant.go),
@@ -49,9 +49,9 @@ tenant + default chart of accounts + API keys, atomically.
 2. Consolidation helper: roll up child balances with FX conversion at a given rate date.
 3. Permission rule: parent read access requires explicit grant per child (no implicit).
 **Acceptance Criteria:**
-- [ ] Cyclic parenting rejected (test).
-- [ ] Consolidated balance equals sum of converted children (property test).
-- [ ] Cross-child transfers without grant rejected (test).
+- [x] Cyclic parenting rejected (test).
+- [x] Consolidated balance equals sum of converted children (property test).
+- [x] Cross-child transfers without grant rejected (test).
 **Story Points:** 3
 **Depends On:** E05-T01, E03-T05
 **Related Docs:** `docs/fintech-ledger-features.md §5`
@@ -60,7 +60,7 @@ tenant + default chart of accounts + API keys, atomically.
 ---
 
 ### E05-T03: Isolation contract (RLS policies, key/subject conventions)
-**Status:** pending
+**Status:** completed
 **Background:** Makes data-flow §3 tenant isolation enforceable: every query,
 cache key, and subject carries tenant. This task writes the contract tests
 against; E07/E08 implement it.
@@ -79,9 +79,9 @@ against; E07/E08 implement it.
 4. Data-residency settings shape: per-tenant region/db pointer (enforced in E07).
 5. White-label settings shape: branding, domains (validated format, no behavior).
 **Acceptance Criteria:**
-- [ ] Key/subject builders round-trip (parse(build(x)) == x) (test).
-- [ ] Policy matrix covers every table E07 will create (review vs E07-T01 file list).
-- [ ] ADR-004 written and linked.
+- [x] Key/subject builders round-trip (parse(build(x)) == x) (test).
+- [x] Policy matrix covers every table E07 will create (review vs E07-T01 file list).
+- [x] ADR-004 written and linked.
 **Story Points:** 3
 **Depends On:** E05-T01
 **Related Docs:** `docs/data-flow.md §3`, `docs/fintech-ledger-features.md §5`, `SPEC.md §15` (ADR-004), `docs/domain-events.md §4.4`
@@ -90,7 +90,7 @@ against; E07/E08 implement it.
 ---
 
 ### E05-T04: Tenancy unit tests (G2 slice)
-**Status:** pending
+**Status:** completed
 **Background:** G2 coverage for this epic.
 **Files:**
 - Create: `test/unit/domain/tenant/...`
@@ -98,8 +98,8 @@ against; E07/E08 implement it.
 1. Onboarding, hierarchy, consolidation, isolation builders, residency/white-label validation.
 2. Run with `-race -count=3`; contributes to the ≥90% domain coverage bar.
 **Acceptance Criteria:**
-- [ ] `go test ./internal/domain/... -race -count=3` still passes with new packages.
-- [ ] No external imports in new code (guard from E02-T09).
+- [x] `go test ./internal/domain/... -race -count=3` still passes with new packages.
+- [x] No external imports in new code (guard from E02-T09).
 **Story Points:** 2
 **Depends On:** E05-T01, E05-T02, E05-T03
 **Related Docs:** `SPEC.md §10.2`
@@ -107,7 +107,7 @@ against; E07/E08 implement it.
 
 ## Acceptance Criteria
 
-- [ ] E05-T01 … E05-T04 all `completed` (count 11 SP in `tasks/tracking/PROGRESS.md`)
-- [ ] Every features §5 row has rules + tests
-- [ ] Isolation contract consumable by E07/E08/E11 without follow-up questions
-- [ ] SDD gate G2 checks pass — `tasks/tracking/GATES.md#G2`
+- [x] E05-T01 … E05-T04 all `completed` (count 11 SP in `tasks/tracking/PROGRESS.md`)
+- [x] Every features §5 row has rules + tests
+- [x] Isolation contract consumable by E07/E08/E11 without follow-up questions
+- [x] SDD gate G2 checks pass — `tasks/tracking/GATES.md#G2`

@@ -28,6 +28,7 @@
 - **Version pinning** - Exact versions in `go.mod`
 - **Vendor** - Not used (Go modules)
 - **Private modules** - `GOPRIVATE` for internal packages
+- **Toolchain & Dependency Bootstrap** - Run `./scripts/dev/setup.sh` (or `make setup`) to automatically install Pixi, toolchains (Go, Clang, Docker, Make), and Go developer tools.
 
 ## Testing
 - **Table-driven tests** - Standard pattern

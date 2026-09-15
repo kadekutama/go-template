@@ -55,6 +55,9 @@ the bootstrap tasks create the Go module, Makefile, binaries, and deployment fil
 # Clone and enter
 cd go-template
 
+# Bootstrap environment, toolchains, and dependencies
+make setup   # or ./scripts/dev/setup.sh
+
 # Start all dependencies (Postgres, Valkey, NATS, Unleash, Traefik, LGTM stack)
 make dev-up
 

@@ -13,7 +13,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | E02 | Ledger domain core | 30 | 30/30 | completed | G2 |
 | E03 | Money-movement domain | 37 | 34/37 | pending | G2 |
 | E04 | Compliance domain | 16 | 16/16 | completed | G2 |
-| E05 | Tenancy domain | 11 | 0/11 | pending | G2 |
+| E05 | Tenancy domain | 11 | 11/11 | completed | G2 |
 | E06 | Application layer | 40 | 0/40 | pending | G3 |
 | E07 | Persistence adapters | 34 | 0/34 | pending | G4 |
 | E08 | Cache + messaging adapters | 24 | 0/24 | pending | G4 |
@@ -29,7 +29,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | E18 | Docs + DX | 16 | 0/16 | pending | G8 |
 | E19 | Hardening + release | 13 | 0/13 | pending | G8 |
 
-**Total:** 111/432 SP completed.
+**Total:** 122/432 SP completed.
 
 ## Task checklists (tick as epic files flip to completed)
 
@@ -86,10 +86,10 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 - [x] E04-T05 AML hooks + regulatory reports
 
 ### E05 — Tenancy
-- [ ] E05-T01 tenant + onboarding
-- [ ] E05-T02 hierarchies + consolidation
-- [ ] E05-T03 isolation contract + ADR-004
-- [ ] E05-T04 tenancy unit tests
+- [x] E05-T01 tenant + onboarding
+- [x] E05-T02 hierarchies + consolidation
+- [x] E05-T03 isolation contract + ADR-004
+- [x] E05-T04 tenancy unit tests
 
 ### E06 — Application
 - [ ] E06-T01 handler plumbing

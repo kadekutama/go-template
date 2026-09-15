@@ -25,6 +25,16 @@ endef
 help: ## List every target with a one-line description.
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
 
+.PHONY: setup
+setup: ## Single-command environment bootstrap: installs pixi, toolchains, tools, and modules.
+	$(call need-script,./scripts/dev/setup.sh)
+	./scripts/dev/setup.sh
+
+.PHONY: deps
+deps: ## Download Go modules and install developer CLI tools (scripts/dev/setup.sh).
+	$(call need-script,./scripts/dev/setup.sh)
+	./scripts/dev/setup.sh
+
 .PHONY: build
 build: ## Build all packages (no output binaries).
 	$(GO) build ./...
@@ -42,7 +52,7 @@ test-unit: ## Fast unit tests (domain + application + pkg).
 
 .PHONY: test-race
 test-race: ## Fast unit tests with race detector enabled (requires CGO).
-	CGO_ENABLED=1 CC=$(CC) $(GO) test -v -race ./internal/... ./pkg/...
+	CGO_ENABLED=1 CC=$(CC) $(GO) test -v -race ./...
 
 .PHONY: test-integration
 test-integration: ## Integration tests against testcontainers (needs Docker).

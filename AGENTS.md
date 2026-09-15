@@ -394,17 +394,29 @@ When implementing tests for different function signatures, inspect these referen
 
 No task claim may be released (`Status: released`) and no work may be considered complete without running and passing the full verification pipeline:
 
-1. **Environment Setup (Pixi & CGO)**:
+1. **Environment Setup**:
    - Tool binaries (`clang`, `golangci-lint`, `pixi`) reside in `/home/kadekutama/.pixi/bin`.
    - Ensure PATH is exported: `export PATH="$HOME/.pixi/bin:$PATH"`.
-   - The Go race detector (`-race`) requires a C compiler and CGO: always export `export CGO_ENABLED=1 CC=clang`.
+   - The Go race detector (`-race`) requires CGO and a C compiler. In standard Go and CI, this is enabled by default. In Pixi/Conda environments, set this persistently once via `go env -w CGO_ENABLED=1 CC=clang`.
+   - **Automatic Toolchain & Dependency Bootstrap**:
+     If any tool, compiler, or dependency is missing or not found on PATH, run the single setup script:
+     ```bash
+     ./scripts/dev/setup.sh
+     # or: make setup
+     ```
+     This script automatically:
+     1. Checks and installs `pixi` (`https://pixi.sh/install.sh`) if absent.
+     2. Installs core toolchains via Pixi (`go`, `clang`, `clangxx`, `make`, `shellcheck`, `docker-cli`, `docker-compose`, `kubernetes-client`, `k6`, `syft`).
+     3. Configures CGO persistently (`go env -w CGO_ENABLED=1 CC=clang`).
+     4. Downloads and verifies Go modules (`go mod download && go mod verify`).
+     5. Installs Go developer tools (`goimports`, `golangci-lint` v2.13.2, `govulncheck`, `gosec`, `go-licenses`, `mockery`, `buf`, `oapi-codegen`, `air`, `migrate`) and links them into `~/.pixi/bin`.
 2. **Formatting**:
    - Run `gofmt -s -w .` and `goimports -l -w .`.
 3. **Strict Linting**:
    - Run `make lint` (executes `golangci-lint run ./...` with strict rules: `gocyclo <= 12`, `goconst`, `unparam`, `revive`, etc., and `shellcheck`).
    - Must exit with **0 issues**.
 4. **Race-Detector Test Suite**:
-   - Run `CGO_ENABLED=1 CC=clang go test -v -race ./...` (or for domain: `CGO_ENABLED=1 CC=clang go test -v -race ./internal/domain/...`).
+   - Run `go test -v -race ./...` (or `make test-race`).
    - Must pass with **zero data races**.
 5. **Gate Check**:
    - Run `./tasks/scripts/gate-check.sh <GATE>` (e.g., `G2` for domain layer).

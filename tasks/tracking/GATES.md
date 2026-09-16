@@ -33,12 +33,12 @@ the capability is not stable or externally exposed until its gate passes.
 - [ ] `make generate-mocks` compiles against all ports.
 
 ## G3 — Application complete
-**Status:** pending
+**Status:** completed
 **Promotes capability for:** adapter integration
 **Checks:**
-- [ ] `go test ./internal/application/... -race -count=3` passes, coverage ≥85%.
-- [ ] Every `api-contracts.md §7` endpoint group has handlers (`check-tasks.py --handlers`).
-- [ ] Saga crash-resume tests pass; every `money-flow.md §10` row has a saga test.
+- [x] `go test ./internal/application/... -race -count=3` passes, coverage ≥85%. (86.6% — `tasks/evidence/E06-T08.md`)
+- [x] Every `api-contracts.md §7` endpoint group has handlers (`check-tasks.py --handlers`).
+- [x] Saga crash-resume tests pass; every `money-flow.md §10` row has a saga test.
 
 ## G4 — Adapters implement ports, integration green
 **Status:** pending

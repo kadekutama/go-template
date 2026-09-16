@@ -46,10 +46,9 @@ Designed as a foundation for complex systems:
 
 **Note**: This template uses **Valkey** (OSS fork of Redis) instead of Redis, and **maildev** instead of MailHog.
 
-## 🚀 Planned Quick Start
+## 🚀 Quick Start
 
-These commands are acceptance targets for Foundation/G1. They do not work until
-the bootstrap tasks create the Go module, Makefile, binaries, and deployment files.
+For a detailed step-by-step walkthrough covering every phase from machine setup to local testing, refer to the **[Developer Workflow & Makefile Guide](docs/development/developer-workflow.md)**.
 
 ```bash
 # Clone and enter

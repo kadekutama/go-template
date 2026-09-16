@@ -74,7 +74,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 - [x] E03-T06 methods/settlement/returns/linking
 - [x] E03-T07 disputes (evidence/representment/fees)
 - [x] E03-T08 auth-capture/descriptors/SCA
-- [ ] E03-T09 platform split (destination charges)
+- [x] E03-T09 platform split (destination charges)
 - [x] E03-T10 top-ups
 - [x] E03-T11 payout eligibility + negative-balance recovery
 

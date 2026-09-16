@@ -191,7 +191,7 @@ func TestUnmarshal(t *testing.T) {
 func BenchmarkMarshal(b *testing.B) {
 	in := moneyShape{AccountID: "acc_bench", AmountMinor: 123456, AssetCode: "USD"}
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if _, err := Marshal(in); err != nil {
 			b.Fatalf("Marshal: %v", err)
 		}

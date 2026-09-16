@@ -6,6 +6,9 @@ export PATH := $(PIXI_BIN):$(GOPATH_BIN):$(PATH)
 # Binaries and tools (override with `make TOOL=...` only in local shell, never committed)
 GO ?= go
 GOLANGCI_LINT ?= golangci-lint
+GOPLS ?= gopls
+GOIMPORTS ?= goimports
+LOCAL_MODULE := github.com/kadekutama/go-template
 BIN_DIR := bin
 MIGRATE ?= migrate
 
@@ -68,14 +71,23 @@ test-contract: ## Consumer-driven contract tests (Pact).
 test-all: ## Full suite: unit + integration + contract.
 	./scripts/test/unit.sh && ./scripts/test/integration.sh && ./scripts/test/contract.sh
 
-.PHONY: lint
-lint: ## Strict lint (golangci-lint) + shellcheck on scripts.
-	CGO_ENABLED=0 $(GOLANGCI_LINT) run ./... && shellcheck scripts/**/*.sh
+.PHONY: gopls-check
+gopls-check: ## Run gopls diagnostics across all Go source files.
+	@find . -name "*.go" -not -path "./vendor/*" | xargs $(GOPLS) check
 
 .PHONY: fmt
-fmt: ## gofmt/goimports over the tree.
+fmt: ## Format all Go code (gofmt -s + goimports with local module grouping).
 	gofmt -s -w .
-	@if command -v goimports >/dev/null 2>&1; then goimports -l -w .; fi
+	$(GOIMPORTS) -local $(LOCAL_MODULE) -w .
+
+.PHONY: fmt-check
+fmt-check: ## Check that all Go files are formatted with gofmt -s and goimports.
+	@test -z "$$(gofmt -s -l .)" || (echo "gofmt -s check failed on files:" >&2; gofmt -s -l . >&2; exit 1)
+	@test -z "$$($(GOIMPORTS) -local $(LOCAL_MODULE) -l .)" || (echo "goimports check failed on files:" >&2; $(GOIMPORTS) -local $(LOCAL_MODULE) -l . >&2; exit 1)
+
+.PHONY: lint
+lint: fmt-check gopls-check ## Strict lint (fmt check + gopls check + golangci-lint) + shellcheck on scripts.
+	CGO_ENABLED=0 $(GOLANGCI_LINT) run ./... && shellcheck scripts/**/*.sh
 
 .PHONY: verify
 verify: fmt lint test-race ## Full pre-commit verification: fmt, lint, race tests, and SDD checks.
@@ -93,6 +105,11 @@ generate: ## Regenerate mocks, protobuf, GraphQL, OpenAPI artifacts.
 	$(call need-script,./scripts/generate/gqlgen.sh)
 	$(call need-script,./scripts/generate/openapi.sh)
 	./scripts/generate/mocks.sh && ./scripts/generate/proto.sh && ./scripts/generate/gqlgen.sh && ./scripts/generate/openapi.sh
+
+.PHONY: generate-mocks
+generate-mocks: ## Regenerate testify mocks for domain + application ports (E06-T12).
+	$(call need-script,./scripts/generate/mocks.sh)
+	./scripts/generate/mocks.sh
 
 .PHONY: migrate-up
 migrate-up: ## Apply all pending migrations (DATABASE_URL required).

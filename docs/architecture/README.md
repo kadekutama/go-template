@@ -4,6 +4,8 @@ Index of structural decisions for this template. ADRs are immutable once
 accepted; a superseded ADR stays listed with status `Superseded` and a link to
 its replacement. Content beyond this index is filled by E18.
 
+For architectural patterns, layers, and DDD structure, see the [Clean Architecture & DDD Guide](./clean-architecture-guide.md).
+
 | ID | Title | Status |
 |----|-------|--------|
 | [ADR-002](./ADR-002-amount-currency-representation.md) | Amount and currency representation | Accepted |

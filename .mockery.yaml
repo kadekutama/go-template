@@ -1,0 +1,17 @@
+# Mockery configuration (E06-T12). Regenerate with `make generate-mocks`.
+# Mocks cover the domain repository ports and the application ports so every
+# E06 handler and E07–E10 adapter builds against compiling fakes.
+with-expecter: true
+packages:
+  github.com/kadekutama/go-template/internal/domain/repository:
+    config:
+      all: true
+      dir: test/mock/domain
+      outpkg: mockdomain
+      filename: "{{.InterfaceName}}.go"
+  github.com/kadekutama/go-template/internal/application/port:
+    config:
+      all: true
+      dir: test/mock/application
+      outpkg: mockapplication
+      filename: "{{.InterfaceName}}.go"

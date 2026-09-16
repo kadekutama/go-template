@@ -129,6 +129,13 @@ func (a *Account) UncommittedEvents() []event.DomainEvent {
 	return out
 }
 
+// LoadAccount rehydrates an aggregate from its stored record for command
+// handling (added in E06-T02: no transition path existed for stored
+// accounts). Events start empty: only new transitions are uncommitted.
+func LoadAccount(data entity.AccountData) Account {
+	return Account{data: data}
+}
+
 // ClearEvents drains the uncommitted buffer after persistence.
 func (a *Account) ClearEvents() { a.events = nil }
 

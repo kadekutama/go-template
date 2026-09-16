@@ -120,6 +120,8 @@ The audit and open risks are recorded in `docs/repository-audit.md`.
 - **No circular imports** between layers
 - **Domain layer**: Zero external imports
 - **fx Modules**: Each layer registers its own fx.Option
+- **Service Encapsulation**: Application and infrastructure services must encapsulate dependencies in private fields and use the Parameter Object Pattern (`*Params` + `New*Service`).
+- **Struct Receivers**: Follow quantitative 64-byte / register ABI metric in [`docs/development/go-conventions.md`](docs/development/go-conventions.md).
 
 ### Testing Requirements
 - Unit tests for all business logic
@@ -452,6 +454,7 @@ Agents should:
 
 ## Key Files to Reference
 - `SPEC.md` - Master specification (source of truth)
+- `docs/architecture/clean-architecture-guide.md` - Definitive Clean Architecture & DDD guide (Domain vs Application, folder breakdown)
 - `docs/development/go-conventions.md` - Go/SOLID/CQRS/ledger coding contract
 - `tasks/SDD-INTEROP.md` - OpenSpec/Spec Kit interoperability mapping
 - `Makefile` - Build/test/deploy commands

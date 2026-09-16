@@ -253,5 +253,12 @@ func (a *Posting) UncommittedEvents() []event.DomainEvent {
 	return out
 }
 
+// LoadPosting rehydrates an aggregate from its stored record for reversal
+// handling (added in E06-T03: no rehydration path existed for stored
+// postings). Events start empty: only the new reversal is uncommitted.
+func LoadPosting(data entity.PostingData) Posting {
+	return Posting{data: data}
+}
+
 // ClearEvents drains the uncommitted buffer after persistence.
 func (a *Posting) ClearEvents() { a.events = nil }

@@ -1,6 +1,6 @@
 # Epic E03: Money-Movement Domain
 
-**Status:** pending
+**Status:** completed
 **Story Points:** 37
 **Phase:** 3 (parallel with E04, E05)
 **Dependencies:** E02
@@ -242,7 +242,7 @@ expiry auto-void; SCA/3DS challenge states; network descriptor rules.
 ---
 
 ### E03-T09: Platform split (destination charges + application fees)
-**Status:** pending
+**Status:** completed
 **Background:** Features §3.5 + money-flow §2.10: charge on platform, carve the
 fee at charge time, settle net to the connected account (with FX if needed).
 **Files:**
@@ -323,7 +323,7 @@ cache or ad-hoc handler logic.
 
 ## Acceptance Criteria
 
-- [ ] E03-T01 … E03-T11 all `completed` (count 37 SP in `tasks/tracking/PROGRESS.md`)
-- [ ] Every features §3 row has domain rules + specs + tests
-- [ ] Every money-flow §2 pattern has a corresponding service
-- [ ] SDD gate G2 checks pass — `tasks/tracking/GATES.md#G2`
+- [x] E03-T01 … E03-T11 all `completed` (count 37 SP in `tasks/tracking/PROGRESS.md`)
+- [x] Every features §3 row has domain rules + specs + tests
+- [x] Every money-flow §2 pattern has a corresponding service
+- [x] SDD gate G2 checks pass — `tasks/tracking/GATES.md#G2`

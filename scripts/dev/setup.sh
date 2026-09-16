@@ -98,6 +98,7 @@ PIXI_PACKAGES=(
   "kubernetes-client:Kubectl CLI for chaos tests"
   "k6:Load testing tool for performance tests"
   "syft:SPDX SBOM generator for releases"
+  "gopls:Go language server"
 )
 
 install_pixi_packages() {
@@ -191,7 +192,7 @@ check_status() {
   echo ""
 
   echo "--- Toolchains & System Dependencies (Pixi-managed) ---"
-  local check_bins=("go" "clang" "clang++" "make" "shellcheck" "docker" "docker-compose" "kubectl" "k6" "syft")
+  local check_bins=("go" "clang" "clang++" "make" "shellcheck" "docker" "docker-compose" "kubectl" "k6" "syft" "gopls")
   for b in "${check_bins[@]}"; do
     if command -v "$b" >/dev/null 2>&1; then
       loc="$(command -v "$b")"

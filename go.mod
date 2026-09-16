@@ -69,6 +69,7 @@ require (
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/sosodev/duration v1.4.0 // indirect
+	github.com/stretchr/objx v0.5.3 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/vektah/gqlparser/v2 v2.5.36 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect

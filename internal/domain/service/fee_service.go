@@ -23,12 +23,9 @@ func AssessTransactionFee(amountMinor, bps, floorMinor, capMinor int64) (int64, 
 	if !ok {
 		return 0, entity.NewError("FEE_OVERFLOW", "fee computation overflowed")
 	}
-	fee := hi / 10000
-	if fee < floorMinor {
-		fee = floorMinor
-	}
-	if capMinor > 0 && fee > capMinor {
-		fee = capMinor
+	fee := max(hi/10000, floorMinor)
+	if capMinor > 0 {
+		fee = min(fee, capMinor)
 	}
 	return fee, nil
 }

@@ -86,6 +86,88 @@ database splitting or event sourcing:
   and the configured linter. Generated code is reproducible and is never edited
   by hand.
 
+## Service Encapsulation & The Parameter Object Pattern
+
+All application-layer and infrastructure services, workflow runners, and long-running components must strictly encapsulate their dependencies and follow the **Parameter Object pattern**:
+
+### 1. Private / Unexported Struct Fields
+- **Anti-pattern**: Exported service fields (e.g. `type TransferService struct { UoW port.UnitOfWork }`). This permits external callers to mutate dependencies mid-flight, bypass constructor invariant checks, and break thread safety.
+- **Mandatory rule**: Service struct fields must be unexported (e.g. `type TransferService struct { uow port.UnitOfWork; clock port.Clock }`).
+
+### 2. The `<Service>Params` Struct (Parameter Object)
+- Declare a companion parameter object struct for every service constructor:
+  ```go
+  // TransferServiceParams holds dependencies and configuration for TransferService.
+  type TransferServiceParams struct {
+      UoW      port.UnitOfWork
+      Accounts repository.AccountRepository
+      Postings repository.PostingRepository
+      Clock    port.Clock
+      IDs      port.IDGenerator
+      Authz    port.Authorizer
+  }
+  ```
+- **Benefits**:
+  - **Dependency Injection Compatibility**: Directly compatible with both compile-time DI (`google/wire`) and runtime DI (`uber-go/fx`).
+  - **Signature Stability**: Adding, removing, or reordering dependencies never breaks caller call sites or constructor signatures across the codebase.
+  - **Self-Documenting Call Sites**: Test setups and wiring code use explicit named field assignments (`Store: fakeStore, Clock: testClock`).
+
+### 3. Dedicated Constructor Function
+- Every service must provide a constructor returning a pointer to the service:
+  ```go
+  // NewTransferService constructs a TransferService with injected dependencies.
+  func NewTransferService(params TransferServiceParams) *TransferService {
+      return &TransferService{
+          uow:      params.UoW,
+          accounts: params.Accounts,
+          postings: params.Postings,
+          clock:    params.Clock,
+          ids:      params.IDs,
+          authz:    params.Authz,
+      }
+  }
+  ```
+- Any optional parameters, default values, or unexported caches are initialized deterministically inside the constructor.
+
+---
+
+## Struct Receiver Selection: Value vs. Pointer Receivers
+
+Go allows methods to be declared on either value receivers `(s Struct)` or pointer receivers `(s *Struct)`. In this repository, receiver choice is determined by a quantitative decision framework based on the Go compiler's register-based calling convention (Go 1.17+ ABIInternal) and CPU hardware architecture:
+
+### 1. The 64-Byte Cache Line Rule (Quantitative Metric)
+
+| Size Category | Threshold | Recommended Receiver | Rationale |
+|---|---|---|---|
+| **Small / Lightweight** | $\le 64$ bytes ($\le 8$ machine words on 64-bit) | **Value receiver** `(v ValueObject)` | Fits completely inside a standard CPU L1 cache line (64 bytes). Passed entirely in CPU registers (zero heap allocation, zero stack copy overhead). Enforces pure value semantics and immutability. |
+| **Large / Heavyweight** | $> 64$ bytes ($> 8$ machine words on 64-bit) | **Pointer receiver** `(s *Service)` | Exceeds register passing capacity. Passing by value forces the compiler to copy memory across the stack frame on every method call. Pointer receiver copies only 1 machine word (8 bytes). |
+
+#### How to Calculate Struct Size in Go:
+On 64-bit platforms (`amd64`, `arm64`):
+- Pointer, `int`, `int64`, `uint64`: 8 bytes
+- `string`: 16 bytes (8-byte pointer + 8-byte length)
+- `slice`: 24 bytes (8-byte pointer + 8-byte length + 8-byte capacity)
+- `interface`: 16 bytes (8-byte type pointer + 8-byte data pointer)
+- `time.Time`: 24 bytes (wall uint64 + ext int64 + loc *Location)
+- `bool`: 1 byte (+ alignment padding)
+
+*Examples:*
+- `Money`: `int64` (8B) + `Currency string` (16B) = 24 bytes $\le 64$B $\rightarrow$ **Value receiver**
+- `FXRate`: 2 `string`s (32B) + `int64` (8B) + `int32` (4B) = 44 bytes $\le 64$B $\rightarrow$ **Value receiver**
+- `DateRange`: 2 `time.Time`s (48B) = 48 bytes $\le 64$B $\rightarrow$ **Value receiver**
+- `Service` / `Runner`: Multiple interfaces ($N \times 16$B) $\ge 96$B $> 64$B $\rightarrow$ **Pointer receiver**
+
+### 2. Semantic Rules (Override Size)
+
+The following semantic rules override the size metric:
+
+1. **State Mutation**: If any method modifies the struct's state, **all** methods on that struct must use a pointer receiver for consistency.
+2. **Synchronization Primitives**: Any struct containing a `sync.Mutex`, `sync.RWMutex`, `sync.WaitGroup`, or `sync/atomic` value **MUST NEVER** be copied. Copying a mutex breaks lock ownership and triggers `go vet` copylocks errors. **Must always use a pointer receiver.**
+3. **Identity & Lifecycle (Services, Repositories, Sagas)**: Services represent active system components and dependency handles, not transient values. They **must always use pointer receivers** `(s *Service)`.
+4. **Value Objects (DDD)**: Value objects represent immutable quantities (amounts, currency codes, descriptors). If $\le 64$ bytes, they **must use value receivers** to prevent external mutation of shared references.
+
+---
+
 ## Unit testing conventions
 
 Every test suite in this repository adheres to a strict table-driven pattern optimized for readability, test case isolation, and parallel thread safety:

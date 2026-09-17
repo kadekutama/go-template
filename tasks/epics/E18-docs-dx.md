@@ -18,8 +18,9 @@
 **Background:** The ledger audit decisions for ADR-002/003/009 were approved by
 the repository owner on 2026-09-13, and ADR-006
 (reconciliation ingestion), ADR-007 (FX source/freshness), ADR-008 (archival),
-and ADR-011 (balance materialization/authority) remain pending. ADR-002/003/009
-already have permanent accepted records; this task must record the four pending
+and ADR-011 (balance materialization/authority) remain pending, alongside
+proposed architectural decisions ADR-013 through ADR-017. ADR-002/003/009
+already have permanent accepted records; this task must record the pending
 decisions and finish the ADR index, with owner approval where noted.
 **Files:**
 - Create: `docs/architecture/ADR-00{2,3,6,7,8,9,11}-*.md` (and index the accepted

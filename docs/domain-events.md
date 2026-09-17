@@ -11,9 +11,10 @@
 | Principle | Implementation |
 |-----------|----------------|
 | **Immutable** | Events never change after creation |
-| **Ordered** | Per-aggregate ordering via sequence number |
+| **Ordered** | Per-aggregate ordering via sequence number and partition keys |
 | **Idempotent Consumption** | Deduplication via event ID |
-| **At-Least-Once Delivery** | NATS JetStream ack + outbox pattern |
+| **At-Least-Once Delivery** | Redpanda (Kafka API) producer ack + Transactional Outbox |
+| **Edge Low-Latency Fanout**| NATS Core in-memory publish (<50µs) |
 | **Schema Versioned** | Event type includes version (`v1`, `v2`) |
 | **Correlated** | `causation_id`, `correlation_id` for tracing |
 | **Tenant-Scoped** | All events carry `tenant_id` for isolation |
@@ -501,7 +502,7 @@ graph TB
     subgraph OutboxPub["Outbox Publisher (separate goroutine/process)"]
         Select["SELECT * FROM outbox_events\nWHERE published_at IS NULL\nORDER BY sequence\nFOR UPDATE SKIP LOCKED\nLIMIT 100"]
         ForEach["FOR EACH event:"]
-        Publish["a. Publish to NATS JetStream"]
+        Publish["a. Publish to Redpanda partition (Kafka API)"]
         Update["b. UPDATE outbox_events\nSET published_at = NOW()\nWHERE id = ?"]
         Retry["3. Retry on failure, alert on repeated failure"]
     end
@@ -526,76 +527,74 @@ graph TB
 
 ---
 
-### 4.3 Event Publishing Flow (NATS JetStream)
+### 4.3 Event Publishing Flow: Dual-Broker Architecture
+
+The repository enforces a dual-broker split:
+1. **Redpanda v26.2 (Durable Event Log)**: The Transactional Outbox poller publishes domain events to partitioned Redpanda topics using the Kafka producer API.
+2. **NATS Core v2.14.6 (Real-Time Edge Mesh)**: Lightweight in-memory bridge relays push signals to NATS Core subjects for sub-millisecond edge WebSocket fanout.
 
 ```go
-// internal/infrastructure/messaging/nats/publisher/jetstream.go
+// internal/infrastructure/messaging/redpanda/publisher.go
 
-type JetStreamPublisher struct {
-    js      jetstream.JetStream
-    encoder EventEncoder // pkg/jsonparser codec
+type RedpandaPublisher struct {
+    writer  *kafka.Writer // segmentio/kafka-go or IBM/sarama
+    encoder EventEncoder  // pkg/jsonparser codec
 }
 
-func (p *JetStreamPublisher) Publish(ctx context.Context, event DomainEvent) error {
-    // 1. Serialize the versioned envelope, not only its payload
+func (p *RedpandaPublisher) Publish(ctx context.Context, event DomainEvent) error {
+    // 1. Serialize the versioned envelope
     data, err := p.encoder.Encode(event)
     if err != nil {
         return fmt.Errorf("encode event: %w", err)
     }
 
-    // 2. Build headers
-    headers := nats.Header{}
-    headers.Set("Content-Type", "application/json")
-    headers.Set("X-Event-Type", event.EventType())
-    headers.Set("X-Aggregate-ID", event.AggregateID())
-    headers.Set("X-Aggregate-Type", event.AggregateType())
-    headers.Set("X-Occurred-At", event.OccurredAt().Format(time.RFC3339Nano))
-    
-    // Correlation headers
-    meta := event.Metadata()
-    if meta.TenantID != "" {
-        headers.Set("X-Tenant-ID", meta.TenantID)
-    }
-    if meta.CausationID != "" {
-        headers.Set("X-Causation-ID", meta.CausationID)
-    }
-    if meta.CorrelationID != "" {
-        headers.Set("X-Correlation-ID", meta.CorrelationID)
-    }
-    if meta.UserID != "" {
-        headers.Set("X-User-ID", meta.UserID)
-    }
-    if meta.TraceID != "" {
-        headers.Set("X-Trace-ID", meta.TraceID)
+    // 2. Build partition key: tenant_id:aggregate_id guarantees strict per-account ordering
+    partitionKey := fmt.Sprintf("%s:%s", event.Metadata().TenantID, event.AggregateID())
+
+    // 3. Build Kafka message with metadata headers
+    msg := kafka.Message{
+        Topic: "ledger.events.v1",
+        Key:   []byte(partitionKey),
+        Value: data,
+        Headers: []kafka.Header{
+            {Key: "X-Event-ID", Value: []byte(event.EventID())},
+            {Key: "X-Event-Type", Value: []byte(event.EventType())},
+            {Key: "X-Tenant-ID", Value: []byte(event.Metadata().TenantID)},
+            {Key: "X-Trace-ID", Value: []byte(event.Metadata().TraceID)},
+        },
     }
 
-    // 3. Determine subject (tenant-scoped)
-    subject := p.subjectForEvent(event.Metadata().TenantID, event.EventType())
-
-    // 4. Publish with acknowledgment
-    _, err = p.js.PublishMsg(ctx, &nats.Msg{
-        Subject: subject,
-        Data:    data,
-        Header:  headers,
-    }, jetstream.WithMsgID(event.EventID()))
-
-    return err
-}
-
-func (p *JetStreamPublisher) subjectForEvent(tenantID, eventType string) string {
-    // Format: ledger.{tenant}.{event_type}; event_type already contains
-    // domain/entity/action/version (for example account.created.v1).
-    // Tenant scoping isolates streams and bounded wildcards support platform
-    // consumers (for example ledger.*.account.*.v1).
-    if tenantID == "" {
-        tenantID = "platform"
-    }
-    return fmt.Sprintf("ledger.%s.%s", tenantID, eventType)
+    // 4. Produce to Redpanda with leader ack
+    return p.writer.WriteMessages(ctx, msg)
 }
 ```
 
-### 4.4 Subject Naming Convention
+```go
+// internal/infrastructure/messaging/nats/publisher.go (Edge Push Bridge)
 
+type NATSEdgePublisher struct {
+    nc *nats.Conn // Pure in-memory NATS Core connection
+}
+
+func (p *NATSEdgePublisher) BroadcastBalanceUpdate(ctx context.Context, tenantID, accountID string, balance int64) error {
+    subject := fmt.Sprintf("updates.tenant.%s.account.%s.balance", tenantID, accountID)
+    payload := fmt.Sprintf(`{"tenant_id":"%s","account_id":"%s","available_minor":%d}`, tenantID, accountID, balance)
+    return p.nc.Publish(subject, []byte(payload))
+}
+```
+
+### 4.4 Topic and Subject Naming Conventions
+
+#### A. Redpanda Durable Topics (Kafka API)
+```
+ledger.events.v1
+money-movement.transfers.v1
+compliance.kyc.v1
+```
+* Partition Key: `{tenant_id}:{aggregate_id}` (guarantees strictly ordered partition logs per financial entity).
+* Canonical persistent stream configuration: `stream: LEDGER_EVENTS` (logical event log stream).
+
+#### B. NATS Core Edge Subjects & Event Routing
 ```
 ledger.{tenant_id}.{event_type}
 ──────────────────────────────
@@ -607,11 +606,7 @@ ledger.ten_abc123.transfer.completed.v1
 ledger.ten_abc123.payment_intent.succeeded.v1
 ledger.ten_abc123.reconciliation.break.found.v1
 ```
-
-Every versioned event in §3 uses the canonical `LEDGER_EVENTS` JetStream stream
-and this subject template. Consumer filters may narrow delivery, but they must
-not introduce a second naming scheme or leave an event without a routable
-subject.
+* In addition to granular topic partitions in Redpanda, real-time edge notifications use the canonical `ledger.{tenant_id}.{event_type}` subject hierarchy for sub-millisecond WebSocket fanout directly to client subscriptions.
 
 ---
 
@@ -625,62 +620,56 @@ subject.
 > break the handler). Webhook receivers get the same guarantee — see
 > api-contracts §11.
 
-### 5.1 Consumer Groups (NATS JetStream)
+### 5.1 Consumer Groups (Redpanda Kafka API)
 
 ```yaml
 # Consumer configurations per service
-consumers:
+consumer_groups:
   # Webhook Dispatcher - delivers to merchant endpoints
   webhook-dispatcher:
-    stream: LEDGER_EVENTS
-    durable: webhook-dispatcher
-    ack_policy: explicit
-    ack_wait: 30s
-    max_deliver: 5
-    filter_subjects:
-      - "ledger.*.account.>"
-      - "ledger.*.transaction.>"
-      - "ledger.*.payment_intent.>"
-      - "ledger.*.transfer.>"
-      - "ledger.*.refund.>"
-      - "ledger.*.payout.>"
-    dead_letter: LEDGER_DLQ
+    topics:
+      - ledger.events.v1
+      - money-movement.transfers.v1
+    group_id: ledger-webhook-dispatcher
+    auto_offset_reset: earliest
+    max_poll_interval_ms: 300000
+    session_timeout_ms: 45000
+    retry_max: 5
+    dead_letter_topic: ledger.events.dlq.v1
 
-  # Analytics Pipeline - feeds data warehouse
+  # Analytics Pipeline - feeds data lakehouse
   analytics-pipeline:
-    stream: LEDGER_EVENTS
-    durable: analytics-pipeline
-    ack_policy: explicit
-    ack_wait: 60s
-    max_deliver: 3
-    filter_subjects:
-      - "ledger.>"  # All events
-    dead_letter: LEDGER_DLQ
+    topics:
+      - ledger.events.v1
+    group_id: ledger-analytics-pipeline
+    auto_offset_reset: earliest
 
-  # Audit Logger - immutable audit trail
-  audit-logger:
-    stream: LEDGER_EVENTS
-    durable: audit-logger
-    ack_policy: explicit
-    ack_wait: 10s
-    max_deliver: 10
-    filter_subjects:
-      - "ledger.>"
-    dead_letter: LEDGER_DLQ
+  # Audit Archiver - regulatory compliance
+  audit-archiver:
+    topics:
+      - ledger.events.v1
+      - compliance.kyc.v1
+    group_id: ledger-audit-archiver
+    auto_offset_reset: earliest
 
-  # Reconciliation Engine - processes breaks
+  # Real-Time Bridge - publishes lightweight updates to NATS Core
+  realtime-bridge:
+    topics:
+      - ledger.events.v1
+    group_id: ledger-realtime-bridge
+    auto_offset_reset: latest
+
+  # Reconciliation Engine - processes transactions and breaks
   reconciliation-engine:
-    stream: LEDGER_EVENTS
-    durable: reconciliation-engine
-    ack_policy: explicit
-    ack_wait: 60s
-    max_deliver: 3
-    filter_subjects:
-      - "ledger.*.transaction.posted.v1"
-      - "ledger.*.transfer.completed.v1"
-      - "ledger.*.payout.paid.v1"
-      - "ledger.*.refund.succeeded.v1"
-    dead_letter: LEDGER_DLQ
+    topics:
+      - ledger.events.v1
+      - money-movement.transfers.v1
+    group_id: ledger-reconciliation-engine
+    auto_offset_reset: earliest
+    max_poll_interval_ms: 300000
+    session_timeout_ms: 45000
+    retry_max: 3
+    dead_letter_topic: ledger.events.dlq.v1
 ```
 
 ### 5.2 Idempotent Consumer Pattern
@@ -736,7 +725,7 @@ func (c *IdempotentConsumer) Handle(ctx context.Context, msg *nats.Msg) error {
         return msg.Ack() // durable receipt already committed
     }
     if err := c.handler.Handle(ctx, event); err != nil {
-        return err // rollback; JetStream redelivers
+        return err // rollback; consumer group redelivers
     }
     if err := tx.Commit(); err != nil {
         return fmt.Errorf("commit inbox effects: %w", err)
@@ -885,37 +874,37 @@ func decodeAccountCreated(data []byte, version string) (*AccountCreatedPayload, 
 flowchart LR
     Client((Client/Merchant))
     Payment[Payment Service]
-    NATS[NATS JetStream]
+    Redpanda[(Redpanda Cluster)]
+    NATSEdge[NATS Core Mesh]
     Ledger[Ledger Service]
-    DB[DB Transaction]
-    Outbox[Outbox Publisher]
-    Consumers[Consumers]
+    DB[(PostgreSQL/Citus)]
+    Outbox[Outbox Relay]
+    Consumers[Application Consumers]
+    WSClient((Live Web UI))
 
     Client -->|1. Create PaymentIntent| Payment
-    Payment -->|2. payment_intent.created.v1| NATS
-    NATS -->|3. Consume| Ledger
-    NATS -.->|4. Webhook Dispatcher| Consumers
-    Ledger -->|5. Validate Specs| Validate[Validate Specs]
-    Client -->|5. Confirm PaymentIntent| Payment
-    Payment -->|6. payment_intent.succeeded.v1| NATS
-    NATS -->|7. Post Double-Entry| Ledger
-    Ledger -->|8. DB Transaction| DB
-    DB -->|9. Outbox Publisher| Outbox
-    Outbox -->|10. transaction.posted.v1| NATS
-    NATS -->|11. Consumers| Consumers
+    Payment -->|2. Outbox TX / Publish| Redpanda
+    Redpanda -->|3. Consume Intent| Ledger
+    Ledger -->|4. Validate Specs & Post| DB
+    DB -->|5. Atomic Outbox Insert| DB
+    DB -->|6. Outbox Poller| Outbox
+    Outbox -->|7. Produce Event| Redpanda
+    Redpanda -->|8. Consumer Groups| Consumers
+    Consumers -->|9. Real-Time Bridge| NATSEdge
+    NATSEdge -->|10. Sub-ms Fanout| WSClient
 ```
 
 **Sequence Steps:**
 1. **Client** creates PaymentIntent → **Payment Service**
-2. **Payment Service** publishes `payment_intent.created.v1` → **NATS JetStream**
-3. **NATS** delivers to **Ledger Service** (consumer)
-4. **Webhook Dispatcher** (consumer) notifies merchant
-5. **Ledger Service** validates specs (SufficientFunds, AccountActive)
-6. **Client** confirms PaymentIntent with payment method
-7. **Payment Service** publishes `payment_intent.succeeded.v1` → **NATS**
-8. **Ledger Service** posts double-entry in **DB Transaction**
-9. **Outbox Publisher** publishes `transaction.posted.v1` → **NATS**
-10. **Consumers** process: Webhook, Audit, Reconciliation, Analytics
+2. **Payment Service** records intent and outbox emits `payment_intent.created.v1` → **Redpanda**
+3. **Ledger Service** consumes intent from **Redpanda** partition
+4. **Ledger Service** validates domain specs (SufficientFunds, AccountActive)
+5. **Ledger Service** posts double-entry transaction + inserts outbox event atomically in **PostgreSQL/Citus**
+6. **Outbox Poller** claims unpublished outbox rows via `SELECT FOR UPDATE SKIP LOCKED`
+7. **Outbox Poller** produces `transaction.posted.v1` to **Redpanda** with key `{tenant_id}:{account_id}`
+8. **Redpanda Consumer Groups** process: Webhook Dispatcher, Audit Archiver, Reconciliation Engine
+9. **Real-Time Bridge Consumer** publishes lightweight balance notification to **NATS Core** subject
+10. **NATS Core** fans out sub-millisecond updates to active **WebSocket Clients**
 
 ### 9.2 Reconciliation Event Flow
 
@@ -1067,9 +1056,10 @@ func TestTransfer_PublishesTransactionPostedEvent(t *testing.T) {
 - [ ] Write unit tests for event emission
 
 ### Phase 3 (Infrastructure)
-- [ ] Implement NATS JetStream publisher with outbox
-- [ ] Implement consumer framework with idempotency
-- [ ] Configure streams, consumers, DLQ
+- [ ] Implement Redpanda Kafka API publisher with Transactional Outbox poller
+- [ ] Implement NATS Core real-time in-memory edge fanout bridge
+- [ ] Implement consumer framework with Kafka consumer groups and idempotency
+- [ ] Configure Redpanda topics, partitions, and DLQ
 - [ ] Add event serialization through `pkg/jsonparser` (stdlib default; optional Sonic adapter)
 
 ### Phase 4 (Application)

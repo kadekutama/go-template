@@ -52,7 +52,7 @@ def parse_epic(path: pathlib.Path):
     epic_sp = int(sp_m.group(1)) if sp_m else None
     tasks = []
     for m in re.finditer(
-        r"^###\s+(E\d{2}-T\d{2}):\s*(.+?)\s*\n(.*?)(?=^###\s+E\d{2}-T|\Z)",
+        r"^###\s+(E\d{2}(?:\.\d+)?-T\d{2}):\s*(.+?)\s*\n(.*?)(?=^###\s+E\d{2}(?:\.\d+)?-T|\Z)",
         text, re.M | re.S,
     ):
         tid, title, body = m.group(1), m.group(2).strip(), m.group(3)
@@ -268,7 +268,7 @@ def check_sdd(all_tasks: dict[str, dict]) -> None:
         "Invariants and Failure Semantics", "Change Surface",
         "Verification Plan", "Acceptance Mapping", "Open Questions", "Approval",
     ]
-    for packet in sorted(SPECS.glob("E??-T??.md")) if SPECS.exists() else []:
+    for packet in sorted(SPECS.glob("E*-T*.md")) if SPECS.exists() else []:
         text = packet.read_text()
         tid = packet.stem
         if tid not in all_tasks:
@@ -302,7 +302,7 @@ def check_sdd(all_tasks: dict[str, dict]) -> None:
 
     progress_text = (TASKS / "tracking/PROGRESS.md").read_text()
     progress_rows = re.findall(
-        r"^- \[([ xX])\] (E\d{2}-T\d{2})\b", progress_text, re.M
+        r"^- \[([ xX])\] (E\d{2}(?:\.\d+)?-T\d{2})\b", progress_text, re.M
     )
     progress: dict[str, bool] = {}
     for mark, tid in progress_rows:
@@ -384,12 +384,12 @@ def check_format() -> None:
         gate_m = re.search(r"\*\*SDD Gate:\*\*\s*(G\d)", head)
         if gate_m and gate_m.group(1) not in tail:
             errors.append(f"--format: {ep.name} acceptance section does not reference its gate {gate_m.group(1)}")
-        ids = re.findall(r"^###\s+(E\d{2}-T\d{2}):", tasks_part, flags=re.M)
+        ids = re.findall(r"^###\s+(E\d{2}(?:\.\d+)?-T\d{2}):", tasks_part, flags=re.M)
         seps = len(re.findall(r"^---$", tasks_part, flags=re.M))
         if seps != max(0, len(ids) - 1):
             errors.append(f"--format: {ep.name} has {len(ids)} tasks but {seps} '---' separators (want {len(ids)-1})")
         # per-task field order
-        bodies = re.split(r"^###\s+E\d{2}-T\d{2}:.*$", tasks_part, flags=re.M)[1:]
+        bodies = re.split(r"^###\s+E\d{2}(?:\.\d+)?-T\d{2}:.*$", tasks_part, flags=re.M)[1:]
         for tid, body in zip(ids, bodies):
             if not tid.startswith(eid):
                 errors.append(f"--format: {tid} has wrong epic prefix in {ep.name}")
@@ -515,11 +515,36 @@ def run_content_checks(all_tasks: dict) -> None:
         if not mig.exists():
             print("--migrations: SKIP (no migration files yet)")
         else:
-            nums = sorted(int(f.name.split("_")[0]) for f in mig.glob("*.up.sql"))
-            if nums != list(range(1, len(nums) + 1)):
-                errors.append(f"--migrations: numbering gaps: {nums}")
+            up_files = list(mig.glob("*.up.sql"))
+            if up_files:
+                nums = sorted(int(f.name.split("_")[0]) for f in up_files)
+                if nums != list(range(1, len(nums) + 1)):
+                    errors.append(f"--migrations: numbering gaps: {nums}")
+                else:
+                    print(f"--migrations: {len(nums)} versions OK (legacy up/down format)")
             else:
-                print(f"--migrations: {len(nums)} versions OK")
+                sql_files = sorted(f for f in mig.glob("*.sql"))
+                if not sql_files:
+                    errors.append("--migrations: no .sql migration files found")
+                else:
+                    atlas_sum = mig / "atlas.sum"
+                    if not atlas_sum.exists():
+                        errors.append("--migrations: missing atlas.sum integrity manifest")
+                    legacy_nums = []
+                    ts_versions = []
+                    for f in sql_files:
+                        prefix = f.name.split("_")[0]
+                        if len(prefix) == 6 and prefix.isdigit():
+                            legacy_nums.append(int(prefix))
+                        elif len(prefix) == 14 and prefix.isdigit():
+                            ts_versions.append(int(prefix))
+                        else:
+                            errors.append(f"--migrations: invalid migration version prefix: {f.name}")
+                    if legacy_nums and legacy_nums != list(range(1, len(legacy_nums) + 1)):
+                        errors.append(f"--migrations: legacy numbering gaps: {legacy_nums}")
+                    if ts_versions and ts_versions != sorted(ts_versions):
+                        errors.append(f"--migrations: timestamp versions out of order: {ts_versions}")
+                    print(f"--migrations: {len(sql_files)} versions OK ({len(legacy_nums)} legacy, {len(ts_versions)} timestamped)")
     if "--adrs" in FLAGS:
         feat15 = _section_text(DOCS / "fintech-ledger-features.md", "15")
         pend = re.findall(r"\|\s*(ADR-\d+)\s*\|[^|]*\|\s*[Pp]ending", feat15)

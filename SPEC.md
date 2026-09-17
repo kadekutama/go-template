@@ -74,27 +74,30 @@ audit date; keep the `go` directive and CI toolchain aligned with it.
 | **HTTP Router** | Echo | v5.3.1 | High performance, middleware (v4 EOL 2026-12-31) |
 | **gRPC** | grpc-go | v1.66.0 | Protobuf v1.34.0+ |
 | **GraphQL** | gqlgen | v0.17.94 | Schema-first, codegen |
-| **Database** | PostgreSQL | 18.6 | GORM v2 (v1.31.2) |
-| **Migration** | golang-migrate | v4.19.1 | Embed + CLI |
-| **Cache L1** | Ristretto | v2.4.2 | In-memory, high throughput (generics) |
-| **Cache L2** | Valkey | 9.0.6 | go-redis v9.22.0 (Valkey-compatible) |
-| **Messaging** | NATS JetStream | 2.14.6 | nats.go v1.53.1 |
+| **Database** | PostgreSQL + Citus | 18.6 / 14.0 | Citus horizontal tenant sharding (ADR-013), GORM v2 (v1.31.2) |
+| **Database HA** | Patroni / CloudNativePG | v4.1.5 / v1.30.0 | Patroni for bare-metal/VMs, CNPG for K8s (ADR-013) |
+| **Coordination / DCS**| etcd | v3.7.0 | Patroni DCS, gRPC config stream, leader election (ADR-017) |
+| **Migration & Linting** | Goose + Atlas | v3.28.0 / v1.3.0 | Goose v3 embed/runtime + Atlas CI safety linter + UTC timestamps (ADR-018) |
+| **Cache L1** | Otter | v2.3.0 | Adaptive W-TinyLFU, Go generics, per-key TTL; supersedes Ristretto (ADR-015) |
+| **Cache L2** | Valkey | 9.1.2 | go-redis v9.22.0 (Sentinel & Cluster HA modes) |
+| **Messaging (Log)** | Redpanda | v26.2 | Kafka API, Raft-native, durable financial event log (ADR-014) |
+| **Messaging (Edge)**| NATS Core | v2.14.6 | In-memory real-time WebSocket push & microsecond RPC (ADR-014) |
 | **Auth JWT** | golang-jwt | v5.3.1 | RS256 asymmetric |
 | **OAuth2** | golang.org/x/oauth2 | v0.23.0 | Google, GitHub, OIDC |
 | **RBAC** | Casbin | v2.8.0 | ABAC/RBAC hybrid |
-| **Feature Flags** | OpenFeature + Unleash | v1.17.2 / v6.5.1 | go-sdk + official SDK |
-| **Secrets** | Bitwarden SDK | v2.1.0 | Secret Manager |
+| **Feature Flags** | OpenFeature + Unleash | v1.17.2 / v6.5.1 | go-sdk + official SDK; etcd dynamic overrides |
+| **Secrets / Crypto** | OpenBao | v2.6.2 | Dynamic DB credentials & Transit encryption; supersedes Bitwarden (ADR-016) |
 | **Circuit Breaker** | gobreaker | v0.5.0 | Sony |
-| **Tracing** | OpenTelemetry | v1.26.0 | Jaeger, Prometheus, OTLP |
+| **Tracing** | OpenTelemetry | v1.46.0 | Jaeger, Prometheus, OTLP |
 | **Logging** | zerolog | v1.35.1 | JSON, structured, leveled; port in `shared/kernel/log` (ADR-012) |
 | **Validation** | validator | v10.22.0 | Struct tags |
 | **JSON** | `pkg/jsonparser` wrapper | Sonic v1.15.4 default (ADR-012); stdlib fallback | One codec seam; benchmark recorded in E01-T07 evidence |
 | **i18n** | go-i18n | v2.7.0 | YAML locale files |
-| **Scheduler** | gocron | v1.5.0 | Valkey Redlock distributed |
-| **Config** | koanf | v2.3.0 | Multi-source, validation |
+| **Scheduler** | gocron | v1.5.0 | etcd / Valkey Redlock distributed |
+| **Config** | koanf | v2.3.0 | Multi-source, validation, etcd watcher |
 | **Testing** | testify, testcontainers, mockery | Pinned in `go.mod` at bootstrap | Unit, integration, contract |
 | **API Gateway** | Traefik | v3.2.0 | Docker labels, auto-TLS |
-| **Observability Stack** | Prometheus, Grafana, Loki, Tempo | Pinned image tags at bootstrap | Full LGTM target (Prom 2.54, Grafana 11.2, Loki 3.1, Tempo 2.5) |
+| **Observability Stack** | Prometheus, Grafana, Loki, Tempo | Pinned image tags at bootstrap | Full LGTM target (Prom 3.14.0, Grafana 13.0, Loki 3.7.7, Tempo 2.9.4) |
 
 ---
 
@@ -247,17 +250,17 @@ go-template/
 │   │   ├── config/
 │   │   ├── database/postgres/
 │   │   ├── database/migration/
-│   │   ├── cache/local/              # Ristretto
-│   │   ├── cache/valkey/             # Valkey (OSS Redis fork)
+│   │   ├── cache/local/              # Otter (Adaptive W-TinyLFU)
+│   │   ├── cache/valkey/             # Valkey Cluster (OSS Redis fork)
 │   │   ├── cache/hybrid/             # L1+L2
 │   │   ├── auth/jwt/, oauth2/, rbac/, apikey/
-│   │   ├── messaging/nats/
-│   │   │   ├── publisher/
-│   │   │   ├── consumer/
-│   │   │   └── stream/
+│   │   ├── messaging/
+│   │   │   ├── redpanda/             # Redpanda consumer groups (Kafka API)
+│   │   │   └── nats/                 # NATS Core WebSocket fanout & RPC
 │   │   ├── scheduler/
 │   │   ├── featureflag/provider/     # OpenFeature + Unleash
-│   │   ├── secrets/bitwarden/
+│   │   ├── secrets/openbao/          # OpenBao dynamic credentials & Transit
+│   │   ├── coordination/etcd/        # etcd leader election & dynamic config
 │   │   ├── resilience/circuitbreaker/
 │   │   ├── audit/
 │   │   ├── crypto/
@@ -483,46 +486,50 @@ type TransferWorkflow interface {
 ```go
 // internal/infrastructure/config/config.go
 type Config struct {
-    App       AppConfig       `koanf:"app" validate:"required"`
-    Server    ServerConfig    `koanf:"server" validate:"required"`
-    Database  DatabaseConfig  `koanf:"database" validate:"required"`
-    Cache     CacheConfig     `koanf:"cache" validate:"required"`
-    Auth      AuthConfig      `koanf:"auth" validate:"required"`
-    NATS      NATSConfig      `koanf:"nats" validate:"required"`
+    App           AppConfig           `koanf:"app" validate:"required"`
+    Server        ServerConfig        `koanf:"server" validate:"required"`
+    Database      DatabaseConfig      `koanf:"database" validate:"required"`
+    Cache         CacheConfig         `koanf:"cache" validate:"required"`
+    Auth          AuthConfig          `koanf:"auth" validate:"required"`
+    Redpanda      RedpandaConfig      `koanf:"redpanda" validate:"required"`
+    NATS          NATSConfig          `koanf:"nats" validate:"required"`
+    Etcd          EtcdConfig          `koanf:"etcd"`
     Observability ObservabilityConfig `koanf:"observability"`
-    FeatureFlags FeatureFlagConfig `koanf:"feature_flags"`
-    Secrets   SecretsConfig   `koanf:"secrets"`
+    FeatureFlags  FeatureFlagConfig   `koanf:"feature_flags"`
+    Secrets       SecretsConfig       `koanf:"secrets"`
 }
 ```
 
-**Loading Priority:** Base YAML → Environment YAML → Local YAML → Env Vars → Secrets
+**Loading Priority:** Base YAML → Environment YAML → Local YAML → Env Vars → OpenBao Secrets / etcd Watcher
 
-### 7.2 Database (PostgreSQL + GORM)
+### 7.2 Database (PostgreSQL + Citus + GORM)
 - **ORM**: GORM v2 with interfaces
-- **Migrations**: golang-migrate (embed + CLI, Up/Down reversible)
-- **Connection Pool**: Configurable (max_open, max_idle, max_lifetime)
+- **Horizontal Sharding**: Citus 14.0 sharding on `tenant_id` (`create_distributed_table` on accounts, entries, postings, holds, outbox_facts, idempotency_keys; `create_reference_table` on currencies). See ADR-013.
+- **High Availability**: Patroni v4.1.5 + etcd v3.7.0 (bare-metal/compose) or CloudNativePG v1.30.0 (Kubernetes). See ADR-013.
+- **Migrations**: Pressly Goose v3 (v3.28.0; embedded FS + CLI, preserved 1..4 baseline versions + 14-digit UTC timestamps `YYYYMMDDHHMMSS_<name>.sql` for new migrations, out-of-order execution `-allow-missing`, one-time ledger bootstrap from `schema_migrations` to `goose_db_version`, Up/Down reversible, `-- +goose NO TRANSACTION` at top of file for Citus sharding and concurrent indexing, pure-compute programmatic `.go` migrations with service backfills deferred to E14 jobs) + Ariga Atlas CLI (v1.3.0; `atlas.sum` Merkle tree integrity validation + pre-deployment ephemeral container safety linting `atlas migrate lint`). Supersedes the bespoke stdlib runner and `golang-migrate` CLI to eliminate merge conflicts, lock contention, and silent DDL table lockouts. See ADR-018 and `docs/infrastructure/README.md §12`.
+- **Connection Pool**: Native Go `database/sql` with `jackc/pgx/v5/stdlib` pool (configurable max_open, max_idle, max_lifetime; Citus coordinator manages worker connections directly)
 - **Ledger write path**: explicit, reviewable SQL transaction or stored procedure;
   database-enforced per-currency balance, immutability, tenant/ledger scope,
   deterministic locking, durable idempotency, balance checkpoint, and outbox
 - **Authority**: PostgreSQL entries/checkpoints are authoritative; GORM hooks,
   account balance columns, Valkey, and replicas are never money-safety boundaries
 
-### 7.3 Cache (Multi-Level)
+### 7.3 Cache (Multi-Level: Otter L1 + Valkey L2)
 ```go
 // internal/infrastructure/cache/hybrid/cache.go
 type HybridCache struct {
-    l1 *ristretto.Cache  // Hot data, ~100MB
-    l2 *redis.Client      // Shared, persistent (Valkey-compatible)
+    l1 *otter.Cache[string, []byte] // Hot data, Adaptive W-TinyLFU eviction, generics, ~100MB (ADR-015)
+    l2 *redis.Client               // Shared, persistent (Valkey 9.1.2 Sentinel/Cluster)
 }
 
 func (h *HybridCache) Get(ctx context.Context, key string, dest any) error {
-    // Try L1 → Try L2 → Populate L1
+    // Try L1 (Otter) → Try L2 (Valkey) → Populate L1
 }
 ```
 
 Cached balances are labeled projections with a ledger cursor. They may accelerate
 display reads but never authorize a spend. Idempotency cache entries are hints;
-the durable record is in PostgreSQL.
+the durable record is in PostgreSQL. Otter provides synchronous visibility and adaptive W-TinyLFU eviction (ADR-015).
 
 ### 7.4 Authentication & Authorization
 - **JWT**: RS256, short-lived access (15m), rotating refresh (7d)
@@ -530,37 +537,42 @@ the durable record is in PostgreSQL.
 - **RBAC/ABAC**: Casbin with domain-specific policies
 - **API Keys**: Scoped, rate-limited, rotatable
 
-### 7.5 Messaging (NATS JetStream)
+### 7.5 Messaging (Dual-Broker: Redpanda + NATS Core)
 ```go
-// Subject Naming Convention: ledger.{tenant}.{event_type}
-// The versioned event type already carries domain/entity/action, so it is not
-// duplicated in the subject. Platform consumers use bounded wildcards.
+// Redpanda Topic Convention: ledger.events, outbox.facts, webhook.jobs, audit.streams
+// Partition Key: "tenant_id:account_id" (strict FIFO ordering per ledger account)
+// NATS Core Subject Convention: tenants.{tenant_id}.balance.changed (real-time edge push)
 const (
-    SubjectAccountCreated    = "ledger.{tenant}.account.created.v1"
-    SubjectTransactionPosted = "ledger.{tenant}.transaction.posted.v1"
-    SubjectBalanceChanged    = "ledger.{tenant}.account.balance.changed.v1"
+    TopicLedgerEvents      = "ledger.events"
+    TopicOutboxFacts       = "outbox.facts"
+    SubjectBalanceChanged  = "ledger.%s.account.balance.changed.v1"
 )
 ```
-- **Publisher**: Embedded in API services
-- **Consumer**: Separate `cmd/consumer/` binary (scales independently)
-- **Dead Letter**: Automatic DLQ with retry policy
+- **Durable Event Log (Redpanda v26.2)**: System-of-record event stream, outbox relay, sagas, audit, CDC, Flink integration (ADR-014)
+- **Real-Time Edge Mesh (NATS Core v2.14.6)**: Pure in-memory pub/sub (<5µs) for active WebSockets and live UI updates (ADR-014)
+- **Publisher**: Outbox relay publishing to Redpanda with real-time bridge to NATS Core
+- **Consumer**: Separate `cmd/consumer/` binary (scales via Redpanda consumer groups)
+- **Dead Letter**: Automatic DLQ with exponential backoff retry policy
 
 ### 7.6 Feature Flags (OpenFeature + Unleash)
 ```go
 // Provider: github.com/open-feature/go-sdk-contrib/providers/unleash
+// Dynamic Overrides: etcd v3.7.0 gRPC streaming watcher (ADR-017)
 // Evaluation context: user_id, tenant_id, custom attributes
 ```
 
-### 7.7 Secrets (Bitwarden Secret Manager)
+### 7.7 Secrets & Encryption (OpenBao)
 ```yaml
 # config.yaml references only
 database:
   postgres:
-    password: "{{ secret:db/postgres/password }}"
+    dynamic_lease: "database/creds/app-user-role" # 1h leased ephemeral credentials (ADR-016)
 auth:
   jwt:
     private_key: "{{ secret:auth/jwt/private_key }}"
 ```
+- **Dynamic DB Credentials**: Leased ephemeral credentials from OpenBao for `app_user` (ADR-016)
+- **Transit Secrets Engine**: Field-level encryption for PAN/PII (AES-256-GCM) with automated key rotation and crypto-shredding (ADR-016)
 
 ### 7.8 Resilience (Circuit Breaker)
 ```go
@@ -596,12 +608,15 @@ can be swapped without touching business logic (dependency inversion):
 | **Logging** | `Logger` (`shared/kernel/log`) | zerolog v1.35.1 (ADR-012; was `log/slog` per ADR-010) | `log/slog`, zap |
 | **Tracing** | `Tracer` (`shared/kernel/observability`) | OTel SDK + Jaeger/Tempo adapter | Datadog, Honeycomb |
 | **Metrics** | `Meter` (`shared/kernel/observability`) | OTel + Prometheus adapter | StatsD, Datadog |
-| **Database** | Intent-specific repository/unit-of-work ports (`domain`/`application`) | GORM + PostgreSQL adapter | sqlx, sqlc, Ent, CockroachDB |
-| **Cache** | `Cache` (`application/port`) | Ristretto (L1) + Valkey (L2) | Memcached, Dragonfly, in-memory only |
+| **Database** | Intent-specific repository/unit-of-work ports (`domain`/`application`) | GORM + PostgreSQL/Citus adapter (ADR-013) | sqlx, sqlc, Ent, CockroachDB |
+| **Database HA**| `HAManager` (`infrastructure`) | Patroni / CloudNativePG (ADR-013) | AWS RDS Multi-AZ, Azure HA |
+| **Coordination**| `Coordinator` (`infrastructure`) | etcd v3.7.0 client adapter (ADR-017) | Consul, ZooKeeper |
+| **Cache** | `Cache` (`application/port`) | Otter (L1, ADR-015) + Valkey (L2) | Memcached, Dragonfly, in-memory only |
 | **Rate limiting** | `RateLimiter` (`application/port`) | Valkey token bucket adapter | In-memory/test implementation |
-| **Messaging** | `Publisher` / `Consumer` (`application/port`) | NATS JetStream | Kafka, RabbitMQ, SQS |
-| **Secrets** | `SecretManager` (`application/port`) | Bitwarden SDK adapter | Vault, AWS/GCP Secret Manager, env |
-| **Feature Flags** | `FlagClient` (`application/port`) | OpenFeature + Unleash adapter | LaunchDarkly, Flipt, Redis provider |
+| **Messaging (Log)** | `EventPublisher` / `EventConsumer` (`application/port`) | Redpanda v26.2 (Kafka API, ADR-014) | Kafka, Pulsar |
+| **Messaging (Edge)**| `NotificationPublisher` (`application/port`) | NATS Core v2.14.6 (In-memory, ADR-014) | Valkey Pub/Sub, WebSockets |
+| **Secrets & EaaS**| `SecretManager` / `Encrypter` (`application/port`) | OpenBao v2.6.2 adapter (ADR-016) | HashiCorp Vault, AWS/GCP Secret Manager |
+| **Feature Flags** | `FlagClient` (`application/port`) | OpenFeature + Unleash adapter (etcd dynamic override) | LaunchDarkly, Flipt, Redis provider |
 | **Resilience** | `Breaker`/`RetryPolicy` (`shared/kernel/resilience`) | gobreaker + bounded retry adapter | Hystrix-style or provider-native adapter |
 | **Clock** | `Clock` (`shared/kernel`) | System clock | Fixed clock (tests) |
 | **ID Generation** | `IDGenerator` (`shared/kernel`) | UUIDv7 (`google/uuid`; ADR-012) | ULID, KSUID, Snowflake |
@@ -636,14 +651,15 @@ can be swapped without touching business logic (dependency inversion):
 
 ### 8.4 Cron (Distributed Scheduler)
 - **Framework**: gocron v1.5.0
-- **Distributed Lock**: Valkey Redlock (go-redis v9.22.0)
-- **Jobs**: leader coordination plus a durable unique run key; at-least-once
+- **Leader Election & Coordination**: Primary single-writer leader election via etcd v3.7.0 (`concurrency.NewElection` / lease renewal; ADR-017) with Valkey 9.1.2 Redlock (go-redis v9.22.0) as fallback coordination lock
+- **Jobs**: Leader coordination plus a durable unique run key; at-least-once
   invocation, idempotent effects, fencing/lease checks, and automatic failover
 
-### 8.5 Consumer (NATS)
-- **Separate Binary**: Deploys to different cluster
-- **Pull-based**: JetStream consumer groups
-- **Scaling**: Horizontal, independent of API tier
+### 8.5 Consumer (Dual-Broker Workers: Redpanda + NATS Core)
+- **Separate Binary**: `cmd/consumer` independently deployable and horizontally scalable
+- **Durable Stream Processing**: Redpanda v26.2 consumer groups (Kafka API) for Transactional Outbox relay, accounting replay, webhook dispatching, analytics, and audit log processing (ADR-014)
+- **Real-Time Edge Processing**: NATS Core v2.14.6 queue groups for ephemeral edge fanout, real-time push, and low-latency cache invalidation signals (ADR-014)
+- **DLQ & Poison Handling**: Max delivery limits with dead-letter queue routing and replay operations
 
 ---
 
@@ -902,23 +918,23 @@ volumes:
 # Extends docker-compose.yml - adds LGTM Stack
 services:
   prometheus:
-    image: prom/prometheus:v2.54
+    image: prom/prometheus:v3.14.0
     ports: ["9090:9090"]
     volumes: [./prometheus:/etc/prometheus, prom_data:/prometheus]
 
   grafana:
-    image: grafana/grafana:11.2
+    image: grafana/grafana:13.0.0
     ports: ["3000:3000"]
     environment: {GF_SECURITY_ADMIN_PASSWORD: admin}
     volumes: [grafana_data:/var/lib/grafana, ./grafana/dashboards:/etc/grafana/provisioning/dashboards]
 
   loki:
-    image: grafana/loki:3.1
+    image: grafana/loki:3.7.7
     ports: ["3100:3100"]
     volumes: [./loki:/etc/loki, loki_data:/loki]
 
   tempo:
-    image: grafana/tempo:2.5
+    image: grafana/tempo:2.9.4
     ports: ["3200:3200", "4317:4317", "9411:9411"]
     volumes: [./tempo:/etc/tempo, tempo_data:/tempo]
 
@@ -1183,9 +1199,11 @@ standalone 2025 Top 10 category: validate destinations, use allowlists, block
 link-local/private metadata targets, and constrain egress.
 
 ### 14.2 Data Protection
-- **Encryption at Rest**: Envelope encryption (DEK + KEK), KEK in Bitwarden/HSM
-- **Encryption in Transit**: TLS 1.3 everywhere (mTLS for service-to-service)
-- **PII Handling**: Field-level encryption, GDPR erasure workflow
+- **Encryption at Rest**: Envelope encryption (DEK + KEK), KEK in OpenBao Transit Secret Engine / HSM
+- **Field-Level Tokenization**: PCI DSS cardholder data tokenization via OpenBao Transit cryptographic engine (`POST /v1/transit/encrypt/fintech-ledger`)
+- **Encryption in Transit**: TLS 1.3 everywhere (mTLS for service-to-service, gRPC, and etcd peer traffic)
+- **PII Handling**: Field-level encryption, GDPR erasure workflow via cryptographic erasure (dropping tenant/account DEK)
+- **Dynamic DB Credentials**: OpenBao PostgreSQL database secrets engine with short-lived leases (1h) and automatic revocation
 - **Audit Logging**: Append-only, signed, tamper-evident
 
 PCI DSS controls apply only after the cardholder-data environment and service
@@ -1201,8 +1219,9 @@ so PAN and sensitive authentication data never enter the ledger service.
 |-------|-------|--------------|--------|
 | **1. Foundation** | go.mod, Makefile, config, kernel, DI, scripts, docker-compose | Buildable skeleton, dev environment | 📋 Planned |
 | **2. Domain Layer** | Entities, VOs, Aggregates, Events, Repositories, Specifications | Pure domain, executable specs | 📋 Planned |
-| **3. Infrastructure** | Postgres+GORM+Migrations, Cache (Ristretto+Valkey), Auth, NATS, Scheduler, FeatureFlags, Secrets, Resilience, Audit, Crypto, Observability | All adapters implemented | 📋 Planned |
+| **3. Infrastructure** | Postgres+GORM+Migrations, Cache (Otter+Valkey Cluster), Auth, Redpanda+NATS Core, Scheduler, FeatureFlags, OpenBao Secrets+Transit, etcd Coordination, Resilience, Audit, Crypto, Observability | All adapters implemented | 📋 Planned |
 | **4. Application Layer** | Commands, Queries, DTOs, Ports, Services, Workflows | CQRS use cases, orchestration | 📋 Planned |
+| **4.5 Distributed Persistence & HA** | Citus coordinator & distributed workers, Patroni DCS failover, CloudNativePG operator manifests, multi-node replication | Production distributed cluster & HA | 📋 Planned |
 | **5. Interface Layer** | REST (Echo), gRPC, GraphQL, Cron, Consumer | 5 binaries, WebSocket, HTTP/3 ready | 📋 Planned |
 | **6. Cross-Cutting** | Middleware, Error handling, Validation, Rate limit, Correlation ID, Health, Graceful shutdown | Production-ready concerns | 📋 Planned |
 | **7. Testing** | Unit, Integration (testcontainers), Performance (k6), Contract (Pact), Chaos | Test pyramid complete | 📋 Planned |
@@ -1243,6 +1262,13 @@ so PAN and sensitive authentication data never enter the ledger service.
 | Distributed trace sampling | Always / Probabilistic | Probabilistic (10%) |
 | Log sampling in prod | None / Tail / Adaptive | Tail (ERROR always, WARN sampled) |
 | Balance materialization | On-demand / immutable checkpoints / derived projection | Benchmark and owner approval required (ADR-011) |
+| Database sharding & scale-out | Citus / CockroachDB / Vitess | Citus 14.0 distributed tables partitioned by `tenant_id` / `account_id`, keeping standard PostgreSQL & GORM compatibility (ADR-013) |
+| Database High Availability | Patroni vs CloudNativePG | Dual deployment profiles: Patroni v4.1.5 + etcd for bare-metal/VMs; CloudNativePG v1.30.0 for Kubernetes (ADR-013) |
+| Messaging architecture | Single broker vs Dual broker | Dual broker: Redpanda v26.2 (Kafka API) for durable, audit-grade event stream; NATS Server v2.14.6 Core for low-latency WebSocket push (ADR-014) |
+| In-Memory L1 cache | Ristretto vs Otter vs BigCache | Otter v2.3.0 with adaptive W-TinyLFU eviction, zero-alloc Go generics, and per-key TTL (ADR-015) |
+| Secrets & Tokenization | Bitwarden vs OpenBao vs HashiCorp Vault | OpenBao v2.6.2 (MPL-2.0) with dynamic DB credentials and Transit Secret Engine for field-level encryption / tokenization (ADR-016) |
+| Distributed coordination | Consul vs etcd | etcd v3.7.0 for Patroni DCS, gRPC streaming configuration watchers, and distributed worker leader election (ADR-017) |
+| Database migrations & linting | golang-migrate vs Goose + Atlas | Pressly Goose v3 for embedded runtime + Ariga Atlas CLI for CI safety linting + 14-digit UTC timestamps (ADR-018) |
 
 ---
 
@@ -1256,7 +1282,15 @@ so PAN and sensitive authentication data never enter the ledger service.
 - **Go Best Practices**: Uber Go Style, Google Go Style
 - **OpenFeature**: https://openfeature.dev
 - **Unleash**: https://unleash.io
-- **Bitwarden Secrets**: https://bitwarden.com/products/secrets-manager
+- **OpenBao**: https://openbao.org
+- **Citus Data**: https://www.citusdata.com
+- **Patroni**: https://github.com/patroni/patroni
+- **CloudNativePG**: https://cloudnative-pg.io
+- **Redpanda**: https://redpanda.com
+- **NATS.io**: https://nats.io
+- **Otter Cache**: https://github.com/maypok86/otter
+- **etcd**: https://etcd.io
+- **Valkey**: https://valkey.io
 - **Testcontainers**: https://golang.testcontainers.org
 
 ---
@@ -1268,9 +1302,11 @@ so PAN and sensitive authentication data never enter the ledger service.
 | 1.0.0 | 2026-09-10 | Planning Agent | Initial specification |
 | 1.1.0 | 2026-09-11 | Codex audit | Added normative ledger correctness contract; corrected boundaries, persistence authority, posting model, and delivery semantics |
 | 1.1.1 | 2026-09-13 | Repository owner | Approved ledger-core precedence and ADR-002/003/009 decisions; recorded standalone `main` repository choice |
+| 1.2.0 | 2026-09-17 | Architecture Evolution | Pinned distributed Citus sharding, Patroni/CloudNativePG HA, Redpanda + NATS Core dual broker, Otter W-TinyLFU L1 cache, OpenBao secrets & Transit encryption, etcd distributed coordination |
 
 ---
 
 **Next Step**: Resolve blocking ADRs, then implement the vertical slice in
 `docs/repository-audit.md §8`. All implementation must follow the normative
 precedence in §1.4.
+

@@ -12,13 +12,13 @@ import (
 // NATSImage is the pinned NATS image for integration suites.
 const NATSImage = "nats:2.14.6"
 
-// NATSHandle is one isolated NATS JetStream container.
+// NATSHandle is one isolated NATS container (supports NATS Core edge fanout and JetStream).
 type NATSHandle struct {
 	container tc.Container
 	url       string
 }
 
-// StartNATS boots one isolated NATS server with JetStream enabled and waits
+// StartNATS boots one isolated NATS server (with JetStream enabled for compatibility) and waits
 // until it is ready. Cleanup is registered on t; Terminate is idempotent.
 func StartNATS(t *testing.T) (*NATSHandle, error) {
 	t.Helper()

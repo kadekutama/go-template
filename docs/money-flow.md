@@ -726,12 +726,12 @@ Break Detected
 │       ▼                                                         │
 │  ┌─────────┐    Miss     ┌─────────┐    Miss     ┌──────────┐  │
 │  │ L1:     │────────────▶│ L2:     │────────────▶│ PostgreSQL│ │
-│  │ Ristretto│             │ Valkey  │             │ (Source) │  │
-│  │ (Hot,    │             │ (Warm,  │             │          │  │
-│  │  ~100MB) │             │  10GB)  │             │          │  │
+│  │ Otter   │             │ Valkey  │             │ (Source) │  │
+│  │ (W-Tiny │             │ Cluster │             │          │  │
+│  │  ~100MB)│             │  10GB)  │             │          │  │
 │  └─────────┘             └─────────┘             └──────────┘  │
 │       │                     │                    │              │
-│       │ Hit (sub-ms)        │ Hit (~1ms)         │ ~5ms        │
+│       │ Hit (<50ns)         │ Hit (~1ms)         │ ~5ms        │
 │       └─────────────────────┴────────────────────┘              │
 │                                                                 │
 │  POST-COMMIT PROJECTION INVALIDATION (never write authority):   │

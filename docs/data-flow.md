@@ -46,12 +46,15 @@ graph TB
     end
 
     subgraph Infrastructure["Infrastructure Layer (Adapters)"]
-        PostgreSQL["PostgreSQL (GORM)"]
-        Valkey["Valkey (go-redis)"]
-        NATS["NATS JetStream"]
-        Bitwarden["Bitwarden Secrets"]
+        PostgreSQL["Citus Distributed PostgreSQL (GORM)"]
+        Otter["Otter L1 Cache (W-TinyLFU)"]
+        Valkey["Valkey L2 Cache Cluster"]
+        Redpanda["Redpanda (Kafka API Event Stream)"]
+        NATS["NATS Core (Real-Time Edge Push)"]
+        OpenBao["OpenBao (Dynamic Creds & Transit Tokenization)"]
+        etcd["etcd (Consensus DCS & Config Stream)"]
         OpenFeature["OpenFeature + Unleash"]
-        CrossCutting["Cross-Cutting\nOTel, log/slog, Prometheus, CircuitBreaker"]
+        CrossCutting["Cross-Cutting\nOTel, log/slog, Prometheus HA, CircuitBreaker"]
     end
 
     REST -->|HTTP/JSON| Echo
@@ -76,13 +79,17 @@ graph TB
     Echo -.->|RateLimiter port| RateLimitPort
 
     RepoPorts -.->|implemented by| PostgreSQL
-    CachePort -.->|implemented by| Valkey
+    CachePort -.->|L1 implemented by| Otter
+    CachePort -.->|L2 implemented by| Valkey
     RateLimitPort -.->|implemented by| Valkey
-    AppServices -.->|EventPublisher port implemented by| NATS
-    AppServices -.->|SecretManager port implemented by| Bitwarden
+    AppServices -.->|EventPublisher port implemented by| Redpanda
+    AppServices -.->|RealTimeNotifier port implemented by| NATS
+    AppServices -.->|SecretManager & TransitCrypto implemented by| OpenBao
+    AppServices -.->|ConfigWatcher & Coordinator implemented by| etcd
     AppServices -.->|FlagClient port implemented by| OpenFeature
     CrossCutting --> PostgreSQL
     CrossCutting --> Valkey
+    CrossCutting --> Redpanda
     CrossCutting --> NATS
 ```
 
@@ -210,7 +217,7 @@ at the interface boundary
 ```
 Query Handler (e.g., GetAccountHandler)
      │
-     │ 1. Check Cache (Hybrid: Ristretto → Valkey → PostgreSQL)
+     │ 1. Check Cache (Hybrid: Otter L1 → Valkey L2 → PostgreSQL/Citus)
      ▼
      │ 2. If cache miss: Load via Repository Port
      ▼
@@ -308,32 +315,30 @@ func (r *postgresAccountRepository) FindByID(ctx context.Context, id AccountID) 
 ```
 GetAccountBalance(accountID)
 ────────────────────────────
-1. L1 (Ristretto): GET balance:{tenantID}:{accountID}:{assetCode}:{cursor}
-   ├─▶ HIT: Return cached balance (sub-ms)
+1. L1 (Otter W-TinyLFU): GET balance:{tenantID}:{accountID}:{assetCode}:{cursor}
+   ├─▶ HIT: Return cached balance (<50ns)
    └─▶ MISS: Continue
 
 2. L2 (Valkey): GET balance:{tenantID}:{accountID}:{assetCode}:{cursor}
-   ├─▶ HIT: Set L1, Return balance (~1ms)
+   ├─▶ HIT: Set L1 (Otter per-key TTL), Return balance (~1ms)
    └─▶ MISS: Continue
 
-3. PostgreSQL: SELECT checkpoint + deltas + active holds at requested cursor
+3. PostgreSQL / Citus: SELECT checkpoint + deltas + active holds at requested cursor
    ├─▶ Set L2 (TTL 5min)
-   ├─▶ Set L1 (TTL 1min)
+   ├─▶ Set L1 (Otter TTL 1min)
    └─▶ Return balance (~5ms)
 
 PostLedgerPosting(posting)
 ──────────────────────────
-1. PostgreSQL: COMMIT posting + new immutable/monotonic checkpoint
+1. PostgreSQL / Citus: COMMIT posting + new immutable/monotonic checkpoint
 2. Valkey: bump the balance namespace/version for tenant/account/asset (or
    delete the known cursor keys); never rely on an unsupported wildcard delete
-3. Ristretto: bump the same namespace/version and evict known hot keys (L1
-   invalidation is best-effort because it is only a projection)
-4. Pub/Sub: Notify other instances (optional)
-```
+3. Otter: evict key synchronously via W-TinyLFU cache and bump version
+4. Pub/Sub: Invalidation channel notifies peer pod Otter caches
 
 ---
 
-### 2.5 Event Publishing Flow (NATS JetStream)
+### 2.5 Event Publishing Flow (Redpanda + NATS Core)
 
 ```
 Domain Event Created
@@ -357,25 +362,33 @@ Domain Event Dispatcher (in Application Layer)
      │    - correlation_id
      │
      ▼
-NATS JetStream Publisher
+Transactional Outbox Poller → Redpanda Producer (Kafka API)
      │
-     ├─▶ Subject: "ledger.{tenant}.account.created.v1"
+     ├─▶ Topic: "ledger.events.v1"
+     │
+     ├─▶ Partition Key: "{tenant_id}:{account_id}" (guarantees per-account ordering)
      │
      ├─▶ Headers:
-     │    Nats-Msg-Id: "evt_abc123"  (deduplication)
+     │    kafka_messageId: "evt_abc123"  (deduplication)
      │    Content-Type: application/json
      │    X-Trace-ID: "trace_123"
      │
      ▼
-Stream: ACCOUNT_EVENTS (Retention: 7 days, MaxMsgs: 10M)
+Redpanda 3-Node Raft Cluster (Retention: 30 days durable log)
      │
-     ├─▶ Consumer: Webhook Dispatcher (pull, ack)
-     ├─▶ Consumer: Analytics Pipeline (pull, ack)
-     ├─▶ Consumer: Audit Logger (pull, ack)
-     └─▶ Consumer: Notification Service (pull, ack)
+     ├─▶ Consumer Group: Webhook Dispatcher (pull, committed offset)
+     ├─▶ Consumer Group: Analytics Pipeline (pull, committed offset)
+     ├─▶ Consumer Group: Audit & Compliance Archiver (pull, committed offset)
+     └─▶ Consumer Group: Real-Time Fanout Bridge
+               │
+               ▼
+         NATS Core Mesh (In-Memory Pub/Sub)
+               │
+               ├─▶ Subject: "updates.tenant.{tenant_id}.account.{account_id}.balance"
+               └─▶ Sub-millisecond Fanout: Merchant WebSockets, Mobile App Push
 ```
 
-**Event Subject Naming Convention:**
+**Event Topic and Subject Naming Convention:**
 ```
 ledger.{tenant}.{event_type}
 ────────────────────────────
@@ -498,9 +511,13 @@ balance:ten_123:acc_789
 idempotency:ten_123:abc-123
 ratelimit:ten_123:usr_456
 
-// NATS Subjects (tenant-scoped consumers)
-ledger.ten_123.account.created.v1
-ledger.ten_123.transaction.posted.v1
+// Redpanda Topics & NATS Core Subjects (tenant-scoped)
+// Redpanda durable event stream:
+ledger.events.v1
+money-movement.transfers.v1
+// NATS Core real-time fanout subjects:
+updates.tenant.ten_123.account.acc_789.balance
+alerts.tenant.ten_123.fraud
 ```
 
 ### 3.3 Distributed Tracing (OpenTelemetry)
@@ -511,10 +528,11 @@ Trace: "req_abc123"
 │  ├─ Span: Validation
 │  ├─ Span: CreateAccountCommandHandler
 │  │  ├─ Span: AccountRepository.Find/Create
-│  │  │  └─ Span: PostgreSQL INSERT
+│  │  │  └─ Span: Citus/PostgreSQL INSERT
 │  │  ├─ Span: Domain Event Creation
-│  │  └─ Span: NATS Publish
-│  │     └─ Span: JetStream Ack
+│  │  └─ Span: Outbox Insert (atomic with account TX)
+│  │     └─ Span: Outbox Poller → Redpanda Produce Ack
+│  │        └─ Span: NATS Core Fanout Broadcast
 │  └─ Span: Response Serialization
 └─ Span: HTTP Response
 ```
@@ -533,17 +551,17 @@ Interface Layer (REST/gRPC/GraphQL)
       │ Bind + Validate DTO
       ▼
 Application Layer (Command Handler)
-      │ Durable idempotency reserve/fingerprint (PostgreSQL)
-      │ Load Aggregates (Repo → Cache → DB)
+      │ Durable idempotency reserve/fingerprint (PostgreSQL/Citus)
+      │ Load Aggregates (Repo → Otter L1 → Valkey L2 → DB)
       ▼
 Domain Layer (Aggregate + Specifications)
       │ Business Logic + Invariant Validation
       │ Generate Domain Events
       ▼
 Infrastructure Layer (Repository + Event Publisher)
-      │ PostgreSQL: Posting + entries + checkpoints + idempotency + outbox
-      │ Valkey: Invalidate Cache
-      │ Outbox: publish domain events after commit, at least once
+      │ PostgreSQL/Citus: Posting + entries + checkpoints + idempotency + outbox
+      │ Valkey: Invalidate Cache (pub/sub invalidation bus clears peer Otter L1)
+      │ Outbox: publish domain events to Redpanda after commit, at least once
       ▼
 Response to Client
 ```
@@ -560,7 +578,7 @@ Interface Layer
       ▼
 Application Layer (Query Handler)
       │
-      ├─▶ Hybrid Cache: Ristretto → Valkey → PostgreSQL
+      ├─▶ Hybrid Cache: Otter L1 → Valkey L2 → Citus PostgreSQL
       │
       └─▶ If cache miss: Repository → Domain → DTO → Cache
       ▼
@@ -568,8 +586,8 @@ Response to Client
 ```
 
 **Cache Strategy:**
-| Data Type | L1 (Ristretto) | L2 (Valkey) | Invalidation |
-|-----------|----------------|-------------|--------------|
+| Data Type | L1 (Otter W-TinyLFU) | L2 (Valkey Cluster) | Invalidation |
+|-----------|--------------------|---------------------|--------------|
 | Account Balance | 1 min | 5 min | On write; key includes tenant/account/asset/cursor |
 | Account Config | 5 min | 30 min | On update |
 | Tenant Config | 10 min | 1 hour | On update |
@@ -580,10 +598,10 @@ Response to Client
 ### 4.3 Async Event Processing
 
 ```
-NATS JetStream Message Received
+Redpanda Partition Message Received (Consumer Group)
       │
       ▼
-Consumer (e.g., Webhook Dispatcher)
+Consumer (e.g., Webhook Dispatcher / Real-Time Bridge)
       │
       ├─▶ Deserialize Event
       │
@@ -591,11 +609,11 @@ Consumer (e.g., Webhook Dispatcher)
       │
       ├─▶ Transform Payload and perform handler effects in the same transaction
       │
-      ├─▶ Commit inbox claim + handler effects, then Ack Message
+      ├─▶ Commit inbox claim + handler effects, then Commit Kafka Offset
       │
       └─▶ On Failure: 
            ├─▶ Retry (exponential backoff, max 5)
-           ├─▶ Dead Letter Queue (after max retries)
+           ├─▶ Dead Letter Queue topic (after max retries)
            └─▶ Alert on DLQ
 ```
 
@@ -778,12 +796,13 @@ records are separate from this core schema.
 
 | Operation | Consistency Level | Mechanism |
 |-----------|-------------------|-----------|
-| **Transaction Post** | Strong (ACID) | Single PostgreSQL transaction |
+| **Transaction Post** | Strong (ACID) | Single PostgreSQL/Citus transaction (co-located by tenant_id) |
 | **Balance Read (decision/read-after-write)** | Strong | Primary checkpoint + deltas + durable holds at cursor |
-| **Balance Read (display/cache)** | Bounded stale | Hybrid cache/replica; response exposes cursor/as-of |
-| **Cross-Account Transfer** | Strong | SELECT FOR UPDATE + Single TX |
-| **Event Publishing** | At-least-once | NATS JetStream ack + deduplication |
-| **Webhook Delivery** | At-least-once | Retry + DLQ + idempotency keys |
+| **Balance Read (display/cache)** | Bounded stale | Hybrid cache (Otter L1 + Valkey L2); response exposes cursor/as-of |
+| **Cross-Account Transfer** | Strong | SELECT FOR UPDATE + Single TX (co-located tenant shards) |
+| **Event Publishing** | At-least-once | Outbox poller → Redpanda producer ack + partition key |
+| **Edge Real-Time Fanout** | Best-effort / Ephemeral | NATS Core in-memory publish to active WebSocket subscribers |
+| **Webhook Delivery** | At-least-once | Redpanda consumer retry + DLQ + idempotency keys |
 | **Reconciliation** | Eventual | Daily batch, break resolution workflow |
 
 ---
@@ -792,10 +811,10 @@ records are separate from this core schema.
 
 | Data Type | Hot Storage | Warm Storage | Cold Storage | Retention |
 |-----------|-------------|--------------|--------------|-----------|
-| **Transactions** | 2 years (PostgreSQL) | 5 years (Partitioned) | 7 years (S3/Glacier) | 7 years |
+| **Transactions** | 2 years (Citus/PostgreSQL) | 5 years (Partitioned shards) | 7 years (S3/Glacier) | 7 years |
 | **Entries** | 2 years | 5 years | 7 years | 7 years |
-| **Domain Events** | 30 days (NATS) | 1 year (PostgreSQL) | 7 years (S3) | 7 years |
-| **Audit Logs** | 1 year (Loki) | 7 years (S3) | Indefinite | Indefinite |
+| **Domain Events** | 30 days (Redpanda log) | 1 year (PostgreSQL outbox archive) | 7 years (S3 Parquet) | 7 years |
+| **Audit Logs** | 1 year (Loki HA) | 7 years (S3) | Indefinite | Indefinite |
 | **Reconciliation** | 2 years | 7 years | 7 years | 7 years |
 | **FX Rates** | 1 year | 7 years | 7 years | 7 years |
 
@@ -806,11 +825,14 @@ records are separate from this core schema.
 | Flow | Encryption | Integrity | Access Control |
 |------|------------|-----------|----------------|
 | **Client → API** | TLS 1.3 | JWT Signature | JWT + Casbin |
-| **API → PostgreSQL** | TLS (if remote) | N/A | Role-based (app user) |
-| **API → Valkey** | TLS (if remote) | N/A | ACL user |
-| **API → NATS** | TLS | N/A | NKey/JWT |
+| **API → Citus / PostgreSQL** | TLS 1.3 | Dynamic DB user lease (OpenBao) | Role-based (`app_user` DML only) |
+| **API → Valkey** | TLS 1.3 | ACL password | ACL user |
+| **API → Redpanda** | TLS 1.3 | SASL/SCRAM | Topic ACLs |
+| **API → NATS Core** | TLS 1.3 | NKey / User credentials | Subject-based permissions |
+| **API → OpenBao** | mTLS / TLS 1.3 | AppRole / Token auth | Policy-based secret access |
+| **API → etcd** | mTLS | Client cert | Role-based RBAC |
 | **Event → Webhook** | TLS 1.3 | HMAC-SHA256 | Webhook Secret |
-| **Inter-Service** | mTLS | N/A | SPIFFE/SPIRE |
+| **Inter-Service** | mTLS | SPIFFE/SPIRE | Service identity |
 
 ---
 

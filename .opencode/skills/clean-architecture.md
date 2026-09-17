@@ -40,14 +40,14 @@ Infrastructure Layer ──────────────┘
 
 ### Infrastructure Layer
 - **Adapters** - Implement domain/application interfaces
-- **Database**: GORM repositories, Migrations
-- **Cache**: Ristretto, Valkey, Hybrid
-- **Messaging**: NATS Publisher/Consumer
+- **Database**: Citus Distributed PostgreSQL, GORM repositories, Migrations
+- **Cache**: Otter (L1 Adaptive W-TinyLFU), Valkey (L2 Cluster), Hybrid
+- **Messaging**: Redpanda (Kafka API Event Stream) & NATS Core (Edge Push)
 - **Auth**: JWT, OAuth2, RBAC, API Keys
-- **Config**: koanf loading, validation
-- **Observability**: OTel, `log/slog`, Prometheus
+- **Config**: koanf loading, validation, etcd live streaming
+- **Observability**: OTel, zerolog, Prometheus HA, Grafana HA, Loki HA, Tempo
 - **Resilience**: Circuit Breaker, Retry
-- **Secrets**: Bitwarden SDK
+- **Secrets & Crypto**: OpenBao (Dynamic DB creds & Transit encryption)
 - **Feature Flags**: OpenFeature + Unleash
 
 ### Interface Layer (Delivery)
@@ -55,8 +55,8 @@ Infrastructure Layer ──────────────┘
   - `rest-api` - Echo HTTP server
   - `grpc-api` - gRPC server
   - `graphql-api` - gqlgen server
-  - `cron` - Distributed scheduler
-  - `consumer` - NATS consumers (separate cluster)
+  - `cron` - Distributed scheduler (etcd leader election)
+  - `consumer` - Redpanda & NATS consumers (separate cluster)
 - **Protocol Adapters** - Translate protocol → Application commands/queries
 - Private handlers live in `internal/interface/{rest,grpc,cron,consumer}`;
   reusable transport/server primitives live in `pkg/`.

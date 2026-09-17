@@ -16,6 +16,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | E05 | Tenancy domain | 11 | 11/11 | completed | G2 |
 | E06 | Application layer | 40 | 40/40 | completed | G3 |
 | E07 | Persistence adapters | 34 | 34/34 | completed | G4 |
+| E07.1 | Distributed persistence (Citus, Patroni, CloudNativePG, etcd) | 19 | 0/19 | pending | G4 |
 | E08 | Cache + messaging adapters | 24 | 0/24 | pending | G4 |
 | E09 | Identity + security adapters | 22 | 0/22 | pending | G4 |
 | E10 | Platform integrations | 17 | 0/17 | pending | G4 |
@@ -29,7 +30,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | E18 | Docs + DX | 16 | 0/16 | pending | G8 |
 | E19 | Hardening + release | 13 | 0/13 | pending | G8 |
 
-**Total:** 199/432 SP completed.
+**Total:** 199/451 SP completed.
 
 ## Task checklists (tick as epic files flip to completed)
 
@@ -118,10 +119,17 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 - [x] E07-T09 shared Testcontainers harness + fixtures
 - [x] E07-T10 workflow/tenancy/reconciliation schema
 
+### E07.1 — Distributed persistence
+- [ ] E07.1-T01 Migration framework evolution (Goose v3 + Atlas) & Citus distribution
+- [ ] E07.1-T02 Multi-Node Citus + Patroni + etcd HA cluster topology
+- [ ] E07.1-T03 CloudNativePG (CNPG) Kubernetes deployment manifests
+- [ ] E07.1-T04 etcd coordination adapter (dynamic config + worker election)
+- [ ] E07.1-T05 Multi-node Citus integration test suite
+
 ### E08 — Cache + messaging
-- [ ] E08-T01 hybrid cache
+- [ ] E08-T01 Otter L1 + Valkey L2 hybrid cache
 - [ ] E08-T02 Redlock
-- [ ] E08-T03 NATS topology
+- [ ] E08-T03 Redpanda + NATS Core topology
 - [ ] E08-T04 publisher + idempotent consumer
 - [ ] E08-T05 webhook dispatcher
 - [ ] E08-T06 integration tests (G4 slice)
@@ -132,7 +140,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 - [ ] E09-T02 OAuth2/OIDC
 - [ ] E09-T03 Casbin
 - [ ] E09-T04 API keys
-- [ ] E09-T05 Bitwarden
+- [ ] E09-T05 OpenBao
 - [ ] E09-T06 envelope crypto + PII
 - [ ] E09-T07 audit logger
 

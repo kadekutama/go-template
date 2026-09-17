@@ -30,14 +30,15 @@ tasks/
 │   ├── E05-tenancy.md             # Tenant aggregate, hierarchies, RLS, onboarding, residency
 │   ├── E06-application.md         # Commands, queries, ports, sagas
 │   ├── E07-persistence.md         # Postgres/GORM, migrations, RLS, seed, outbox
-│   ├── E08-cache-messaging.md     # Ristretto, hybrid cache, NATS, webhook dispatcher
-│   ├── E09-identity-security.md   # JWT, OAuth2, Casbin, API keys, Bitwarden, crypto, audit
+│   ├── E07.1-distributed-persistence.md # Citus 14.0 sharding, Patroni/CNPG HA, multi-node replication failover
+│   ├── E08-cache-messaging.md     # Otter L1, Valkey Cluster L2, Redpanda, NATS Core, webhook dispatcher
+│   ├── E09-identity-security.md   # JWT, OAuth2, Casbin, API keys, OpenBao secrets/Transit, crypto, audit
 │   ├── E10-integrations.md        # Unleash, FX provider, payment processor, statements, SMTP
 │   ├── E11-rest-api.md            # Echo server, middleware, all §7 endpoints, OpenAPI
 │   ├── E12-grpc-api.md            # Proto, server, interceptors, gateway
 │   ├── E13-graphql-api.md         # Schema, resolvers, DataLoader, subscriptions
-│   ├── E14-workers.md             # Cron binary + 8 jobs, consumer binary + 4 groups
-│   ├── E15-observability.md       # OTel, Prometheus/alerts, Loki, panic recovery, HTTP/3, limits
+│   ├── E14-workers.md             # Cron binary (etcd election) + 8 jobs, consumer binary + 4 groups
+│   ├── E15-observability.md       # OTel, Prometheus HA, Grafana HA, Loki HA, panic recovery, HTTP/3, limits
 │   ├── E16-verification.md        # Shared harness, contract, k6, litmus, coverage gates
 │   ├── E17-delivery.md            # CI/CD, Dockerfiles, compose, K8s, ArgoCD
 │   ├── E18-docs-dx.md             # ADRs, layer docs, API docs, runbooks, SDKs, sandbox

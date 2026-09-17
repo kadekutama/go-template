@@ -19,7 +19,7 @@
 **Status:** completed
 **Background:** All later code compiles against these exact versions
 (Go 1.27.1, fx v1.24.0, Echo v5.3.1, GORM v1.31.2, go-redis v9.22.0,
-OTel v1.26.0, and the codec wrapper policy). Version drift is the top cause of
+OTel v1.46.0, and the codec wrapper policy). Version drift is the top cause of
 "works on my machine" failures.
 **Files:**
 - Modify: `go.mod`, `go.sum`
@@ -126,7 +126,7 @@ Middleware in E11/E12/E13 consumes the `Tracer` port defined here.
 - [ ] Misconfigured endpoint fails fast with a clear error (no silent no-op in prod config).
 **Story Points:** 2
 **Depends On:** E01-T02
-**Related Docs:** `SPEC.md §7.9`, `SPEC.md §2` (OTel v1.26.0)
+**Related Docs:** `SPEC.md §7.9`, `SPEC.md §2` (OTel v1.46.0)
 **SDD Gate:** G1
 
 ---

@@ -37,7 +37,7 @@ sequenceDiagram
     participant API as REST API
     participant Ledger as Ledger Service
     participant Valkey as Valkey Cache
-    participant NATS as NATS JetStream
+    participant Redpanda as Redpanda (Kafka API)
     participant Webhook as Webhook Dispatcher
 
     Merchant->>Platform: Sign up for platform
@@ -52,8 +52,8 @@ sequenceDiagram
     API->>Ledger: CreateAccountCommand
     Ledger->>Ledger: Validate asset registry + chart/account purpose
     Ledger->>PostgreSQL: INSERT account (chart-selected class, USD)
-    Ledger->>NATS: Outbox publisher delivers AccountCreated (at least once)
-    NATS-->>Webhook: Deliver to merchant webhook
+    Ledger->>Redpanda: Outbox relay delivers AccountCreated (at least once)
+    Redpanda-->>Webhook: Deliver to merchant webhook
     API-->>Merchant: 201 Created {account_id, account_number}
 
     Merchant->>API: POST /payment-intents (create payment)
@@ -96,7 +96,7 @@ sequenceDiagram
     participant API as REST API
     participant Ledger as Transfer Service
     participant PostgreSQL as PostgreSQL
-    participant NATS as NATS JetStream
+    participant Redpanda as Redpanda (Kafka API)
 
     FinanceTeam->>API: POST /transfers {from_account_id, to_account_id, amount_minor, currency, idempotency_key}
     API->>Ledger: TransferCommand
@@ -113,7 +113,7 @@ sequenceDiagram
         Ledger->>PostgreSQL: INSERT entries (DR source liability, CR destination liability)
         Ledger->>PostgreSQL: INSERT checkpoints + outbox + stored response
         Ledger->>PostgreSQL: COMMIT
-        Ledger->>NATS: Outbox publisher delivers TransactionPosted
+        Ledger->>Redpanda: Outbox relay delivers TransactionPosted
         API-->>FinanceTeam: 201 Created {transfer_id, transaction_id}
     else Same key, different request hash
         API-->>FinanceTeam: 409 Conflict {error: "IDEMPOTENCY_CONFLICT"}
@@ -132,12 +132,12 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant Cron as Cron Scheduler (gocron)
+    participant Cron as Cron Scheduler (gocron + etcd)
     participant Ledger as Reconciliation Workflow
     participant PostgreSQL as PostgreSQL
     participant Valkey as Valkey
     participant BankAPI as Bank API (SFTP/API)
-    participant NATS as NATS JetStream
+    participant Redpanda as Redpanda (Kafka API)
     participant Alert as Alerting (PagerDuty)
 
     Cron->>Ledger: Trigger DailyReconciliationWorkflow (02:00 UTC)
@@ -184,7 +184,7 @@ sequenceDiagram
     participant Ledger as Refund Service
     participant PP as Payment Processor
     participant PG as PostgreSQL
-    participant NATS as NATS JetStream
+    participant Redpanda as Redpanda (Kafka API)
     participant Webhook as Merchant Webhook
 
     Customer->>Merchant: Requests refund
@@ -196,15 +196,15 @@ sequenceDiagram
     Note over Ledger: RefundWindowNotExpired (90 days)
     Note over Ledger: AccountActive
     Ledger->>PP: Initiate refund (async)
-    PP-->>NATS: RefundSucceeded
-    NATS->>Ledger: HandleRefundSucceeded
+    PP-->>Redpanda: RefundSucceeded
+    Redpanda->>Ledger: HandleRefundSucceeded
     Ledger->>PG: BEGIN
     Ledger->>PG: INSERT immutable reversal posting (linked to original)
     Ledger->>PG: INSERT entries (DR merchant payable, CR refunds payable)
     Ledger->>PG: INSERT balance checkpoint + outbox
     Ledger->>PG: COMMIT
-    Ledger->>NATS: Outbox publisher delivers TransactionPosted (type=REVERSAL)
-    NATS-->>Webhook: refund.succeeded
+    Ledger->>Redpanda: Outbox relay delivers TransactionPosted (type=REVERSAL)
+    Redpanda-->>Webhook: refund.succeeded
     API-->>Merchant: 201 Created {refund_id, SUCCEEDED}
 ```
 
@@ -254,7 +254,7 @@ sequenceDiagram
     participant API as REST API
     participant Ledger as Period Close Workflow
     participant PostgreSQL as PostgreSQL
-    participant NATS as NATS JetStream
+    participant Redpanda as Redpanda (Kafka API)
     participant ReportGen as Report Generator
 
     FinanceTeam->>API: POST /periods/{period_id}/close
@@ -268,8 +268,8 @@ sequenceDiagram
     Ledger->>PostgreSQL: UPDATE period SET status=CLOSED, closed_at=NOW()
     Ledger->>PostgreSQL: INSERT closing_entries (income summary → retained earnings)
     Ledger->>PostgreSQL: COMMIT
-    Ledger->>NATS: Publish PeriodClosed
-    NATS->>ReportGen: Generate period-end reports
+    Ledger->>Redpanda: Outbox relay delivers PeriodClosed
+    Redpanda->>ReportGen: Generate period-end reports
     ReportGen->>PostgreSQL: STORE reports (BalanceSheet, P&L, TrialBalance)
     API-->>FinanceTeam: 200 OK {period_id, status: CLOSED, reports: [...]}
 ```
@@ -290,22 +290,22 @@ sequenceDiagram
     participant API as REST API
     participant Ledger as Dispute Service
     participant PG as PostgreSQL
-    participant NATS as NATS JetStream
+    participant Redpanda as Redpanda (Kafka API)
     participant Merchant as Merchant
 
     Network->>API: dispute.opened notification
     API->>Ledger: OpenDisputeCommand
     Ledger->>PG: Create durable hold (no entry) + post dispute fee template
-    Ledger->>NATS: Publish dispute.opened
-    NATS-->>Merchant: Alert + evidence deadline
+    Ledger->>Redpanda: Outbox relay delivers dispute.opened
+    Redpanda-->>Merchant: Alert + evidence deadline
     Merchant->>API: POST /disputes/{id}/evidence
     API->>Ledger: SubmitEvidenceCommand
     alt Evidence wins
         Ledger->>PG: Release hold + reverse fee
-        Ledger->>NATS: Publish dispute.closed (WON)
+        Ledger->>Redpanda: Outbox relay delivers dispute.closed (WON)
     else Evidence loses or deadline passes
         Ledger->>PG: Convert hold to reversal entries
-        Ledger->>NATS: Publish dispute.closed (LOST)
+        Ledger->>Redpanda: Outbox relay delivers dispute.closed (LOST)
     end
     API-->>Merchant: 200 OK {dispute_id, outcome}
 ```

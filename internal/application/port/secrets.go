@@ -19,7 +19,7 @@ type Secret struct {
 	ExpiresAt time.Time
 }
 
-// SecretStore is the secrets boundary (Bitwarden in E09). Reads are strongly
+// SecretStore is the secrets boundary (OpenBao in E09; ADR-016). Reads are strongly
 // consistent; misses are caller errors, never silent empty values; rotation
 // is transparent to callers behind the name.
 type SecretStore interface {

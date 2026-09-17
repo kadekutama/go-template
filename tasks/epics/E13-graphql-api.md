@@ -3,7 +3,7 @@
 **Status:** pending
 **Story Points:** 18
 **Phase:** 6 (parallel with E11, E12, E14)
-**Dependencies:** E07, E08, E09, E10
+**Dependencies:** E07.1, E08, E09, E10
 **SDD Gate:** G5
 **Design refs:** `SPEC.md §8.3`, `docs/api-contracts.md §9` (schema, subscriptions),
 `docs/fintech-ledger-features.md §7.3, §8`
@@ -29,7 +29,7 @@ fields per the parity rule.
 - [ ] `execute_at`/`recurrence`/batch inputs present (review vs api-contracts §7.5).
 - [ ] Introspection matches committed schema file (test).
 **Story Points:** 4
-**Depends On:** E06-T06
+**Depends On:** E06-T06, E07.1-T01
 **Related Docs:** `SPEC.md §8.3`, `SPEC.md §2` (gqlgen v0.17.94), `docs/api-contracts.md §9`
 **SDD Gate:** G5
 

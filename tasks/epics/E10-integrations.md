@@ -2,8 +2,8 @@
 
 **Status:** pending
 **Story Points:** 17
-**Phase:** 5 (parallel with E07, E08, E09)
-**Dependencies:** E06 (ports)
+**Phase:** 5.2 (parallel with E08, E09)
+**Dependencies:** E06 (ports), E07.1 (distributed persistence)
 **SDD Gate:** G4
 **Design refs:** `SPEC.md §7.6`, `docs/money-flow.md §2.1, §5–§6`,
 `docs/user-journeys.md §2.3`, `docs/fintech-ledger-features.md §3.2, §9, §12`
@@ -30,7 +30,7 @@
 - [ ] Flag flip changes behavior without restart (integration test with Unleash container).
 - [ ] Unleash down → fallback provider serves last-known/defaults (test).
 **Story Points:** 3
-**Depends On:** E06-T12, E01-T08
+**Depends On:** E06-T12, E01-T08, E07.1-T01
 **Related Docs:** `SPEC.md §7.6`, `SPEC.md §2` (OpenFeature v1.17.2, Unleash v6.5.1), `SPEC.md §12.2`
 **SDD Gate:** G4
 
@@ -51,7 +51,7 @@
 - [ ] Stale-rate path tested (frozen clock + expired TTL).
 - [ ] Provider outage → breaker opens → last-known+stale served (test).
 **Story Points:** 3
-**Depends On:** E06-T12, E03-T05, E01-T08
+**Depends On:** E06-T12, E03-T05, E01-T08, E07.1-T01
 **Related Docs:** `docs/money-flow.md §2.7, §7`, `docs/fintech-ledger-features.md §9`, `tasks/epics/E03-money-movement.md#E03-T05`
 **SDD Gate:** G4
 
@@ -77,7 +77,7 @@ E06/E11 never touch vendor SDKs directly (money-flow §5 timelines).
 - [ ] Settlement-lag table matches money-flow §5 per method (test).
 - [ ] Challenge-required outcome yields `requires_action` (not success/failure); decline yields `decline_code` (tests).
 **Story Points:** 4
-**Depends On:** E06-T12, E03-T06, E01-T08
+**Depends On:** E06-T12, E03-T06, E01-T08, E07.1-T01
 **Related Docs:** `docs/money-flow.md §2.1, §5`, `docs/fintech-ledger-features.md §3.2`, `SPEC.md §14`
 **SDD Gate:** G4
 
@@ -98,7 +98,7 @@ E06/E11 never touch vendor SDKs directly (money-flow §5 timelines).
 - [ ] Golden-file tests for all three formats incl. edge cases.
 - [ ] Malformed lines collected as errors, never silently dropped (test).
 **Story Points:** 3
-**Depends On:** E04-T01, E06-T12
+**Depends On:** E04-T01, E06-T12, E07.1-T01
 **Related Docs:** `docs/user-journeys.md §2.3`, `docs/money-flow.md §6`, `tasks/epics/E04-compliance.md#E04-T01`
 **SDD Gate:** G4
 
@@ -117,7 +117,7 @@ E06/E11 never touch vendor SDKs directly (money-flow §5 timelines).
 - [ ] Notification content test via maildev API in integration suite.
 - [ ] No real sends in dev/test (guard test).
 **Story Points:** 2
-**Depends On:** E06-T12, E01-T08
+**Depends On:** E06-T12, E01-T08, E07.1-T01
 **Related Docs:** `SPEC.md §12.1`, `docs/user-journeys.md §2.3` (alerts)
 **SDD Gate:** G4
 

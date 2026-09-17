@@ -54,12 +54,12 @@ The **Specification pattern** refers only to executable domain business rules.
 
 ### 3. Database Engineer (`db-engineer`)
 - **Focus**: `internal/infrastructure/database/`, `internal/infrastructure/cache/`
-- **Tasks**: PostgreSQL (GORM), Migrations (golang-migrate), Valkey, Ristretto, Hybrid Cache
-- **Rules**:
+- **Tasks**: PostgreSQL & Citus 14.0 (GORM), Migrations (Goose v3 + Atlas), Valkey Cluster, Otter L1 Cache, Hybrid Cache
+- **Rules**: 
   - Repository interfaces in domain, implementations in infrastructure
   - Migrations embedded, Up/Down reversible
   - Connection pooling configured
-  - Cache-aside pattern with L1/L2 (Ristretto → Valkey)
+  - Cache-aside pattern with L1/L2 (Otter W-TinyLFU → Valkey Cluster)
 
 ### 4. DevOps Engineer (`devops-engineer`)
 - **Focus**: `deployments/`, `.github/workflows/`, `scripts/`, Docker, K8s
@@ -108,11 +108,11 @@ The audit and open risks are recorded in `docs/repository-audit.md`.
 - **Linting**: `golangci-lint` strict mode (`.golangci.yml`)
 - **Formatting**: `gofmt` / `goimports`
 - **Dependencies**: Reproducible target pins in `SPEC.md`; verify/update through Renovate/Dependabot and evidence
-- **Go idioms**: Follow [`docs/development/go-conventions.md`](docs/development/go-conventions.md); new structured logging uses `log/slog`
+- **Go idioms**: Follow [`docs/development/go-conventions.md`](docs/development/go-conventions.md); structured logging uses `rs/zerolog` (ADR-012)
 - **JSON**: import the repository's `pkg/jsonparser` wrapper; it is
   encoding/json-compatible and may use Sonic only when benchmark evidence
   justifies it (never import jsoniter or a codec directly from domain code)
-- **Cache**: Valkey 9.0.6 (OSS fork of Redis) instead of Redis
+- **Cache**: Valkey 9.1.2 (OSS fork of Redis) instead of Redis
 - **SMTP Testing**: maildev instead of MailHog
 
 ### Architecture Compliance
@@ -408,10 +408,10 @@ No task claim may be released (`Status: released`) and no work may be considered
      ```
      This script automatically:
      1. Checks and installs `pixi` (`https://pixi.sh/install.sh`) if absent.
-     2. Installs core toolchains via Pixi (`go`, `clang`, `clangxx`, `make`, `shellcheck`, `docker-cli`, `docker-compose`, `kubernetes-client`, `k6`, `syft`).
+     2. Installs core toolchains via Pixi (`go`, `clang`, `clangxx`, `make`, `shellcheck`, `docker-cli`, `docker-compose`, `kubernetes-client`, `k6`, `syft`, `atlasgo`).
      3. Configures CGO persistently (`go env -w CGO_ENABLED=1 CC=clang`).
      4. Downloads and verifies Go modules (`go mod download && go mod verify`).
-     5. Installs Go developer tools (`goimports`, `golangci-lint` v2.13.2, `govulncheck`, `gosec`, `go-licenses`, `mockery`, `buf`, `oapi-codegen`, `air`, `migrate`) and links them into `~/.pixi/bin`.
+     5. Installs Go developer tools (`goimports`, `golangci-lint` v2.13.2, `govulncheck`, `gosec`, `go-licenses`, `mockery`, `buf`, `oapi-codegen`, `air`, `goose`) and links them into `~/.pixi/bin`.
 2. **Formatting**:
    - Run `gofmt -s -w .` and `goimports -l -w .`.
 3. **Strict Linting**:

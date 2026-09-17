@@ -3,7 +3,7 @@
 **Status:** pending
 **Story Points:** 16
 **Phase:** 6 (parallel with E11, E13, E14)
-**Dependencies:** E07, E08, E09, E10
+**Dependencies:** E07.1, E08, E09, E10
 **SDD Gate:** G5
 **Design refs:** `SPEC.md §8.2`, `docs/api-contracts.md §8` (+ parity rule),
 `SPEC.md §9.5–§9.8`
@@ -34,7 +34,7 @@ scheduled fields + batch messages from day one.
 - [ ] All 10 methods above present with request/response pairs (review vs features §7.2).
 - [ ] Batch + scheduled fields present in transfer messages (review vs api-contracts §7.5).
 **Story Points:** 4
-**Depends On:** E06-T06
+**Depends On:** E06-T06, E07.1-T01
 **Related Docs:** `SPEC.md §8.2`, `SPEC.md §2` (grpc-go v1.66.0), `docs/api-contracts.md §8`, `docs/fintech-ledger-features.md §7.2`
 **SDD Gate:** G5
 

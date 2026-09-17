@@ -46,7 +46,7 @@
   so domain code remains independent of the serializer.
 
 ## Security
-- **No secrets in code** - Use Bitwarden Secret Manager
+- **No secrets in code** - Use OpenBao (Dynamic DB credentials & Transit encryption)
 - **Input validation** - All boundaries (validator.v10)
 - **SQL injection** - GORM or explicitly parameterized SQL only; never build
   query text from untrusted values.

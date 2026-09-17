@@ -66,8 +66,8 @@ local, CI-minimal, prod — single shared Postgres (app+unleash DBs).
 - Create/modify: `deployments/docker/docker-compose*.yml`, `deployments/docker/traefik/*`,
   `deployments/docker/{prometheus,grafana,loki,tempo}/*`, `deployments/docker/minio/*`
 **Steps:**
-1. Implement all 7 variants exactly per SPEC §12 (versions: Postgres 18, Valkey 9,
-   NATS 2.14, Unleash 6.5, Traefik v3.2, Prom 2.54, Grafana 11.2, Loki 3.1, Tempo 2.5,
+1. Implement all 7 variants exactly per SPEC §12 (versions: Citus/Postgres 18, Valkey 9.1.2,
+   Redpanda 26.2, NATS 2.14.6, OpenBao 2.6.2, Unleash 6.5, Traefik v3.2, Prom 3.14.0, Grafana 13.0, Loki 3.7.7, Tempo 2.9.4,
    maildev 3.0.0-rc.3, MinIO).
 2. Prove single-Postgres: unleash connects to shared instance (no second DB container).
 3. `make dev-up` (local), CI job (minimal), prod file with secrets/limits/replicas.
@@ -78,7 +78,7 @@ local, CI-minimal, prod — single shared Postgres (app+unleash DBs).
 - [ ] Production compose references immutable image digests and external secrets;
   local/CI tags are never promoted implicitly.
 **Story Points:** 4
-**Depends On:** E00-T04, E07-T09
+**Depends On:** E00-T04, E07-T09, E07.1-T02
 **Related Docs:** `SPEC.md §12.1–§12.7`, `SPEC.md §10.3`
 **SDD Gate:** G7
 

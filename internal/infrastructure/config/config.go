@@ -57,7 +57,7 @@ type AuthConfig struct {
 	RefreshTTLDays int    `koanf:"refresh_ttl_days" validate:"required,min=1"`
 }
 
-// NATSConfig points at NATS JetStream (E08/E14 own topology/consumers).
+// NATSConfig points at NATS Core (E08/E14 own edge fanout/consumers; ADR-014).
 type NATSConfig struct {
 	URL string `koanf:"url" validate:"required,url"`
 }
@@ -76,5 +76,5 @@ type FeatureFlagConfig struct {
 // SecretsConfig locates the secret manager (E09-T05 implements resolution;
 // any {{ secret:… }} value fails closed in the E01-T03 loader).
 type SecretsConfig struct {
-	Provider string `koanf:"provider" validate:"omitempty,oneof=bitwarden env"`
+	Provider string `koanf:"provider" validate:"omitempty,oneof=openbao bitwarden env"`
 }

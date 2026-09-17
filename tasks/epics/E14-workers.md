@@ -3,7 +3,7 @@
 **Status:** pending
 **Story Points:** 16
 **Phase:** 6 (parallel with E11, E12, E13)
-**Dependencies:** E07, E08, E09, E10
+**Dependencies:** E07.1, E08, E09, E10
 **SDD Gate:** G5
 **Design refs:** `SPEC.md §8.4–§8.5`, `docs/fintech-ledger-features.md §9`,
 `docs/user-journeys.md §2.3`, `docs/domain-events.md §5, §7`
@@ -16,13 +16,14 @@
 
 ### E14-T01: Cron binary + distributed scheduling
 **Status:** pending
-**Background:** `cmd/cron` runs all 8 features-§9 jobs with Valkey Redlock
-leadership. The lock is coordination-only; every job also has a durable run key
-and is safe to retry after lease loss.
+**Background:** `cmd/cron` runs all 8 features-§9 jobs with etcd distributed
+leader election (`concurrency.NewElection` from `E07.1-T04`) as primary leader elector
+with Valkey Redlock as fallback. The lock/election is coordination-only; every job also
+has a durable run key and is safe to retry after lease loss.
 **Files:**
 - Create: `cmd/cron/main.go`, `internal/interface/cron/{scheduler.go,jobs.go,registry.go}`
 **Steps:**
-1. gocron v1.5.0 scheduler; per-job Redlock (30s TTL, auto-renew, release on done/fail) as an optimization.
+1. gocron v1.5.0 scheduler; etcd distributed leader election (`concurrency.NewElection`) with Valkey Redlock (30s TTL, auto-renew, release on done/fail) as fallback optimization.
 2. Each occurrence has a durable unique run key and idempotent step keys; a
    fencing/lease check prevents a stale leader from committing protected effects.
 3. Job records (run key, last/next run, status, duration, error) persisted.
@@ -31,8 +32,8 @@ and is safe to retry after lease loss.
 - [ ] Two replicas/retries → one durable effect per run key (Testcontainers test).
 - [ ] Crashed holder's work picked up after TTL (test).
 **Story Points:** 4
-**Depends On:** E08-T02, E06-T07
-**Related Docs:** `SPEC.md §8.4`, `SPEC.md §2` (gocron v1.5.0), `docs/fintech-ledger-features.md §9`
+**Depends On:** E08-T02, E06-T07, E07.1-T04
+**Related Docs:** `SPEC.md §8.4`, `SPEC.md §2` (gocron v1.5.0), `docs/architecture/ADR-017-distributed-coordination-etcd.md`, `docs/fintech-ledger-features.md §9`
 **SDD Gate:** G5
 
 ---

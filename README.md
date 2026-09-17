@@ -87,13 +87,16 @@ the current stable patch baseline for this audit date.
 | **HTTP** | Echo v5.3.1 |
 | **gRPC** | grpc-go v1.66.0 |
 | **GraphQL** | gqlgen v0.17.94 |
-| **Database** | PostgreSQL 18.6 + GORM v1.31.2 |
-| **Cache** | Ristretto v2.4.2 (L1) + Valkey 9.0.6 (L2) |
-| **Messaging** | NATS JetStream 2.14.6 |
+| **Database & Sharding** | PostgreSQL 18.x + Citus 14.0 + GORM v1.31.2 |
+| **Database Migrations & Safety** | Pressly Goose v3.28.0 (runtime) + Ariga Atlas v1.3.0 (CI linter) (ADR-018) |
+| **High Availability** | Patroni v4.1.5 (Bare-metal/VM) / CloudNativePG v1.30.0 (K8s) |
+| **Distributed Coordination**| etcd v3.7.0 (3-node Raft DCS & config streaming) |
+| **Cache** | Otter v2.3.0 (L1 W-TinyLFU) + Valkey 9.1.2 Cluster (L2) |
+| **Messaging & Streaming** | Redpanda v26.2 (Kafka API Log) + NATS Core 2.14.6 (Edge Fanout) |
 | **Auth** | JWT RS256 (v5.3.1), OAuth2/OIDC, Casbin RBAC (v2.8.0) |
 | **Feature Flags** | OpenFeature v1.17.2 + Unleash v6.5.1 |
-| **Secrets** | Bitwarden SDK v2.1.0 |
-| **Observability** | OpenTelemetry v1.26.0 + `log/slog` (stdlib) + Prometheus 2.54 + Grafana 11.2 + Loki 3.1 + Tempo 2.5 |
+| **Secrets & Tokenization** | OpenBao v2.6.2 (Dynamic DB creds & Transit PCI-DSS encryption) |
+| **Observability** | OpenTelemetry v1.46.0 + zerolog v1.35.1 + Prometheus 3.14.0 + Grafana 13.0 + Loki 3.7.7 + Tempo 2.9.4 |
 | **API Gateway** | Traefik v3.2 |
 | **Testing** | Testcontainers, k6, Pact, Litmus |
 
@@ -105,8 +108,8 @@ go-template/
 │   ├── rest-api/           # Echo REST server
 │   ├── grpc-api/           # gRPC server
 │   ├── graphql-api/        # gqlgen GraphQL
-│   ├── cron/               # Distributed scheduler
-│   └── consumer/           # NATS consumers (separate cluster)
+│   ├── cron/               # Distributed scheduler (etcd leader election)
+│   └── consumer/           # Redpanda & NATS consumers (separate cluster)
 ├── internal/               # Private application code
 │   ├── domain/             # DDD Core (no external deps)
 │   ├── application/        # CQRS Use Cases
@@ -190,10 +193,11 @@ make test-all
 
 | File | Purpose |
 |------|---------|
-| `docker-compose.yml` | Core: PostgreSQL 18, Valkey 9, NATS 2.14, Jaeger 1.58, maildev |
-| `docker-compose.featureflags.yml` | + Unleash 6.5 (shares PostgreSQL) |
+| `docker-compose.yml` | Core: Citus (Coordinator + Workers), etcd, Valkey 9, Redpanda, NATS Core, OpenBao, Jaeger, maildev |
+| `docker-compose.featureflags.yml` | + Unleash 6.5 (shares PostgreSQL/Citus) |
 | `docker-compose.gateway.yml` | + Traefik 3.2 |
-| `docker-compose.observability.yml` | + Prometheus 2.54, Grafana 11.2, Loki 3.1, Tempo 2.5 |
+| `docker-compose.observability.yml` | + Prometheus 3.14.0 (HA), Grafana 13.0 (HA), Loki 3.7.7 (HA), Tempo 2.9.4 |
+| `docker-compose.ha-patroni.yml` | + Patroni v4.1.5 + etcd DCS multi-node failover simulation |
 | `docker-compose.local.yml` | All merged (local dev) |
 | `docker-compose.ci.yml` | Minimal (CI only) |
 
@@ -204,8 +208,10 @@ These are planned controls, not an implementation or compliance claim:
 - OWASP Top 10 control mapping
 - JWT RS256 with rotating refresh tokens
 - Argon2id password hashing
-- Envelope encryption (DEK + KEK in Bitwarden/HSM)
-- TLS 1.3 and mTLS for service-to-service
+- Envelope encryption (DEK + KEK in OpenBao Transit Engine / HSM)
+- PCI-DSS cardholder data tokenization via OpenBao Transit API
+- Ephemeral dynamic PostgreSQL credentials with 1h lease revocation
+- TLS 1.3 and mTLS for service-to-service and etcd peer traffic
 - Rate limiting, CSP, and secure headers
 - SBOM generation and vulnerability scanning (govulncheck, gosec, Trivy)
 - Append-only, signed audit logging

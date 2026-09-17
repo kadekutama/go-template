@@ -31,7 +31,7 @@ public authentication, rate limits, feature flags, and hardening are E11-T15.
 - [ ] Panic in a handler returns 500 envelope with request_id and no stack (test).
 - [ ] The focused E11-T14 test can boot without Valkey, NATS, or provider credentials.
 **Story Points:** 2
-**Depends On:** E01-T02, E01-T04, E01-T05
+**Depends On:** E01-T02, E01-T04, E01-T05, E07.1-T01
 **Related Docs:** `SPEC.md §8.1`, `SPEC.md §9.6–§9.7`, `docs/data-flow.md §2`
 **SDD Gate:** G5
 

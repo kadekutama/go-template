@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// Cache is the read-model cache boundary (hybrid Ristretto + Valkey in E08).
+// Cache is the read-model cache boundary (hybrid Otter W-TinyLFU + Valkey in E08; ADR-015).
 // Cached figures back displays and hints ONLY: spend decisions, eligibility,
 // and idempotency MUST read the strong projection. Invalidation is explicit
 // per key; TTLs bound staleness and are always set.

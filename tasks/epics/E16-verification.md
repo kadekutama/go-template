@@ -83,7 +83,7 @@ latency, partition, disk, CPU, DNS.
 **Acceptance Criteria:**
 - [ ] A deliberately under-tested PR fails the gate (verified once, reverted).
 **Story Points:** 3
-**Depends On:** E07-T09, E02-T09, E06-T08
+**Depends On:** E07-T09, E02-T09, E06-T08, E07.1-T05
 **Related Docs:** `SPEC.md §10.2`, `SPEC.md §16`
 **SDD Gate:** G7
 

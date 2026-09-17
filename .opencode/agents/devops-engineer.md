@@ -20,7 +20,7 @@ Specialist for **Deployment & Operations** - Docker, Kubernetes, CI/CD, Observab
 3. **Compose Variants** - Core, FeatureFlags, Gateway, Observability, Local, CI
 4. **GitOps** - ArgoCD/Flux with Kustomize overlays
 5. **Security Scanning** - Trivy, govulncheck, gosec, SBOM (syft)
-6. **Secrets Management** - Bitwarden SDK, no secrets in images/config
+6. **Secrets Management** - OpenBao (Dynamic DB creds & Transit encryption), no secrets in images/config
 
 ## Key Patterns
 

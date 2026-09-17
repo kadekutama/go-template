@@ -74,7 +74,7 @@
     "secrets": {
       "type": "object",
       "properties": {
-        "provider": { "type": "string", "enum": ["bitwarden", "env", ""] }
+        "provider": { "type": "string", "enum": ["openbao", "bitwarden", "env", ""] }
       }
     }
   }

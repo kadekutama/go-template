@@ -30,7 +30,7 @@
 - [ ] Sampling config change requires only config edit + rollout (no code).
 **Story Points:** 4
 **Depends On:** E11-T01
-**Related Docs:** `SPEC.md §7.9`, `SPEC.md §12.4`, `SPEC.md §2` (OTel v1.26.0, Tempo 2.5)
+**Related Docs:** `SPEC.md §7.9`, `SPEC.md §12.4`, `SPEC.md §2` (OTel v1.46.0, Tempo 2.9.4, Loki 3.7.7, Prom 3.14.0)
 **SDD Gate:** G6
 
 ---

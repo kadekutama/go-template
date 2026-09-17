@@ -77,8 +77,11 @@ internal/
 │   └── workflow/            # Multi-step sagas and long-running processes
 │
 ├── infrastructure/          # CONCRETE IMPLEMENTATIONS OF APPLICATION & DOMAIN PORTS
-│   ├── database/            # PostgreSQL, GORM, migrations
-│   ├── cache/               # Valkey, Ristretto (L1/L2)
+│   ├── database/            # PostgreSQL / Citus 14.0, GORM, migrations (Goose v3 + Atlas, ADR-018)
+│   ├── cache/               # Otter (L1 W-TinyLFU), Valkey Cluster (L2)
+│   ├── messaging/           # Redpanda (Kafka API), NATS Core (Edge)
+│   ├── secrets/             # OpenBao (Dynamic DB creds & Transit tokenization)
+│   ├── coordination/        # etcd (Consensus DCS & Config streaming)
 │   └── resilience/          # Outbox dispatchers, circuit breakers, rate limiters
 │
 └── interface/ (or api/)     # PROTOCOL ADAPTERS & DELIVERY

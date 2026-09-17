@@ -27,4 +27,4 @@ observability:
 feature_flags:
   unleash_url: https://unleash.production.svc:4242
 secrets:
-  provider: bitwarden
+  provider: openbao

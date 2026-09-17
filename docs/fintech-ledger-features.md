@@ -272,10 +272,10 @@ the settlement-batch confirmation, not a mutable Posting state.
 | **Authentication** | JWT RS256 + OAuth2/OIDC | P0 |
 | **Authorization** | Casbin RBAC/ABAC (tenant, role, resource) | P0 |
 | **API Keys** | Scoped, rotatable, rate-limited | P0 |
-| **Encryption at Rest** | Envelope encryption (DEK/KEK), KEK in HSM/Bitwarden | P0 |
+| **Encryption at Rest** | Envelope encryption (DEK/KEK), KEK in HSM/OpenBao | P0 |
 | **Encryption in Transit** | TLS 1.3, mTLS for service-to-service | P0 |
-| **PII Handling** | Field-level encryption, tokenization | P0 |
-| **Secrets Management** | Bitwarden Secret Manager | P0 |
+| **PII & Cardholder Handling** | Field-level encryption, PCI-DSS PAN tokenization via OpenBao Transit | P0 |
+| **Secrets Management** | OpenBao (dynamic DB credentials with 1h lease) | P0 |
 | **Rate Limiting** | Token bucket (Valkey), per-tenant/user/IP | P0 |
 | **Audit Signing** | Cryptographic log signing | P1 |
 
@@ -368,6 +368,12 @@ the settlement-batch confirmation, not a mutable Posting state.
 | ADR-009 | Product boundary | Accepted by owner 2026-09-13: operational payment-platform ledger; full merchant books are separate scope |
 | ADR-010 | Structured logging API | Decided by audit: kernel Logger port with stdlib `log/slog` adapter |
 | ADR-011 | Balance materialization and authority | Pending — benchmark and owner approval required before E07 |
+| ADR-012 | High-Performance JSON Codec | Accepted by owner: Sonic default wrapper in `pkg/jsonparser` |
+| ADR-013 | Citus Horizontal Sharding & Flexible HA | Proposed: Citus 14.0 co-located sharding + Patroni/CNPG dual HA |
+| ADR-014 | Dual-Broker Messaging Architecture | Proposed: Redpanda (Kafka API durable log) + NATS Core (edge push) |
+| ADR-015 | In-Memory L1 Cache with Otter | Proposed: Otter adaptive W-TinyLFU eviction, Go generics, per-key TTL |
+| ADR-016 | Secrets Management & Tokenization | Proposed: OpenBao dynamic DB creds + Transit PCI-DSS tokenization |
+| ADR-017 | Distributed Coordination & Consensus | Proposed: etcd v3 3-node Raft DCS, config watch, leader election |
 
 ---
 
@@ -380,15 +386,18 @@ the settlement-batch confirmation, not a mutable Posting state.
 | **Domain Specification pattern** | Executable invariants (sufficient funds, valid currency) |
 | **CQRS** | Commands (PostLedgerPosting; compatibility PostTransaction) / Queries (GetBalance) |
 | **fx DI** | Wiring all 5 binaries |
-| **Valkey (L2 Cache)** | Non-authoritative balance/idempotency cache, rate limiting |
-| **Ristretto (L1 Cache)** | Hot account/tenant config |
-| **NATS JetStream** | Event streaming, async processing, webhooks |
-| **gocron + Valkey Redlock** | Daily reconciliation, interest accrual |
+| **Citus PostgreSQL (SoR)** | Distributed sharded ledger system of record (partitioned by tenant_id) |
+| **Otter (L1 Cache)** | Adaptive W-TinyLFU zero-alloc in-memory cache for hot balances and accounts |
+| **Valkey (L2 Cache)** | Distributed cluster for sessions, cache-aside, and rate limits |
+| **Redpanda (Event Stream)** | Durable, ordered, partitioned event log (Kafka API) |
+| **NATS Core (Edge Push)** | Sub-millisecond in-memory real-time push to WebSockets |
+| **etcd (Consensus & DCS)** | Patroni failover DCS, gRPC config streaming, and worker leader election |
+| **gocron + etcd Election** | Daily reconciliation, interest accrual, distributed cron |
 | **OpenFeature + Unleash** | Feature flags for payment methods, new currencies |
-| **Bitwarden Secrets** | DB passwords, API keys, encryption keys |
+| **OpenBao Secrets & Transit** | Dynamic DB credentials, API keys, PCI-DSS PAN tokenization |
 | **OpenTelemetry** | Full tracing across all services |
 | **Traefik** | API Gateway with mTLS, rate limiting |
-| **Testcontainers** | Integration tests with real Postgres/Valkey/NATS |
+| **Testcontainers** | Integration tests with real Citus/Valkey/Redpanda/NATS/OpenBao |
 
 ---
 

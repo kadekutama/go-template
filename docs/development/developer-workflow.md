@@ -68,17 +68,29 @@ Verify that all tools and toolchains report `[OK]`:
 
 ## 3. Phase 2: Local Services & Dependencies
 
-The ledger system relies on several backend dependencies (PostgreSQL, Valkey, NATS JetStream, etc.).
+The ledger system relies on a multi-node distributed dependency architecture:
 
-### Start Local Dependencies
+### Start Core Local Dependencies
 ```bash
 make dev-up
 ```
 Starts the Docker Compose development stack in the background:
-- **PostgreSQL 18.6**: Primary relational database.
-- **Valkey 9.0.6**: L2 distributed cache and rate limiter (OSS Redis fork).
-- **NATS JetStream 2.14.6**: Event broker and outbox publisher.
+- **Citus 14.0 (PostgreSQL 18.x)**: Distributed relational database (`citus-coord` + 2 worker shard primaries `citus-worker-1`, `citus-worker-2` in dev profile; full HA profile adds standby replicas for 6 PG nodes total).
+- **etcd v3.7.0**: 3-node Raft consensus cluster for Patroni DCS, gRPC config streaming, and worker leader election.
+- **Redpanda v26.2**: 3-node Raft-native Kafka API event broker for the durable transactional outbox log.
+- **NATS Core 2.14.6**: 3-node in-memory mesh cluster for sub-millisecond edge WebSocket broadcast.
+- **Valkey 9.1.2**: L2 distributed cache and rate limiter (Standalone in dev profile, 6-node Cluster in HA profile).
+- **OpenBao v2.6.2**: 3-node HA secrets engine for dynamic database credentials and Transit PCI-DSS PAN tokenization.
 - **MailDev**: Local SMTP server for testing notification flows.
+
+### Advanced Multi-Node & HA Profiles
+```bash
+# Run full Patroni DCS failover simulation
+docker compose -f deployments/docker/docker-compose.yml -f deployments/docker/docker-compose.ha-patroni.yml up -d
+
+# Run full Observability HA stack (Prometheus HA + Grafana HA + Loki HA + Tempo)
+docker compose -f deployments/docker/docker-compose.yml -f deployments/docker/docker-compose.observability.yml up -d
+```
 
 ### Inspect Dependency Logs
 ```bash
@@ -94,45 +106,87 @@ Stops the Docker containers when development work is paused or finished.
 
 ---
 
-## 4. Phase 3: Database Migrations
+## 4. Phase 3: Database Migrations & Schema Evolution
 
-Schema migrations are managed with `golang-migrate` and live under `internal/infrastructure/database/migration/versions/`.
+Schema migrations are managed with a **Hybrid Migration Architecture** pairing **Pressly Goose v3** (embedded runtime engine + CLI) and **Ariga Atlas** (pre-deployment CI safety linter & Merkle tree verifier) per [ADR-018](../architecture/ADR-018-database-migrations-goose-and-atlas.md). Migrations live under `internal/infrastructure/database/migration/versions/`.
 
-### Apply Migrations
+### Why Goose v3 + Atlas Over Legacy Tooling (Custom Runner & `golang-migrate`)
+
+| Problem in Multi-Engineer Teams | Legacy Runner / CLI Limitations | Goose v3 + Atlas Resolution |
+| :--- | :--- | :--- |
+| **Concurrent Branch Merge Conflicts** | Strict sequential integer check (`version != index+1`) in custom runner halts deployment on out-of-order PR merges. | **Preserved 1..4 integers + 14-digit UTC timestamps** (`YYYYMMDDHHMMSS`) with out-of-order execution (`-allow-missing`). Feature squads merge independently without lockouts. |
+| **Distributed DDL & Citus Sharding** | Custom runner hardcoded `BeginTx` transaction wrapper around every file. Citus `create_distributed_table` and PostgreSQL `CREATE INDEX CONCURRENTLY` strictly fail inside transaction blocks. | Native **`-- +goose NO TRANSACTION`** annotation executes distributed DDL and non-blocking indexing cleanly outside transaction blocks. |
+| **Destructive DDL & Silent Lock Outages** | Custom runner blindly executes SQL without safety checks. Accidental table rewrites lock 100M-row tables in production. | **Ariga Atlas dynamic CI linting** (`atlas migrate lint`) runs against ephemeral dev containers to detect table locks and destructive operations before merge. |
+| **Historical Migration Tampering** | No checksum manifest. Silent modifications in historical files create untracked schema drift. | **Atlas Merkle tree manifest (`atlas.sum`)** cryptographically verifies migration immutability (`atlas migrate validate`). |
+| **Pure-Compute Data Transformations** | Custom runner supports SQL only. | Native **programmatic Go migrations** (`goose.AddMigrationContext`) allow deterministic in-process compute. (External network calls are forbidden in migrations; service-coupled backfills run in Epic E14 background jobs). |
+
+### Migration Commands Reference
+
 ```bash
+# Apply all pending migrations
 make migrate-up
 # Or via script: ./scripts/db/migrate.sh up
-```
-Applies all pending SQL migrations to the database specified by `DATABASE_URL`.
 
-### Roll Back a Migration
-```bash
+# Roll back the latest migration step (strictly reversible)
 make migrate-down
 # Or via script: ./scripts/db/migrate.sh down 1
-```
-Rolls back the most recent migration step. All migrations must be strictly reversible.
 
-### Create a New Migration
-```bash
+# Check current migration version and pending status
+make migrate-status
+# Or via script: ./scripts/db/migrate.sh status
+
+# Create a new 14-digit UTC timestamped migration (auto-updates atlas.sum)
 make migrate-create NAME=add_merchants_table
-```
-Generates a new timestamped migration pair:
-- `internal/infrastructure/database/migration/versions/<timestamp>_add_merchants_table.up.sql`
-- `internal/infrastructure/database/migration/versions/<timestamp>_add_merchants_table.down.sql`
+# Creates: internal/infrastructure/database/migration/versions/<YYYYMMDDHHMMSS>_add_merchants_table.sql
 
-### Seed Development Data
-```bash
+# Lint migrations with Atlas (pre-deployment safety gate)
+make migrate-lint
+# Or via script: ./scripts/db/migrate.sh lint
+
+# Seed development data (idempotent dev plan via cmd/seed)
 make db-seed
 # Or via script: ./scripts/db/seed.sh
-```
-Runs pending migrations and applies the deterministic development plan (dev tenant `tnt-test-01`, dev ledger `ldg-test-01`, 9-account chart across USD/EUR/IDR, and 4 canonical double-entry postings). Strictly idempotent via `ON CONFLICT DO NOTHING`.
 
-### Reset Database (Dev Only)
-```bash
+# Reset database (drops public schema, re-migrates from scratch, seeds dev data)
 make db-reset
 # Or via script: ./scripts/db/reset.sh
 ```
-Drops the `public` schema, re-applies all migrations from version 1, and seeds dev data. Includes production safeguards (refuses to run against URLs containing `prod`, `amazonaws.com`, or `cloudsql` without `--force`).
+
+### Migration File Annotations & Guidelines
+
+1. **Standard DDL with Multi-line Blocks**:
+   Enclose stored procedures, triggers, or anonymous `DO $$ ... $$` blocks with `-- +goose StatementBegin` and `-- +goose StatementEnd`:
+   ```sql
+   -- +goose Up
+   -- +goose StatementBegin
+   CREATE OR REPLACE FUNCTION audit_trigger()
+   RETURNS trigger AS $$
+   BEGIN
+       RETURN NEW;
+   END;
+   $$ LANGUAGE plpgsql;
+   -- +goose StatementEnd
+
+   -- +goose Down
+   -- +goose StatementBegin
+   DROP FUNCTION IF EXISTS audit_trigger();
+   -- +goose StatementEnd
+   ```
+
+2. **Non-Transactional Citus & Concurrent Indexing**:
+   Always place `-- +goose NO TRANSACTION` at the top of the file when running `SELECT create_distributed_table(...)` or `CREATE INDEX CONCURRENTLY`:
+   ```sql
+   -- +goose NO TRANSACTION
+   -- +goose Up
+   SELECT create_distributed_table('ledger_entries', 'account_id');
+   CREATE INDEX CONCURRENTLY idx_entries_created_at ON ledger_entries (created_at);
+
+   -- +goose Down
+   DROP INDEX CONCURRENTLY IF EXISTS idx_entries_created_at;
+   ```
+
+3. **Pre-PR Safety Check**:
+   Always execute `make migrate-lint` prior to opening a Pull Request. Atlas will verify `atlas.sum` hash integrity and simulate the migration against an ephemeral database container to detect lock hazards or destructive operations.
 
 ### Architecture Note: Why Migrations & Seeding Are Decoupled from `main.go`
 In this repository, database migrations and seeding are deliberately decoupled from application server startup binaries (`cmd/rest`, `cmd/grpc`, `cmd/cron`, etc.):

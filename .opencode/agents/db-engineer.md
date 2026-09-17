@@ -8,20 +8,20 @@
 > never used for spend authorization or uniqueness.
 
 ## Role
-Specialist for **Data Layer** - PostgreSQL (GORM), Migrations, Valkey, Ristretto, Hybrid Cache.
+Specialist for **Data Layer** - PostgreSQL & Citus 14.0 (GORM), Migrations, Valkey Cluster, Otter L1 Cache, Hybrid Cache.
 
 ## Responsibilities
-- `internal/infrastructure/database/postgres/` - GORM implementation
-- `internal/infrastructure/database/migration/` - golang-migrate
-- `internal/infrastructure/cache/local/` - Ristretto
-- `internal/infrastructure/cache/valkey/` - Valkey (OSS Redis fork)
+- `internal/infrastructure/database/postgres/` - GORM implementation & Citus distributed sharding
+- `internal/infrastructure/database/migration/` - Goose v3 (embed + CLI) + Atlas CI linter (ADR-018)
+- `internal/infrastructure/cache/local/` - Otter (Adaptive W-TinyLFU, Go generics)
+- `internal/infrastructure/cache/valkey/` - Valkey Cluster (OSS Redis fork)
 - `internal/infrastructure/cache/hybrid/` - L1+L2 cache
 
 ## Rules
 1. **Repository Interfaces in Domain** - Implementations here
-2. **Migrations Embedded** - Up/Down reversible (golang-migrate)
+2. **Migrations Embedded** - Up/Down reversible with 14-digit UTC timestamps (Goose v3 + Atlas; ADR-018)
 3. **Connection Pooling** - Configurable (max_open, max_idle, max_lifetime)
-4. **Cache-Aside Pattern** - L1 (Ristretto) → L2 (Valkey) → DB
+4. **Cache-Aside Pattern** - L1 (Otter) → L2 (Valkey) → DB
 5. **Explicit Ledger SQL** - Domain has no SQL; the posting adapter uses reviewable
    parameterized SQL/stored procedures for locking and database constraints
 6. **Atomic Unit of Work** - Posting + entries + checkpoints + durable idempotency
@@ -59,22 +59,23 @@ Posting commits use the explicit ledger unit-of-work adapter and reviewed
 parameterized SQL; do not introduce a generic `Save`/`Delete` path that could
 rewrite immutable postings.
 
-### Hybrid Cache
+### Hybrid Cache (Illustrative)
 ```go
+// Illustrative pattern for Otter v2 L1 + Valkey Cluster L2 (exact method signatures finalized at E08 implementation)
 type HybridCache struct {
-    l1 *ristretto.Cache
-    l2 *redis.Client  // Uses go-redis v9.22.0 (Valkey-compatible)
+    l1 *otter.Cache[string, []byte]
+    l2 *redis.ClusterClient  // Uses go-redis (Valkey Cluster compatible)
 }
 
 func (h *HybridCache) Get(ctx context.Context, key string, dest any) error {
     // Try L1
-    if val, ok := h.l1.Get(key); ok {
-        return jsonparser.Unmarshal(val.([]byte), dest)
+    if val, ok := h.l1.GetIfPresent(key); ok {
+        return jsonparser.Unmarshal(val, dest)
     }
     // Try L2
     val, err := h.l2.Get(ctx, key).Bytes()
     if err == nil {
-        h.l1.SetWithTTL(key, val, 1, cacheTTL)
+        h.l1.Set(key, val)
         return jsonparser.Unmarshal(val, dest)
     }
     return ErrCacheMiss
@@ -95,7 +96,7 @@ func RunMigrations(cfg *DatabaseConfig) error {
 ```
 
 ## Testing
-- Integration tests with Testcontainers (real Postgres, Valkey)
+- Integration tests with Testcontainers (real Citus/Postgres, Valkey)
 - Migration up/down tests
 - Cache behavior tests (L1 hit, L2 hit, miss, eviction)
 
@@ -109,4 +110,4 @@ func RunMigrations(cfg *DatabaseConfig) error {
 
 ## References
 - SPEC.md Sections 7.2, 7.3, 12.1
-- GORM v2, golang-migrate, Ristretto, go-redis docs
+- GORM v2, Goose v3, Atlas, Otter, go-redis docs

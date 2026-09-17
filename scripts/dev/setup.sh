@@ -27,6 +27,7 @@ CHECK_ONLY=false
 PIXI_ONLY=false
 TOOLS_ONLY=false
 MODULES_ONLY=false
+FAILED_PIXI_PKGS=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -113,10 +114,49 @@ install_pixi_packages() {
       echo "  [OK] pixi: $pkg ($desc)"
     else
       echo "  -> Installing pixi package: $pkg ($desc)..."
-      pixi global install "$pkg"
+      # Docker CLI/Compose are hard requirements for integration tests, but a
+      # failed install must not abort the whole toolchain setup: record it and
+      # report actionable guidance at the end (see check_docker).
+      if ! pixi global install "$pkg"; then
+        echo "  [WARN] pixi install failed for: $pkg ($desc)" >&2
+        FAILED_PIXI_PKGS+=("$pkg")
+      fi
     fi
   done
   echo "==> Pixi global packages ready."
+}
+
+# check_docker verifies the Docker *client* binaries and, separately, daemon
+# reachability. Pixi only ships the client (docker-cli, docker-compose); the
+# daemon comes from the host (Rancher Desktop, Docker Desktop, or dockerd).
+# Never fatal: unit tests and linting work without a daemon, and
+# container-gated tests skip cleanly (see test/testcontainers SkipIfNoDocker).
+check_docker() {
+  echo "--- Docker Client & Daemon ---"
+  local ok=true
+
+  for b in docker docker-compose; do
+    if command -v "$b" >/dev/null 2>&1; then
+      echo "  [OK]      $b ($(command -v "$b"))"
+    elif [[ -x "$PIXI_BIN/$b" ]]; then
+      echo "  [OK]      $b ($PIXI_BIN/$b)"
+    else
+      echo "  [MISSING] $b (run ./scripts/dev/setup.sh to install via pixi)"
+      ok=false
+    fi
+  done
+
+  if [[ "$ok" == "true" ]] && docker info >/dev/null 2>&1; then
+    echo "  [OK]      docker daemon ($(docker version --format '{{.Server.Version}}' 2>/dev/null || echo 'reachable'))"
+  else
+    echo "  [WARN]    docker daemon unreachable."
+    echo "            Pixi provides the client only; start an engine first:"
+    echo "            - Rancher Desktop (Windows): launch the app with WSL integration enabled, or"
+    echo "            - Native Linux: sudo systemctl start docker (or sudo dockerd), or"
+    echo "            - Remote: export DOCKER_HOST=tcp://<host>:2375"
+    echo "            Without a daemon, Testcontainers suites skip (TESTCONTAINERS_SKIP=1 forces skip)."
+  fi
+  echo ""
 }
 
 configure_go_env() {
@@ -168,7 +208,11 @@ install_go_tools() {
     bin="${item%%:*}"
     pkg="${item#*:}"
     echo "  -> Installing $bin ($pkg)..."
-    go install "$pkg"
+    if [[ "$bin" == "migrate" ]]; then
+      go install -tags 'postgres' "$pkg"
+    else
+      go install "$pkg"
+    fi
 
     if [[ -d "$PIXI_BIN" && -w "$PIXI_BIN" && -f "$gobin/$bin" ]]; then
       ln -sf "$gobin/$bin" "$PIXI_BIN/$bin"
@@ -192,7 +236,7 @@ check_status() {
   echo ""
 
   echo "--- Toolchains & System Dependencies (Pixi-managed) ---"
-  local check_bins=("go" "clang" "clang++" "make" "shellcheck" "docker" "docker-compose" "kubectl" "k6" "syft" "gopls")
+  local check_bins=("go" "clang" "clang++" "make" "shellcheck" "kubectl" "k6" "syft" "gopls")
   for b in "${check_bins[@]}"; do
     if command -v "$b" >/dev/null 2>&1; then
       loc="$(command -v "$b")"
@@ -204,6 +248,8 @@ check_status() {
     fi
   done
   echo ""
+
+  check_docker
 
   echo "--- Go Developer CLI Tools ---"
   local gobin
@@ -256,4 +302,9 @@ fi
 
 echo ""
 check_status
-echo "==> Full environment & dependency setup completed successfully."
+if [[ "${#FAILED_PIXI_PKGS[@]}" -gt 0 ]]; then
+  echo "==> Setup completed WITH WARNINGS: pixi install failed for: ${FAILED_PIXI_PKGS[*]}" >&2
+  echo "    Re-run ./scripts/dev/setup.sh once the network/registry issue is resolved." >&2
+else
+  echo "==> Full environment & dependency setup completed successfully."
+fi

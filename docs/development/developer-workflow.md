@@ -96,17 +96,19 @@ Stops the Docker containers when development work is paused or finished.
 
 ## 4. Phase 3: Database Migrations
 
-Schema migrations are managed with `golang-migrate` and live under `deployments/migrations/`.
+Schema migrations are managed with `golang-migrate` and live under `internal/infrastructure/database/migration/versions/`.
 
 ### Apply Migrations
 ```bash
 make migrate-up
+# Or via script: ./scripts/db/migrate.sh up
 ```
-Applies all pending SQL migrations to the local database specified by `DATABASE_URL`.
+Applies all pending SQL migrations to the database specified by `DATABASE_URL`.
 
 ### Roll Back a Migration
 ```bash
 make migrate-down
+# Or via script: ./scripts/db/migrate.sh down 1
 ```
 Rolls back the most recent migration step. All migrations must be strictly reversible.
 
@@ -115,8 +117,31 @@ Rolls back the most recent migration step. All migrations must be strictly rever
 make migrate-create NAME=add_merchants_table
 ```
 Generates a new timestamped migration pair:
-- `deployments/migrations/<timestamp>_add_merchants_table.up.sql`
-- `deployments/migrations/<timestamp>_add_merchants_table.down.sql`
+- `internal/infrastructure/database/migration/versions/<timestamp>_add_merchants_table.up.sql`
+- `internal/infrastructure/database/migration/versions/<timestamp>_add_merchants_table.down.sql`
+
+### Seed Development Data
+```bash
+make db-seed
+# Or via script: ./scripts/db/seed.sh
+```
+Runs pending migrations and applies the deterministic development plan (dev tenant `tnt-test-01`, dev ledger `ldg-test-01`, 9-account chart across USD/EUR/IDR, and 4 canonical double-entry postings). Strictly idempotent via `ON CONFLICT DO NOTHING`.
+
+### Reset Database (Dev Only)
+```bash
+make db-reset
+# Or via script: ./scripts/db/reset.sh
+```
+Drops the `public` schema, re-applies all migrations from version 1, and seeds dev data. Includes production safeguards (refuses to run against URLs containing `prod`, `amazonaws.com`, or `cloudsql` without `--force`).
+
+### Architecture Note: Why Migrations & Seeding Are Decoupled from `main.go`
+In this repository, database migrations and seeding are deliberately decoupled from application server startup binaries (`cmd/rest`, `cmd/grpc`, `cmd/cron`, etc.):
+1. **Multi-Pod Concurrency**: Prevents schema lock contention, readiness probe timeouts, and `ACCESS EXCLUSIVE` table lock queuing when multiple pods autoscale concurrently.
+2. **Least Privilege Security**: Runtime pods run as `app_user` (DML only: `SELECT`, `INSERT`, `UPDATE`). Administrative DDL credentials (`CREATE TABLE`, `ALTER TABLE`) are strictly restricted to isolated migration jobs in CI/CD.
+3. **Accidental Seeding Protection**: Keeps dev seed logic completely out of production server binaries.
+4. **Zero-Downtime Deployments**: Enables the Expand/Contract rollout pattern during blue-green and canary releases.
+
+For deep architectural rationale on persistence, the transactional outbox pattern, and concurrency control, see [docs/infrastructure/README.md](../infrastructure/README.md).
 
 ---
 
@@ -344,3 +369,14 @@ go env -w CGO_ENABLED=1 CC=clang
 
 ### Q: Does running `make setup` interfere with my system or other editors (e.g. Zed)?
 **A:** No. Pixi installs packages exclusively under `~/.pixi/` and links developer binaries into `~/.pixi/bin`. It does not modify system packages, `/usr/local`, or external editor configurations.
+
+### Q: How do I run Docker from Pixi (for Testcontainers suites)?
+**A:** Pixi provides the Docker **client only** (`docker-cli`, `docker-compose` → `~/.pixi/bin/docker`, `~/.pixi/bin/docker-compose`). The **daemon** comes from the host. Every shell (including agent/non-interactive shells) needs:
+```bash
+export PATH="$HOME/.pixi/bin:$PATH"
+docker info   # must show a Server section; client-only output means no daemon
+```
+If the daemon is unreachable, start one engine first: Rancher Desktop / Docker Desktop with WSL integration enabled, native `sudo systemctl start docker` (or `sudo dockerd`), or point at a remote engine via `export DOCKER_HOST=tcp://<host>:2375`. `./scripts/dev/setup.sh --check` reports client binaries and daemon reachability separately, and a failed `docker-cli`/`docker-compose` install warns instead of aborting the rest of the toolchain setup.
+
+### Q: Why do Testcontainers tests skip (or once panicked with no daemon)?
+**A:** Container-gated suites skip cleanly without a daemon via `test/testcontainers.SkipIfNoDocker` (probes `docker info`, honors `TESTCONTAINERS_SKIP=1`). Two past pitfalls are fixed in-tree: the helper no longer lets `testcontainers-go` panic on daemon detection, and PostgreSQL readiness uses SQL-level `wait.ForSQL` (TCP-accept fires while Postgres is still starting, `57P03`). Profiles: `TESTCONTAINERS_PROFILE=ci` shortens startup bounds for runners. Without a daemon, `go test -race ./...` stays green; with one, `make test-integration` proves the live paths.

@@ -1,0 +1,10 @@
+DROP TABLE IF EXISTS audit_refs;
+DROP TABLE IF EXISTS inbox_receipts;
+DROP TABLE IF EXISTS approvals;
+DROP TABLE IF EXISTS reports;
+DROP TABLE IF EXISTS periods;
+DROP TABLE IF EXISTS recon_breaks;
+DROP TABLE IF EXISTS recon_match_groups;
+DROP TABLE IF EXISTS recon_sources;
+DROP TABLE IF EXISTS workflows;
+DROP TABLE IF EXISTS tenants;

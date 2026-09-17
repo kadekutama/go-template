@@ -126,6 +126,16 @@ migrate-create: ## Create a new migration pair (usage: make migrate-create NAME=
 	$(call need-script,./scripts/db/migrate.sh)
 	./scripts/db/migrate.sh create $(NAME)
 
+.PHONY: db-seed
+db-seed: ## Migrate up and apply the deterministic dev seed (DATABASE_URL required).
+	$(call need-script,./scripts/db/seed.sh)
+	./scripts/db/seed.sh
+
+.PHONY: db-reset
+db-reset: ## Drop the public schema, migrate up, and reseed (dev only, DATABASE_URL required).
+	$(call need-script,./scripts/db/reset.sh)
+	./scripts/db/reset.sh
+
 .PHONY: dev-up
 dev-up: ## Start the core dependency set (compose).
 	$(call need-script,./scripts/dev/dev-up.sh)

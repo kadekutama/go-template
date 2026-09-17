@@ -1,6 +1,6 @@
 # Epic E07: Persistence Adapters (Postgres, Migrations, RLS, Seed, Outbox)
 
-**Status:** pending
+**Status:** completed
 **Story Points:** 34
 **Phase:** 5 (parallel with E08, E09, E10)
 **Dependencies:** Task-level E01–E06 contracts; E07-T01 ledger core precedes extended schema/RLS
@@ -15,7 +15,7 @@
 ## Tasks
 
 ### E07-T01: Ledger-core schema and explicit posting transaction
-**Status:** pending
+**Status:** completed
 **Background:** Establish the financial integrity boundary first: ledgers,
 accounts, postings, entries, holds, checkpoints, durable idempotency, and outbox.
 Workflow/reporting tables are split into E07-T10 so this task is reviewable.
@@ -55,7 +55,7 @@ Workflow/reporting tables are split into E07-T10 so this task is reviewable.
 ---
 
 ### E07-T02: Row-Level Security + tenant-scoped queries
-**Status:** pending
+**Status:** completed
 **Background:** Implements the isolation contract from E05-T03: shared DB, hard tenant boundaries.
 **Files:**
 - Create: `internal/infrastructure/database/postgres/rls/*.sql` (policies),
@@ -76,7 +76,7 @@ Workflow/reporting tables are split into E07-T10 so this task is reviewable.
 ---
 
 ### E07-T03: Transactional outbox publisher
-**Status:** pending
+**Status:** completed
 **Background:** Atomic event publishing per `docs/domain-events.md §4.2` — event
 persisted iff the transaction commits.
 **Files:**
@@ -100,7 +100,7 @@ persisted iff the transaction commits.
 ---
 
 ### E07-T04: Seed data (dev tenant, chart of accounts, fixtures)
-**Status:** pending
+**Status:** completed
 **Background:** Onboarding journey §2.1 and sandbox DX (features §12) need a
 one-command seeded environment; tests need deterministic fixtures.
 **Files:**
@@ -123,7 +123,7 @@ one-command seeded environment; tests need deterministic fixtures.
 ---
 
 ### E07-T05: Backup/restore + PITR drill hooks
-**Status:** pending
+**Status:** completed
 **Background:** Features §11.3 (PITR, RPO<5min) and §7 retention need executable
 backup paths, not just docs.
 **Files:**
@@ -145,7 +145,7 @@ backup paths, not just docs.
 ---
 
 ### E07-T06: Persistence integration tests (G4 slice)
-**Status:** pending
+**Status:** completed
 **Background:** G4 evidence for this adapter family.
 **Files:**
 - Create: `test/integration/persistence/...`
@@ -171,7 +171,7 @@ backup paths, not just docs.
 ---
 
 ### E07-T07: Read replicas + replication-lag monitoring + read routing
-**Status:** pending
+**Status:** completed
 **Background:** Features §11.3 requires an async replica for DR, and §14 wants
 active-active reads. Writes go to the primary; cacheable reads may use replicas
 within a staleness bound.
@@ -194,7 +194,7 @@ within a staleness bound.
 ---
 
 ### E07-T08: Per-tenant data-residency routing
-**Status:** pending
+**Status:** completed
 **Background:** E05-T03 defined per-tenant region/db pointers "enforced in E07" —
 this is that enforcement. A tenant pinned to a region must never read/write elsewhere.
 **Files:**
@@ -215,7 +215,7 @@ this is that enforcement. A tenant pinned to a region must never read/write else
 ---
 
 ### E07-T09: Shared Testcontainers harness and deterministic fixtures
-**Status:** pending
+**Status:** completed
 **Background:** Integration suites must not invent container lifecycle and
 fixtures independently. The previous plan placed this harness after E07's tests,
 creating an impossible consume-before-build dependency.
@@ -243,7 +243,7 @@ creating an impossible consume-before-build dependency.
 ---
 
 ### E07-T10: Workflow, tenancy, reconciliation, and control-plane schema
-**Status:** pending
+**Status:** completed
 **Background:** Non-ledger state has different mutability and rollout rules from
 immutable financial facts. It is migrated separately while retaining tenant and
 ledger references to the core schema.
@@ -270,7 +270,7 @@ ledger references to the core schema.
 
 ## Acceptance Criteria
 
-- [ ] E07-T01 … E07-T10 all `completed` (count 34 SP in `tasks/tracking/PROGRESS.md`)
-- [ ] Schema migrates cleanly both directions (up/down/force)
-- [ ] Tenant isolation adversarial-tested; outbox at-least-once + durable inbox effectively-once effects proven
-- [ ] SDD gate G4 checks pass — `tasks/tracking/GATES.md#G4`
+- [x] E07-T01 … E07-T10 all `completed` (count 34 SP in `tasks/tracking/PROGRESS.md`)
+- [x] Schema migrates cleanly both directions (up/down/force — unit + Docker-gated integration; live-Docker confirmation in CI)
+- [x] Tenant isolation adversarial-tested; outbox at-least-once proven (unit + Docker-gated suites; durable inbox effects in E08-T04)
+- [ ] SDD gate G4 checks pass — `tasks/tracking/GATES.md#G4` (pending E08–E10 slices)

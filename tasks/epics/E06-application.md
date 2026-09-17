@@ -1,6 +1,6 @@
 # Epic E06: Application Layer (Commands, Queries, Ports, Sagas)
 
-**Status:** pending
+**Status:** completed
 **Story Points:** 40
 **Phase:** 4
 **Dependencies:** Task-level E02–E05 contracts; the ledger pilot depends only on its E02 subset
@@ -16,7 +16,7 @@
 ## Tasks
 
 ### E06-T01: Shared handler plumbing (envelope, idempotency, outbox, translation hook)
-**Status:** pending
+**Status:** completed
 **Background:** Every command handler repeats: validate → idempotency reserve →
 load → execute → persist + outbox → publish → translate errors. Build once
 (data-flow §2 command flow).
@@ -46,7 +46,7 @@ load → execute → persist + outbox → publish → translate errors. Build on
 ---
 
 ### E06-T02: Account + tenant commands/queries
-**Status:** pending
+**Status:** completed
 **Background:** Backs api-contracts account endpoints + tenant provisioning (journeys §2.1).
 **Files:**
 - Create: `internal/application/command/{account.go,tenant.go}`,
@@ -67,7 +67,7 @@ load → execute → persist + outbox → publish → translate errors. Build on
 ---
 
 ### E06-T03: Transaction + transfer commands/queries (incl. scheduled/bulk)
-**Status:** pending
+**Status:** completed
 **Background:** Backs transfers §7.5 incl. new `execute_at`/`recurrence` fields
 and batch endpoints added during verification.
 **Files:**
@@ -92,7 +92,7 @@ and batch endpoints added during verification.
 ---
 
 ### E06-T04: Payment, refund, payout commands/queries
-**Status:** pending
+**Status:** completed
 **Background:** Backs api-contracts payments/refunds/payouts; drives payment-processor
 and settlement integrations (E10).
 **Files:**
@@ -121,7 +121,7 @@ and settlement integrations (E10).
 ---
 
 ### E06-T05: Reconciliation, period, report, compliance commands/queries
-**Status:** pending
+**Status:** completed
 **Background:** Backs ops endpoints + compliance workflows (features §4, §6).
 **Files:**
 - Create: `internal/application/command/{reconciliation.go,period.go,report.go,compliance.go}`,
@@ -147,7 +147,7 @@ and settlement integrations (E10).
 ---
 
 ### E06-T06: Core ledger integrity ports
-**Status:** pending
+**Status:** completed
 **Background:** Define the smallest stable contracts needed to post and read a
 ledger without waiting for every payment, compliance, identity, and provider port.
 **Files:**
@@ -170,7 +170,7 @@ ledger without waiting for every payment, compliance, identity, and provider por
 ---
 
 ### E06-T07: Sagas (transfer, refund, payout-settlement, reconciliation, period-close, batch)
-**Status:** pending
+**Status:** completed
 **Background:** Long-running orchestrations with compensation (`SPEC.md §6.4`,
 money-flow §10 failure table).
 **Files:**
@@ -191,7 +191,7 @@ money-flow §10 failure table).
 ---
 
 ### E06-T08: Application test suite (G3 gate)
-**Status:** pending
+**Status:** completed
 **Background:** G3 requires ≥85% with mocked ports.
 **Files:**
 - Create: `test/unit/application/...`
@@ -209,7 +209,7 @@ money-flow §10 failure table).
 ---
 
 ### E06-T09: Extended reporting (reconciliation, regulatory, scheduled delivery, dashboard aggregations)
-**Status:** pending
+**Status:** completed
 **Background:** E06-T05 covers the 10 named report types. This task covers the
 remaining reporting surface from features §4.2/§6: reconciliation reports,
 regulatory generation (1099/FATCA/CRS/call reports using E04-T05 field defs),
@@ -236,7 +236,7 @@ period for live charts).
 ---
 
 ### E06-T10: Tenant usage metering + billing export
-**Status:** pending
+**Status:** completed
 **Background:** Features §7.1 lists tenant "billing" (P1), but no task metered
 anything. Scope: record billable usage and export invoice-ready data; actual
 charging stays with an external billing provider fed by webhook/export.
@@ -259,7 +259,7 @@ charging stays with an external billing provider fed by webhook/export.
 ---
 
 ### E06-T11: Dispute commands/queries
-**Status:** pending
+**Status:** completed
 **Background:** Application face of E03-T07 for api-contracts §7.11.
 **Files:**
 - Create: `internal/application/command/dispute.go`,
@@ -280,7 +280,7 @@ charging stays with an external billing provider fed by webhook/export.
 ---
 
 ### E06-T12: Extended workflow and adapter ports
-**Status:** pending
+**Status:** completed
 **Background:** Payment, compliance, tenancy, security, provider, cache, worker,
 and notification contracts change at a different rate from the ledger kernel and
 must not block its first vertical proof.
@@ -304,7 +304,7 @@ must not block its first vertical proof.
 ---
 
 ### E06-T13: Core posting and strong-balance use cases
-**Status:** pending
+**Status:** completed
 **Background:** The first vertical slice needs one real financial write/read path
 before scheduled transfers, reports, provider sagas, and three public protocols.
 **Files:**
@@ -331,8 +331,8 @@ before scheduled transfers, reports, provider sagas, and three public protocols.
 
 ## Acceptance Criteria
 
-- [ ] E06-T01 … E06-T13 all `completed` (count 40 SP in `tasks/tracking/PROGRESS.md`)
-- [ ] Every api-contracts §7 endpoint group has handlers (`check-tasks.py --handlers`)
-- [ ] Every money-flow pattern has a saga path; ports complete for E07–E10
-- [ ] Application tests ≥85% with `-race -count=3`
-- [ ] SDD gate G3 checks pass — `tasks/tracking/GATES.md#G3`
+- [x] E06-T01 … E06-T13 all `completed` (count 40 SP in `tasks/tracking/PROGRESS.md`)
+- [x] Every api-contracts §7 endpoint group has handlers (`check-tasks.py --handlers`)
+- [x] Every money-flow pattern has a saga path; ports complete for E07–E10
+- [x] Application tests ≥85% with `-race -count=3`
+- [x] SDD gate G3 checks pass — `tasks/tracking/GATES.md#G3`

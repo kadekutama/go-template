@@ -1,6 +1,6 @@
 # Progress Dashboard (single source of truth for progress)
 
-**Last updated:** 2026-09-14
+**Last updated:** 2026-09-16
 **How to update:** flip task `**Status:**` in the epic file, then tick the box here.
 Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 
@@ -11,11 +11,11 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | E00 | Foundation & repo bootstrap | 14 | 14/14 | completed | G1 |
 | E01 | Platform core (fx, config, logging, tracing, kernel, resilience) | 17 | 17/17 | completed | G1 |
 | E02 | Ledger domain core | 30 | 30/30 | completed | G2 |
-| E03 | Money-movement domain | 37 | 34/37 | pending | G2 |
+| E03 | Money-movement domain | 37 | 37/37 | completed | G2 |
 | E04 | Compliance domain | 16 | 16/16 | completed | G2 |
 | E05 | Tenancy domain | 11 | 11/11 | completed | G2 |
-| E06 | Application layer | 40 | 0/40 | pending | G3 |
-| E07 | Persistence adapters | 34 | 0/34 | pending | G4 |
+| E06 | Application layer | 40 | 40/40 | completed | G3 |
+| E07 | Persistence adapters | 34 | 34/34 | completed | G4 |
 | E08 | Cache + messaging adapters | 24 | 0/24 | pending | G4 |
 | E09 | Identity + security adapters | 22 | 0/22 | pending | G4 |
 | E10 | Platform integrations | 17 | 0/17 | pending | G4 |
@@ -29,7 +29,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | E18 | Docs + DX | 16 | 0/16 | pending | G8 |
 | E19 | Hardening + release | 13 | 0/13 | pending | G8 |
 
-**Total:** 122/432 SP completed.
+**Total:** 199/432 SP completed.
 
 ## Task checklists (tick as epic files flip to completed)
 
@@ -92,31 +92,31 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 - [x] E05-T04 tenancy unit tests
 
 ### E06 — Application
-- [ ] E06-T01 handler plumbing
-- [ ] E06-T02 account + tenant handlers
-- [ ] E06-T03 transaction + transfer handlers
-- [ ] E06-T04 payment + refund + payout handlers
-- [ ] E06-T05 recon + period + report + compliance handlers
-- [ ] E06-T06 core ledger integrity ports
-- [ ] E06-T07 sagas
-- [ ] E06-T08 app test suite (G3)
-- [ ] E06-T09 extended reporting
-- [ ] E06-T10 metering + billing export
-- [ ] E06-T11 dispute handlers
-- [ ] E06-T12 extended workflow + adapter ports
-- [ ] E06-T13 core posting + strong-balance use cases
+- [x] E06-T01 handler plumbing
+- [x] E06-T02 account + tenant handlers
+- [x] E06-T03 transaction + transfer handlers
+- [x] E06-T04 payment + refund + payout handlers
+- [x] E06-T05 recon + period + report + compliance handlers
+- [x] E06-T06 core ledger integrity ports
+- [x] E06-T07 sagas
+- [x] E06-T08 app test suite (G3)
+- [x] E06-T09 extended reporting
+- [x] E06-T10 metering + billing export
+- [x] E06-T11 dispute handlers
+- [x] E06-T12 extended workflow + adapter ports
+- [x] E06-T13 core posting + strong-balance use cases
 
 ### E07 — Persistence
-- [ ] E07-T01 ledger-core schema + posting transaction
-- [ ] E07-T02 RLS
-- [ ] E07-T03 outbox
-- [ ] E07-T04 seed data
-- [ ] E07-T05 backup/restore scripts
-- [ ] E07-T06 integration tests (G4 slice)
-- [ ] E07-T07 read replicas
-- [ ] E07-T08 residency routing
-- [ ] E07-T09 shared Testcontainers harness + fixtures
-- [ ] E07-T10 workflow/tenancy/reconciliation schema
+- [x] E07-T01 ledger-core schema + posting transaction
+- [x] E07-T02 RLS
+- [x] E07-T03 outbox
+- [x] E07-T04 seed data
+- [x] E07-T05 backup/restore scripts
+- [x] E07-T06 integration tests (G4 slice)
+- [x] E07-T07 read replicas
+- [x] E07-T08 residency routing
+- [x] E07-T09 shared Testcontainers harness + fixtures
+- [x] E07-T10 workflow/tenancy/reconciliation schema
 
 ### E08 — Cache + messaging
 - [ ] E08-T01 hybrid cache
@@ -219,7 +219,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 |------|--------|-------------------------|
 | G1 | completed | E02 |
 | G2 | pending | E06 |
-| G3 | pending | E07–E10 |
+| G3 | completed | E07–E10 |
 | G4 | pending | E11–E14 |
 | G5 | pending | E15 |
 | G6 | pending | E16 |

@@ -31,7 +31,7 @@ func Postings(tenantID string, ledgerID string) []PostingFixture {
 
 	return []PostingFixture{
 		{
-			PostingID:   "pst-test-funding-01",
+			PostingID:   PostingFunding01,
 			TenantID:    tenantID,
 			LedgerID:    ledgerID,
 			Operation:   "FUNDING",
@@ -53,7 +53,7 @@ func Postings(tenantID string, ledgerID string) []PostingFixture {
 			},
 		},
 		{
-			PostingID:   "pst-test-fee-01",
+			PostingID:   PostingFee01,
 			TenantID:    tenantID,
 			LedgerID:    ledgerID,
 			Operation:   "FEE",
@@ -64,7 +64,7 @@ func Postings(tenantID string, ledgerID string) []PostingFixture {
 			},
 		},
 		{
-			PostingID:   "pst-test-refund-01",
+			PostingID:   PostingRefund01,
 			TenantID:    tenantID,
 			LedgerID:    ledgerID,
 			Operation:   "REFUND",

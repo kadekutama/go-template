@@ -364,15 +364,12 @@ func (s *TransferService) commitTransferPosting(ctx context.Context, tx port.Tx,
 	if err != nil {
 		return "", err
 	}
-	// Posting identities live in their own namespace: a transfer intent and
-	// its posting must never share an ID.
-	postingID := valueobject.PostingID("post:" + transferID)
 	entries := BuildPostingEntries([]port.NewEntry{
 		{AccountID: lines.DebitAccount, Side: valueobject.DirectionDebit, AmountMinor: lines.AmountMinor, AssetCode: lines.AssetCode},
 		{AccountID: lines.CreditAccount, Side: valueobject.DirectionCredit, AmountMinor: lines.AmountMinor, AssetCode: lines.AssetCode},
-	}, postingID, s.ids)
+	}, "")
 	posting, err := aggregate.ConstructPosting(aggregate.PostingParams{
-		ID: postingID, TenantID: req.TenantID, LedgerID: req.LedgerID,
+		ID: "", TenantID: req.TenantID, LedgerID: req.LedgerID,
 		Operation: "transfer", ExternalReference: transferID,
 		Entries: entries, Accounts: accounts,
 		EffectiveAt: now, RecordedAt: now, EventID: eventID,
@@ -380,10 +377,14 @@ func (s *TransferService) commitTransferPosting(ctx context.Context, tx port.Tx,
 	if err != nil {
 		return "", err
 	}
-	if err := tx.Postings().Commit(ctx, posting.Record()); err != nil {
+	stored, err := tx.Postings().Commit(ctx, posting.Record())
+	if err != nil {
 		return "", err
 	}
-	return postingID, nil
+	if err := posting.AssignID(stored.ID, stored.Entries, eventID); err != nil {
+		return "", err
+	}
+	return stored.ID, nil
 }
 
 // requireSameAssetTransfer enforces the slice boundary: this handler posts

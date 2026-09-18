@@ -20,25 +20,32 @@ func Accounts(tenantID string, ledgerID string) []AccountFixture {
 		ledgerID = DefaultLedgerID
 	}
 
-	kinds := []struct {
-		suffix string
-		kind   string
-	}{
-		{suffix: "operating", kind: "OPERATING"},
-		{suffix: "fee", kind: "FEE"},
-		{suffix: "suspense", kind: "SUSPENSE"},
-	}
+	kinds := []string{"OPERATING", "FEE", "SUSPENSE"}
 	assets := []string{AssetUSD, AssetEUR, AssetIDR}
+
+	// Deterministic account IDs keyed by kind/asset (single source of truth
+	// for the chart; postings.go references the same constants).
+	accountIDs := map[string]string{
+		"OPERATING/USD": AcctOperatingUSD,
+		"OPERATING/EUR": AcctOperatingEUR,
+		"OPERATING/IDR": AcctOperatingIDR,
+		"FEE/USD":       AcctFeeUSD,
+		"FEE/EUR":       AcctFeeEUR,
+		"FEE/IDR":       AcctFeeIDR,
+		"SUSPENSE/USD":  AcctSuspenseUSD,
+		"SUSPENSE/EUR":  AcctSuspenseEUR,
+		"SUSPENSE/IDR":  AcctSuspenseIDR,
+	}
 
 	out := make([]AccountFixture, 0, len(kinds)*len(assets))
 	for _, kind := range kinds {
 		for _, asset := range assets {
 			out = append(out, AccountFixture{
-				AccountID: "acct-test-" + kind.suffix + "-" + asset,
+				AccountID: accountIDs[kind+"/"+asset],
 				TenantID:  tenantID,
 				LedgerID:  ledgerID,
 				AssetCode: asset,
-				Kind:      kind.kind,
+				Kind:      kind,
 			})
 		}
 	}

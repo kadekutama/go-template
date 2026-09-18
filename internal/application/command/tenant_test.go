@@ -2,6 +2,7 @@ package command_test
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -20,22 +21,39 @@ type tenantStore struct {
 	tenants map[valueobject.TenantID]entity.TenantData
 }
 
-func (s *tenantStore) Create(_ context.Context, tenant entity.TenantData) error {
+func (s *tenantStore) Create(_ context.Context, tenant entity.TenantData) (entity.TenantData, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.tenants == nil {
 		s.tenants = map[valueobject.TenantID]entity.TenantData{}
 	}
+	if tenant.ID == "" {
+		tenant.ID = valueobject.TenantID(fmt.Sprintf("10000000-0000-4000-8000-%012d", len(s.tenants)+1))
+	}
 	if _, dup := s.tenants[tenant.ID]; dup {
-		return entity.NewError("TENANT_CONFLICT", "tenant id already exists")
+		return entity.TenantData{}, entity.NewError("TENANT_CONFLICT", "tenant id already exists")
 	}
 	for _, existing := range s.tenants {
 		if existing.Name == tenant.Name {
-			return entity.NewError("TENANT_NAME_TAKEN", "tenant name is taken")
+			return entity.TenantData{}, entity.NewError("TENANT_NAME_TAKEN", "tenant name is taken")
 		}
 	}
 	s.tenants[tenant.ID] = tenant
-	return nil
+	return tenant, nil
+}
+
+func (s *tenantStore) ListAliases(_ context.Context) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	aliases := make([]string, 0, len(s.tenants))
+	for _, tenant := range s.tenants {
+		if tenant.Alias != "" {
+			aliases = append(aliases, tenant.Alias)
+		}
+	}
+
+	return aliases, nil
 }
 
 func (s *tenantStore) FindByID(_ context.Context, id valueobject.TenantID) (entity.TenantData, error) {
@@ -123,6 +141,7 @@ func TestTenantProvision(t *testing.T) {
 		expectedTenants    int
 		expectedOutbox     int
 		expectedAuthzCalls int
+		expectedAlias      string
 	}
 
 	testCases := []testCase{
@@ -135,6 +154,7 @@ func TestTenantProvision(t *testing.T) {
 			expectedTenants:    1,
 			expectedOutbox:     1,
 			expectedAuthzCalls: 1,
+			expectedAlias:      "acme",
 		},
 		{
 			name: "duplicate replay returns original single tenant",
@@ -148,6 +168,7 @@ func TestTenantProvision(t *testing.T) {
 			expectedTenants:    1,
 			expectedOutbox:     1,
 			expectedAuthzCalls: 2,
+			expectedAlias:      "acme",
 		},
 		{
 			name: "corrupt idempotency replay returns IDEMPOTENCY_RECORD_INVALID",
@@ -254,6 +275,56 @@ func TestTenantProvision(t *testing.T) {
 			expectedTenants:    0,
 			expectedOutbox:     0,
 			expectedAuthzCalls: 1,
+			expectedAlias:      "",
+		},
+		{
+			name: "explicit alias stored",
+			req: func() port.ProvisionTenantRequest {
+				r := provisionTestTenant()
+				r.Alias = "acme-corp"
+				return r
+			}(),
+			preload:            func(_ *acctUOW, _ *command.TenantService) {},
+			denied:             false,
+			expectedError:      nil,
+			expectedTenants:    1,
+			expectedOutbox:     1,
+			expectedAuthzCalls: 1,
+			expectedAlias:      "acme-corp",
+		},
+		{
+			name: "malformed alias rejected",
+			req: func() port.ProvisionTenantRequest {
+				r := provisionTestTenant()
+				r.Alias = "-bad!"
+				return r
+			}(),
+			preload:            func(_ *acctUOW, _ *command.TenantService) {},
+			denied:             false,
+			expectedError:      entity.NewError("TENANT_ALIAS_INVALID", "tenant alias must be lowercase alphanumeric with hyphens"),
+			expectedTenants:    0,
+			expectedOutbox:     0,
+			expectedAuthzCalls: 0,
+			expectedAlias:      "",
+		},
+		{
+			name: "taken alias resolves with suffix",
+			req: func() port.ProvisionTenantRequest {
+				r := provisionTestTenant()
+				r.IdempotencyKey = "key-2"
+				r.Name = "Acme."
+				return r
+			}(),
+			preload: func(_ *acctUOW, svc *command.TenantService) {
+				_, err := svc.ProvisionTenant(context.Background(), provisionTestTenant())
+				require.NoError(t, err)
+			},
+			denied:             false,
+			expectedError:      nil,
+			expectedTenants:    2,
+			expectedOutbox:     2,
+			expectedAuthzCalls: 2,
+			expectedAlias:      "acme-2",
 		},
 	}
 
@@ -271,6 +342,7 @@ func TestTenantProvision(t *testing.T) {
 			assert.Equal(t, tc.expectedError, err)
 			if tc.expectedError == nil {
 				assert.Equal(t, tc.req.Name, actualResult.Tenant.Name)
+				assert.Equal(t, tc.expectedAlias, actualResult.Tenant.Alias)
 				assert.Equal(t, "cursor-3", actualResult.Cursor)
 			}
 			assert.Len(t, store.tenants, tc.expectedTenants)

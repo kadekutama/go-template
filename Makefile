@@ -121,6 +121,16 @@ migrate-down: ## Roll back one migration (DATABASE_URL required).
 	$(call need-script,./scripts/db/migrate.sh)
 	./scripts/db/migrate.sh down 1
 
+.PHONY: migrate-status
+migrate-status: ## Show applied/pending migrations (DATABASE_URL required).
+	$(call need-script,./scripts/db/migrate.sh)
+	./scripts/db/migrate.sh status
+
+.PHONY: migrate-lint
+migrate-lint: ## Validate Atlas checksums and lint migrations for destructive DDL.
+	$(call need-script,./scripts/db/migrate.sh)
+	./scripts/db/migrate.sh lint
+
 .PHONY: migrate-create
 migrate-create: ## Create a new migration pair (usage: make migrate-create NAME=...).
 	$(call need-script,./scripts/db/migrate.sh)

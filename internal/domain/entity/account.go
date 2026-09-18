@@ -12,14 +12,18 @@ type Ledger struct {
 	ID           valueobject.LedgerID
 	TenantID     valueobject.TenantID
 	Name         string
+	Alias        string
 	BaseAsset    valueobject.AssetCode
 	ChartVersion string
 }
 
-// NewLedger validates ledger identity and scope.
+// NewLedger validates ledger identity and scope. An empty ID is permitted
+// prior to persistence; if set, it must be a valid canonical UUID.
 func NewLedger(id valueobject.LedgerID, tenant valueobject.TenantID, name string, base valueobject.AssetCode, chartVersion string) (Ledger, error) {
-	if id.String() == "" {
-		return Ledger{}, NewError("LEDGER_ID_REQUIRED", "ledger id is required")
+	if id.String() != "" {
+		if _, err := valueobject.ParseLedgerID(id.String()); err != nil {
+			return Ledger{}, NewError("LEDGER_ID_INVALID", "ledger id is invalid")
+		}
 	}
 	if tenant.String() == "" {
 		return Ledger{}, NewError("TENANT_REQUIRED", "tenant id is required")
@@ -58,10 +62,13 @@ type AccountData struct {
 }
 
 // Validate checks structural scope and classification. Number uniqueness is a
-// repository concern, not a domain check.
+// repository concern, not a domain check. An empty ID is permitted prior to
+// persistence; if set, it must be a valid canonical UUID.
 func (a AccountData) Validate() error {
-	if a.ID.String() == "" {
-		return NewError("ACCOUNT_ID_REQUIRED", "account id is required")
+	if a.ID.String() != "" {
+		if _, err := valueobject.ParseAccountID(a.ID.String()); err != nil {
+			return NewError("ACCOUNT_ID_INVALID", "account id is invalid")
+		}
 	}
 	if a.TenantID.String() == "" {
 		return NewError("TENANT_REQUIRED", "tenant id is required")

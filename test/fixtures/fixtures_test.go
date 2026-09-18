@@ -14,27 +14,32 @@ func TestTenantFixtureDeterministic(t *testing.T) {
 	type testCase struct {
 		name           string
 		id             string
+		alias          string
 		expectedTenant fixtures.TenantFixture
 	}
 
 	testCases := []testCase{
 		{
-			name: "default tenant stable ids",
-			id:   "",
+			name:  "default tenant stable ids",
+			id:    "",
+			alias: "",
 			expectedTenant: fixtures.TenantFixture{
-				TenantID: "tnt-test-01",
-				LedgerID: "ldg-test-01",
+				TenantID: "10000000-0000-4000-8000-000000000001",
+				LedgerID: "20000000-0000-4000-8000-000000000001",
 				Name:     "Test Tenant 01",
+				Alias:    "test-tenant-01",
 				Region:   "local",
 			},
 		},
 		{
-			name: "explicit tenant id preserved",
-			id:   "tnt-test-02",
+			name:  "explicit tenant id preserved",
+			id:    "10000000-0000-4000-8000-000000000002",
+			alias: "test-tenant-02",
 			expectedTenant: fixtures.TenantFixture{
-				TenantID: "tnt-test-02",
-				LedgerID: "ldg-test-01",
+				TenantID: "10000000-0000-4000-8000-000000000002",
+				LedgerID: "20000000-0000-4000-8000-000000000001",
 				Name:     "Test Tenant 01",
+				Alias:    "test-tenant-02",
 				Region:   "local",
 			},
 		},
@@ -42,7 +47,7 @@ func TestTenantFixtureDeterministic(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expectedTenant, fixtures.Tenant(tc.id))
+			assert.Equal(t, tc.expectedTenant, fixtures.Tenant(tc.id, tc.alias))
 		})
 	}
 }
@@ -66,8 +71,8 @@ func TestAccountFixturesChart(t *testing.T) {
 		},
 		{
 			name:          "explicit scope preserved",
-			tenantID:      "tnt-test-02",
-			ledgerID:      "ldg-test-02",
+			tenantID:      "10000000-0000-4000-8000-000000000002",
+			ledgerID:      "20000000-0000-4000-8000-000000000002",
 			expectedCount: 9,
 		},
 	}

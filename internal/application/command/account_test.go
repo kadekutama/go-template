@@ -18,8 +18,9 @@ import (
 )
 
 const (
-	acctTenant = valueobject.TenantID("t-1")
-	acctLedger = valueobject.LedgerID("l-1")
+	acctTenant = valueobject.TenantID("10000000-0000-4000-8000-000000000001")
+	acctLedger = valueobject.LedgerID("20000000-0000-4000-8000-000000000001")
+	acctID1    = valueobject.AccountID("40000000-0000-4000-8000-000000000001")
 	acctAsset  = valueobject.AssetCode("USD")
 )
 
@@ -30,17 +31,20 @@ type acctRepo struct {
 	accounts map[valueobject.AccountID]entity.AccountData
 }
 
-func (f *acctRepo) Create(_ context.Context, account entity.AccountData) error {
+func (f *acctRepo) Create(_ context.Context, account entity.AccountData) (entity.AccountData, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if _, dup := f.accounts[account.ID]; dup {
-		return entity.NewError("ACCOUNT_CONFLICT", "account id already exists")
-	}
 	if f.accounts == nil {
 		f.accounts = map[valueobject.AccountID]entity.AccountData{}
 	}
+	if account.ID == "" {
+		account.ID = valueobject.AccountID(fmt.Sprintf("40000000-0000-4000-8000-%012d", len(f.accounts)+1))
+	}
+	if _, dup := f.accounts[account.ID]; dup {
+		return entity.AccountData{}, entity.NewError("ACCOUNT_CONFLICT", "account id already exists")
+	}
 	f.accounts[account.ID] = account
-	return nil
+	return account, nil
 }
 
 func (f *acctRepo) FindByID(_ context.Context, _ valueobject.TenantID, id valueobject.AccountID) (entity.AccountData, error) {
@@ -188,7 +192,7 @@ func (f *acctIDs) NewID() string {
 func acctTestIDs() []string {
 	ids := make([]string, 0, 40)
 	for i := 1; i <= 40; i++ {
-		ids = append(ids, fmt.Sprintf("acct-%02d", i))
+		ids = append(ids, fmt.Sprintf("90000000-0000-4000-8000-%012d", i))
 	}
 	return ids
 }
@@ -341,7 +345,7 @@ func TestAccountOpen(t *testing.T) {
 			repo := &acctRepo{}
 			authz := &acctAuthz{denied: map[string]bool{}}
 			if tc.denied {
-				authz.denied["u-1|account.open|ledger/l-1"] = true
+				authz.denied["u-1|account.open|ledger/"+string(acctLedger)] = true
 			}
 			svc := newAccountService(uow, repo, authz)
 			tc.preload(uow, svc)
@@ -466,7 +470,7 @@ func TestUpdateAccount(t *testing.T) {
 
 	baseReq := port.UpdateAccountRequest{
 		TenantID:        acctTenant,
-		AccountID:       valueobject.AccountID("acct-1"),
+		AccountID:       acctID1,
 		Name:            "Operating Account Updated",
 		Purpose:         "Updated treasury ops",
 		Metadata:        map[string]string{"env": "staging"},
@@ -491,7 +495,7 @@ func TestUpdateAccount(t *testing.T) {
 			denied:      false,
 			expectedResult: port.AccountResult{
 				Account: entity.AccountData{
-					ID:        valueobject.AccountID("acct-1"),
+					ID:        acctID1,
 					TenantID:  acctTenant,
 					LedgerID:  acctLedger,
 					Number:    "1000",
@@ -609,7 +613,7 @@ func TestUpdateAccount(t *testing.T) {
 			if tc.seedAccount {
 				opened, err := svc.OpenAccount(context.Background(), openTestAccount())
 				require.NoError(t, err)
-				if req.AccountID == valueobject.AccountID("acct-1") {
+				if req.AccountID == acctID1 {
 					req.AccountID = opened.Account.ID
 				}
 			}

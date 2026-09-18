@@ -96,20 +96,21 @@ type txPostings struct {
 }
 
 // Commit stores the posting, then captures its cursor in-transaction.
-func (p *txPostings) Commit(ctx context.Context, posting entity.PostingData) error {
-	if err := p.PostingRepository.Commit(ctx, posting); err != nil {
-		return err
+func (p *txPostings) Commit(ctx context.Context, posting entity.PostingData) (entity.PostingData, error) {
+	stored, err := p.PostingRepository.Commit(ctx, posting)
+	if err != nil {
+		return entity.PostingData{}, err
 	}
 
 	// Same-tx read: the row is visible here even before outer commit.
-	cursor, err := p.CursorOf(ctx, posting.ID)
+	cursor, err := p.CursorOf(ctx, stored.ID)
 	if err != nil {
-		return err
+		return entity.PostingData{}, err
 	}
 
 	p.onCursor(cursor)
 
-	return nil
+	return stored, nil
 }
 
 // setCursor records the latest posting cursor of this transaction.

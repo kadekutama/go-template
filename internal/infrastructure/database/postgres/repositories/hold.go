@@ -32,27 +32,28 @@ func NewHoldRepository(params HoldRepositoryParams) (*HoldRepository, error) {
 	return &HoldRepository{db: params.DB}, nil
 }
 
-// Create stores a new ACTIVE hold; duplicate IDs conflict.
-func (r *HoldRepository) Create(ctx context.Context, hold entity.HoldData) error {
+// Create stores a new ACTIVE hold and returns it with the
+// database-assigned ID; duplicate IDs conflict.
+func (r *HoldRepository) Create(ctx context.Context, hold entity.HoldData) (entity.HoldData, error) {
 	if err := hold.Validate(); err != nil {
-		return err
+		return entity.HoldData{}, err
 	}
 
 	if err := scopeTenant(ctx, r.db, hold.TenantID); err != nil {
-		return err
+		return entity.HoldData{}, err
 	}
 
 	model := holdToModel(hold)
 
 	if err := r.db.WithContext(ctx).Create(&model).Error; err != nil {
 		if isDuplicate(err) {
-			return ErrConflict
+			return entity.HoldData{}, ErrConflict
 		}
 
-		return fmt.Errorf("postgres: create hold: %w", err)
+		return entity.HoldData{}, fmt.Errorf("postgres: create hold: %w", err)
 	}
 
-	return nil
+	return holdToEntity(model), nil
 }
 
 // FindByID returns one hold by tenant + ID (strong read).

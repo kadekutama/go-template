@@ -31,8 +31,8 @@ type reversePostings struct {
 	err     error
 }
 
-func (s *reversePostings) Commit(_ context.Context, _ entity.PostingData) error {
-	return nil
+func (s *reversePostings) Commit(_ context.Context, posting entity.PostingData) (entity.PostingData, error) {
+	return posting, nil
 }
 
 func (s *reversePostings) FindByID(_ context.Context, _ valueobject.TenantID, _ valueobject.PostingID) (entity.PostingData, error) {
@@ -52,8 +52,8 @@ func reverseOriginal() entity.PostingData {
 		ID: "123e4567-e89b-12d3-a456-426614174010", TenantID: tfrTenant, LedgerID: tfrLedger,
 		Operation: "transfer", ExternalReference: "ext-9", Description: "original",
 		Entries: []entity.Entry{
-			{ID: "e-1", PostingID: "123e4567-e89b-12d3-a456-426614174010", AccountID: tfrSrc, Side: valueobject.DirectionDebit, AmountMinor: 5000, AssetCode: tfrAsset, AccountSeq: 1},
-			{ID: "e-2", PostingID: "123e4567-e89b-12d3-a456-426614174010", AccountID: tfrDst, Side: valueobject.DirectionCredit, AmountMinor: 5000, AssetCode: tfrAsset, AccountSeq: 1},
+			{ID: "123e4567-e89b-12d3-a456-426614174011", PostingID: "123e4567-e89b-12d3-a456-426614174010", AccountID: tfrSrc, Side: valueobject.DirectionDebit, AmountMinor: 5000, AssetCode: tfrAsset, AccountSeq: 1},
+			{ID: "123e4567-e89b-12d3-a456-426614174012", PostingID: "123e4567-e89b-12d3-a456-426614174010", AccountID: tfrDst, Side: valueobject.DirectionCredit, AmountMinor: 5000, AssetCode: tfrAsset, AccountSeq: 1},
 		},
 		EffectiveAt: tfrAt, RecordedAt: tfrAt,
 	}
@@ -183,5 +183,5 @@ func TestPostTransactionDelegates(t *testing.T) {
 
 	actualResult, err := svc.PostTransaction(context.Background(), postTestCommand())
 	assert.NoError(t, err)
-	assert.Equal(t, "id-01", string(actualResult.PostingID))
+	assert.Equal(t, "50000000-0000-4000-8000-000000000001", string(actualResult.PostingID))
 }

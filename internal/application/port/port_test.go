@@ -69,12 +69,12 @@ type fakePostingRepo struct {
 	committed map[valueobject.PostingID]entity.PostingData
 }
 
-func (f *fakePostingRepo) Commit(_ context.Context, posting entity.PostingData) error {
+func (f *fakePostingRepo) Commit(_ context.Context, posting entity.PostingData) (entity.PostingData, error) {
 	if f.staged == nil {
 		f.staged = map[valueobject.PostingID]entity.PostingData{}
 	}
 	f.staged[posting.ID] = posting
-	return nil
+	return posting, nil
 }
 
 func (f *fakePostingRepo) FindByID(_ context.Context, _ valueobject.TenantID, id valueobject.PostingID) (entity.PostingData, error) {
@@ -98,12 +98,12 @@ type fakeHoldRepo struct {
 	staged map[valueobject.HoldID]entity.HoldData
 }
 
-func (f *fakeHoldRepo) Create(_ context.Context, hold entity.HoldData) error {
+func (f *fakeHoldRepo) Create(_ context.Context, hold entity.HoldData) (entity.HoldData, error) {
 	if f.staged == nil {
 		f.staged = map[valueobject.HoldID]entity.HoldData{}
 	}
 	f.staged[hold.ID] = hold
-	return nil
+	return hold, nil
 }
 
 func (f *fakeHoldRepo) FindByID(_ context.Context, _ valueobject.TenantID, _ valueobject.HoldID) (entity.HoldData, error) {
@@ -267,7 +267,7 @@ func TestUnitOfWorkAtomicity(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			uow := &fakeUnitOfWork{}
 			err := uow.Do(context.Background(), func(_ context.Context, tx port.Tx) error {
-				commitErr := tx.Postings().Commit(context.Background(), entity.PostingData{ID: "p-1"})
+				_, commitErr := tx.Postings().Commit(context.Background(), entity.PostingData{ID: "p-1"})
 				assert.NoError(t, commitErr)
 				outboxErr := tx.Outbox().Append(context.Background(), port.OutboxFact{EventType: "transfer.completed.v1"})
 				assert.NoError(t, outboxErr)

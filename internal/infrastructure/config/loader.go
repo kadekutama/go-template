@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
@@ -51,7 +52,21 @@ func Load(base string, overlays ...string) (*Config, error) {
 	}
 
 	var cfg Config
-	if err := k.UnmarshalWithConf("", &cfg, koanf.UnmarshalConf{Tag: "koanf"}); err != nil {
+	// DecoderConfig replicates koanf's defaults (duration parsing, weak
+	// typing for APP_ string scalars) and adds comma-splitting so list
+	// leaves (e.g. APP_COORDINATION__ETCD_ENDPOINTS=a,b) decode from env.
+	decodeHooks := mapstructure.ComposeDecodeHookFunc(
+		mapstructure.StringToTimeDurationHookFunc(),
+		mapstructure.StringToSliceHookFunc(","),
+	)
+	if err := k.UnmarshalWithConf("", &cfg, koanf.UnmarshalConf{
+		Tag: "koanf",
+		DecoderConfig: &mapstructure.DecoderConfig{
+			DecodeHook:       decodeHooks,
+			Metadata:         nil,
+			WeaklyTypedInput: true,
+		},
+	}); err != nil {
 		return nil, fmt.Errorf("decode config: %w", err)
 	}
 

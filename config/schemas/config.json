@@ -31,7 +31,10 @@
         "user": { "type": "string", "minLength": 1 },
         "password": { "type": "string", "minLength": 1 },
         "name": { "type": "string", "minLength": 1 },
-        "sslmode": { "type": "string", "enum": ["disable", "require", "verify-full"] }
+        "sslmode": { "type": "string", "enum": ["disable", "require", "verify-full"] },
+        "max_open_conns": { "type": "integer", "minimum": 1 },
+        "max_idle_conns": { "type": "integer", "minimum": 0 },
+        "conn_max_lifetime_sec": { "type": "integer", "minimum": 1 }
       }
     },
     "cache": {
@@ -61,6 +64,7 @@
     "observability": {
       "type": "object",
       "properties": {
+        "log_level": { "type": "string", "enum": ["debug", "info", "warn", "error", ""] },
         "otlp_endpoint": { "type": "string" },
         "sample_ratio": { "type": "number", "minimum": 0, "maximum": 1 }
       }
@@ -76,6 +80,16 @@
       "properties": {
         "provider": { "type": "string", "enum": ["openbao", "bitwarden", "env", ""] }
       }
+    },
+    "coordination": {
+      "type": "object",
+      "properties": {
+        "etcd_endpoints": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "etcd_dial_timeout_sec": { "type": "integer", "minimum": 1 },
+        "etcd_election_ttl_sec": { "type": "integer", "minimum": 1 },
+        "leader_key_prefix": { "type": "string" }
+      }
     }
   }
 }
+

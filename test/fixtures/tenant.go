@@ -8,19 +8,27 @@ type TenantFixture struct {
 	TenantID string
 	LedgerID string
 	Name     string
+	Alias    string
 	Region   string
 }
 
-// Tenant returns the stable default tenant fixture.
-func Tenant(id string) TenantFixture {
+// Tenant returns a deterministic tenant fixture. Empty id and alias resolve
+// to the stable defaults; explicit values pass through untouched so every
+// caller owns alias uniqueness (aliases are globally UNIQUE).
+func Tenant(id string, alias string) TenantFixture {
 	if id == "" {
 		id = DefaultTenantID
+	}
+
+	if alias == "" {
+		alias = DefaultTenantAlias
 	}
 
 	return TenantFixture{
 		TenantID: id,
 		LedgerID: DefaultLedgerID,
 		Name:     "Test Tenant 01",
+		Alias:    alias,
 		Region:   "local",
 	}
 }

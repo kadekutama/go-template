@@ -107,18 +107,11 @@ func (s *TransactionService) loadReversalSnapshot(ctx context.Context, req Rever
 	if err != nil {
 		return reversalSnapshot{}, err
 	}
-	mirrored := make([]string, 0, len(original.Entries))
-	newID := valueobject.PostingID(s.ids.NewID())
 	eventID := s.ids.NewID()
-	for range original.Entries {
-		mirrored = append(mirrored, s.ids.NewID())
-	}
 	return reversalSnapshot{
 		original: original,
 		accounts: accounts,
-		newID:    newID,
 		eventID:  eventID,
-		mirrored: mirrored,
 		now:      s.clock.Now().UTC(),
 	}, nil
 }
@@ -139,16 +132,20 @@ func (s *TransactionService) reverseInTx(ctx context.Context, tx port.Tx, req Re
 		return nil
 	}
 	reversed, err := aggregate.ReversePosting(aggregate.LoadPosting(snapshot.original), snapshot.accounts, aggregate.ReverseParams{
-		NewID: snapshot.newID, Reason: req.Reason, Actor: valueobject.UserID(req.Actor),
-		EventID: snapshot.eventID, At: snapshot.now, IDGen: &fixedIDGen{next: snapshot.mirrored},
+		NewID: "", Reason: req.Reason, Actor: valueobject.UserID(req.Actor),
+		EventID: snapshot.eventID, At: snapshot.now,
 	})
 	if err != nil {
 		return err
 	}
-	if err := tx.Postings().Commit(ctx, reversed.Record()); err != nil {
+	stored, err := tx.Postings().Commit(ctx, reversed.Record())
+	if err != nil {
 		return err
 	}
-	*result = port.PostingResult{PostingID: reversed.ID(), TenantID: req.TenantID, LedgerID: snapshot.original.LedgerID, Cursor: tx.Cursor()}
+	if err := reversed.AssignID(stored.ID, stored.Entries, snapshot.eventID); err != nil {
+		return err
+	}
+	*result = port.PostingResult{PostingID: stored.ID, TenantID: req.TenantID, LedgerID: snapshot.original.LedgerID, Cursor: tx.Cursor()}
 	encoded, err := jsonparser.Marshal(*result)
 	if err != nil {
 		return err
@@ -157,7 +154,7 @@ func (s *TransactionService) reverseInTx(ctx context.Context, tx port.Tx, req Re
 		TenantID:    req.TenantID,
 		LedgerID:    snapshot.original.LedgerID,
 		EventType:   "transaction.reversed.v1",
-		AggregateID: string(reversed.ID()),
+		AggregateID: string(stored.ID),
 		Payload:     encoded,
 		OccurredAt:  snapshot.now,
 	}); err != nil {
@@ -171,9 +168,7 @@ func (s *TransactionService) reverseInTx(ctx context.Context, tx port.Tx, req Re
 type reversalSnapshot struct {
 	original entity.PostingData
 	accounts map[valueobject.AccountID]entity.AccountData
-	newID    valueobject.PostingID
 	eventID  string
-	mirrored []string
 	now      time.Time
 }
 
@@ -212,15 +207,4 @@ func (s *TransactionService) loadOriginalAccounts(ctx context.Context, tenant va
 		accounts[entry.AccountID] = account
 	}
 	return accounts, nil
-}
-
-// fixedIDGen replays pre-minted identities so retried callbacks reuse them.
-type fixedIDGen struct {
-	next []string
-}
-
-func (f *fixedIDGen) NewID() string {
-	id := f.next[0]
-	f.next = f.next[1:]
-	return id
 }

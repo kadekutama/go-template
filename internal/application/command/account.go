@@ -52,14 +52,13 @@ func (s *AccountService) OpenAccount(ctx context.Context, req port.OpenAccountRe
 	if err := validateOpenAccount(req); err != nil {
 		return port.AccountResult{}, err
 	}
-	accountID := valueobject.AccountID(s.ids.NewID())
 	eventID := s.ids.NewID()
 	now := s.clock.Now().UTC()
 	return s.runAccountCommand(ctx, req.TenantID, req.Actor, "account.open", "ledger/"+string(req.LedgerID), req.IdempotencyKey,
 		accountFingerprint(append([]string{"open", string(req.TenantID), string(req.LedgerID), req.IdempotencyKey, req.Number, req.Name, string(req.Class), string(req.AssetCode), req.Purpose}, MapParts("metadata", req.Metadata)...)...),
 		func(ctx context.Context, tx port.Tx) (entity.AccountData, event.DomainEvent, error) {
 			account, err := aggregate.OpenAccount(aggregate.OpenAccountParams{
-				ID: accountID, TenantID: req.TenantID, LedgerID: req.LedgerID,
+				ID: "", TenantID: req.TenantID, LedgerID: req.LedgerID,
 				Number: req.Number, Name: req.Name, Class: req.Class, AssetCode: req.AssetCode,
 				Purpose: req.Purpose, Metadata: req.Metadata, OpenedBy: valueobject.UserID(req.Actor),
 				EventID: eventID, OccurredAt: now,
@@ -67,10 +66,14 @@ func (s *AccountService) OpenAccount(ctx context.Context, req port.OpenAccountRe
 			if err != nil {
 				return entity.AccountData{}, nil, err
 			}
-			if err := s.accounts.Create(ctx, account.Record()); err != nil {
+			stored, err := s.accounts.Create(ctx, account.Record())
+			if err != nil {
 				return entity.AccountData{}, nil, err
 			}
-			return account.Record(), firstEvent(account), nil
+			if err := account.AssignID(stored.ID, eventID, now, valueobject.UserID(req.Actor)); err != nil {
+				return entity.AccountData{}, nil, err
+			}
+			return stored, firstEvent(account), nil
 		})
 }
 

@@ -26,21 +26,31 @@ func (_m *MockLedgerRepository) EXPECT() *MockLedgerRepository_Expecter {
 }
 
 // Create provides a mock function with given fields: ctx, ledger
-func (_m *MockLedgerRepository) Create(ctx context.Context, ledger entity.Ledger) error {
+func (_m *MockLedgerRepository) Create(ctx context.Context, ledger entity.Ledger) (entity.Ledger, error) {
 	ret := _m.Called(ctx, ledger)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Create")
 	}
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, entity.Ledger) error); ok {
+	var r0 entity.Ledger
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, entity.Ledger) (entity.Ledger, error)); ok {
+		return rf(ctx, ledger)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, entity.Ledger) entity.Ledger); ok {
 		r0 = rf(ctx, ledger)
 	} else {
-		r0 = ret.Error(0)
+		r0 = ret.Get(0).(entity.Ledger)
 	}
 
-	return r0
+	if rf, ok := ret.Get(1).(func(context.Context, entity.Ledger) error); ok {
+		r1 = rf(ctx, ledger)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // MockLedgerRepository_Create_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Create'
@@ -62,12 +72,12 @@ func (_c *MockLedgerRepository_Create_Call) Run(run func(ctx context.Context, le
 	return _c
 }
 
-func (_c *MockLedgerRepository_Create_Call) Return(_a0 error) *MockLedgerRepository_Create_Call {
-	_c.Call.Return(_a0)
+func (_c *MockLedgerRepository_Create_Call) Return(_a0 entity.Ledger, _a1 error) *MockLedgerRepository_Create_Call {
+	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *MockLedgerRepository_Create_Call) RunAndReturn(run func(context.Context, entity.Ledger) error) *MockLedgerRepository_Create_Call {
+func (_c *MockLedgerRepository_Create_Call) RunAndReturn(run func(context.Context, entity.Ledger) (entity.Ledger, error)) *MockLedgerRepository_Create_Call {
 	_c.Call.Return(run)
 	return _c
 }

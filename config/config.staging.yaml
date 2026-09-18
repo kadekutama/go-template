@@ -12,6 +12,9 @@ database:
   password: "{{ secret:db/staging/password }}"
   name: app
   sslmode: require
+  max_open_conns: 25
+  max_idle_conns: 5
+  conn_max_lifetime_sec: 1800
 cache:
   host: valkey.staging.svc
   port: 6379
@@ -22,9 +25,17 @@ auth:
 nats:
   url: nats://nats.staging.svc:4222
 observability:
+  log_level: info
   otlp_endpoint: https://tempo.staging.svc:4317
   sample_ratio: 0.1
 feature_flags:
   unleash_url: https://unleash.staging.svc:4242
 secrets:
   provider: openbao
+coordination:
+  etcd_endpoints:
+    - http://etcd.staging.svc:2379
+  etcd_dial_timeout_sec: 5
+  etcd_election_ttl_sec: 5
+  leader_key_prefix: "/finance/worker-leader"
+

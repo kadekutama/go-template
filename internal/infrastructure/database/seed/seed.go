@@ -13,18 +13,21 @@ import (
 
 // Stable seed identifiers (single source of truth for the dev plan).
 const (
-	TenantID = "tnt-test-01"
-	LedgerID = "ldg-test-01"
+	TenantID = "10000000-0000-4000-8000-000000000001"
+	LedgerID = "20000000-0000-4000-8000-000000000001"
 
-	AcctOperatingUSD = "acct-test-operating-USD"
-	AcctOperatingEUR = "acct-test-operating-EUR"
-	AcctOperatingIDR = "acct-test-operating-IDR"
-	AcctFeeUSD       = "acct-test-fee-USD"
-	AcctFeeEUR       = "acct-test-fee-EUR"
-	AcctFeeIDR       = "acct-test-fee-IDR"
-	AcctSuspenseUSD  = "acct-test-suspense-USD"
-	AcctSuspenseEUR  = "acct-test-suspense-EUR"
-	AcctSuspenseIDR  = "acct-test-suspense-IDR"
+	TenantAlias = "test-tenant-01"
+	LedgerAlias = "test-ledger-01"
+
+	AcctOperatingUSD = "30000000-0000-4000-8000-000000000001"
+	AcctOperatingEUR = "30000000-0000-4000-8000-000000000002"
+	AcctOperatingIDR = "30000000-0000-4000-8000-000000000003"
+	AcctFeeUSD       = "30000000-0000-4000-8000-000000000004"
+	AcctFeeEUR       = "30000000-0000-4000-8000-000000000005"
+	AcctFeeIDR       = "30000000-0000-4000-8000-000000000006"
+	AcctSuspenseUSD  = "30000000-0000-4000-8000-000000000007"
+	AcctSuspenseEUR  = "30000000-0000-4000-8000-000000000008"
+	AcctSuspenseIDR  = "30000000-0000-4000-8000-000000000009"
 )
 
 // Seed classification literals matching chart AccountClass and Direction value objects.
@@ -45,6 +48,7 @@ type TenantSeed struct {
 	TenantID string
 	LedgerID string
 	Name     string
+	Alias    string
 	Region   string
 }
 
@@ -53,6 +57,7 @@ type LedgerSeed struct {
 	ID           string
 	TenantID     string
 	Name         string
+	Alias        string
 	BaseAsset    string
 	ChartVersion string
 }
@@ -112,7 +117,7 @@ type PlannedPosting struct {
 // DevPlan returns the default development plan covering funding, transfer,
 // fee, and refund patterns.
 func DevPlan() Plan {
-	tenant := TenantSeed{TenantID: TenantID, LedgerID: LedgerID, Name: "Test Tenant 01", Region: "local"}
+	tenant := TenantSeed{TenantID: TenantID, LedgerID: LedgerID, Name: "Test Tenant 01", Alias: TenantAlias, Region: "local"}
 
 	accounts := []AccountSeed{
 		{ID: AcctOperatingUSD, TenantID: TenantID, LedgerID: LedgerID, Number: "001000", Name: AcctOperatingUSD, Class: ClassOperating, AssetCode: AssetUSD, Status: StatusActive, Version: 1},
@@ -128,7 +133,7 @@ func DevPlan() Plan {
 
 	postings := []PlannedPosting{
 		{
-			ID: "pst-test-funding-01", TenantID: TenantID, LedgerID: LedgerID,
+			ID: "40000000-0000-4000-8000-000000000001", TenantID: TenantID, LedgerID: LedgerID,
 			Operation: "FUNDING", Description: "initial funding",
 			Lines: []PostingLine{
 				{AccountID: AcctOperatingUSD, Side: SideDebit, AmountMinor: 100000, AssetCode: AssetUSD},
@@ -136,7 +141,7 @@ func DevPlan() Plan {
 			},
 		},
 		{
-			ID: "pst-test-transfer-01", TenantID: TenantID, LedgerID: LedgerID,
+			ID: "40000000-0000-4000-8000-000000000002", TenantID: TenantID, LedgerID: LedgerID,
 			Operation: "TRANSFER", Description: "test transfer",
 			Lines: []PostingLine{
 				{AccountID: AcctOperatingUSD, Side: SideCredit, AmountMinor: 25000, AssetCode: AssetUSD},
@@ -144,7 +149,7 @@ func DevPlan() Plan {
 			},
 		},
 		{
-			ID: "pst-test-fee-01", TenantID: TenantID, LedgerID: LedgerID,
+			ID: "40000000-0000-4000-8000-000000000003", TenantID: TenantID, LedgerID: LedgerID,
 			Operation: "FEE", Description: "test fee",
 			Lines: []PostingLine{
 				{AccountID: AcctOperatingUSD, Side: SideDebit, AmountMinor: 290, AssetCode: AssetUSD},
@@ -152,7 +157,7 @@ func DevPlan() Plan {
 			},
 		},
 		{
-			ID: "pst-test-refund-01", TenantID: TenantID, LedgerID: LedgerID,
+			ID: "40000000-0000-4000-8000-000000000004", TenantID: TenantID, LedgerID: LedgerID,
 			Operation: "REFUND", Description: "test refund",
 			Lines: []PostingLine{
 				{AccountID: AcctOperatingUSD, Side: SideDebit, AmountMinor: 5000, AssetCode: AssetUSD},
@@ -164,7 +169,7 @@ func DevPlan() Plan {
 	return Plan{
 		Tenant: tenant,
 		Ledgers: []LedgerSeed{
-			{ID: LedgerID, TenantID: TenantID, Name: "Dev Ledger", BaseAsset: AssetUSD, ChartVersion: "v1"},
+			{ID: LedgerID, TenantID: TenantID, Name: "Dev Ledger", Alias: LedgerAlias, BaseAsset: AssetUSD, ChartVersion: "v1"},
 		},
 		Accounts: accounts,
 		Postings: postings,

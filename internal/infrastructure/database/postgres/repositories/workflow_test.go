@@ -58,17 +58,10 @@ func TestWorkflowStoreTenantClosed(t *testing.T) {
 			name: "create without tenant",
 			operation: func() error {
 				store := &WorkflowStore{db: nil}
-				return store.Create(context.Background(), WorkflowRecord{ID: "wfl-01"})
+				_, err := store.Create(context.Background(), WorkflowRecord{ID: "wfl-01"})
+				return err
 			},
 			expectedError: errors.New("postgres: tenant is required"),
-		},
-		{
-			name: "create without id",
-			operation: func() error {
-				store := &WorkflowStore{db: nil}
-				return store.Create(context.Background(), WorkflowRecord{TenantID: "tnt-01"})
-			},
-			expectedError: errors.New("postgres: workflow id is required"),
 		},
 		{
 			name: "find without tenant",
@@ -91,7 +84,8 @@ func TestWorkflowStoreTenantClosed(t *testing.T) {
 			name: "recon source without tenant",
 			operation: func() error {
 				store := &WorkflowStore{db: nil}
-				return store.StoreReconSource(context.Background(), ReconSourceRecord{ID: "src-01", PayloadHash: "h"})
+				_, err := store.StoreReconSource(context.Background(), ReconSourceRecord{ID: "src-01", PayloadHash: "h"})
+				return err
 			},
 			expectedError: errors.New("postgres: tenant is required"),
 		},
@@ -99,7 +93,8 @@ func TestWorkflowStoreTenantClosed(t *testing.T) {
 			name: "recon source without hash",
 			operation: func() error {
 				store := &WorkflowStore{db: nil}
-				return store.StoreReconSource(context.Background(), ReconSourceRecord{ID: "src-01", TenantID: "tnt-01"})
+				_, err := store.StoreReconSource(context.Background(), ReconSourceRecord{ID: "src-01", TenantID: "tnt-01"})
+				return err
 			},
 			expectedError: errors.New("postgres: payload hash is required"),
 		},

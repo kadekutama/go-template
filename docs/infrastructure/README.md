@@ -419,6 +419,16 @@ flowchart TD
 | **Loki** | 2 | Microservices mode (Read/Write split) | `3100` | `9096` | MinIO / S3 distributed object store |
 | **Tempo** | 1 | Distributed tracing backend | `4317` | `4318` | MinIO / S3 block storage |
 
+### Deployment profiles (E07.1)
+
+- **Profile A (Compose):** `deployments/docker/docker-compose.citus-patroni.yml` builds
+  `deployments/patroni/Dockerfile` (Citus 14.0 + Patroni v4.1.5) for the coordinator
+  (1 primary + 1 standby, `localhost:5432`) and two worker shards, supervised by the
+  3-node etcd DCS; `citus-init` enables the extension and registers workers
+  (verify with `SELECT nodename FROM pg_dist_node;`).
+- **Profile B (Kubernetes):** `deployments/k8s/cloudnativepg/` (CNPG v1.30.0 Cluster CRs,
+  backup stanza, worker-registration Job, NetworkPolicies).
+
 ---
 
 ## 11. Failure Scenarios & Self-Healing Drills
@@ -536,18 +546,18 @@ Ariga Atlas pioneered schema-as-code and migration safety linting:
 To eliminate merge conflicts across concurrent engineering branches while strictly honoring migration immutability:
 ```
 internal/infrastructure/database/migration/versions/
-├── 000001_ledger_core.sql
-├── 000002_idempotency_outbox.sql
-├── 000003_workflow_tenancy_recon.sql
-├── 000004_rls_policies.sql
+├── 20260901000001_ledger_core.sql
+├── 20260901000002_idempotency_outbox.sql
+├── 20260901000003_workflow_tenancy_recon.sql
+├── 20260901000004_rls_policies.sql
 ├── 20260901000005_citus_distribution.sql
 └── atlas.sum
 ```
 
-1. **History Preservation Without Renumbering**:
-   - Historical baseline migrations `000001` through `000004` maintain their original numeric prefixes, merging the `.up.sql` and `.down.sql` pairs into unified single files using `-- +goose Up` and `-- +goose Down`.
-   - Goose parses numeric prefixes as integer versions `1, 2, 3, 4`.
-   - All future migrations starting after `000004` use 14-digit UTC timestamps (`YYYYMMDDHHMMSS_<name>.sql`). Goose orders integer versions before timestamp versions (`1 < 2 < 3 < 4 < 20260901000005`).
+1. **Timestamped Versions, No Legacy Numbers**:
+   - All migration files use 14-digit UTC timestamps (`YYYYMMDDHHMMSS_<name>.sql`); the pre-release `000001`–`000004` baseline was renamed once per owner directive (zero deployed databases) so no incrementing names remain.
+   - Goose parses every numeric prefix as an integer version and applies them in ascending order.
+   - All future migrations use 14-digit UTC timestamps. The validator rejects bad names, legacy gaps (for any residual 6-digit files), and duplicate versions.
 
 2. **Automatic One-Time Ledger Bootstrap**:
    Existing databases in development and staging have a `schema_migrations` table with rows `1..4`. When Goose initializes, `NewRunner` executes a one-time bootstrap copying applied versions into `goose_db_version`:

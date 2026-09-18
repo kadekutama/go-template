@@ -1,6 +1,7 @@
 package service_test
 
 import (
+	"strconv"
 	"testing"
 	"time"
 
@@ -14,8 +15,8 @@ import (
 
 func baseOnboardingRequest() service.OnboardingRequest {
 	return service.OnboardingRequest{
-		TenantID: "t-1",
-		LedgerID: "l-1",
+		TenantID: "10000000-0000-4000-8000-000000000001",
+		LedgerID: "20000000-0000-4000-8000-000000000001",
 		Name:     "Acme Corp",
 		Region:   "us-east-1",
 		Settings: entity.TenantSettings{
@@ -25,7 +26,7 @@ func baseOnboardingRequest() service.OnboardingRequest {
 		Assets:         []valueobject.AssetCode{"USD", "EUR"},
 		ExistingNames:  []string{"Other Corp"},
 		AllowedRegions: []string{"us-east-1", "eu-west-1"},
-		RequestedBy:    "u-1",
+		RequestedBy:    "30000000-0000-4000-8000-000000000001",
 		EventID:        "ev-1",
 		Now:            time.Date(2026, 9, 14, 0, 0, 0, 0, time.UTC),
 	}
@@ -69,44 +70,64 @@ func TestValidateOnboarding(t *testing.T) {
 			expectedError: entity.NewError("TENANT_REGION_INVALID", "tenant region is not allowed"),
 		},
 		{
-			name: "missing tenant id",
+			name: "missing tenant id permitted before persistence",
 			req: func() service.OnboardingRequest {
 				r := baseOnboardingRequest()
 				r.TenantID = ""
 				return r
 			}(),
-			expectedCount: 0,
-			expectedError: entity.NewError("TENANT_ID_REQUIRED", "tenant id is required"),
+			expectedCount: 6,
+			expectedError: nil,
 		},
 		{
-			name: "whitespace tenant id",
+			name: "whitespace tenant id rejected",
 			req: func() service.OnboardingRequest {
 				r := baseOnboardingRequest()
 				r.TenantID = "   "
 				return r
 			}(),
 			expectedCount: 0,
-			expectedError: entity.NewError("TENANT_ID_REQUIRED", "tenant id is required"),
+			expectedError: entity.NewError("TENANT_ID_INVALID", "tenant id is invalid"),
 		},
 		{
-			name: "missing ledger id",
+			name: "invalid tenant id format",
+			req: func() service.OnboardingRequest {
+				r := baseOnboardingRequest()
+				r.TenantID = "not-a-uuid"
+				return r
+			}(),
+			expectedCount: 0,
+			expectedError: entity.NewError("TENANT_ID_INVALID", "tenant id is invalid"),
+		},
+		{
+			name: "missing ledger id permitted before persistence",
 			req: func() service.OnboardingRequest {
 				r := baseOnboardingRequest()
 				r.LedgerID = ""
 				return r
 			}(),
-			expectedCount: 0,
-			expectedError: entity.NewError("LEDGER_REQUIRED", "ledger id is required"),
+			expectedCount: 6,
+			expectedError: nil,
 		},
 		{
-			name: "whitespace ledger id",
+			name: "whitespace ledger id rejected",
 			req: func() service.OnboardingRequest {
 				r := baseOnboardingRequest()
 				r.LedgerID = "   "
 				return r
 			}(),
 			expectedCount: 0,
-			expectedError: entity.NewError("LEDGER_REQUIRED", "ledger id is required"),
+			expectedError: entity.NewError("LEDGER_ID_INVALID", "ledger id is invalid"),
+		},
+		{
+			name: "invalid ledger id format",
+			req: func() service.OnboardingRequest {
+				r := baseOnboardingRequest()
+				r.LedgerID = "not-a-uuid"
+				return r
+			}(),
+			expectedCount: 0,
+			expectedError: entity.NewError("LEDGER_ID_INVALID", "ledger id is invalid"),
 		},
 		{
 			name: "invalid settings rejected",
@@ -186,10 +207,12 @@ func TestValidateOnboarding(t *testing.T) {
 			assert.Equal(t, tc.expectedError, err)
 			if tc.expectedError == nil {
 				assert.Len(t, plan.Accounts, tc.expectedCount)
-				assert.Equal(t, "t-1", plan.Tenant.ID.String())
-				assert.Equal(t, "l-1", plan.LedgerID)
+				assert.Equal(t, tc.req.TenantID.String(), plan.Tenant.ID.String())
+				assert.Equal(t, tc.req.LedgerID.String(), plan.LedgerID)
 				assert.Equal(t, "Acme Corp", plan.Event.Name)
-				assert.NotEmpty(t, plan.Key.KeyID)
+				if tc.req.TenantID.String() != "" {
+					assert.NotEmpty(t, plan.Key.KeyID)
+				}
 			} else {
 				assert.Empty(t, plan.Accounts)
 				assert.Empty(t, plan.Tenant.ID)
@@ -428,6 +451,78 @@ func TestIsNameTaken(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			actualResult := service.IsNameTaken(tc.tenantName, tc.existing)
 			assert.Equal(t, tc.expectedResult, actualResult)
+		})
+	}
+}
+
+func TestDeriveTenantAlias(t *testing.T) {
+	t.Parallel()
+
+	type testCase struct {
+		name          string
+		requested     string
+		tenantName    string
+		taken         []string
+		expectedAlias string
+		expectedError error
+	}
+
+	exhausted := func() []string {
+		taken := []string{"acme"}
+		for attempt := 2; attempt <= 100; attempt++ {
+			taken = append(taken, "acme-"+strconv.Itoa(attempt))
+		}
+		return taken
+	}()
+
+	testCases := []testCase{
+		{
+			name:          "explicit alias wins",
+			requested:     "acme-corp",
+			tenantName:    "Acme Corporation",
+			taken:         nil,
+			expectedAlias: "acme-corp",
+			expectedError: nil,
+		},
+		{
+			name:          "malformed explicit alias rejected",
+			requested:     "-Bad_Alias!",
+			tenantName:    "Acme Corporation",
+			taken:         nil,
+			expectedAlias: "",
+			expectedError: entity.NewError("TENANT_ALIAS_INVALID", "tenant alias must be lowercase alphanumeric with hyphens"),
+		},
+		{
+			name:          "derived from display name",
+			requested:     "",
+			tenantName:    "Acme Corporation",
+			taken:         nil,
+			expectedAlias: "acme-corporation",
+			expectedError: nil,
+		},
+		{
+			name:          "collision resolves with suffix",
+			requested:     "",
+			tenantName:    "Acme Corporation",
+			taken:         []string{"acme-corporation"},
+			expectedAlias: "acme-corporation-2",
+			expectedError: nil,
+		},
+		{
+			name:          "exhausted namespace fails closed",
+			requested:     "",
+			tenantName:    "Acme",
+			taken:         exhausted,
+			expectedAlias: "",
+			expectedError: entity.NewError("TENANT_ALIAS_TAKEN", "tenant alias namespace exhausted"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			alias, err := service.DeriveTenantAlias(tc.requested, tc.tenantName, tc.taken)
+			assert.Equal(t, tc.expectedError, err)
+			assert.Equal(t, tc.expectedAlias, alias)
 		})
 	}
 }

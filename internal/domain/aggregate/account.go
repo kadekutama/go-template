@@ -99,20 +99,47 @@ func OpenAccount(p OpenAccountParams) (Account, error) {
 		return Account{}, err
 	}
 	a := Account{data: data}
-	evt, err := event.NewAccountCreated(p.EventID, p.ID.String(), p.OccurredAt, 1, 0,
+	if p.ID.String() != "" {
+		evt, err := event.NewAccountCreated(p.EventID, p.ID.String(), p.OccurredAt, 1, 0,
+			event.AccountCreatedPayload{
+				AccountID: p.ID.String(), TenantID: p.TenantID.String(),
+				AccountNumber: p.Number, Name: p.Name, Type: string(p.Class),
+				AssetCode: string(p.AssetCode), Status: string(valueobject.StatusActive),
+				OpenedBy: p.OpenedBy.String(),
+			},
+			event.EventMetadata{TenantID: p.TenantID.String(), LedgerID: p.LedgerID.String(),
+				CausationID: p.EventID, CorrelationID: p.EventID, UserID: p.OpenedBy.String()})
+		if err != nil {
+			return Account{}, err
+		}
+		a.append(evt)
+	}
+	return a, nil
+}
+
+// AssignID attaches the database-generated ID to an unpersisted Account and emits account.created.v1.
+func (a *Account) AssignID(id valueobject.AccountID, eventID string, occurredAt time.Time, openedBy valueobject.UserID) error {
+	if a.data.ID != "" {
+		return entity.NewError("ACCOUNT_ID_IMMUTABLE", "account id is already assigned")
+	}
+	if _, err := valueobject.ParseAccountID(id.String()); err != nil {
+		return entity.NewError("ACCOUNT_ID_INVALID", "account id is invalid")
+	}
+	a.data.ID = id
+	evt, err := event.NewAccountCreated(eventID, id.String(), occurredAt, 1, 0,
 		event.AccountCreatedPayload{
-			AccountID: p.ID.String(), TenantID: p.TenantID.String(),
-			AccountNumber: p.Number, Name: p.Name, Type: string(p.Class),
-			AssetCode: string(p.AssetCode), Status: string(valueobject.StatusActive),
-			OpenedBy: p.OpenedBy.String(),
+			AccountID: id.String(), TenantID: a.data.TenantID.String(),
+			AccountNumber: a.data.Number, Name: a.data.Name, Type: string(a.data.Class),
+			AssetCode: string(a.data.AssetCode), Status: string(valueobject.StatusActive),
+			OpenedBy: openedBy.String(),
 		},
-		event.EventMetadata{TenantID: p.TenantID.String(), LedgerID: p.LedgerID.String(),
-			CausationID: p.EventID, CorrelationID: p.EventID, UserID: p.OpenedBy.String()})
+		event.EventMetadata{TenantID: a.data.TenantID.String(), LedgerID: a.data.LedgerID.String(),
+			CausationID: eventID, CorrelationID: eventID, UserID: openedBy.String()})
 	if err != nil {
-		return Account{}, err
+		return err
 	}
 	a.append(evt)
-	return a, nil
+	return nil
 }
 
 // Record returns a defensive copy of the account record.

@@ -11,6 +11,7 @@ import (
 // chart of accounts and API keys, atomically (journeys §2.1).
 type ProvisionTenantRequest struct {
 	Name           string
+	Alias          string
 	Region         string
 	Settings       entity.TenantSettings
 	IdempotencyKey string

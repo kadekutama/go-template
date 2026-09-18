@@ -73,29 +73,36 @@ func TestPostingRepositoryMock(t *testing.T) {
 	t.Parallel()
 
 	type testCase struct {
-		name            string
-		programmedError error
-		expectedError   error
+		name             string
+		programmedResult entity.PostingData
+		programmedError  error
+		expectedResult   entity.PostingData
+		expectedError    error
 	}
 
 	testCases := []testCase{
 		{
-			name:            "commit success records once",
-			programmedError: nil,
-			expectedError:   nil,
+			name:             "commit success records once",
+			programmedResult: entity.PostingData{ID: valueobject.PostingID("p-1")},
+			programmedError:  nil,
+			expectedResult:   entity.PostingData{ID: valueobject.PostingID("p-1")},
+			expectedError:    nil,
 		},
 		{
-			name:            "commit failure propagates",
-			programmedError: entity.NewError("POSTING_CONFLICT", "posting id already committed"),
-			expectedError:   entity.NewError("POSTING_CONFLICT", "posting id already committed"),
+			name:             "commit failure propagates",
+			programmedResult: entity.PostingData{},
+			programmedError:  entity.NewError("POSTING_CONFLICT", "posting id already committed"),
+			expectedResult:   entity.PostingData{},
+			expectedError:    entity.NewError("POSTING_CONFLICT", "posting id already committed"),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			postings := new(mockdomain.MockPostingRepository)
-			postings.On("Commit", mock.Anything, mock.Anything).Return(tc.programmedError).Once()
-			err := postings.Commit(context.Background(), entity.PostingData{ID: valueobject.PostingID("p-1")})
+			postings.On("Commit", mock.Anything, mock.Anything).Return(tc.programmedResult, tc.programmedError).Once()
+			actualResult, err := postings.Commit(context.Background(), entity.PostingData{ID: valueobject.PostingID("p-1")})
+			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
 			postings.AssertExpectations(t)
 		})

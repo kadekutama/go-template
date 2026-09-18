@@ -26,21 +26,31 @@ func (_m *MockHoldRepository) EXPECT() *MockHoldRepository_Expecter {
 }
 
 // Create provides a mock function with given fields: ctx, hold
-func (_m *MockHoldRepository) Create(ctx context.Context, hold entity.HoldData) error {
+func (_m *MockHoldRepository) Create(ctx context.Context, hold entity.HoldData) (entity.HoldData, error) {
 	ret := _m.Called(ctx, hold)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Create")
 	}
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, entity.HoldData) error); ok {
+	var r0 entity.HoldData
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, entity.HoldData) (entity.HoldData, error)); ok {
+		return rf(ctx, hold)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, entity.HoldData) entity.HoldData); ok {
 		r0 = rf(ctx, hold)
 	} else {
-		r0 = ret.Error(0)
+		r0 = ret.Get(0).(entity.HoldData)
 	}
 
-	return r0
+	if rf, ok := ret.Get(1).(func(context.Context, entity.HoldData) error); ok {
+		r1 = rf(ctx, hold)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // MockHoldRepository_Create_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Create'
@@ -62,12 +72,12 @@ func (_c *MockHoldRepository_Create_Call) Run(run func(ctx context.Context, hold
 	return _c
 }
 
-func (_c *MockHoldRepository_Create_Call) Return(_a0 error) *MockHoldRepository_Create_Call {
-	_c.Call.Return(_a0)
+func (_c *MockHoldRepository_Create_Call) Return(_a0 entity.HoldData, _a1 error) *MockHoldRepository_Create_Call {
+	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *MockHoldRepository_Create_Call) RunAndReturn(run func(context.Context, entity.HoldData) error) *MockHoldRepository_Create_Call {
+func (_c *MockHoldRepository_Create_Call) RunAndReturn(run func(context.Context, entity.HoldData) (entity.HoldData, error)) *MockHoldRepository_Create_Call {
 	_c.Call.Return(run)
 	return _c
 }

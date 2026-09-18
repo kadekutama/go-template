@@ -33,7 +33,7 @@ func TestWithTenantRejectsBlank(t *testing.T) {
 		{
 			name:          "tenant stored",
 			ctx:           context.Background(),
-			tenant:        "tnt-test-01",
+			tenant:        "10000000-0000-4000-8000-000000000001",
 			expectedError: nil,
 		},
 	}
@@ -77,13 +77,13 @@ func TestTenantFromContextFailsClosed(t *testing.T) {
 		{
 			name: "stored tenant resolves",
 			ctx: func() context.Context {
-				c, err := rls.WithTenant(context.Background(), "tnt-test-01")
+				c, err := rls.WithTenant(context.Background(), "10000000-0000-4000-8000-000000000001")
 				if err != nil {
 					panic(err)
 				}
 				return c
 			}(),
-			expectedResult: "tnt-test-01",
+			expectedResult: "10000000-0000-4000-8000-000000000001",
 			expectedError:  nil,
 		},
 	}
@@ -117,40 +117,40 @@ func TestResolveTenantAgreement(t *testing.T) {
 		{
 			name: "context only resolves",
 			ctx: func() context.Context {
-				c, err := rls.WithTenant(context.Background(), "tnt-test-01")
+				c, err := rls.WithTenant(context.Background(), "10000000-0000-4000-8000-000000000001")
 				if err != nil {
 					panic(err)
 				}
 				return c
 			}(),
 			arg:            "",
-			expectedResult: "tnt-test-01",
+			expectedResult: "10000000-0000-4000-8000-000000000001",
 			expectedError:  nil,
 		},
 		{
 			name:           "argument only resolves",
 			ctx:            context.Background(),
-			arg:            "tnt-test-02",
-			expectedResult: "tnt-test-02",
+			arg:            "10000000-0000-4000-8000-000000000002",
+			expectedResult: "10000000-0000-4000-8000-000000000002",
 			expectedError:  nil,
 		},
 		{
 			name: "agreement resolves",
 			ctx: func() context.Context {
-				c, err := rls.WithTenant(context.Background(), "tnt-test-01")
+				c, err := rls.WithTenant(context.Background(), "10000000-0000-4000-8000-000000000001")
 				if err != nil {
 					panic(err)
 				}
 				return c
 			}(),
-			arg:            "tnt-test-01",
-			expectedResult: "tnt-test-01",
+			arg:            "10000000-0000-4000-8000-000000000001",
+			expectedResult: "10000000-0000-4000-8000-000000000001",
 			expectedError:  nil,
 		},
 		{
 			name: "disagreement fails closed",
 			ctx: func() context.Context {
-				c, err := rls.WithTenant(context.Background(), "tnt-test-01")
+				c, err := rls.WithTenant(context.Background(), "10000000-0000-4000-8000-000000000001")
 				if err != nil {
 					panic(err)
 				}
@@ -206,7 +206,7 @@ func TestApplyTenantGuards(t *testing.T) {
 			name:          "nil DB fails before SQL",
 			ctx:           context.Background(),
 			db:            nil,
-			tenant:        "tnt-test-01",
+			tenant:        "10000000-0000-4000-8000-000000000001",
 			expectedError: errors.New("rls: DB is required"),
 		},
 	}

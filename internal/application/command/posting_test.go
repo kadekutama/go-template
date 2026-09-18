@@ -18,10 +18,11 @@ import (
 )
 
 const (
-	postAcctSrc  = valueobject.AccountID("a-src")
-	postAcctDst  = valueobject.AccountID("a-dst")
-	postTenant   = valueobject.TenantID("t-1")
-	postLedger   = valueobject.LedgerID("l-1")
+	postAcctSrc  = valueobject.AccountID("40000000-0000-4000-8000-000000000001")
+	postAcctDst  = valueobject.AccountID("40000000-0000-4000-8000-000000000002")
+	postTenant   = valueobject.TenantID("10000000-0000-4000-8000-000000000001")
+	postLedger   = valueobject.LedgerID("20000000-0000-4000-8000-000000000001")
+	postPosting1 = valueobject.PostingID("50000000-0000-4000-8000-000000000001")
 	postCurrency = valueobject.AssetCode("USD")
 )
 
@@ -31,8 +32,8 @@ type postAccounts struct {
 	accounts map[valueobject.AccountID]entity.AccountData
 }
 
-func (f *postAccounts) Create(_ context.Context, _ entity.AccountData) error {
-	return nil
+func (f *postAccounts) Create(_ context.Context, _ entity.AccountData) (entity.AccountData, error) {
+	return entity.AccountData{}, nil
 }
 
 func (f *postAccounts) FindByID(_ context.Context, _ valueobject.TenantID, id valueobject.AccountID) (entity.AccountData, error) {
@@ -123,16 +124,27 @@ type postTxPostings struct {
 	tx *postTxAdapter
 }
 
-func (p *postTxPostings) Commit(_ context.Context, posting entity.PostingData) error {
+func (p *postTxPostings) Commit(_ context.Context, posting entity.PostingData) (entity.PostingData, error) {
+	if posting.ID == "" {
+		posting.ID = valueobject.PostingID(fmt.Sprintf("50000000-0000-4000-8000-%012d", len(p.tx.staged.postings)+len(p.tx.uow.postings)+1))
+	}
+	for i := range posting.Entries {
+		if posting.Entries[i].ID == "" {
+			posting.Entries[i].ID = valueobject.EntryID(fmt.Sprintf("70000000-0000-4000-8000-%012d", i+1))
+		}
+		if posting.Entries[i].PostingID == "" {
+			posting.Entries[i].PostingID = posting.ID
+		}
+	}
 	if _, dup := p.tx.uow.postings[posting.ID]; dup {
-		return entity.NewError("POSTING_CONFLICT", "posting id already committed")
+		return entity.PostingData{}, entity.NewError("POSTING_CONFLICT", "posting id already committed")
 	}
 	if _, dup := p.tx.staged.postings[posting.ID]; dup {
-		return entity.NewError("POSTING_CONFLICT", "posting id already committed")
+		return entity.PostingData{}, entity.NewError("POSTING_CONFLICT", "posting id already committed")
 	}
 	p.tx.staged.postings[posting.ID] = posting
 	p.tx.uow.commits++
-	return nil
+	return posting, nil
 }
 
 func (p *postTxPostings) FindByID(_ context.Context, _ valueobject.TenantID, _ valueobject.PostingID) (entity.PostingData, error) {
@@ -149,7 +161,9 @@ func (p *postTxPostings) FindByAccount(_ context.Context, _ valueobject.TenantID
 
 type postTxHolds struct{}
 
-func (*postTxHolds) Create(_ context.Context, _ entity.HoldData) error { return nil }
+func (*postTxHolds) Create(_ context.Context, _ entity.HoldData) (entity.HoldData, error) {
+	return entity.HoldData{}, nil
+}
 
 func (*postTxHolds) FindByID(_ context.Context, _ valueobject.TenantID, _ valueobject.HoldID) (entity.HoldData, error) {
 	return entity.HoldData{}, entity.NewError("HOLD_NOT_FOUND", "hold is unknown")
@@ -245,7 +259,7 @@ func postTestAccounts() map[valueobject.AccountID]entity.AccountData {
 func postTestIDs(n int) []string {
 	ids := make([]string, 0, n)
 	for i := 1; i <= n; i++ {
-		ids = append(ids, fmt.Sprintf("id-%02d", i))
+		ids = append(ids, fmt.Sprintf("90000000-0000-4000-8000-%012d", i))
 	}
 	return ids
 }
@@ -298,7 +312,7 @@ func TestPostingServiceExecute(t *testing.T) {
 			preload: func(_ *command.PostingService, _ *postUOW) {},
 			denied:  false,
 			expectedResult: port.PostingResult{
-				PostingID: "id-01",
+				PostingID: postPosting1,
 				TenantID:  postTenant,
 				LedgerID:  postLedger,
 				Cursor:    "cursor-7",
@@ -371,7 +385,7 @@ func TestPostingServiceExecute(t *testing.T) {
 			},
 			denied: false,
 			expectedResult: port.PostingResult{
-				PostingID: "id-01",
+				PostingID: postPosting1,
 				TenantID:  postTenant,
 				LedgerID:  postLedger,
 				Cursor:    "cursor-7",
@@ -448,7 +462,7 @@ func TestPostingServiceExecute(t *testing.T) {
 			uow := &postUOW{}
 			authz := &postAuthz{denied: map[string]bool{}}
 			if tc.denied {
-				authz.denied["u-1|ledger.post|ledger/l-1"] = true
+				authz.denied["u-1|ledger.post|ledger/"+string(postLedger)] = true
 			}
 			svc := newPostingService(uow, authz, 20)
 			tc.preload(svc, uow)
@@ -478,7 +492,7 @@ func TestPostingServiceUnknownOutcome(t *testing.T) {
 	actualResult, err = svc.Execute(context.Background(), postTestCommand())
 	assert.NoError(t, err)
 	assert.Equal(t, port.PostingResult{
-		PostingID: "id-01",
+		PostingID: postPosting1,
 		TenantID:  postTenant,
 		LedgerID:  postLedger,
 		Cursor:    "cursor-7",

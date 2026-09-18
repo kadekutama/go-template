@@ -14,6 +14,9 @@ database:
   password: changeme-local-only
   name: app
   sslmode: disable
+  max_open_conns: 25
+  max_idle_conns: 5
+  conn_max_lifetime_sec: 1800
 cache:
   host: 127.0.0.1
   port: 6379
@@ -24,9 +27,17 @@ auth:
 nats:
   url: nats://127.0.0.1:4222
 observability:
+  log_level: debug
   otlp_endpoint: ""
   sample_ratio: 1.0
 feature_flags:
   unleash_url: ""
 secrets:
   provider: env
+coordination:
+  etcd_endpoints:
+    - http://127.0.0.1:2379
+  etcd_dial_timeout_sec: 5
+  etcd_election_ttl_sec: 5
+  leader_key_prefix: "/finance/worker-leader"
+

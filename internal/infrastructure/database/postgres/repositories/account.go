@@ -46,14 +46,15 @@ func NewAccountRepository(params AccountRepositoryParams) (*AccountRepository, e
 	return &AccountRepository{db: params.DB}, nil
 }
 
-// Create stores a new account record; duplicate IDs conflict.
-func (r *AccountRepository) Create(ctx context.Context, account entity.AccountData) error {
+// Create stores a new account record and returns it with the
+// database-assigned ID; duplicate IDs conflict.
+func (r *AccountRepository) Create(ctx context.Context, account entity.AccountData) (entity.AccountData, error) {
 	if err := account.Validate(); err != nil {
-		return err
+		return entity.AccountData{}, err
 	}
 
 	if err := scopeTenant(ctx, r.db, account.TenantID); err != nil {
-		return err
+		return entity.AccountData{}, err
 	}
 
 	model := accountToModel(account)
@@ -61,13 +62,13 @@ func (r *AccountRepository) Create(ctx context.Context, account entity.AccountDa
 
 	if err := r.db.WithContext(ctx).Create(&model).Error; err != nil {
 		if isDuplicate(err) {
-			return ErrConflict
+			return entity.AccountData{}, ErrConflict
 		}
 
-		return fmt.Errorf("postgres: create account: %w", err)
+		return entity.AccountData{}, fmt.Errorf("postgres: create account: %w", err)
 	}
 
-	return nil
+	return accountToEntity(model), nil
 }
 
 // FindByID returns one account by tenant + ID (strong read).

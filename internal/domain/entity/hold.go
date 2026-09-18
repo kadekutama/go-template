@@ -32,10 +32,12 @@ type HoldData struct {
 	UpdatedAt   time.Time
 }
 
-// Validate checks hold structure.
+// Validate checks hold structure. An empty ID is permitted prior to persistence.
 func (h HoldData) Validate() error {
-	if h.ID.String() == "" {
-		return NewError("HOLD_ID_REQUIRED", "hold id is required")
+	if h.ID.String() != "" {
+		if _, err := valueobject.ParseHoldID(h.ID.String()); err != nil {
+			return NewError("HOLD_ID_INVALID", "hold id is invalid")
+		}
 	}
 	if h.TenantID.String() == "" {
 		return NewError("TENANT_REQUIRED", "tenant id is required")

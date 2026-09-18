@@ -14,9 +14,9 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | E03 | Money-movement domain | 37 | 37/37 | completed | G2 |
 | E04 | Compliance domain | 16 | 16/16 | completed | G2 |
 | E05 | Tenancy domain | 11 | 11/11 | completed | G2 |
-| E06 | Application layer | 40 | 40/40 | completed | G3 |
+| E06 | Application layer | 48 | 48/48 | completed | G3 |
 | E07 | Persistence adapters | 34 | 34/34 | completed | G4 |
-| E07.1 | Distributed persistence (Citus, Patroni, CloudNativePG, etcd) | 19 | 0/19 | pending | G4 |
+| E07.1 | Distributed persistence (Citus, Patroni, CloudNativePG, etcd) | 24 | 24/24 | completed | G4 |
 | E08 | Cache + messaging adapters | 24 | 0/24 | pending | G4 |
 | E09 | Identity + security adapters | 22 | 0/22 | pending | G4 |
 | E10 | Platform integrations | 17 | 0/17 | pending | G4 |
@@ -30,7 +30,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | E18 | Docs + DX | 16 | 0/16 | pending | G8 |
 | E19 | Hardening + release | 13 | 0/13 | pending | G8 |
 
-**Total:** 199/451 SP completed.
+**Total:** 231/464 SP completed.
 
 ## Task checklists (tick as epic files flip to completed)
 
@@ -106,6 +106,8 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 - [x] E06-T11 dispute handlers
 - [x] E06-T12 extended workflow + adapter ports
 - [x] E06-T13 core posting + strong-balance use cases
+- [x] E06-T14 UUID identity application port (flows + aliases)
+- [x] E06-T15 remove entity pre-mint across flows
 
 ### E07 — Persistence
 - [x] E07-T01 ledger-core schema + posting transaction
@@ -120,11 +122,12 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 - [x] E07-T10 workflow/tenancy/reconciliation schema
 
 ### E07.1 — Distributed persistence
-- [ ] E07.1-T01 Migration framework evolution (Goose v3 + Atlas) & Citus distribution
-- [ ] E07.1-T02 Multi-Node Citus + Patroni + etcd HA cluster topology
-- [ ] E07.1-T03 CloudNativePG (CNPG) Kubernetes deployment manifests
-- [ ] E07.1-T04 etcd coordination adapter (dynamic config + worker election)
-- [ ] E07.1-T05 Multi-node Citus integration test suite
+- [x] E07.1-T01 Migration framework evolution (Goose v3 + Atlas) & Citus distribution
+- [x] E07.1-T02 Multi-Node Citus + Patroni + etcd HA cluster topology
+- [x] E07.1-T03 CloudNativePG (CNPG) Kubernetes deployment manifests
+- [x] E07.1-T04 etcd coordination adapter (dynamic config + worker election)
+- [x] E07.1-T05 Multi-node Citus integration test suite
+- [x] E07.1-T06 UUIDv7 composite identity re-baseline (persistence)
 
 ### E08 — Cache + messaging
 - [ ] E08-T01 Otter L1 + Valkey L2 hybrid cache

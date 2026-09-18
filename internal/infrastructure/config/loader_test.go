@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/knadh/koanf/parsers/json"
 	"github.com/knadh/koanf/providers/file"
@@ -242,4 +243,61 @@ func TestSchemaAlignsWithStruct(t *testing.T) {
 			t.Errorf("schema root required[] missing section %q", section)
 		}
 	}
+}
+
+func TestDatabasePoolSettings(t *testing.T) {
+	t.Parallel()
+
+	type testCase struct {
+		name             string
+		config           DatabaseConfig
+		expectedMaxOpen  int
+		expectedMaxIdle  int
+		expectedLifetime time.Duration
+	}
+
+	testCases := []testCase{
+		{
+			name:             "explicit knobs map through",
+			config:           DatabaseConfig{MaxOpenConns: 25, MaxIdleConns: 5, ConnMaxLifetimeSec: 1800},
+			expectedMaxOpen:  25,
+			expectedMaxIdle:  5,
+			expectedLifetime: 30 * time.Minute,
+		},
+		{
+			name:             "unset knobs stay zero for driver defaults",
+			config:           DatabaseConfig{},
+			expectedMaxOpen:  0,
+			expectedMaxIdle:  0,
+			expectedLifetime: 0,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			maxOpen, maxIdle, lifetime := tc.config.PoolSettings()
+			assert.Equal(t, tc.expectedMaxOpen, maxOpen)
+			assert.Equal(t, tc.expectedMaxIdle, maxIdle)
+			assert.Equal(t, tc.expectedLifetime, lifetime)
+		})
+	}
+}
+
+func TestCoordinationEnvOverrides(t *testing.T) {
+	t.Setenv("APP_COORDINATION__ETCD_ENDPOINTS", "http://etcd-a:2379,http://etcd-b:2379")
+	t.Setenv("APP_COORDINATION__ETCD_DIAL_TIMEOUT_SEC", "7")
+	t.Setenv("APP_COORDINATION__ETCD_ELECTION_TTL_SEC", "9")
+	t.Setenv("APP_COORDINATION__LEADER_KEY_PREFIX", "/custom/leader")
+	t.Setenv("APP_OBSERVABILITY__LOG_LEVEL", "debug")
+
+	cfg, err := Load(repoConfig("config.yaml"))
+	if err != nil {
+		t.Fatalf("Load with coordination env overrides: %v", err)
+	}
+
+	assert.Equal(t, []string{"http://etcd-a:2379", "http://etcd-b:2379"}, cfg.Coordination.EtcdEndpoints)
+	assert.Equal(t, 7, cfg.Coordination.EtcdDialTimeoutSec)
+	assert.Equal(t, 9, cfg.Coordination.EtcdElectionTTLSeconds)
+	assert.Equal(t, "/custom/leader", cfg.Coordination.LeaderKeyPrefix)
+	assert.Equal(t, "debug", cfg.Observability.LogLevel)
 }

@@ -37,14 +37,14 @@ type fakeAccounts struct {
 
 var _ repository.AccountRepository = (*fakeAccounts)(nil)
 
-func (f *fakeAccounts) Create(_ context.Context, a entity.AccountData) error {
+func (f *fakeAccounts) Create(_ context.Context, a entity.AccountData) (entity.AccountData, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if _, exists := f.rows[a.ID]; exists {
-		return errors.New("duplicate account")
+		return entity.AccountData{}, errors.New("duplicate account")
 	}
 	f.rows[a.ID] = a
-	return nil
+	return a, nil
 }
 
 func (f *fakeAccounts) FindByID(_ context.Context, tenant valueobject.TenantID, id valueobject.AccountID) (entity.AccountData, error) {
@@ -120,17 +120,17 @@ type fakePostings struct {
 
 var _ repository.PostingRepository = (*fakePostings)(nil)
 
-func (f *fakePostings) Commit(_ context.Context, p entity.PostingData) error {
+func (f *fakePostings) Commit(_ context.Context, p entity.PostingData) (entity.PostingData, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if _, exists := f.rows[p.ID]; exists {
-		return errors.New("duplicate posting")
+		return entity.PostingData{}, errors.New("duplicate posting")
 	}
 	entries := make([]entity.Entry, len(p.Entries))
 	copy(entries, p.Entries)
 	p.Entries = entries
 	f.rows[p.ID] = p
-	return nil
+	return p, nil
 }
 
 func (f *fakePostings) FindByID(_ context.Context, tenant valueobject.TenantID, id valueobject.PostingID) (entity.PostingData, error) {
@@ -184,10 +184,10 @@ func TestAccountPortRoundTrip(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	repo := &fakeAccounts{rows: map[valueobject.AccountID]entity.AccountData{}}
-	if err := repo.Create(ctx, testAccount()); err != nil {
+	if _, err := repo.Create(ctx, testAccount()); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	if err := repo.Create(ctx, testAccount()); err == nil {
+	if _, err := repo.Create(ctx, testAccount()); err == nil {
 		t.Fatal("duplicate Create must fail")
 	}
 	got, err := repo.FindByID(ctx, testTenantID, testAccount1)
@@ -290,7 +290,7 @@ func TestPostingPortRoundTrip(t *testing.T) {
 			{ID: "e-1", PostingID: testPosting1, AccountID: testAccount1, Side: valueobject.DirectionDebit, AmountMinor: 100, AssetCode: testUSD, AccountSeq: 1},
 			{ID: "e-2", PostingID: testPosting1, AccountID: testAccount2, Side: valueobject.DirectionCredit, AmountMinor: 100, AssetCode: testUSD, AccountSeq: 1},
 		}}
-	if err := repo.Commit(ctx, p); err != nil {
+	if _, err := repo.Commit(ctx, p); err != nil {
 		t.Fatalf("Commit: %v", err)
 	}
 	got, err := repo.FindByID(ctx, testTenantID, testPosting1)

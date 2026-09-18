@@ -22,6 +22,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
+        with:
+          # Full history is required: scripts/build/version.sh derives the
+          # release version from tags + commit count (E00-T07-R05). A shallow
+          # clone would stamp binaries with a meaningless count of 1.
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v7.0.0
@@ -60,6 +65,16 @@ jobs:
 
       - name: Validate task metadata (SDD control plane, E00-T08)
         run: python3 tasks/scripts/check-tasks.py --format --graph --sdd
+
+      - name: Resolve release version
+        run: |
+          VERSION="$(./scripts/build/version.sh)"
+          if [[ "$VERSION" == "dev" ]]; then
+            echo "version resolution fell back to dev with full history present" >&2
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "### Release version \`$VERSION\`" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build all binaries
         run: make build-all

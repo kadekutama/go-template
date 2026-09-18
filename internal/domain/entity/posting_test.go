@@ -14,7 +14,7 @@ func TestEntryValidate(t *testing.T) {
 	t.Parallel()
 
 	valid := entity.Entry{
-		ID:          "e-1",
+		ID:          "70000000-0000-4000-8000-000000000001",
 		PostingID:   testPosting1,
 		AccountID:   testAccount1,
 		Side:        valueobject.DirectionDebit,
@@ -36,22 +36,40 @@ func TestEntryValidate(t *testing.T) {
 			expectedError: nil,
 		},
 		{
-			name: "missing entry id",
+			name: "missing entry id permitted before persistence",
 			entry: func() entity.Entry {
 				e := valid
 				e.ID = ""
 				return e
 			}(),
-			expectedError: entity.NewError("ENTRY_ID_REQUIRED", "entry id is required"),
+			expectedError: nil,
 		},
 		{
-			name: "missing posting id",
+			name: "invalid entry id format",
+			entry: func() entity.Entry {
+				e := valid
+				e.ID = "not-a-uuid"
+				return e
+			}(),
+			expectedError: entity.NewError("ENTRY_ID_INVALID", "entry id is invalid"),
+		},
+		{
+			name: "missing posting id permitted before persistence",
 			entry: func() entity.Entry {
 				e := valid
 				e.PostingID = ""
 				return e
 			}(),
-			expectedError: entity.NewError("ENTRY_POSTING_REQUIRED", "posting id is required"),
+			expectedError: nil,
+		},
+		{
+			name: "invalid posting id format",
+			entry: func() entity.Entry {
+				e := valid
+				e.PostingID = "not-a-uuid"
+				return e
+			}(),
+			expectedError: entity.NewError("ENTRY_POSTING_INVALID", "posting id is invalid"),
 		},
 		{
 			name: "missing account id",
@@ -127,8 +145,8 @@ func TestPostingDataValidate(t *testing.T) {
 		LedgerID:  testLedgerID,
 		Operation: "transfer.v1",
 		Entries: []entity.Entry{
-			{ID: "e-1", PostingID: testPosting1, AccountID: testAccount1, Side: valueobject.DirectionDebit, AmountMinor: 100, AssetCode: testUSD, AccountSeq: 1},
-			{ID: "e-2", PostingID: testPosting1, AccountID: testAccount2, Side: valueobject.DirectionCredit, AmountMinor: 100, AssetCode: testUSD, AccountSeq: 1},
+			{ID: "70000000-0000-4000-8000-000000000001", PostingID: testPosting1, AccountID: testAccount1, Side: valueobject.DirectionDebit, AmountMinor: 100, AssetCode: testUSD, AccountSeq: 1},
+			{ID: "70000000-0000-4000-8000-000000000002", PostingID: testPosting1, AccountID: testAccount2, Side: valueobject.DirectionCredit, AmountMinor: 100, AssetCode: testUSD, AccountSeq: 1},
 		},
 		EffectiveAt: at,
 		RecordedAt:  at,
@@ -150,7 +168,7 @@ func TestPostingDataValidate(t *testing.T) {
 			name: "valid reversal with reason",
 			posting: func() entity.PostingData {
 				p := valid
-				rev := valueobject.PostingID("p-0")
+				rev := valueobject.PostingID("40000000-0000-4000-8000-000000000002")
 				p.ReversalOf = &rev
 				p.Reason = "fix"
 				return p
@@ -158,13 +176,22 @@ func TestPostingDataValidate(t *testing.T) {
 			expectedError: nil,
 		},
 		{
-			name: "missing id",
+			name: "missing id permitted before persistence",
 			posting: func() entity.PostingData {
 				p := valid
 				p.ID = ""
 				return p
 			}(),
-			expectedError: entity.NewError("POSTING_ID_REQUIRED", "posting id is required"),
+			expectedError: nil,
+		},
+		{
+			name: "invalid id format",
+			posting: func() entity.PostingData {
+				p := valid
+				p.ID = "not-a-uuid"
+				return p
+			}(),
+			expectedError: entity.NewError("POSTING_ID_INVALID", "posting id is invalid"),
 		},
 		{
 			name: "missing tenant id",
@@ -207,8 +234,8 @@ func TestPostingDataValidate(t *testing.T) {
 			posting: func() entity.PostingData {
 				p := valid
 				p.Entries = []entity.Entry{
-					{ID: "e-1", PostingID: testPosting1, AccountID: testAccount1, Side: valueobject.DirectionDebit, AmountMinor: 0, AssetCode: testUSD, AccountSeq: 1},
-					{ID: "e-2", PostingID: testPosting1, AccountID: testAccount2, Side: valueobject.DirectionCredit, AmountMinor: 100, AssetCode: testUSD, AccountSeq: 1},
+					{ID: "70000000-0000-4000-8000-000000000001", PostingID: testPosting1, AccountID: testAccount1, Side: valueobject.DirectionDebit, AmountMinor: 0, AssetCode: testUSD, AccountSeq: 1},
+					{ID: "70000000-0000-4000-8000-000000000002", PostingID: testPosting1, AccountID: testAccount2, Side: valueobject.DirectionCredit, AmountMinor: 100, AssetCode: testUSD, AccountSeq: 1},
 				}
 				return p
 			}(),
@@ -236,7 +263,7 @@ func TestPostingDataValidate(t *testing.T) {
 			name: "reversal missing reason",
 			posting: func() entity.PostingData {
 				p := valid
-				rev := valueobject.PostingID("p-0")
+				rev := valueobject.PostingID("40000000-0000-4000-8000-000000000002")
 				p.ReversalOf = &rev
 				p.Reason = ""
 				return p
@@ -258,7 +285,7 @@ func TestHoldDataValidate(t *testing.T) {
 
 	base := time.Date(2026, 9, 14, 9, 0, 0, 0, time.UTC)
 	valid := entity.HoldData{
-		ID:          "h-1",
+		ID:          "80000000-0000-4000-8000-000000000001",
 		TenantID:    testTenantID,
 		LedgerID:    testLedgerID,
 		AccountID:   testAccount1,
@@ -312,13 +339,22 @@ func TestHoldDataValidate(t *testing.T) {
 			expectedError: nil,
 		},
 		{
-			name: "missing id",
+			name: "missing id permitted before persistence",
 			hold: func() entity.HoldData {
 				h := valid
 				h.ID = ""
 				return h
 			}(),
-			expectedError: entity.NewError("HOLD_ID_REQUIRED", "hold id is required"),
+			expectedError: nil,
+		},
+		{
+			name: "invalid id format",
+			hold: func() entity.HoldData {
+				h := valid
+				h.ID = "not-a-uuid"
+				return h
+			}(),
+			expectedError: entity.NewError("HOLD_ID_INVALID", "hold id is invalid"),
 		},
 		{
 			name: "missing tenant",

@@ -10,8 +10,9 @@ import (
 // JournalRepository persists posting groups. Journals are operational records;
 // reads are strongly consistent.
 type JournalRepository interface {
-	// Create stores a new journal. Strong write; fails on duplicate ID.
-	Create(ctx context.Context, journal entity.Journal) error
+	// Create stores a new journal and returns it with the database-assigned ID.
+	// Strong write; fails on duplicate ID.
+	Create(ctx context.Context, journal entity.Journal) (entity.Journal, error)
 	// FindByID returns one journal by tenant + ID. Strong read.
 	FindByID(ctx context.Context, tenant valueobject.TenantID, id valueobject.JournalID) (entity.Journal, error)
 	// FindByPeriod returns journals filed in a period. Strong read.

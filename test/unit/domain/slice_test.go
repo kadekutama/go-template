@@ -14,13 +14,13 @@ import (
 
 const (
 	testUSD      = "USD"
-	testAccount1 = "a-src"
-	testAccount2 = "a-dst"
-	testPosting1 = "p-1"
-	testPosting2 = "p-2"
-	testTenantID = "t-1"
-	testLedgerID = "l-1"
-	testPeriod1  = "pd-1"
+	testAccount1 = "40000000-0000-4000-8000-000000000001"
+	testAccount2 = "40000000-0000-4000-8000-000000000002"
+	testPosting1 = "50000000-0000-4000-8000-000000000001"
+	testPosting2 = "50000000-0000-4000-8000-000000000002"
+	testTenantID = "10000000-0000-4000-8000-000000000001"
+	testLedgerID = "20000000-0000-4000-8000-000000000001"
+	testPeriod1  = "60000000-0000-4000-8000-000000000001"
 	testTransfer = "transfer.v1"
 )
 
@@ -59,8 +59,8 @@ func constructSlicePosting(t *testing.T, accounts map[valueobject.AccountID]enti
 	posting, err := aggregate.ConstructPosting(aggregate.PostingParams{
 		ID: testPosting1, TenantID: testTenantID, LedgerID: testLedgerID, Operation: testTransfer,
 		Entries: []entity.Entry{
-			{ID: "e-1", PostingID: testPosting1, AccountID: testAccount1, Side: valueobject.DirectionDebit, AmountMinor: 5000, AssetCode: testUSD, AccountSeq: 1},
-			{ID: "e-2", PostingID: testPosting1, AccountID: testAccount2, Side: valueobject.DirectionCredit, AmountMinor: 5000, AssetCode: testUSD, AccountSeq: 1},
+			{ID: "30000000-0000-4000-8000-000000000001", PostingID: testPosting1, AccountID: testAccount1, Side: valueobject.DirectionDebit, AmountMinor: 5000, AssetCode: testUSD, AccountSeq: 1},
+			{ID: "30000000-0000-4000-8000-000000000002", PostingID: testPosting1, AccountID: testAccount2, Side: valueobject.DirectionCredit, AmountMinor: 5000, AssetCode: testUSD, AccountSeq: 1},
 		},
 		Accounts: accounts, EffectiveAt: at, RecordedAt: at, EventID: "ev-1",
 	})

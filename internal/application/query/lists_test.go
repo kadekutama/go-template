@@ -148,8 +148,8 @@ type listAccountsReader struct {
 	account entity.AccountData
 }
 
-func (r *listAccountsReader) Create(_ context.Context, _ entity.AccountData) error {
-	return nil
+func (r *listAccountsReader) Create(_ context.Context, _ entity.AccountData) (entity.AccountData, error) {
+	return entity.AccountData{}, nil
 }
 
 func (r *listAccountsReader) FindByID(_ context.Context, _ valueobject.TenantID, _ valueobject.AccountID) (entity.AccountData, error) {

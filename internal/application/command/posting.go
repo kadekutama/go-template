@@ -8,6 +8,7 @@ import (
 	"context"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/kadekutama/go-template/internal/application/port"
 	"github.com/kadekutama/go-template/internal/domain/aggregate"
@@ -66,13 +67,9 @@ func (s *PostingService) Execute(ctx context.Context, cmd port.PostPostingComman
 	if err := RequireAuthz(ctx, s.authz, subject, "ledger.post", "ledger/"+string(cmd.LedgerID)); err != nil {
 		return port.PostingResult{}, err
 	}
-	// Mint identities once before Do so retried callbacks reuse them and can
-	// never double-mint; duplicate posting IDs fail at commit for replay
-	// resolution.
-	postingID := valueobject.PostingID(s.ids.NewID())
 	eventID := s.ids.NewID()
 	now := s.clock.Now().UTC()
-	entries := BuildPostingEntries(cmd.Entries, postingID, s.ids)
+	entries := BuildPostingEntries(cmd.Entries, "")
 	rec := port.IdempotencyRecord{
 		Key:         cmd.IdempotencyKey,
 		Fingerprint: fingerprintPostingCommand(cmd),
@@ -80,67 +77,75 @@ func (s *PostingService) Execute(ctx context.Context, cmd port.PostPostingComman
 	}
 	var result port.PostingResult
 	err := s.uow.Do(ctx, func(ctx context.Context, tx port.Tx) error {
-		outcome, err := tx.Idempotency().Reserve(ctx, rec)
-		if err != nil {
-			return err
-		}
-		if outcome.Replay {
-			decoded, err := decodePostingResult(outcome.Response)
-			if err != nil {
-				return err
-			}
-			result = decoded
-			return nil
-		}
-		accounts, err := s.loadAccounts(ctx, cmd)
-		if err != nil {
-			return err
-		}
-		posting, err := aggregate.ConstructPosting(aggregate.PostingParams{
-			ID:                postingID,
-			TenantID:          cmd.TenantID,
-			LedgerID:          cmd.LedgerID,
-			Operation:         cmd.Operation,
-			ExternalReference: cmd.ExternalReference,
-			Description:       cmd.Description,
-			Entries:           entries,
-			Accounts:          accounts,
-			EffectiveAt:       now,
-			RecordedAt:        now,
-			EventID:           eventID,
-		})
-		if err != nil {
-			return err
-		}
-		if err := tx.Postings().Commit(ctx, posting.Record()); err != nil {
-			return err
-		}
-		result = port.PostingResult{
-			PostingID: posting.ID(),
-			TenantID:  cmd.TenantID,
-			LedgerID:  cmd.LedgerID,
-			Cursor:    tx.Cursor(),
-		}
-		encoded, err := jsonparser.Marshal(result)
-		if err != nil {
-			return err
-		}
-		if err := tx.Outbox().Append(ctx, port.OutboxFact{
-			TenantID:    cmd.TenantID,
-			LedgerID:    cmd.LedgerID,
-			EventType:   "transaction.posted.v1",
-			AggregateID: string(posting.ID()),
-			Payload:     encoded,
-			OccurredAt:  now,
-		}); err != nil {
-			return err
-		}
-		return tx.Idempotency().Complete(ctx, rec.Key, encoded)
+		return s.executeInTx(ctx, tx, cmd, rec, entries, eventID, now, &result)
 	})
 	if err != nil {
 		return port.PostingResult{}, err
 	}
 	return result, nil
+}
+
+func (s *PostingService) executeInTx(ctx context.Context, tx port.Tx, cmd port.PostPostingCommand, rec port.IdempotencyRecord, entries []entity.Entry, eventID string, now time.Time, result *port.PostingResult) error {
+	outcome, err := tx.Idempotency().Reserve(ctx, rec)
+	if err != nil {
+		return err
+	}
+	if outcome.Replay {
+		decoded, err := decodePostingResult(outcome.Response)
+		if err != nil {
+			return err
+		}
+		*result = decoded
+		return nil
+	}
+	accounts, err := s.loadAccounts(ctx, cmd)
+	if err != nil {
+		return err
+	}
+	posting, err := aggregate.ConstructPosting(aggregate.PostingParams{
+		ID:                "",
+		TenantID:          cmd.TenantID,
+		LedgerID:          cmd.LedgerID,
+		Operation:         cmd.Operation,
+		ExternalReference: cmd.ExternalReference,
+		Description:       cmd.Description,
+		Entries:           entries,
+		Accounts:          accounts,
+		EffectiveAt:       now,
+		RecordedAt:        now,
+		EventID:           eventID,
+	})
+	if err != nil {
+		return err
+	}
+	stored, err := tx.Postings().Commit(ctx, posting.Record())
+	if err != nil {
+		return err
+	}
+	if err := posting.AssignID(stored.ID, stored.Entries, eventID); err != nil {
+		return err
+	}
+	*result = port.PostingResult{
+		PostingID: stored.ID,
+		TenantID:  cmd.TenantID,
+		LedgerID:  cmd.LedgerID,
+		Cursor:    tx.Cursor(),
+	}
+	encoded, err := jsonparser.Marshal(*result)
+	if err != nil {
+		return err
+	}
+	if err := tx.Outbox().Append(ctx, port.OutboxFact{
+		TenantID:    cmd.TenantID,
+		LedgerID:    cmd.LedgerID,
+		EventType:   "transaction.posted.v1",
+		AggregateID: string(stored.ID),
+		Payload:     encoded,
+		OccurredAt:  now,
+	}); err != nil {
+		return err
+	}
+	return tx.Idempotency().Complete(ctx, rec.Key, encoded)
 }
 
 // validatePostingCommand checks the command envelope. Line-level rules
@@ -180,17 +185,21 @@ func (s *PostingService) loadAccounts(ctx context.Context, cmd port.PostPostingC
 	return accounts, nil
 }
 
-// BuildPostingEntries maps request lines to domain entries with minted IDs
-// and deterministic 1-based per-account positions (domain requires
+// BuildPostingEntries maps request lines to domain entries with
+// deterministic 1-based per-account positions (domain requires
 // AccountSeq ≥ 1; durable global sequencing is assigned at commit by
 // E07-T01 — see the E06-T13 packet). Shared with transfer construction.
-func BuildPostingEntries(lines []port.NewEntry, postingID valueobject.PostingID, ids port.IDGenerator) []entity.Entry {
+func BuildPostingEntries(lines []port.NewEntry, postingID valueobject.PostingID, ids ...port.IDGenerator) []entity.Entry {
 	positions := make(map[valueobject.AccountID]int64, len(lines))
 	entries := make([]entity.Entry, 0, len(lines))
 	for _, line := range lines {
 		positions[line.AccountID]++
+		var entryID valueobject.EntryID
+		if len(ids) > 0 && ids[0] != nil {
+			entryID = valueobject.EntryID(ids[0].NewID())
+		}
 		entries = append(entries, entity.Entry{
-			ID:          valueobject.EntryID(ids.NewID()),
+			ID:          entryID,
 			PostingID:   postingID,
 			AccountID:   line.AccountID,
 			Side:        line.Side,

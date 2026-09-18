@@ -1,0 +1,14 @@
+# Kustomize entrypoint for the CloudNativePG Citus profile (E07.1-T03).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: database
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: go-template
+      app.kubernetes.io/managed-by: kustomize
+
+resources:
+  - citus-coordinator.yaml
+  - citus-workers.yaml

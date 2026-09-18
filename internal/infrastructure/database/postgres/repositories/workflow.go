@@ -43,32 +43,29 @@ func NewWorkflowStore(params WorkflowStoreParams) (*WorkflowStore, error) {
 	return &WorkflowStore{db: params.DB}, nil
 }
 
-// Create stores a new workflow; duplicate IDs conflict, cross-tenant
-// references are rejected by the caller contract (tenant always required).
-func (s *WorkflowStore) Create(ctx context.Context, record WorkflowRecord) error {
-	if record.ID == "" {
-		return fmt.Errorf("postgres: workflow id is required")
-	}
-
+// Create stores a new workflow and returns it with the database-assigned
+// ID; duplicate IDs conflict, cross-tenant references are rejected by the
+// caller contract (tenant always required).
+func (s *WorkflowStore) Create(ctx context.Context, record WorkflowRecord) (WorkflowRecord, error) {
 	if record.TenantID == "" {
-		return fmt.Errorf("postgres: tenant is required")
+		return WorkflowRecord{}, fmt.Errorf("postgres: tenant is required")
 	}
 
 	if err := scopeTenant(ctx, s.db, valueobject.TenantID(record.TenantID)); err != nil {
-		return err
+		return WorkflowRecord{}, err
 	}
 
 	model := workflowToModel(record)
 
 	if err := s.db.WithContext(ctx).Create(&model).Error; err != nil {
 		if isDuplicate(err) {
-			return ErrConflict
+			return WorkflowRecord{}, ErrConflict
 		}
 
-		return fmt.Errorf("postgres: create workflow: %w", err)
+		return WorkflowRecord{}, fmt.Errorf("postgres: create workflow: %w", err)
 	}
 
-	return nil
+	return workflowToRecord(model), nil
 }
 
 // FindByID returns one workflow by tenant + ID (strong read).
@@ -133,18 +130,19 @@ type ReconSourceRecord struct {
 	RawRef        string
 }
 
-// StoreReconSource persists a source; identical tenant+hash dedupes.
-func (s *WorkflowStore) StoreReconSource(ctx context.Context, record ReconSourceRecord) error {
+// StoreReconSource persists a source and returns it with the
+// database-assigned ID; identical tenant+hash dedupes.
+func (s *WorkflowStore) StoreReconSource(ctx context.Context, record ReconSourceRecord) (ReconSourceRecord, error) {
 	if record.TenantID == "" {
-		return fmt.Errorf("postgres: tenant is required")
+		return ReconSourceRecord{}, fmt.Errorf("postgres: tenant is required")
 	}
 
 	if record.PayloadHash == "" {
-		return fmt.Errorf("postgres: payload hash is required")
+		return ReconSourceRecord{}, fmt.Errorf("postgres: payload hash is required")
 	}
 
 	if err := scopeTenant(ctx, s.db, valueobject.TenantID(record.TenantID)); err != nil {
-		return err
+		return ReconSourceRecord{}, err
 	}
 
 	model := models.ReconSourceModel{
@@ -158,13 +156,15 @@ func (s *WorkflowStore) StoreReconSource(ctx context.Context, record ReconSource
 
 	if err := s.db.WithContext(ctx).Create(&model).Error; err != nil {
 		if isDuplicate(err) {
-			return ErrConflict
+			return ReconSourceRecord{}, ErrConflict
 		}
 
-		return fmt.Errorf("postgres: store recon source: %w", err)
+		return ReconSourceRecord{}, fmt.Errorf("postgres: store recon source: %w", err)
 	}
 
-	return nil
+	record.ID = model.ID
+
+	return record, nil
 }
 
 // InboxReceipt records a consumed event key; replays dedupe on (tenant, key).

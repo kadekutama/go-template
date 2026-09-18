@@ -26,21 +26,31 @@ func (_m *MockJournalRepository) EXPECT() *MockJournalRepository_Expecter {
 }
 
 // Create provides a mock function with given fields: ctx, journal
-func (_m *MockJournalRepository) Create(ctx context.Context, journal entity.Journal) error {
+func (_m *MockJournalRepository) Create(ctx context.Context, journal entity.Journal) (entity.Journal, error) {
 	ret := _m.Called(ctx, journal)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Create")
 	}
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, entity.Journal) error); ok {
+	var r0 entity.Journal
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, entity.Journal) (entity.Journal, error)); ok {
+		return rf(ctx, journal)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, entity.Journal) entity.Journal); ok {
 		r0 = rf(ctx, journal)
 	} else {
-		r0 = ret.Error(0)
+		r0 = ret.Get(0).(entity.Journal)
 	}
 
-	return r0
+	if rf, ok := ret.Get(1).(func(context.Context, entity.Journal) error); ok {
+		r1 = rf(ctx, journal)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // MockJournalRepository_Create_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Create'
@@ -62,12 +72,12 @@ func (_c *MockJournalRepository_Create_Call) Run(run func(ctx context.Context, j
 	return _c
 }
 
-func (_c *MockJournalRepository_Create_Call) Return(_a0 error) *MockJournalRepository_Create_Call {
-	_c.Call.Return(_a0)
+func (_c *MockJournalRepository_Create_Call) Return(_a0 entity.Journal, _a1 error) *MockJournalRepository_Create_Call {
+	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *MockJournalRepository_Create_Call) RunAndReturn(run func(context.Context, entity.Journal) error) *MockJournalRepository_Create_Call {
+func (_c *MockJournalRepository_Create_Call) RunAndReturn(run func(context.Context, entity.Journal) (entity.Journal, error)) *MockJournalRepository_Create_Call {
 	_c.Call.Return(run)
 	return _c
 }

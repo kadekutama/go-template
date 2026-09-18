@@ -67,11 +67,15 @@ func tenantMeta(t *Tenant, tr TenantTransitionParams, ledgerID valueobject.Ledge
 // OpenTenant creates an ACTIVE tenant at version 1 and records
 // tenant.created.v1.
 func OpenTenant(p OpenTenantParams) (Tenant, error) {
-	if p.ID.String() == "" {
-		return Tenant{}, entity.NewError("TENANT_ID_REQUIRED", "tenant id is required")
+	if p.ID.String() != "" {
+		if _, err := valueobject.ParseTenantID(p.ID.String()); err != nil {
+			return Tenant{}, entity.NewError("TENANT_ID_INVALID", "tenant id is invalid")
+		}
 	}
-	if p.LedgerID.String() == "" {
-		return Tenant{}, entity.NewError("LEDGER_REQUIRED", "ledger id is required")
+	if p.LedgerID.String() != "" {
+		if _, err := valueobject.ParseLedgerID(p.LedgerID.String()); err != nil {
+			return Tenant{}, entity.NewError("LEDGER_ID_INVALID", "ledger id is invalid")
+		}
 	}
 	if p.OpenedBy.String() == "" {
 		return Tenant{}, entity.NewError("OPENED_BY_REQUIRED", "opened by user id is required")
@@ -96,22 +100,52 @@ func OpenTenant(p OpenTenantParams) (Tenant, error) {
 		return Tenant{}, err
 	}
 	t := Tenant{data: data}
-	evt, err := event.NewTenantCreated(p.EventID, p.ID.String(), p.OccurredAt, 1, 0,
+	if p.ID.String() != "" && p.LedgerID.String() != "" {
+		evt, err := event.NewTenantCreated(p.EventID, p.ID.String(), p.OccurredAt, 1, 0,
+			event.TenantCreatedPayload{
+				TenantID:      p.ID.String(),
+				LedgerID:      p.LedgerID.String(),
+				Name:          p.Name,
+				Region:        p.Region,
+				BaseAssetCode: string(p.Settings.DefaultCurrency),
+				CreatedAt:     p.OccurredAt.UTC(),
+			},
+			event.EventMetadata{TenantID: p.ID.String(), LedgerID: p.LedgerID.String(),
+				CausationID: p.EventID, CorrelationID: p.EventID, UserID: p.OpenedBy.String()})
+		if err != nil {
+			return Tenant{}, err
+		}
+		t.append(evt)
+	}
+	return t, nil
+}
+
+// AssignID attaches the database-assigned identity to an unpersisted tenant
+// and emits the initial tenant.created.v1 domain event.
+func (t *Tenant) AssignID(id valueobject.TenantID, ledgerID valueobject.LedgerID, eventID string, occurredAt time.Time, openedBy valueobject.UserID) error {
+	if t.data.ID.String() != "" {
+		return entity.NewError("TENANT_ID_IMMUTABLE", "tenant id is already assigned")
+	}
+	if _, err := valueobject.ParseTenantID(id.String()); err != nil {
+		return entity.NewError("TENANT_ID_INVALID", "tenant id is invalid")
+	}
+	t.data.ID = id
+	evt, err := event.NewTenantCreated(eventID, id.String(), occurredAt, t.data.Version, int64(len(t.events)),
 		event.TenantCreatedPayload{
-			TenantID:      p.ID.String(),
-			LedgerID:      p.LedgerID.String(),
-			Name:          p.Name,
-			Region:        p.Region,
-			BaseAssetCode: string(p.Settings.DefaultCurrency),
-			CreatedAt:     p.OccurredAt.UTC(),
+			TenantID:      id.String(),
+			LedgerID:      ledgerID.String(),
+			Name:          t.data.Name,
+			Region:        t.data.Region,
+			BaseAssetCode: string(t.data.Settings.DefaultCurrency),
+			CreatedAt:     occurredAt.UTC(),
 		},
-		event.EventMetadata{TenantID: p.ID.String(), LedgerID: p.LedgerID.String(),
-			CausationID: p.EventID, CorrelationID: p.EventID, UserID: p.OpenedBy.String()})
+		event.EventMetadata{TenantID: id.String(), LedgerID: ledgerID.String(),
+			CausationID: eventID, CorrelationID: eventID, UserID: openedBy.String()})
 	if err != nil {
-		return Tenant{}, err
+		return err
 	}
 	t.append(evt)
-	return t, nil
+	return nil
 }
 
 // Record returns a defensive copy of the tenant record.

@@ -11,9 +11,9 @@ import (
 // write path for postings + entries; adapters extend the same atomic unit to
 // checkpoints and outbox rows in E07 without changing this signature.
 type PostingRepository interface {
-	// Commit atomically stores one posting with all its entries.
-	// Strong write; fails on duplicate ID.
-	Commit(ctx context.Context, posting entity.PostingData) error
+	// Commit atomically stores one posting with all its entries and returns it
+	// with database-assigned IDs. Strong write; fails on duplicate ID.
+	Commit(ctx context.Context, posting entity.PostingData) (entity.PostingData, error)
 	// FindByID returns one posting with entries by tenant + ID. Strong read.
 	FindByID(ctx context.Context, tenant valueobject.TenantID, id valueobject.PostingID) (entity.PostingData, error)
 	// FindByExternalReference returns the posting filed under a provider or

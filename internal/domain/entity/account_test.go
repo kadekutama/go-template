@@ -11,14 +11,14 @@ import (
 
 const (
 	testMain     = "Main"
-	testLedgerID = "l-1"
-	testTenantID = "t-1"
+	testLedgerID = "20000000-0000-4000-8000-000000000001"
+	testTenantID = "10000000-0000-4000-8000-000000000001"
 	testUSD      = "USD"
-	testAccount1 = "a-1"
-	testAccount2 = "a-2"
-	testPosting1 = "p-1"
-	testPeriod1  = "pd-1"
-	testJournal1 = "j-1"
+	testAccount1 = "30000000-0000-4000-8000-000000000001"
+	testAccount2 = "30000000-0000-4000-8000-000000000002"
+	testPosting1 = "40000000-0000-4000-8000-000000000001"
+	testPeriod1  = "50000000-0000-4000-8000-000000000001"
+	testJournal1 = "60000000-0000-4000-8000-000000000001"
 )
 
 func TestDomainError(t *testing.T) {
@@ -82,13 +82,22 @@ func TestNewLedger(t *testing.T) {
 			expectedError: nil,
 		},
 		{
-			name:          "empty id",
+			name:          "empty id permitted before persistence",
 			id:            "",
 			tenantID:      testTenantID,
 			nameField:     testMain,
 			assetCode:     testUSD,
 			chartVersion:  "v1",
-			expectedError: entity.NewError("LEDGER_ID_REQUIRED", "ledger id is required"),
+			expectedError: nil,
+		},
+		{
+			name:          "invalid id format",
+			id:            "not-a-uuid",
+			tenantID:      testTenantID,
+			nameField:     testMain,
+			assetCode:     testUSD,
+			chartVersion:  "v1",
+			expectedError: entity.NewError("LEDGER_ID_INVALID", "ledger id is invalid"),
 		},
 		{
 			name:          "empty tenant",
@@ -170,13 +179,22 @@ func TestAccountDataValidate(t *testing.T) {
 			expectedError: nil,
 		},
 		{
-			name: "missing id",
+			name: "missing id permitted before persistence",
 			account: func() entity.AccountData {
 				a := valid
 				a.ID = ""
 				return a
 			}(),
-			expectedError: entity.NewError("ACCOUNT_ID_REQUIRED", "account id is required"),
+			expectedError: nil,
+		},
+		{
+			name: "invalid id format",
+			account: func() entity.AccountData {
+				a := valid
+				a.ID = "not-a-uuid"
+				return a
+			}(),
+			expectedError: entity.NewError("ACCOUNT_ID_INVALID", "account id is invalid"),
 		},
 		{
 			name: "missing tenant id",

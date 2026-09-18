@@ -45,7 +45,7 @@ type balanceTotals struct {
 func (a *Posting) append(ev event.DomainEvent) { a.events = append(a.events, ev) }
 
 func validatePostingAccount(e entity.Entry, postingID valueobject.PostingID, tenantID valueobject.TenantID, ledgerID valueobject.LedgerID, accounts map[valueobject.AccountID]entity.AccountData) error {
-	if e.PostingID != postingID {
+	if postingID != "" && e.PostingID != "" && e.PostingID != postingID {
 		return entity.NewError("ENTRY_POSTING_MISMATCH", "entry posting id must match the posting")
 	}
 	acct, ok := accounts[e.AccountID]
@@ -146,13 +146,45 @@ func ConstructPosting(p PostingParams) (Posting, error) {
 	if err := validatePostingBalance(entries); err != nil {
 		return Posting{}, err
 	}
-	evt, err := buildPostingPostedEvent(p, entries)
-	if err != nil {
-		return Posting{}, err
-	}
 	posting := Posting{data: data}
-	posting.append(evt)
+	if p.ID != "" {
+		evt, err := buildPostingPostedEvent(p, entries)
+		if err != nil {
+			return Posting{}, err
+		}
+		posting.append(evt)
+	}
 	return posting, nil
+}
+
+// AssignID attaches the database-generated ID and entries to an unpersisted Posting and emits transaction.posted.v1.
+func (a *Posting) AssignID(id valueobject.PostingID, entries []entity.Entry, eventID string) error {
+	if a.data.ID != "" {
+		return entity.NewError("POSTING_ID_IMMUTABLE", "posting id is already assigned")
+	}
+	if _, err := valueobject.ParsePostingID(id.String()); err != nil {
+		return entity.NewError("POSTING_ID_INVALID", "posting id is invalid")
+	}
+	a.data.ID = id
+	if len(entries) > 0 {
+		a.data.Entries = make([]entity.Entry, len(entries))
+		copy(a.data.Entries, entries)
+	}
+	evt, err := buildPostingPostedEvent(PostingParams{
+		ID:                id,
+		TenantID:          a.data.TenantID,
+		LedgerID:          a.data.LedgerID,
+		Operation:         a.data.Operation,
+		ExternalReference: a.data.ExternalReference,
+		Description:       a.data.Description,
+		RecordedAt:        a.data.RecordedAt,
+		EventID:           eventID,
+	}, a.data.Entries)
+	if err != nil {
+		return err
+	}
+	a.append(evt)
+	return nil
 }
 
 // ReverseParams carries the new posting identity, the reversal reason/actor,
@@ -169,35 +201,59 @@ type ReverseParams struct {
 	IDGen valueobject.IDGenerator
 }
 
-// ReversePosting builds the opposite-side linked correction for a committed
-// posting and records transaction.reversed.v1 on the new posting. The original
-// is returned unchanged.
-func ReversePosting(original Posting, accounts map[valueobject.AccountID]entity.AccountData, p ReverseParams) (Posting, error) {
+func validateReverseParams(p ReverseParams) error {
 	if p.Reason == "" {
-		return Posting{}, entity.NewError("REVERSAL_REASON_REQUIRED", "reversal requires a reason")
+		return entity.NewError("REVERSAL_REASON_REQUIRED", "reversal requires a reason")
 	}
-	if p.IDGen == nil {
-		return Posting{}, entity.NewError("ID_GENERATOR_REQUIRED", "reversal requires an ID generator for mirrored entries")
+	if p.NewID != "" {
+		if _, err := valueobject.ParsePostingID(p.NewID.String()); err != nil {
+			return entity.NewError("POSTING_ID_INVALID", "posting id is invalid")
+		}
+		if p.IDGen == nil {
+			return entity.NewError("ID_GENERATOR_REQUIRED", "reversal requires an ID generator for mirrored entries")
+		}
 	}
-	src := original.data
-	mirrored := make([]entity.Entry, len(src.Entries))
+	return nil
+}
+
+func mirrorEntries(srcEntries []entity.Entry, newID valueobject.PostingID, idGen valueobject.IDGenerator) ([]entity.Entry, int64, error) {
+	mirrored := make([]entity.Entry, len(srcEntries))
 	var total int64
-	for i, e := range src.Entries {
+	for i, e := range srcEntries {
 		side := valueobject.DirectionDebit
 		if e.Side == valueobject.DirectionDebit {
 			side = valueobject.DirectionCredit
 		}
-		entryID, err := valueobject.ParseEntryID(p.IDGen.NewID())
-		if err != nil {
-			return Posting{}, entity.Errorf("ENTRY_ID_INVALID", "generated entry id rejected: %v", err)
+		var entryID valueobject.EntryID
+		if idGen != nil {
+			var err error
+			entryID, err = valueobject.ParseEntryID(idGen.NewID())
+			if err != nil {
+				return nil, 0, entity.Errorf("ENTRY_ID_INVALID", "generated entry id rejected: %v", err)
+			}
 		}
 		mirrored[i] = entity.Entry{
-			ID: entryID, PostingID: p.NewID, AccountID: e.AccountID,
+			ID: entryID, PostingID: newID, AccountID: e.AccountID,
 			Side: side, AmountMinor: e.AmountMinor, AssetCode: e.AssetCode, AccountSeq: e.AccountSeq,
 		}
 		if e.Side == valueobject.DirectionDebit {
 			total += e.AmountMinor
 		}
+	}
+	return mirrored, total, nil
+}
+
+// ReversePosting builds the opposite-side linked correction for a committed
+// posting and records transaction.reversed.v1 on the new posting. The original
+// is returned unchanged.
+func ReversePosting(original Posting, accounts map[valueobject.AccountID]entity.AccountData, p ReverseParams) (Posting, error) {
+	if err := validateReverseParams(p); err != nil {
+		return Posting{}, err
+	}
+	src := original.data
+	mirrored, total, err := mirrorEntries(src.Entries, p.NewID, p.IDGen)
+	if err != nil {
+		return Posting{}, err
 	}
 	reversed, err := ConstructPosting(PostingParams{
 		ID: p.NewID, TenantID: src.TenantID, LedgerID: src.LedgerID,
@@ -210,27 +266,29 @@ func ReversePosting(original Posting, accounts map[valueobject.AccountID]entity.
 	if err != nil {
 		return Posting{}, err
 	}
-	revEntries := make([]event.EntryPayload, len(mirrored))
-	for i, e := range mirrored {
-		revEntries[i] = event.EntryPayload{
-			EntryID: e.ID.String(), AccountID: e.AccountID.String(),
-			Direction: string(e.Side), AmountMinor: e.AmountMinor,
-			AssetCode: string(e.AssetCode), AccountSeq: e.AccountSeq,
+	if p.NewID != "" {
+		revEntries := make([]event.EntryPayload, len(mirrored))
+		for i, e := range mirrored {
+			revEntries[i] = event.EntryPayload{
+				EntryID: e.ID.String(), AccountID: e.AccountID.String(),
+				Direction: string(e.Side), AmountMinor: e.AmountMinor,
+				AssetCode: string(e.AssetCode), AccountSeq: e.AccountSeq,
+			}
 		}
+		evt, err := event.NewTransactionReversed(p.EventID, p.NewID.String(), p.At, 1, 0,
+			event.TransactionReversedPayload{
+				PostingID: p.NewID.String(), TenantID: src.TenantID.String(),
+				OriginalPostingID: src.ID.String(), ReversalType: "FULL",
+				ReversedAmountMinor: total, ReversedEntries: revEntries,
+				Reason: p.Reason, ReversedAt: p.At.UTC(),
+			},
+			event.EventMetadata{TenantID: src.TenantID.String(), LedgerID: src.LedgerID.String(),
+				CausationID: p.EventID, CorrelationID: p.EventID, UserID: p.Actor.String()})
+		if err != nil {
+			return Posting{}, err
+		}
+		reversed.append(evt)
 	}
-	evt, err := event.NewTransactionReversed(p.EventID, p.NewID.String(), p.At, 1, 0,
-		event.TransactionReversedPayload{
-			PostingID: p.NewID.String(), TenantID: src.TenantID.String(),
-			OriginalPostingID: src.ID.String(), ReversalType: "FULL",
-			ReversedAmountMinor: total, ReversedEntries: revEntries,
-			Reason: p.Reason, ReversedAt: p.At.UTC(),
-		},
-		event.EventMetadata{TenantID: src.TenantID.String(), LedgerID: src.LedgerID.String(),
-			CausationID: p.EventID, CorrelationID: p.EventID, UserID: p.Actor.String()})
-	if err != nil {
-		return Posting{}, err
-	}
-	reversed.append(evt)
 	return reversed, nil
 }
 

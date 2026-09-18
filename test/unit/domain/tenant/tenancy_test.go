@@ -22,8 +22,8 @@ func TestTenancySliceOnboarding(t *testing.T) {
 
 	at := time.Date(2026, 9, 14, 0, 0, 0, 0, time.UTC)
 	baseReq := service.OnboardingRequest{
-		TenantID:       "t-e05",
-		LedgerID:       "l-e05",
+		TenantID:       "10000000-0000-4000-8000-000000000001",
+		LedgerID:       "20000000-0000-4000-8000-000000000001",
 		Name:           "Slice Corp",
 		Region:         "us-east-1",
 		Settings:       entity.TenantSettings{DefaultCurrency: "USD", Timezone: "UTC"},
@@ -48,8 +48,9 @@ func TestTenancySliceOnboarding(t *testing.T) {
 			req:  baseReq,
 			expectedResult: service.OnboardingPlan{
 				Tenant: entity.TenantData{
-					ID:        "t-e05",
+					ID:        "10000000-0000-4000-8000-000000000001",
 					Name:      "Slice Corp",
+					Alias:     "slice-corp",
 					Region:    "us-east-1",
 					Status:    entity.TenantActive,
 					Settings:  entity.TenantSettings{DefaultCurrency: "USD", Timezone: "UTC"},
@@ -57,21 +58,21 @@ func TestTenancySliceOnboarding(t *testing.T) {
 					CreatedAt: at,
 					UpdatedAt: at,
 				},
-				LedgerID: "l-e05",
+				LedgerID: "20000000-0000-4000-8000-000000000001",
 				Accounts: []service.DefaultAccount{
 					{Purpose: service.TenantPurposeOperating, AssetCode: "USD", Number: "1000-USD", Name: "Operating USD", Class: valueobject.ClassLiability},
 					{Purpose: service.TenantPurposeFee, AssetCode: "USD", Number: "4000-USD", Name: "Platform Fees USD", Class: valueobject.ClassRevenue},
 					{Purpose: service.TenantPurposeSuspense, AssetCode: "USD", Number: "1100-USD", Name: "Suspense USD", Class: valueobject.ClassAsset},
 				},
 				Key: service.APIKeyDescriptor{
-					KeyID:     "key_t-e05",
-					KeyPrefix: "pk_t-e05",
-					TenantID:  "t-e05",
+					KeyID:     "key_10000000-0000-4000-8000-000000000001",
+					KeyPrefix: "pk_10000000",
+					TenantID:  "10000000-0000-4000-8000-000000000001",
 					IssuedAt:  at,
 				},
 				Event: event.TenantCreatedPayload{
-					TenantID:      "t-e05",
-					LedgerID:      "l-e05",
+					TenantID:      "10000000-0000-4000-8000-000000000001",
+					LedgerID:      "20000000-0000-4000-8000-000000000001",
 					Name:          "Slice Corp",
 					Region:        "us-east-1",
 					BaseAssetCode: "USD",
@@ -136,8 +137,8 @@ func TestTenancySliceAggregateLifecycle(t *testing.T) {
 
 	at := time.Date(2026, 9, 14, 0, 0, 0, 0, time.UTC)
 	baseParams := aggregate.OpenTenantParams{
-		ID:         "t-e05",
-		LedgerID:   "l-e05",
+		ID:         "10000000-0000-4000-8000-000000000001",
+		LedgerID:   "20000000-0000-4000-8000-000000000001",
 		Name:       "Slice Corp",
 		Region:     "us-east-1",
 		Settings:   entity.TenantSettings{DefaultCurrency: "USD", Timezone: "UTC"},
@@ -165,28 +166,40 @@ func TestTenancySliceAggregateLifecycle(t *testing.T) {
 			expectedError:   nil,
 		},
 		{
-			name: "missing tenant id rejected",
+			name: "open tenant with empty id succeeds without events",
 			p: func() aggregate.OpenTenantParams {
 				p := baseParams
 				p.ID = ""
 				return p
 			}(),
-			expectedStatus:  "",
-			expectedVersion: 0,
+			expectedStatus:  entity.TenantActive,
+			expectedVersion: 1,
 			expectedEvent:   "",
-			expectedError:   entity.NewError("TENANT_ID_REQUIRED", "tenant id is required"),
+			expectedError:   nil,
 		},
 		{
-			name: "missing ledger id rejected",
+			name: "invalid tenant id rejected",
 			p: func() aggregate.OpenTenantParams {
 				p := baseParams
-				p.LedgerID = ""
+				p.ID = "invalid-uuid"
 				return p
 			}(),
 			expectedStatus:  "",
 			expectedVersion: 0,
 			expectedEvent:   "",
-			expectedError:   entity.NewError("LEDGER_REQUIRED", "ledger id is required"),
+			expectedError:   entity.NewError("TENANT_ID_INVALID", "tenant id is invalid"),
+		},
+		{
+			name: "invalid ledger id rejected",
+			p: func() aggregate.OpenTenantParams {
+				p := baseParams
+				p.LedgerID = "invalid-uuid"
+				return p
+			}(),
+			expectedStatus:  "",
+			expectedVersion: 0,
+			expectedEvent:   "",
+			expectedError:   entity.NewError("LEDGER_ID_INVALID", "ledger id is invalid"),
 		},
 		{
 			name: "missing opened by user id rejected",
@@ -234,8 +247,12 @@ func TestTenancySliceAggregateLifecycle(t *testing.T) {
 				assert.Equal(t, tc.expectedStatus, actualResult.Record().Status)
 				assert.Equal(t, tc.expectedVersion, actualResult.Record().Version)
 				evts := actualResult.UncommittedEvents()
-				require.Len(t, evts, 1)
-				assert.Equal(t, tc.expectedEvent, evts[0].EventType())
+				if tc.expectedEvent != "" {
+					require.Len(t, evts, 1)
+					assert.Equal(t, tc.expectedEvent, evts[0].EventType())
+				} else {
+					require.Empty(t, evts)
+				}
 			}
 		})
 	}

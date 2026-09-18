@@ -1,0 +1,308 @@
+# Profile A (bare-metal / Docker Compose): Citus 14.0 sharded PostgreSQL with
+# Patroni v4.1.5 HA supervised by a 3-node etcd v3.7.0 DCS (E07.1-T02, ADR-013).
+#
+# Tiers: 3x etcd | coordinator (1 primary + 1 standby) | 2 worker shards
+# (each 1 primary + 1 standby). Application traffic targets the coordinator
+# primary at localhost:5432 (postgres/postgres_pw). Synchronous replication
+# (num_sync >= 1) gives RPO=0 on ungraceful primary kill.
+#
+# Usage:
+#   docker compose -f deployments/docker/docker-compose.citus-patroni.yml config  # static validation (S01)
+#   docker compose -f deployments/docker/docker-compose.citus-patroni.yml up -d --build
+#   PGPASSWORD=postgres_pw psql -h localhost -U postgres -c "SELECT nodename, nodeport FROM pg_dist_node;"  # S03
+name: go-template-citus-patroni
+
+x-patroni-common: &patroni-common
+  build:
+    context: ../patroni
+    dockerfile: Dockerfile
+  environment:
+    PATRONI_ETCD3_HOSTS: "etcd1:2379,etcd2:2379,etcd3:2379"
+  # Each service mounts its own patroni.yml (coordinator vs worker) and sets
+  # PATRONI_SCOPE/NAME/connect addresses via environment overrides.
+  healthcheck:
+    test: ["CMD", "curl", "-fsS", "http://localhost:8008/health"]
+    interval: 10s
+    timeout: 5s
+    retries: 12
+    start_period: 60s
+
+services:
+  etcd1:
+    image: quay.io/coreos/etcd:v3.7.0
+    container_name: etcd1
+    command:
+      - etcd
+      - --name=etcd1
+      - --advertise-client-urls=http://etcd1:2379
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --initial-advertise-peer-urls=http://etcd1:2380
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-cluster=etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
+      - --initial-cluster-state=new
+    ports:
+      - "2379:2379"
+    volumes:
+      - etcd1-data:/etcd-data
+    environment:
+      ETCD_DATA_DIR: /etcd-data
+      ETCDCTL_API: "3"
+    healthcheck:
+      test: ["CMD", "etcdctl", "--endpoints=http://localhost:2379", "endpoint", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  etcd2:
+    image: quay.io/coreos/etcd:v3.7.0
+    container_name: etcd2
+    command:
+      - etcd
+      - --name=etcd2
+      - --advertise-client-urls=http://etcd2:2379
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --initial-advertise-peer-urls=http://etcd2:2380
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-cluster=etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
+      - --initial-cluster-state=new
+    ports:
+      - "2378:2379"
+    volumes:
+      - etcd2-data:/etcd-data
+    environment:
+      ETCD_DATA_DIR: /etcd-data
+      ETCDCTL_API: "3"
+    healthcheck:
+      test: ["CMD", "etcdctl", "--endpoints=http://localhost:2379", "endpoint", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  etcd3:
+    image: quay.io/coreos/etcd:v3.7.0
+    container_name: etcd3
+    command:
+      - etcd
+      - --name=etcd3
+      - --advertise-client-urls=http://etcd3:2379
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --initial-advertise-peer-urls=http://etcd3:2380
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-cluster=etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
+      - --initial-cluster-state=new
+    ports:
+      - "2377:2379"
+    volumes:
+      - etcd3-data:/etcd-data
+    environment:
+      ETCD_DATA_DIR: /etcd-data
+      ETCDCTL_API: "3"
+    healthcheck:
+      test: ["CMD", "etcdctl", "--endpoints=http://localhost:2379", "endpoint", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  citus-coordinator:
+    <<: *patroni-common
+    container_name: citus-coordinator
+    hostname: citus-coordinator
+    environment:
+      PATRONI_SCOPE: citus-coordinator
+      PATRONI_NAME: citus-coordinator-1
+      PATRONI_RESTAPI_CONNECT_ADDRESS: citus-coordinator:8008
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: citus-coordinator:5432
+      PATRONI_ETCD3_HOSTS: "etcd1:2379,etcd2:2379,etcd3:2379"
+    ports:
+      - "5432:5432"
+      - "8008:8008"
+    volumes:
+      - pg-coordinator-data:/var/lib/postgresql/data
+      - type: bind
+        source: ../patroni/citus-coordinator.yml
+        target: /etc/patroni/patroni.yml
+        read_only: true
+    depends_on:
+      etcd1:
+        condition: service_healthy
+      etcd2:
+        condition: service_healthy
+      etcd3:
+        condition: service_healthy
+
+  citus-coordinator-standby:
+    <<: *patroni-common
+    container_name: citus-coordinator-standby
+    hostname: citus-coordinator-standby
+    environment:
+      PATRONI_SCOPE: citus-coordinator
+      PATRONI_NAME: citus-coordinator-2
+      PATRONI_RESTAPI_CONNECT_ADDRESS: citus-coordinator-standby:8008
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: citus-coordinator-standby:5432
+      PATRONI_ETCD3_HOSTS: "etcd1:2379,etcd2:2379,etcd3:2379"
+    ports:
+      - "8009:8008"
+    volumes:
+      - pg-coordinator-standby-data:/var/lib/postgresql/data
+      - type: bind
+        source: ../patroni/citus-coordinator.yml
+        target: /etc/patroni/patroni.yml
+        read_only: true
+    depends_on:
+      etcd1:
+        condition: service_healthy
+      etcd2:
+        condition: service_healthy
+      etcd3:
+        condition: service_healthy
+
+  citus-worker1:
+    <<: *patroni-common
+    container_name: citus-worker1
+    hostname: citus-worker1
+    environment:
+      PATRONI_SCOPE: citus-worker1
+      PATRONI_NAME: citus-worker1-1
+      PATRONI_RESTAPI_CONNECT_ADDRESS: citus-worker1:8008
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: citus-worker1:5432
+      PATRONI_ETCD3_HOSTS: "etcd1:2379,etcd2:2379,etcd3:2379"
+    ports:
+      - "5434:5432"
+      - "8010:8008"
+    volumes:
+      - pg-worker1-data:/var/lib/postgresql/data
+      - type: bind
+        source: ../patroni/citus-worker.yml
+        target: /etc/patroni/patroni.yml
+        read_only: true
+    depends_on:
+      etcd1:
+        condition: service_healthy
+      etcd2:
+        condition: service_healthy
+      etcd3:
+        condition: service_healthy
+
+  citus-worker1-standby:
+    <<: *patroni-common
+    container_name: citus-worker1-standby
+    hostname: citus-worker1-standby
+    environment:
+      PATRONI_SCOPE: citus-worker1
+      PATRONI_NAME: citus-worker1-2
+      PATRONI_RESTAPI_CONNECT_ADDRESS: citus-worker1-standby:8008
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: citus-worker1-standby:5432
+      PATRONI_ETCD3_HOSTS: "etcd1:2379,etcd2:2379,etcd3:2379"
+    volumes:
+      - pg-worker1-standby-data:/var/lib/postgresql/data
+      - type: bind
+        source: ../patroni/citus-worker.yml
+        target: /etc/patroni/patroni.yml
+        read_only: true
+    depends_on:
+      etcd1:
+        condition: service_healthy
+      etcd2:
+        condition: service_healthy
+      etcd3:
+        condition: service_healthy
+
+  citus-worker2:
+    <<: *patroni-common
+    container_name: citus-worker2
+    hostname: citus-worker2
+    environment:
+      PATRONI_SCOPE: citus-worker2
+      PATRONI_NAME: citus-worker2-1
+      PATRONI_RESTAPI_CONNECT_ADDRESS: citus-worker2:8008
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: citus-worker2:5432
+      PATRONI_ETCD3_HOSTS: "etcd1:2379,etcd2:2379,etcd3:2379"
+    ports:
+      - "5436:5432"
+      - "8011:8008"
+    volumes:
+      - pg-worker2-data:/var/lib/postgresql/data
+      - type: bind
+        source: ../patroni/citus-worker.yml
+        target: /etc/patroni/patroni.yml
+        read_only: true
+    depends_on:
+      etcd1:
+        condition: service_healthy
+      etcd2:
+        condition: service_healthy
+      etcd3:
+        condition: service_healthy
+
+  citus-worker2-standby:
+    <<: *patroni-common
+    container_name: citus-worker2-standby
+    hostname: citus-worker2-standby
+    environment:
+      PATRONI_SCOPE: citus-worker2
+      PATRONI_NAME: citus-worker2-2
+      PATRONI_RESTAPI_CONNECT_ADDRESS: citus-worker2-standby:8008
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: citus-worker2-standby:5432
+      PATRONI_ETCD3_HOSTS: "etcd1:2379,etcd2:2379,etcd3:2379"
+    volumes:
+      - pg-worker2-standby-data:/var/lib/postgresql/data
+      - type: bind
+        source: ../patroni/citus-worker.yml
+        target: /etc/patroni/patroni.yml
+        read_only: true
+    depends_on:
+      etcd1:
+        condition: service_healthy
+      etcd2:
+        condition: service_healthy
+      etcd3:
+        condition: service_healthy
+
+  # One-shot cluster wiring: enables citus everywhere and registers both
+  # workers on the coordinator. Retries until every tier is primary-ready.
+  citus-init:
+    image: citusdata/citus:14.0
+    container_name: citus-init
+    restart: "no"
+    environment:
+      PGPASSWORD: postgres_pw
+    command:
+      - sh
+      - -ec
+      - |
+        for host in citus-coordinator citus-worker1 citus-worker2; do
+          echo "waiting for $$host..."
+          for i in $$(seq 1 90); do
+            pg_isready -h "$$host" -U postgres && break
+            sleep 5
+          done
+        done
+        for host in citus-coordinator citus-worker1 citus-worker2; do
+          psql "host=$$host user=postgres dbname=postgres" -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS citus;"
+        done
+        psql "host=citus-coordinator user=postgres dbname=postgres" -v ON_ERROR_STOP=1 <<'SQL'
+        SELECT citus_add_node('citus-worker1', 5432);
+        SELECT citus_add_node('citus-worker2', 5432);
+        SQL
+        psql "host=citus-coordinator user=postgres dbname=postgres" -v ON_ERROR_STOP=1 -c "SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename;"
+    depends_on:
+      citus-coordinator:
+        condition: service_healthy
+      citus-worker1:
+        condition: service_healthy
+      citus-worker2:
+        condition: service_healthy
+
+volumes:
+  etcd1-data:
+  etcd2-data:
+  etcd3-data:
+  pg-coordinator-data:
+  pg-coordinator-standby-data:
+  pg-worker1-data:
+  pg-worker1-standby-data:
+  pg-worker2-data:
+  pg-worker2-standby-data:

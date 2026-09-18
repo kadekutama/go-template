@@ -29,7 +29,7 @@ func openTestHold(t *testing.T, id valueobject.HoldID, expires time.Time) *aggre
 func TestHoldCaptureIdempotent(t *testing.T) {
 	t.Parallel()
 	base := time.Date(2026, 9, 14, 9, 0, 0, 0, time.UTC)
-	h := openTestHold(t, "h-1", base.Add(time.Hour))
+	h := openTestHold(t, "80000000-0000-4000-8000-000000000001", base.Add(time.Hour))
 	if err := h.Capture(base.Add(time.Minute)); err != nil {
 		t.Fatalf("Capture: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestHoldCaptureIdempotent(t *testing.T) {
 func TestHoldReleaseAndExpire(t *testing.T) {
 	t.Parallel()
 	base := time.Date(2026, 9, 14, 9, 0, 0, 0, time.UTC)
-	h := openTestHold(t, "h-2", base.Add(time.Hour))
+	h := openTestHold(t, "80000000-0000-4000-8000-000000000002", base.Add(time.Hour))
 	if err := h.Release(base.Add(time.Minute)); err != nil {
 		t.Fatalf("Release: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestHoldReleaseAndExpire(t *testing.T) {
 		t.Fatal("Capture after release must fail")
 	}
 
-	e := openTestHold(t, "h-3", base.Add(time.Hour))
+	e := openTestHold(t, "80000000-0000-4000-8000-000000000003", base.Add(time.Hour))
 	if err := e.Expire(base); err == nil || !strings.Contains(err.Error(), "HOLD_NOT_EXPIRED") {
 		t.Fatalf("early Expire err = %v", err)
 	}
@@ -103,7 +103,7 @@ func TestHoldLateCaptureExpired(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			h := openTestHold(t, "h-4", base.Add(time.Hour))
+			h := openTestHold(t, "80000000-0000-4000-8000-000000000004", base.Add(time.Hour))
 			err := h.Capture(tc.captureAt)
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tc.expectedError)
@@ -116,7 +116,7 @@ func TestHoldValidation(t *testing.T) {
 
 	base := time.Date(2026, 9, 14, 9, 0, 0, 0, time.UTC)
 	valid := aggregate.OpenHoldParams{
-		ID:          "h-9",
+		ID:          "80000000-0000-4000-8000-000000000009",
 		TenantID:    testTenantID,
 		LedgerID:    testLedgerID,
 		AccountID:   testAccount1,
@@ -158,10 +158,19 @@ func TestHoldValidation(t *testing.T) {
 			expectedError: true,
 		},
 		{
-			name: "empty id rejected",
+			name: "empty id permitted before persistence",
 			params: func() aggregate.OpenHoldParams {
 				p := valid
 				p.ID = ""
+				return p
+			}(),
+			expectedError: false,
+		},
+		{
+			name: "invalid id rejected",
+			params: func() aggregate.OpenHoldParams {
+				p := valid
+				p.ID = "not-a-uuid"
 				return p
 			}(),
 			expectedError: true,

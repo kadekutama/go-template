@@ -12,8 +12,9 @@ coverage/
 
 # Local environment overrides (never commit secrets)
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+!.env.*.example
 
 # Air hot-reload local overrides (base .air.toml from E00-T04 is tracked)
 .air.toml.local
@@ -27,9 +28,6 @@ tmp/
 # Go workspace leftovers
 vendor/
 
-# Explicitly keep distributable templates trackable
-!.env.example
-!.env.*.example
-
 # Local config overrides (untracked; copy config/config.local.yaml.example, E01-T03)
 config/config.local.yaml
+

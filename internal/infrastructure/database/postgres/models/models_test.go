@@ -23,7 +23,7 @@ func TestLedgerMappingRoundTrip(t *testing.T) {
 		{
 			name: "valid ledger maps and returns",
 			ledger: func() entity.Ledger {
-				ledger, err := entity.NewLedger("ldg-01", "tnt-01", "Test", "USD", "v1")
+				ledger, err := entity.NewLedger("20000000-0000-4000-8000-000000000001", "10000000-0000-4000-8000-000000000001", "Test", "USD", "v1")
 				require.NoError(t, err)
 				return ledger
 			}(),
@@ -55,15 +55,15 @@ func TestLedgerToEntityRejectsInvalidRow(t *testing.T) {
 	testCases := []testCase{
 		{
 			name:  "blank id rejected",
-			model: models.LedgerModel{TenantID: "tnt-01", Name: "x", BaseAsset: "USD", ChartVersion: "v1"},
+			model: models.LedgerModel{TenantID: "10000000-0000-4000-8000-000000000001", Name: "x", BaseAsset: "USD", ChartVersion: "v1"},
 		},
 		{
 			name:  "blank tenant rejected",
-			model: models.LedgerModel{ID: "ldg-01", Name: "x", BaseAsset: "USD", ChartVersion: "v1"},
+			model: models.LedgerModel{ID: "20000000-0000-4000-8000-000000000001", Name: "x", BaseAsset: "USD", ChartVersion: "v1"},
 		},
 		{
 			name:  "blank name rejected",
-			model: models.LedgerModel{ID: "ldg-01", TenantID: "tnt-01", BaseAsset: "USD", ChartVersion: "v1"},
+			model: models.LedgerModel{ID: "20000000-0000-4000-8000-000000000001", TenantID: "10000000-0000-4000-8000-000000000001", BaseAsset: "USD", ChartVersion: "v1"},
 		},
 	}
 

@@ -29,8 +29,8 @@ type stubPostings struct {
 	err     error
 }
 
-func (s *stubPostings) Commit(_ context.Context, _ entity.PostingData) error {
-	return nil
+func (s *stubPostings) Commit(_ context.Context, posting entity.PostingData) (entity.PostingData, error) {
+	return posting, nil
 }
 
 func (s *stubPostings) FindByID(_ context.Context, _ valueobject.TenantID, _ valueobject.PostingID) (entity.PostingData, error) {
@@ -76,8 +76,8 @@ type stubAccounts struct {
 	err      error
 }
 
-func (s *stubAccounts) Create(_ context.Context, _ entity.AccountData) error {
-	return nil
+func (s *stubAccounts) Create(_ context.Context, _ entity.AccountData) (entity.AccountData, error) {
+	return entity.AccountData{}, nil
 }
 
 func (s *stubAccounts) FindByID(_ context.Context, _ valueobject.TenantID, _ valueobject.AccountID) (entity.AccountData, error) {
@@ -106,12 +106,18 @@ type stubTenants struct {
 	err     error
 }
 
-func (s *stubTenants) Create(_ context.Context, _ entity.TenantData) error { return nil }
+func (s *stubTenants) Create(_ context.Context, _ entity.TenantData) (entity.TenantData, error) {
+	return entity.TenantData{}, nil
+}
 func (s *stubTenants) FindByID(_ context.Context, _ valueobject.TenantID) (entity.TenantData, error) {
 	return s.tenant, s.err
 }
 func (s *stubTenants) ListNames(_ context.Context) ([]string, error) {
 	return s.names, s.err
+}
+
+func (s *stubTenants) ListAliases(_ context.Context) ([]string, error) {
+	return nil, s.err
 }
 func (s *stubTenants) UpdateSettings(_ context.Context, _ entity.TenantData, _ int64) error {
 	return nil
@@ -186,8 +192,8 @@ type stubHolds struct {
 	err   error
 }
 
-func (s *stubHolds) Create(_ context.Context, _ entity.HoldData) error {
-	return nil
+func (s *stubHolds) Create(_ context.Context, _ entity.HoldData) (entity.HoldData, error) {
+	return entity.HoldData{}, nil
 }
 
 func (s *stubHolds) FindByID(_ context.Context, _ valueobject.TenantID, _ valueobject.HoldID) (entity.HoldData, error) {

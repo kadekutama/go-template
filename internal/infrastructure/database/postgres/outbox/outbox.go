@@ -17,12 +17,12 @@ import (
 )
 
 // ClaimSQL claims one batch of undelivered facts with row-level locks that
-// skip rows locked by peer pollers. Ordering is by id (insertion sequence);
-// wall-clock order never defines delivery order. Expired claims are reclaimed
-// after the lease timeout.
+// skip rows locked by peer pollers. Ordering is by monotonic BIGSERIAL id for
+// strictly preserved insertion order without same-transaction timestamp tie-breaks.
+// Expired claims are reclaimed after the lease timeout.
 const ClaimSQL = `UPDATE outbox_events SET claimed_at = now()
-WHERE id IN (
-    SELECT id FROM outbox_events
+WHERE (tenant_id, id) IN (
+    SELECT tenant_id, id FROM outbox_events
     WHERE delivered_at IS NULL
       AND (claimed_at IS NULL OR claimed_at < now() - (? * INTERVAL '1 second'))
     ORDER BY id

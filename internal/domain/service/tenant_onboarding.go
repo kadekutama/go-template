@@ -2,6 +2,7 @@ package service
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,17 +25,88 @@ const MaxOnboardingAssets = 8
 // and AllowedRegions are caller-supplied authority (repository/config); the
 // domain never reads global state.
 type OnboardingRequest struct {
-	TenantID       valueobject.TenantID
-	LedgerID       valueobject.LedgerID
-	Name           string
-	Region         string
-	Settings       entity.TenantSettings
-	Assets         []valueobject.AssetCode
-	ExistingNames  []string
-	AllowedRegions []string
-	RequestedBy    valueobject.UserID
-	EventID        string
-	Now            time.Time
+	TenantID        valueobject.TenantID
+	LedgerID        valueobject.LedgerID
+	Name            string
+	RequestedAlias  string
+	Region          string
+	Settings        entity.TenantSettings
+	Assets          []valueobject.AssetCode
+	ExistingNames   []string
+	ExistingAliases []string
+	AllowedRegions  []string
+	RequestedBy     valueobject.UserID
+	EventID         string
+	Now             time.Time
+}
+
+// DeriveTenantAlias resolves the tenant slug: an explicitly requested alias
+// wins when well-formed, otherwise the name is slugified. An underivable
+// name yields "" without error so downstream name validation reports the
+// real problem. Collisions resolve with numeric suffixes; exhaustion fails
+// closed instead of looping forever.
+func DeriveTenantAlias(requested, name string, taken []string) (string, error) {
+	if trimmed := strings.TrimSpace(requested); trimmed != "" {
+		if err := entity.ValidateTenantAlias(trimmed); err != nil {
+			return "", err
+		}
+
+		return trimmed, nil
+	}
+
+	base := slugifyTenantName(name)
+	if base == "" {
+		return "", nil
+	}
+
+	occupied := make(map[string]bool, len(taken))
+	for _, alias := range taken {
+		occupied[alias] = true
+	}
+
+	if !occupied[base] {
+		return base, nil
+	}
+
+	for attempt := 2; attempt <= 100; attempt++ {
+		candidate := base + "-" + strconv.Itoa(attempt)
+		if !occupied[candidate] {
+			return candidate, nil
+		}
+	}
+
+	return "", entity.NewError("TENANT_ALIAS_TAKEN", "tenant alias namespace exhausted")
+}
+
+// slugifyTenantName folds a display name into a URL-safe slug stem.
+func slugifyTenantName(name string) string {
+	var stem strings.Builder
+
+	previousHyphen := true
+
+	for _, r := range strings.ToLower(strings.TrimSpace(name)) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			stem.WriteRune(r)
+			previousHyphen = false
+		default:
+			if !previousHyphen {
+				stem.WriteRune('-')
+				previousHyphen = true
+			}
+		}
+	}
+
+	slug := strings.Trim(stem.String(), "-")
+	if len(slug) < 3 {
+		return ""
+	}
+
+	if len(slug) > 64 {
+		slug = strings.Trim(slug[:64], "-")
+	}
+
+	return slug
 }
 
 // DefaultAccount is one deterministic initial chart row.
@@ -152,9 +224,14 @@ func ValidateOnboarding(req OnboardingRequest) (OnboardingPlan, error) {
 	settings := req.Settings
 	settings.EnabledFeatures = slices.Clone(req.Settings.EnabledFeatures)
 	settings.EnabledPaymentMethods = slices.Clone(req.Settings.EnabledPaymentMethods)
+	alias, err := DeriveTenantAlias(req.RequestedAlias, req.Name, req.ExistingAliases)
+	if err != nil {
+		return OnboardingPlan{}, err
+	}
 	tenant := entity.TenantData{
 		ID:        req.TenantID,
 		Name:      strings.TrimSpace(req.Name),
+		Alias:     alias,
 		Region:    strings.TrimSpace(req.Region),
 		Status:    entity.TenantActive,
 		Settings:  settings,
@@ -194,11 +271,15 @@ func ValidateOnboarding(req OnboardingRequest) (OnboardingPlan, error) {
 }
 
 func validateOnboardingIdentity(req OnboardingRequest) error {
-	if strings.TrimSpace(req.TenantID.String()) == "" {
-		return entity.NewError("TENANT_ID_REQUIRED", "tenant id is required")
+	if req.TenantID.String() != "" {
+		if _, err := valueobject.ParseTenantID(req.TenantID.String()); err != nil {
+			return entity.NewError("TENANT_ID_INVALID", "tenant id is invalid")
+		}
 	}
-	if strings.TrimSpace(req.LedgerID.String()) == "" {
-		return entity.NewError("LEDGER_REQUIRED", "ledger id is required")
+	if req.LedgerID.String() != "" {
+		if _, err := valueobject.ParseLedgerID(req.LedgerID.String()); err != nil {
+			return entity.NewError("LEDGER_ID_INVALID", "ledger id is invalid")
+		}
 	}
 	if err := entity.ValidateTenantName(req.Name); err != nil {
 		return err

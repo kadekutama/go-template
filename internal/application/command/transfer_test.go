@@ -33,7 +33,9 @@ type tfrAccounts struct {
 	accounts map[valueobject.AccountID]entity.AccountData
 }
 
-func (f *tfrAccounts) Create(_ context.Context, _ entity.AccountData) error { return nil }
+func (f *tfrAccounts) Create(_ context.Context, _ entity.AccountData) (entity.AccountData, error) {
+	return entity.AccountData{}, nil
+}
 
 func (f *tfrAccounts) FindByID(_ context.Context, _ valueobject.TenantID, id valueobject.AccountID) (entity.AccountData, error) {
 	f.mu.Lock()
@@ -226,12 +228,23 @@ type tfrTxPostings struct {
 	tx *tfrTx
 }
 
-func (p *tfrTxPostings) Commit(_ context.Context, posting entity.PostingData) error {
+func (p *tfrTxPostings) Commit(_ context.Context, posting entity.PostingData) (entity.PostingData, error) {
 	if p.tx.staged == nil {
 		p.tx.staged = map[valueobject.PostingID]entity.PostingData{}
 	}
+	if posting.ID == "" {
+		posting.ID = valueobject.PostingID(fmt.Sprintf("123e4567-e89b-12d3-a456-%012x", 0x426614174000+int64(len(p.tx.staged))))
+	}
+	for i := range posting.Entries {
+		if posting.Entries[i].ID == "" {
+			posting.Entries[i].ID = valueobject.EntryID(fmt.Sprintf("123e4567-e89b-12d3-a456-%012x", 0x426614174000+int64(len(p.tx.staged))+int64(i)+1))
+		}
+		if posting.Entries[i].PostingID == "" {
+			posting.Entries[i].PostingID = posting.ID
+		}
+	}
 	p.tx.staged[posting.ID] = posting
-	return nil
+	return posting, nil
 }
 
 func (p *tfrTxPostings) FindByID(_ context.Context, _ valueobject.TenantID, _ valueobject.PostingID) (entity.PostingData, error) {

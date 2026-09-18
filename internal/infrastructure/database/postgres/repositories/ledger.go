@@ -43,23 +43,33 @@ func NewLedgerRepository(params LedgerRepositoryParams) (*LedgerRepository, erro
 	return &LedgerRepository{db: params.DB}, nil
 }
 
-// Create stores a new ledger; duplicate IDs conflict.
-func (r *LedgerRepository) Create(ctx context.Context, ledger entity.Ledger) error {
+// Create stores a new ledger and returns it with the database-assigned ID;
+// duplicate IDs conflict.
+func (r *LedgerRepository) Create(ctx context.Context, ledger entity.Ledger) (entity.Ledger, error) {
 	if _, err := entity.NewLedger(ledger.ID, ledger.TenantID, ledger.Name, ledger.BaseAsset, ledger.ChartVersion); err != nil {
-		return err
+		return entity.Ledger{}, err
+	}
+
+	if err := entity.ValidateAliasSlug(ledger.Alias, "LEDGER_ALIAS_INVALID", "ledger alias"); err != nil {
+		return entity.Ledger{}, err
 	}
 
 	model := models.LedgerToModel(ledger)
 
 	if err := r.db.WithContext(ctx).Create(&model).Error; err != nil {
 		if isDuplicate(err) {
-			return ErrConflict
+			return entity.Ledger{}, ErrConflict
 		}
 
-		return fmt.Errorf("postgres: create ledger: %w", err)
+		return entity.Ledger{}, fmt.Errorf("postgres: create ledger: %w", err)
 	}
 
-	return nil
+	stored, err := models.LedgerToEntity(model)
+	if err != nil {
+		return entity.Ledger{}, fmt.Errorf("postgres: invalid ledger row %s: %w", model.ID, err)
+	}
+
+	return stored, nil
 }
 
 // FindByID returns one ledger by tenant + ID (strong read).

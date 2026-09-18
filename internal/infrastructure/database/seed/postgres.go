@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"github.com/kadekutama/go-template/internal/domain/entity"
@@ -53,7 +54,9 @@ func (s *pgLedgerStore) Create(ctx context.Context, ledger LedgerSeed) error {
 		return fmt.Errorf("postgres seed: build ledger: %w", err)
 	}
 
-	if err := repo.Create(ctx, entityLedger); err != nil {
+	entityLedger.Alias = ledger.Alias
+
+	if _, err := repo.Create(ctx, entityLedger); err != nil {
 		if errors.Is(err, repos.ErrConflict) {
 			return nil
 		}
@@ -95,7 +98,7 @@ func (s *pgAccountStore) Create(ctx context.Context, account AccountSeed) error 
 		Version:   account.Version,
 	}
 
-	if err := repo.Create(ctx, accountData); err != nil {
+	if _, err := repo.Create(ctx, accountData); err != nil {
 		if errors.Is(err, repos.ErrConflict) {
 			return nil
 		}
@@ -107,6 +110,14 @@ func (s *pgAccountStore) Create(ctx context.Context, account AccountSeed) error 
 
 type pgPostingStore struct {
 	db *gorm.DB
+}
+
+// seedEntryID derives a deterministic UUIDv5 entry identity from its posting
+// and side. String suffixes (e.g. "<posting>-dr") are not valid UUIDs and
+// cannot land in native UUID columns; name-based UUIDs stay stable across
+// re-seeds, preserving idempotent seed application.
+func seedEntryID(postingID, side string) string {
+	return uuid.NewSHA1(uuid.NameSpaceOID, []byte(postingID+"/"+side)).String()
 }
 
 func (s *pgPostingStore) Exists(ctx context.Context, id string) (bool, error) {
@@ -133,7 +144,7 @@ func (s *pgPostingStore) Create(ctx context.Context, posting PostingSeed) error 
 		Description: posting.Description,
 		Entries: []entity.Entry{
 			{
-				ID:          valueobject.EntryID(posting.ID + "-dr"),
+				ID:          valueobject.EntryID(seedEntryID(posting.ID, "debit")),
 				PostingID:   valueobject.PostingID(posting.ID),
 				AccountID:   valueobject.AccountID(posting.Debit.ID),
 				Side:        valueobject.DirectionDebit,
@@ -141,7 +152,7 @@ func (s *pgPostingStore) Create(ctx context.Context, posting PostingSeed) error 
 				AssetCode:   valueobject.AssetCode(posting.AssetCode),
 			},
 			{
-				ID:          valueobject.EntryID(posting.ID + "-cr"),
+				ID:          valueobject.EntryID(seedEntryID(posting.ID, "credit")),
 				PostingID:   valueobject.PostingID(posting.ID),
 				AccountID:   valueobject.AccountID(posting.Credit.ID),
 				Side:        valueobject.DirectionCredit,
@@ -154,7 +165,7 @@ func (s *pgPostingStore) Create(ctx context.Context, posting PostingSeed) error 
 		Metadata:    map[string]string{},
 	}
 
-	if err := repo.Commit(ctx, postingData); err != nil {
+	if _, err := repo.Commit(ctx, postingData); err != nil {
 		if errors.Is(err, repos.ErrConflict) {
 			return nil
 		}
@@ -187,6 +198,7 @@ func ApplyPostgres(ctx context.Context, db *gorm.DB, plan Plan) error {
 	tenant := models.TenantModel{
 		ID:       plan.Tenant.TenantID,
 		Name:     plan.Tenant.Name,
+		Alias:    plan.Tenant.Alias,
 		Region:   plan.Tenant.Region,
 		Settings: "{}",
 		Status:   "ACTIVE",

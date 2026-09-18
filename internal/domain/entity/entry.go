@@ -19,13 +19,17 @@ type Entry struct {
 
 // Validate checks entry structure. Account existence, scope, asset match, and
 // status are posting-construction checks (they need the account set), not
-// entry checks.
+// entry checks. An empty ID is permitted prior to persistence.
 func (e Entry) Validate() error {
-	if e.ID.String() == "" {
-		return NewError("ENTRY_ID_REQUIRED", "entry id is required")
+	if e.ID.String() != "" {
+		if _, err := valueobject.ParseEntryID(e.ID.String()); err != nil {
+			return NewError("ENTRY_ID_INVALID", "entry id is invalid")
+		}
 	}
-	if e.PostingID.String() == "" {
-		return NewError("ENTRY_POSTING_REQUIRED", "posting id is required")
+	if e.PostingID.String() != "" {
+		if _, err := valueobject.ParsePostingID(e.PostingID.String()); err != nil {
+			return NewError("ENTRY_POSTING_INVALID", "posting id is invalid")
+		}
 	}
 	if e.AccountID.String() == "" {
 		return NewError("ENTRY_ACCOUNT_REQUIRED", "account id is required")

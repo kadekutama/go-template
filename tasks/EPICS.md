@@ -4,7 +4,7 @@
 `docs/ledger-core.md`, `docs/development/go-conventions.md`,
 `SPEC.md`, `docs/fintech-ledger-features.md`, `docs/api-contracts.md`,
 `docs/money-flow.md`, `docs/data-flow.md`, `docs/user-journeys.md`, `docs/domain-events.md`
-**Total:** 21 epics, 451 story points, 8 promotion gates.
+**Total:** 21 epics, 464 story points, 8 promotion gates.
 
 ## One-liners
 
@@ -16,9 +16,9 @@
 | E03 | Money-movement domain: transfers (incl. scheduled/recurring/bulk/templates), refunds, payouts, fees, interest, FX, payment methods/settlement/returns, payout policy/recovery | 37 | 3 | E02 | G2 |
 | E04 | Compliance domain: reconciliation rules, breaks, period-close rules, GDPR erasure, AML hooks, regulatory reports, SOX approvals | 16 | 3 | E02 | G2 |
 | E05 | Tenancy domain: tenant aggregate, hierarchies, RLS policies, onboarding, residency, white-label | 11 | 3 | E02 | G2 |
-| E06 | Application layer: core/extended ports, ledger pilot use cases, workflows, reports | 40 | 4 | task-level domain dependencies | G3 |
+| E06 | Application layer: core/extended ports, ledger pilot use cases, workflows, reports | 48 | 4 | task-level domain dependencies | G3 |
 | E07 | Persistence adapters: SQL posting path, migrations, RLS, outbox, shared test harness, replicas | 34 | 5 | E06 | G4 |
-| E07.1 | Distributed persistence: Citus multi-tenant sharding, Patroni HA, CloudNativePG, etcd coordination | 19 | 5.1 | E07 | G4 |
+| E07.1 | Distributed persistence: Citus multi-tenant sharding, Patroni HA, CloudNativePG, etcd coordination | 24 | 5.1 | E07 | G4 |
 | E08 | Cache + messaging adapters: Otter L1, hybrid cache, Redpanda + NATS Core, webhook dispatcher, rate limiter | 24 | 5.2 | E06, E07.1 | G4 |
 | E09 | Identity + security adapters: JWT, OAuth2, Casbin, API keys, OpenBao secrets & transit, audit log, PII | 22 | 5.2 | E06, E07.1 | G4 |
 | E10 | Platform integrations: Unleash, FX provider, payment-processor sandbox, statement parsers, SMTP | 17 | 5.2 | E06, E07.1 | G4 |

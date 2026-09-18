@@ -20,6 +20,7 @@ import (
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
 	"github.com/kadekutama/go-template/internal/infrastructure/database/migration"
 	"github.com/kadekutama/go-template/internal/infrastructure/database/postgres"
+	"github.com/kadekutama/go-template/internal/infrastructure/database/postgres/models"
 	"github.com/kadekutama/go-template/internal/infrastructure/database/postgres/outbox"
 	"github.com/kadekutama/go-template/internal/infrastructure/database/postgres/posting"
 	repos "github.com/kadekutama/go-template/internal/infrastructure/database/postgres/repositories"
@@ -78,24 +79,24 @@ func TestMigrationsUpDown(t *testing.T) {
 	type testCase struct {
 		name            string
 		action          string
-		expectedVersion int
+		expectedVersion int64
 	}
 
 	testCases := []testCase{
 		{
-			name:            "initial up builds full schema to version 4",
+			name:            "initial up builds full schema to version 20260901000005",
 			action:          "UP",
-			expectedVersion: 4,
+			expectedVersion: 20260901000005,
 		},
 		{
-			name:            "down removes latest migration cleanly to version 3",
+			name:            "down removes latest migration cleanly to version 20260901000004",
 			action:          "DOWN",
-			expectedVersion: 3,
+			expectedVersion: 20260901000004,
 		},
 		{
-			name:            "re-up rebuilds latest migration cleanly back to version 4",
+			name:            "re-up rebuilds latest migration cleanly back to version 20260901000005",
 			action:          "UP",
-			expectedVersion: 4,
+			expectedVersion: 20260901000005,
 		},
 	}
 
@@ -130,6 +131,7 @@ func TestLedgerCRUD(t *testing.T) {
 		otherTenantID  valueobject.TenantID
 		ledgerID       valueobject.LedgerID
 		ledgerName     string
+		ledgerAlias    string
 		baseAsset      valueobject.AssetCode
 		expectConflict bool
 	}
@@ -137,28 +139,31 @@ func TestLedgerCRUD(t *testing.T) {
 	testCases := []testCase{
 		{
 			name:           "create and find ledger within same tenant",
-			tenantID:       "tnt-test-01",
-			otherTenantID:  "tnt-other",
-			ledgerID:       "ldg-test-01",
+			tenantID:       "10000000-0000-4000-8000-000000000001",
+			otherTenantID:  "10000000-0000-4000-8000-000000000099",
+			ledgerID:       "20000000-0000-4000-8000-000000000001",
 			ledgerName:     "Test Primary",
+			ledgerAlias:    "test-primary",
 			baseAsset:      "USD",
 			expectConflict: false,
 		},
 		{
 			name:           "second ledger in different tenant creates cleanly",
-			tenantID:       "tnt-test-02",
-			otherTenantID:  "tnt-other-2",
-			ledgerID:       "ldg-test-02",
+			tenantID:       "10000000-0000-4000-8000-000000000002",
+			otherTenantID:  "10000000-0000-4000-8000-000000000099",
+			ledgerID:       "20000000-0000-4000-8000-000000000002",
 			ledgerName:     "Test Secondary",
+			ledgerAlias:    "test-secondary",
 			baseAsset:      "EUR",
 			expectConflict: false,
 		},
 		{
 			name:           "duplicate ledger creation returns conflict error",
-			tenantID:       "tnt-test-01",
-			otherTenantID:  "tnt-other",
-			ledgerID:       "ldg-test-01",
+			tenantID:       "10000000-0000-4000-8000-000000000001",
+			otherTenantID:  "10000000-0000-4000-8000-000000000099",
+			ledgerID:       "20000000-0000-4000-8000-000000000001",
 			ledgerName:     "Test Duplicate",
+			ledgerAlias:    "test-duplicate",
 			baseAsset:      "USD",
 			expectConflict: true,
 		},
@@ -168,14 +173,17 @@ func TestLedgerCRUD(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ledger, err := entity.NewLedger(tc.ledgerID, tc.tenantID, tc.ledgerName, tc.baseAsset, "v1")
 			require.NoError(t, err)
+			ledger.Alias = tc.ledgerAlias
 
-			createErr := ledgerRepo.Create(ctx, ledger)
+			stored, createErr := ledgerRepo.Create(ctx, ledger)
 			if tc.expectConflict {
 				require.Error(t, createErr)
 				assert.True(t, errors.Is(createErr, repos.ErrConflict))
 				return
 			}
 			require.NoError(t, createErr)
+			assert.Equal(t, tc.ledgerID, stored.ID)
+			assert.Equal(t, tc.ledgerAlias, stored.Alias)
 
 			found, err := ledgerRepo.FindByID(ctx, tc.tenantID, tc.ledgerID)
 			require.NoError(t, err)
@@ -195,13 +203,13 @@ func TestEntrySequencesMonotonic(t *testing.T) {
 
 	_, err := sqlDB.ExecContext(ctx, `INSERT INTO assets (code) VALUES ('USD') ON CONFLICT DO NOTHING`)
 	require.NoError(t, err)
-	_, err = sqlDB.ExecContext(ctx, `INSERT INTO ledgers (id, tenant_id, name, base_asset, chart_version)
-		VALUES ('ldg-seq', 'tnt-seq', 'Seq', 'USD', 'v1') ON CONFLICT DO NOTHING`)
+	_, err = sqlDB.ExecContext(ctx, `INSERT INTO ledgers (id, tenant_id, name, alias, base_asset, chart_version)
+		VALUES ('90000000-0000-4000-8000-000000000011', '90000000-0000-4000-8000-000000000001', 'Seq', 'seq', 'USD', 'v1') ON CONFLICT DO NOTHING`)
 	require.NoError(t, err)
 	_, err = sqlDB.ExecContext(ctx, `INSERT INTO accounts (id, tenant_id, ledger_id, number, name, class, asset_code, status)
-		VALUES ('s-1', 'tnt-seq', 'ldg-seq', '1000', 'Cash', 'ASSET', 'USD', 'ACTIVE'),
-		       ('s-2', 'tnt-seq', 'ldg-seq', '2000', 'Payable', 'LIABILITY', 'USD', 'ACTIVE'),
-		       ('s-3', 'tnt-seq', 'ldg-seq', '3000', 'Reserve', 'ASSET', 'USD', 'ACTIVE')
+		VALUES ('77777777-7777-4777-8777-777777777777', '90000000-0000-4000-8000-000000000001', '90000000-0000-4000-8000-000000000011', '1000', 'Cash', 'ASSET', 'USD', 'ACTIVE'),
+		       ('77777777-7777-4777-8777-777777777778', '90000000-0000-4000-8000-000000000001', '90000000-0000-4000-8000-000000000011', '2000', 'Payable', 'LIABILITY', 'USD', 'ACTIVE'),
+		       ('77777777-7777-4777-8777-777777777779', '90000000-0000-4000-8000-000000000001', '90000000-0000-4000-8000-000000000011', '3000', 'Reserve', 'ASSET', 'USD', 'ACTIVE')
 		ON CONFLICT DO NOTHING`)
 	require.NoError(t, err)
 
@@ -213,10 +221,10 @@ func TestEntrySequencesMonotonic(t *testing.T) {
 
 	commitPosting := func(postingID, entryA, entryB, acctA, acctB string) {
 		now := time.Now()
-		require.NoError(t, postingRepo.Commit(ctx, entity.PostingData{
+		_, err := postingRepo.Commit(ctx, entity.PostingData{
 			ID:          valueobject.PostingID(postingID),
-			TenantID:    "tnt-seq",
-			LedgerID:    "ldg-seq",
+			TenantID:    "90000000-0000-4000-8000-000000000001",
+			LedgerID:    "90000000-0000-4000-8000-000000000011",
 			Operation:   "TRANSFER",
 			Description: "seq probe",
 			Entries: []entity.Entry{
@@ -231,12 +239,13 @@ func TestEntrySequencesMonotonic(t *testing.T) {
 			},
 			EffectiveAt: now,
 			RecordedAt:  now,
-		}))
+		})
+		require.NoError(t, err)
 	}
 
-	commitPosting("44444444-4444-4444-8444-444444444444", "55555555-5555-4555-8555-555555555555", "66666666-6666-4666-8666-666666666666", "s-1", "s-2")
-	commitPosting("77777777-7777-4777-8777-777777777777", "88888888-8888-4888-8888-888888888888", "99999999-9999-4999-8999-999999999999", "s-1", "s-2")
-	commitPosting("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "s-3", "s-2")
+	commitPosting("44444444-4444-4444-8444-444444444444", "55555555-5555-4555-8555-555555555555", "66666666-6666-4666-8666-666666666666", "77777777-7777-4777-8777-777777777777", "77777777-7777-4777-8777-777777777778")
+	commitPosting("77777777-7777-4777-8777-777777777777", "88888888-8888-4888-8888-888888888888", "99999999-9999-4999-8999-999999999999", "77777777-7777-4777-8777-777777777777", "77777777-7777-4777-8777-777777777778")
+	commitPosting("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "77777777-7777-4777-8777-777777777779", "77777777-7777-4777-8777-777777777778")
 
 	type testCase struct {
 		name             string
@@ -249,21 +258,21 @@ func TestEntrySequencesMonotonic(t *testing.T) {
 	testCases := []testCase{
 		{
 			name:             "account s-1 has 2 entries with monotonic sequences 1 and 2",
-			accountID:        "s-1",
+			accountID:        "77777777-7777-4777-8777-777777777777",
 			expectedCount:    2,
 			expectedFirstSeq: 1,
 			expectedFinalSeq: 2,
 		},
 		{
 			name:             "account s-2 participated in all 3 postings with monotonic sequences 1, 2, 3",
-			accountID:        "s-2",
+			accountID:        "77777777-7777-4777-8777-777777777778",
 			expectedCount:    3,
 			expectedFirstSeq: 1,
 			expectedFinalSeq: 3,
 		},
 		{
 			name:             "independent account s-3 starts at sequence 1 despite prior ledger postings",
-			accountID:        "s-3",
+			accountID:        "77777777-7777-4777-8777-777777777779",
 			expectedCount:    1,
 			expectedFirstSeq: 1,
 			expectedFinalSeq: 1,
@@ -272,7 +281,7 @@ func TestEntrySequencesMonotonic(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			entries, next, err := entryStore.FindByAccount(ctx, "tnt-seq", valueobject.AccountID(tc.accountID), "", 10)
+			entries, next, err := entryStore.FindByAccount(ctx, "90000000-0000-4000-8000-000000000001", valueobject.AccountID(tc.accountID), "", 10)
 			require.NoError(t, err)
 			assert.Empty(t, next)
 			require.Len(t, entries, tc.expectedCount)
@@ -318,14 +327,14 @@ func TestPostingAtomicity(t *testing.T) {
 
 			_, err := sqlDB.ExecContext(ctx, `INSERT INTO assets (code) VALUES ('USD') ON CONFLICT DO NOTHING`)
 			require.NoError(t, err)
-			_, err = sqlDB.ExecContext(ctx, `INSERT INTO ledgers (id, tenant_id, name, base_asset, chart_version)
-				VALUES ('ldg-atomic','tnt-atomic','Atomic','USD','v1') ON CONFLICT DO NOTHING`)
+			_, err = sqlDB.ExecContext(ctx, `INSERT INTO ledgers (id, tenant_id, name, alias, base_asset, chart_version)
+				VALUES ('90000000-0000-4000-8000-000000000012','90000000-0000-4000-8000-000000000002','Atomic','atomic','USD','v1') ON CONFLICT DO NOTHING`)
 			require.NoError(t, err)
 			_, err = sqlDB.ExecContext(ctx, `INSERT INTO accounts (id, tenant_id, ledger_id, number, name, class, asset_code, status)
-				VALUES ('a-1','tnt-atomic','ldg-atomic','1000','Cash','ASSET','USD','ACTIVE') ON CONFLICT DO NOTHING`)
+				VALUES ('90000000-0000-4000-8000-000000000021','90000000-0000-4000-8000-000000000002','90000000-0000-4000-8000-000000000012','1000','Cash','ASSET','USD','ACTIVE') ON CONFLICT DO NOTHING`)
 			require.NoError(t, err)
 			_, err = sqlDB.ExecContext(ctx, `INSERT INTO accounts (id, tenant_id, ledger_id, number, name, class, asset_code, status)
-				VALUES ('a-2','tnt-atomic','ldg-atomic','2000','Payable','LIABILITY','USD','ACTIVE') ON CONFLICT DO NOTHING`)
+				VALUES ('90000000-0000-4000-8000-000000000022','90000000-0000-4000-8000-000000000002','90000000-0000-4000-8000-000000000012','2000','Payable','LIABILITY','USD','ACTIVE') ON CONFLICT DO NOTHING`)
 			require.NoError(t, err)
 
 			postingRepo, err := repos.NewPostingRepository(repos.PostingRepositoryParams{DB: pools.Primary})
@@ -335,32 +344,32 @@ func TestPostingAtomicity(t *testing.T) {
 
 			posting := entity.PostingData{
 				ID:          valueobject.PostingID("11111111-1111-4111-8111-111111111111"),
-				TenantID:    "tnt-atomic",
-				LedgerID:    "ldg-atomic",
+				TenantID:    "90000000-0000-4000-8000-000000000002",
+				LedgerID:    "90000000-0000-4000-8000-000000000012",
 				Operation:   "TRANSFER",
 				Description: "atomicity probe",
 				Entries: []entity.Entry{
 					{
 						ID: valueobject.EntryID("22222222-2222-4222-8222-222222222222"), PostingID: "11111111-1111-4111-8111-111111111111",
-						AccountID: "a-1", Side: valueobject.DirectionDebit, AmountMinor: 100, AssetCode: "USD", AccountSeq: 1,
+						AccountID: "90000000-0000-4000-8000-000000000021", Side: valueobject.DirectionDebit, AmountMinor: 100, AssetCode: "USD", AccountSeq: 1,
 					},
 					{
 						ID: valueobject.EntryID("33333333-3333-4333-8333-333333333333"), PostingID: "11111111-1111-4111-8111-111111111111",
-						AccountID: "a-2", Side: valueobject.DirectionCredit, AmountMinor: tc.creditMinor, AssetCode: "USD", AccountSeq: 1,
+						AccountID: "90000000-0000-4000-8000-000000000022", Side: valueobject.DirectionCredit, AmountMinor: tc.creditMinor, AssetCode: "USD", AccountSeq: 1,
 					},
 				},
 				EffectiveAt: now,
 				RecordedAt:  now,
 			}
 
-			err = postingRepo.Commit(ctx, posting)
+			_, err = postingRepo.Commit(ctx, posting)
 			if tc.expectError {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
 			}
 
-			_, findErr := postingRepo.FindByID(ctx, "tnt-atomic", posting.ID)
+			_, findErr := postingRepo.FindByID(ctx, "90000000-0000-4000-8000-000000000002", posting.ID)
 			if tc.expectPersist {
 				require.NoError(t, findErr)
 			} else {
@@ -384,13 +393,13 @@ func TestCommitScopeEnforcement(t *testing.T) {
 		{
 			name:        "unknown account rejected",
 			setup:       "base",
-			accountID:   "no-such-account",
+			accountID:   "90000000-0000-4000-8000-000000000099",
 			expectError: "unknown account",
 		},
 		{
 			name:        "frozen account rejected",
 			setup:       "frozen",
-			accountID:   "f-1",
+			accountID:   "90000000-0000-4000-8000-000000000024",
 			expectError: "not ACTIVE",
 		},
 	}
@@ -402,16 +411,16 @@ func TestCommitScopeEnforcement(t *testing.T) {
 
 			_, err := sqlDB.ExecContext(ctx, `INSERT INTO assets (code) VALUES ('USD') ON CONFLICT DO NOTHING`)
 			require.NoError(t, err)
-			_, err = sqlDB.ExecContext(ctx, `INSERT INTO ledgers (id, tenant_id, name, base_asset, chart_version)
-				VALUES ('ldg-scope','tnt-scope','Scope','USD','v1') ON CONFLICT DO NOTHING`)
+			_, err = sqlDB.ExecContext(ctx, `INSERT INTO ledgers (id, tenant_id, name, alias, base_asset, chart_version)
+				VALUES ('90000000-0000-4000-8000-000000000013','90000000-0000-4000-8000-000000000003','Scope','scope','USD','v1') ON CONFLICT DO NOTHING`)
 			require.NoError(t, err)
 			_, err = sqlDB.ExecContext(ctx, `INSERT INTO accounts (id, tenant_id, ledger_id, number, name, class, asset_code, status)
-				VALUES ('g-1','tnt-scope','ldg-scope','1000','Cash','ASSET','USD','ACTIVE') ON CONFLICT DO NOTHING`)
+				VALUES ('90000000-0000-4000-8000-000000000023','90000000-0000-4000-8000-000000000003','90000000-0000-4000-8000-000000000013','1000','Cash','ASSET','USD','ACTIVE') ON CONFLICT DO NOTHING`)
 			require.NoError(t, err)
 
 			if tc.setup == "frozen" {
 				_, err = sqlDB.ExecContext(ctx, `INSERT INTO accounts (id, tenant_id, ledger_id, number, name, class, asset_code, status)
-					VALUES ('f-1','tnt-scope','ldg-scope','1001','Frozen','ASSET','USD','FROZEN') ON CONFLICT DO NOTHING`)
+					VALUES ('90000000-0000-4000-8000-000000000024','90000000-0000-4000-8000-000000000003','90000000-0000-4000-8000-000000000013','1001','Frozen','ASSET','USD','FROZEN') ON CONFLICT DO NOTHING`)
 				require.NoError(t, err)
 			}
 
@@ -419,16 +428,16 @@ func TestCommitScopeEnforcement(t *testing.T) {
 			require.NoError(t, err)
 
 			now := time.Now()
-			err = postingRepo.Commit(ctx, entity.PostingData{
+			_, err = postingRepo.Commit(ctx, entity.PostingData{
 				ID:          valueobject.PostingID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
-				TenantID:    "tnt-scope",
-				LedgerID:    "ldg-scope",
+				TenantID:    "90000000-0000-4000-8000-000000000003",
+				LedgerID:    "90000000-0000-4000-8000-000000000013",
 				Operation:   "TRANSFER",
 				Description: "scope probe",
 				Entries: []entity.Entry{
 					{
 						ID: valueobject.EntryID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"), PostingID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-						AccountID: "g-1", Side: valueobject.DirectionDebit, AmountMinor: 10, AssetCode: "USD",
+						AccountID: "90000000-0000-4000-8000-000000000023", Side: valueobject.DirectionDebit, AmountMinor: 10, AssetCode: "USD",
 					},
 					{
 						ID: valueobject.EntryID("cccccccc-cccc-4ccc-8ccc-cccccccccccc"), PostingID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
@@ -452,13 +461,13 @@ func TestPostingSearchEndToEnd(t *testing.T) {
 
 	_, err := sqlDB.ExecContext(ctx, `INSERT INTO assets (code) VALUES ('USD') ON CONFLICT DO NOTHING`)
 	require.NoError(t, err)
-	_, err = sqlDB.ExecContext(ctx, `INSERT INTO ledgers (id, tenant_id, name, base_asset, chart_version)
-		VALUES ('ldg-search', 'tnt-search', 'Search', 'USD', 'v1') ON CONFLICT DO NOTHING`)
+	_, err = sqlDB.ExecContext(ctx, `INSERT INTO ledgers (id, tenant_id, name, alias, base_asset, chart_version)
+		VALUES ('90000000-0000-4000-8000-000000000014', '90000000-0000-4000-8000-000000000004', 'Search', 'search', 'USD', 'v1') ON CONFLICT DO NOTHING`)
 	require.NoError(t, err)
 	_, err = sqlDB.ExecContext(ctx, `INSERT INTO accounts (id, tenant_id, ledger_id, number, name, class, asset_code, status)
-		VALUES ('q-1', 'tnt-search', 'ldg-search', '1000', 'Cash', 'ASSET', 'USD', 'ACTIVE'),
-		       ('q-2', 'tnt-search', 'ldg-search', '2000', 'Payable', 'LIABILITY', 'USD', 'ACTIVE'),
-		       ('q-3', 'tnt-search', 'ldg-search', '3000', 'Reserve', 'ASSET', 'USD', 'ACTIVE')
+		VALUES ('90000000-0000-4000-8000-000000000025', '90000000-0000-4000-8000-000000000004', '90000000-0000-4000-8000-000000000014', '1000', 'Cash', 'ASSET', 'USD', 'ACTIVE'),
+		       ('90000000-0000-4000-8000-000000000026', '90000000-0000-4000-8000-000000000004', '90000000-0000-4000-8000-000000000014', '2000', 'Payable', 'LIABILITY', 'USD', 'ACTIVE'),
+		       ('90000000-0000-4000-8000-000000000027', '90000000-0000-4000-8000-000000000004', '90000000-0000-4000-8000-000000000014', '3000', 'Reserve', 'ASSET', 'USD', 'ACTIVE')
 		ON CONFLICT DO NOTHING`)
 	require.NoError(t, err)
 
@@ -466,45 +475,47 @@ func TestPostingSearchEndToEnd(t *testing.T) {
 	require.NoError(t, err)
 
 	now := time.Now()
-	require.NoError(t, postingRepo.Commit(ctx, entity.PostingData{
+	_, err = postingRepo.Commit(ctx, entity.PostingData{
 		ID:          valueobject.PostingID("dddddddd-dddd-4ddd-8ddd-dddddddddddd"),
-		TenantID:    "tnt-search",
-		LedgerID:    "ldg-search",
+		TenantID:    "90000000-0000-4000-8000-000000000004",
+		LedgerID:    "90000000-0000-4000-8000-000000000014",
 		Operation:   "FUNDING",
 		Description: "search probe funding",
 		Entries: []entity.Entry{
 			{
 				ID: valueobject.EntryID("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"), PostingID: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
-				AccountID: "q-1", Side: valueobject.DirectionDebit, AmountMinor: 50, AssetCode: "USD",
+				AccountID: "90000000-0000-4000-8000-000000000025", Side: valueobject.DirectionDebit, AmountMinor: 50, AssetCode: "USD",
 			},
 			{
 				ID: valueobject.EntryID("ffffffff-ffff-4fff-8fff-ffffffffffff"), PostingID: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
-				AccountID: "q-2", Side: valueobject.DirectionCredit, AmountMinor: 50, AssetCode: "USD",
+				AccountID: "90000000-0000-4000-8000-000000000026", Side: valueobject.DirectionCredit, AmountMinor: 50, AssetCode: "USD",
 			},
 		},
 		EffectiveAt: now,
 		RecordedAt:  now,
-	}))
+	})
+	require.NoError(t, err)
 
-	require.NoError(t, postingRepo.Commit(ctx, entity.PostingData{
+	_, err = postingRepo.Commit(ctx, entity.PostingData{
 		ID:          valueobject.PostingID("12121212-1212-4212-8212-121212121212"),
-		TenantID:    "tnt-search",
-		LedgerID:    "ldg-search",
+		TenantID:    "90000000-0000-4000-8000-000000000004",
+		LedgerID:    "90000000-0000-4000-8000-000000000014",
 		Operation:   "TRANSFER",
 		Description: "search probe transfer",
 		Entries: []entity.Entry{
 			{
 				ID: valueobject.EntryID("23232323-2323-4323-8323-232323232323"), PostingID: "12121212-1212-4212-8212-121212121212",
-				AccountID: "q-2", Side: valueobject.DirectionDebit, AmountMinor: 75, AssetCode: "USD",
+				AccountID: "90000000-0000-4000-8000-000000000026", Side: valueobject.DirectionDebit, AmountMinor: 75, AssetCode: "USD",
 			},
 			{
 				ID: valueobject.EntryID("34343434-3434-4343-8343-343434343434"), PostingID: "12121212-1212-4212-8212-121212121212",
-				AccountID: "q-3", Side: valueobject.DirectionCredit, AmountMinor: 75, AssetCode: "USD",
+				AccountID: "90000000-0000-4000-8000-000000000027", Side: valueobject.DirectionCredit, AmountMinor: 75, AssetCode: "USD",
 			},
 		},
 		EffectiveAt: now.Add(time.Minute),
 		RecordedAt:  now.Add(time.Minute),
-	}))
+	})
+	require.NoError(t, err)
 
 	search, err := repos.NewPostingSearch(repos.PostingSearchParams{DB: pools.Primary})
 	require.NoError(t, err)
@@ -522,7 +533,7 @@ func TestPostingSearchEndToEnd(t *testing.T) {
 			name: "operation filter FUNDING returns 1 matching posting",
 			ctx:  ctx,
 			filter: port.PostingFilter{
-				TenantID:  "tnt-search",
+				TenantID:  "90000000-0000-4000-8000-000000000004",
 				Operation: "FUNDING",
 				Limit:     10,
 			},
@@ -533,7 +544,7 @@ func TestPostingSearchEndToEnd(t *testing.T) {
 			name: "operation filter TRANSFER returns 1 matching posting",
 			ctx:  ctx,
 			filter: port.PostingFilter{
-				TenantID:  "tnt-search",
+				TenantID:  "90000000-0000-4000-8000-000000000004",
 				Operation: "TRANSFER",
 				Limit:     10,
 			},
@@ -544,7 +555,7 @@ func TestPostingSearchEndToEnd(t *testing.T) {
 			name: "unmatched operation REFUND returns 0 postings",
 			ctx:  ctx,
 			filter: port.PostingFilter{
-				TenantID:  "tnt-search",
+				TenantID:  "90000000-0000-4000-8000-000000000004",
 				Operation: "REFUND",
 				Limit:     10,
 			},
@@ -555,8 +566,8 @@ func TestPostingSearchEndToEnd(t *testing.T) {
 			name: "account filter q-1 returns only its 1 participating posting",
 			ctx:  ctx,
 			filter: port.PostingFilter{
-				TenantID:  "tnt-search",
-				AccountID: "q-1",
+				TenantID:  "90000000-0000-4000-8000-000000000004",
+				AccountID: "90000000-0000-4000-8000-000000000025",
 				Limit:     10,
 			},
 			expectedCount: 1,
@@ -566,8 +577,8 @@ func TestPostingSearchEndToEnd(t *testing.T) {
 			name: "account filter q-2 participating in both postings returns 2 postings",
 			ctx:  ctx,
 			filter: port.PostingFilter{
-				TenantID:  "tnt-search",
-				AccountID: "q-2",
+				TenantID:  "90000000-0000-4000-8000-000000000004",
+				AccountID: "90000000-0000-4000-8000-000000000026",
 				Limit:     10,
 			},
 			expectedCount: 2,
@@ -577,7 +588,7 @@ func TestPostingSearchEndToEnd(t *testing.T) {
 			name: "wildcard search without operation or account returns all 2 postings",
 			ctx:  ctx,
 			filter: port.PostingFilter{
-				TenantID: "tnt-search",
+				TenantID: "90000000-0000-4000-8000-000000000004",
 				Limit:    10,
 			},
 			expectedCount: 2,
@@ -587,7 +598,7 @@ func TestPostingSearchEndToEnd(t *testing.T) {
 			name: "other tenant search returns 0 postings enforcing tenant isolation",
 			ctx:  ctx,
 			filter: port.PostingFilter{
-				TenantID: "tnt-other-search",
+				TenantID: "90000000-0000-4000-8000-000000000094",
 				Limit:    10,
 			},
 			expectedCount: 0,
@@ -606,7 +617,7 @@ func TestPostingSearchEndToEnd(t *testing.T) {
 			name: "amount filter returns unsupported error",
 			ctx:  ctx,
 			filter: port.PostingFilter{
-				TenantID:  "tnt-search",
+				TenantID:  "90000000-0000-4000-8000-000000000004",
 				MinAmount: 10,
 				Limit:     10,
 			},
@@ -640,39 +651,40 @@ func TestDirectSQLInvariantAttacks(t *testing.T) {
 
 	_, err := sqlDB.ExecContext(ctx, `INSERT INTO assets (code) VALUES ('USD') ON CONFLICT DO NOTHING`)
 	require.NoError(t, err)
-	_, err = sqlDB.ExecContext(ctx, `INSERT INTO ledgers (id, tenant_id, name, base_asset, chart_version)
-		VALUES ('ldg-atk','tnt-atk','Attack','USD','v1') ON CONFLICT DO NOTHING`)
+	_, err = sqlDB.ExecContext(ctx, `INSERT INTO ledgers (id, tenant_id, name, alias, base_asset, chart_version)
+		VALUES ('90000000-0000-4000-8000-000000000015','90000000-0000-4000-8000-000000000005','Attack','attack','USD','v1') ON CONFLICT DO NOTHING`)
 	require.NoError(t, err)
 	_, err = sqlDB.ExecContext(ctx, `INSERT INTO accounts (id, tenant_id, ledger_id, number, name, class, asset_code, status)
-		VALUES ('atk-1','tnt-atk','ldg-atk','1000','Cash','ASSET','USD','ACTIVE') ON CONFLICT DO NOTHING`)
+		VALUES ('90000000-0000-4000-8000-000000000028','90000000-0000-4000-8000-000000000005','90000000-0000-4000-8000-000000000015','1000','Cash','ASSET','USD','ACTIVE') ON CONFLICT DO NOTHING`)
 	require.NoError(t, err)
 	_, err = sqlDB.ExecContext(ctx, `INSERT INTO accounts (id, tenant_id, ledger_id, number, name, class, asset_code, status)
-		VALUES ('atk-2','tnt-atk','ldg-atk','2000','Payable','LIABILITY','USD','ACTIVE') ON CONFLICT DO NOTHING`)
+		VALUES ('90000000-0000-4000-8000-000000000029','90000000-0000-4000-8000-000000000005','90000000-0000-4000-8000-000000000015','2000','Payable','LIABILITY','USD','ACTIVE') ON CONFLICT DO NOTHING`)
 	require.NoError(t, err)
 
 	postingRepo, err := repos.NewPostingRepository(repos.PostingRepositoryParams{DB: pools.Primary})
 	require.NoError(t, err)
 
 	now := time.Now()
-	require.NoError(t, postingRepo.Commit(ctx, entity.PostingData{
+	_, err = postingRepo.Commit(ctx, entity.PostingData{
 		ID:          valueobject.PostingID("11111111-2222-4333-8444-555555555555"),
-		TenantID:    "tnt-atk",
-		LedgerID:    "ldg-atk",
+		TenantID:    "90000000-0000-4000-8000-000000000005",
+		LedgerID:    "90000000-0000-4000-8000-000000000015",
 		Operation:   "TRANSFER",
 		Description: "immutable target",
 		Entries: []entity.Entry{
 			{
 				ID: valueobject.EntryID("aaaa1111-2222-4333-8444-555555555555"), PostingID: "11111111-2222-4333-8444-555555555555",
-				AccountID: "atk-1", Side: valueobject.DirectionDebit, AmountMinor: 100, AssetCode: "USD",
+				AccountID: "90000000-0000-4000-8000-000000000028", Side: valueobject.DirectionDebit, AmountMinor: 100, AssetCode: "USD",
 			},
 			{
 				ID: valueobject.EntryID("bbbb1111-2222-4333-8444-555555555555"), PostingID: "11111111-2222-4333-8444-555555555555",
-				AccountID: "atk-2", Side: valueobject.DirectionCredit, AmountMinor: 100, AssetCode: "USD",
+				AccountID: "90000000-0000-4000-8000-000000000029", Side: valueobject.DirectionCredit, AmountMinor: 100, AssetCode: "USD",
 			},
 		},
 		EffectiveAt: now,
 		RecordedAt:  now,
-	}))
+	})
+	require.NoError(t, err)
 
 	type testCase struct {
 		name          string
@@ -714,7 +726,7 @@ func TestDirectSQLInvariantAttacks(t *testing.T) {
 		{
 			name: "unbalanced entries rejected on transaction commit by constraint trigger",
 			attackSQL: `INSERT INTO entries (id, posting_id, tenant_id, ledger_id, account_id, side, amount_minor, asset_code, account_seq)
-				VALUES ('unbal-entry-1', '22222222-3333-4444-8555-666666666666', 'tnt-atk', 'ldg-atk', 'atk-1', 'DEBIT', 500, 'USD', 2)`,
+				VALUES ('90000000-0000-4000-8000-000000000035', '22222222-3333-4444-8555-666666666666', '90000000-0000-4000-8000-000000000005', '90000000-0000-4000-8000-000000000015', '90000000-0000-4000-8000-000000000028', 'DEBIT', 500, 'USD', 2)`,
 			args:          nil,
 			inTransaction: true,
 			expectedError: "debits must equal credits per asset",
@@ -729,7 +741,7 @@ func TestDirectSQLInvariantAttacks(t *testing.T) {
 				defer func() { _ = tx.Rollback() }()
 
 				_, err = tx.ExecContext(ctx, `INSERT INTO postings (id, tenant_id, ledger_id, operation, effective_at)
-					VALUES ('22222222-3333-4444-8555-666666666666', 'tnt-atk', 'ldg-atk', 'TRANSFER', now()) ON CONFLICT DO NOTHING`)
+					VALUES ('22222222-3333-4444-8555-666666666666', '90000000-0000-4000-8000-000000000005', '90000000-0000-4000-8000-000000000015', 'TRANSFER', now()) ON CONFLICT DO NOTHING`)
 				require.NoError(t, err)
 
 				_, err = tx.ExecContext(ctx, tc.attackSQL, tc.args...)
@@ -772,11 +784,11 @@ func TestDurableIdempotencyPostgres(t *testing.T) {
 	testCases := []testCase{
 		{
 			name:            "identical fingerprint replays completed response",
-			tenantID:        "tnt-idem-1",
+			tenantID:        "90000000-0000-4000-8000-000000000051",
 			key:             "idem-key-1",
 			fingerprint:     "fp-orig-1",
 			completePayload: []byte(`{"status":"SUCCESS","id":"pst-1"}`),
-			secondTenantID:  "tnt-idem-1",
+			secondTenantID:  "90000000-0000-4000-8000-000000000051",
 			secondKey:       "idem-key-1",
 			secondFP:        "fp-orig-1",
 			expectConflict:  false,
@@ -784,11 +796,11 @@ func TestDurableIdempotencyPostgres(t *testing.T) {
 		},
 		{
 			name:            "altered fingerprint returns conflict",
-			tenantID:        "tnt-idem-2",
+			tenantID:        "90000000-0000-4000-8000-000000000052",
 			key:             "idem-key-2",
 			fingerprint:     "fp-orig-2",
 			completePayload: []byte(`{"status":"SUCCESS"}`),
-			secondTenantID:  "tnt-idem-2",
+			secondTenantID:  "90000000-0000-4000-8000-000000000052",
 			secondKey:       "idem-key-2",
 			secondFP:        "fp-tampered-2",
 			expectConflict:  true,
@@ -796,11 +808,11 @@ func TestDurableIdempotencyPostgres(t *testing.T) {
 		},
 		{
 			name:            "cross-tenant key is completely isolated",
-			tenantID:        "tnt-idem-a",
+			tenantID:        "90000000-0000-4000-8000-000000000053",
 			key:             "shared-key",
 			fingerprint:     "fp-a",
 			completePayload: []byte(`{"tenant":"a"}`),
-			secondTenantID:  "tnt-idem-b",
+			secondTenantID:  "90000000-0000-4000-8000-000000000054",
 			secondKey:       "shared-key",
 			secondFP:        "fp-b",
 			expectConflict:  false,
@@ -883,16 +895,16 @@ func TestOutboxRelayPostgres(t *testing.T) {
 	now := time.Now()
 	facts := []port.OutboxFact{
 		{
-			TenantID:    "tnt-ob-1",
-			LedgerID:    "ldg-ob-1",
+			TenantID:    "90000000-0000-4000-8000-000000000055",
+			LedgerID:    "90000000-0000-4000-8000-000000000065",
 			EventType:   "transfer.created.v1",
 			AggregateID: "agg-ob-1",
 			Payload:     []byte(`{"amount":100}`),
 			OccurredAt:  now,
 		},
 		{
-			TenantID:    "tnt-ob-1",
-			LedgerID:    "ldg-ob-1",
+			TenantID:    "90000000-0000-4000-8000-000000000055",
+			LedgerID:    "90000000-0000-4000-8000-000000000065",
 			EventType:   "transfer.completed.v1",
 			AggregateID: "agg-ob-1",
 			Payload:     []byte(`{"amount":100}`),
@@ -935,15 +947,15 @@ func TestAdversarialRLS(t *testing.T) {
 	_, err := sqlDB.ExecContext(ctx, `INSERT INTO assets (code) VALUES ('USD') ON CONFLICT DO NOTHING`)
 	require.NoError(t, err)
 
-	_, err = sqlDB.ExecContext(ctx, `INSERT INTO ledgers (id, tenant_id, name, base_asset, chart_version)
-		VALUES ('ldg-rls-a', 'tnt-rls-a', 'Ledger A', 'USD', 'v1'),
-		       ('ldg-rls-b', 'tnt-rls-b', 'Ledger B', 'USD', 'v1')
+	_, err = sqlDB.ExecContext(ctx, `INSERT INTO ledgers (id, tenant_id, name, alias, base_asset, chart_version)
+		VALUES ('90000000-0000-4000-8000-000000000016', '90000000-0000-4000-8000-000000000006', 'Ledger A', 'ledger-a', 'USD', 'v1'),
+		       ('90000000-0000-4000-8000-000000000017', '90000000-0000-4000-8000-000000000007', 'Ledger B', 'ledger-b', 'USD', 'v1')
 		ON CONFLICT DO NOTHING`)
 	require.NoError(t, err)
 
 	_, err = sqlDB.ExecContext(ctx, `INSERT INTO accounts (id, tenant_id, ledger_id, number, name, class, asset_code, status)
-		VALUES ('acct-rls-a', 'tnt-rls-a', 'ldg-rls-a', '1000', 'Account A', 'ASSET', 'USD', 'ACTIVE'),
-		       ('acct-rls-b', 'tnt-rls-b', 'ldg-rls-b', '2000', 'Account B', 'ASSET', 'USD', 'ACTIVE')
+		VALUES ('90000000-0000-4000-8000-000000000046', '90000000-0000-4000-8000-000000000006', '90000000-0000-4000-8000-000000000016', '1000', 'Account A', 'ASSET', 'USD', 'ACTIVE'),
+		       ('90000000-0000-4000-8000-000000000047', '90000000-0000-4000-8000-000000000007', '90000000-0000-4000-8000-000000000017', '2000', 'Account B', 'ASSET', 'USD', 'ACTIVE')
 		ON CONFLICT DO NOTHING`)
 	require.NoError(t, err)
 
@@ -976,15 +988,15 @@ func TestAdversarialRLS(t *testing.T) {
 	testCases := []testCase{
 		{
 			name:          "tenant A cannot see tenant B account",
-			sessionTenant: "tnt-rls-a",
+			sessionTenant: "90000000-0000-4000-8000-000000000006",
 			bypassRole:    false,
-			querySQL:      `SELECT count(*) FROM accounts WHERE id = 'acct-rls-b'`,
+			querySQL:      `SELECT count(*) FROM accounts WHERE id = '90000000-0000-4000-8000-000000000047'`,
 			expectedCount: 0,
 			attemptInsert: false,
 		},
 		{
 			name:          "tenant A query count only sees own account",
-			sessionTenant: "tnt-rls-a",
+			sessionTenant: "90000000-0000-4000-8000-000000000006",
 			bypassRole:    false,
 			querySQL:      `SELECT count(*) FROM accounts`,
 			expectedCount: 1,
@@ -992,7 +1004,7 @@ func TestAdversarialRLS(t *testing.T) {
 		},
 		{
 			name:          "tenant B query count only sees own account",
-			sessionTenant: "tnt-rls-b",
+			sessionTenant: "90000000-0000-4000-8000-000000000007",
 			bypassRole:    false,
 			querySQL:      `SELECT count(*) FROM accounts`,
 			expectedCount: 1,
@@ -1000,7 +1012,7 @@ func TestAdversarialRLS(t *testing.T) {
 		},
 		{
 			name:          "service role without app_user bypasses RLS and sees all accounts",
-			sessionTenant: "tnt-rls-a",
+			sessionTenant: "90000000-0000-4000-8000-000000000006",
 			bypassRole:    true,
 			querySQL:      `SELECT count(*) FROM accounts`,
 			expectedCount: 2,
@@ -1008,11 +1020,11 @@ func TestAdversarialRLS(t *testing.T) {
 		},
 		{
 			name:          "tenant A cannot insert account for tenant B",
-			sessionTenant: "tnt-rls-a",
+			sessionTenant: "90000000-0000-4000-8000-000000000006",
 			bypassRole:    false,
 			attemptInsert: true,
 			insertSQL: `INSERT INTO accounts (id, tenant_id, ledger_id, number, name, class, asset_code, status)
-				VALUES ('acct-rls-hack', 'tnt-rls-b', 'ldg-rls-b', '3000', 'Hacked', 'ASSET', 'USD', 'ACTIVE')`,
+				VALUES ('90000000-0000-4000-8000-000000000048', '90000000-0000-4000-8000-000000000007', '90000000-0000-4000-8000-000000000017', '3000', 'Hacked', 'ASSET', 'USD', 'ACTIVE')`,
 			expectError: "violates row-level security policy",
 		},
 	}
@@ -1054,12 +1066,12 @@ func TestConcurrentPostingSpendSerialization(t *testing.T) {
 
 	_, err := sqlDB.ExecContext(ctx, `INSERT INTO assets (code) VALUES ('USD') ON CONFLICT DO NOTHING`)
 	require.NoError(t, err)
-	_, err = sqlDB.ExecContext(ctx, `INSERT INTO ledgers (id, tenant_id, name, base_asset, chart_version)
-		VALUES ('ldg-conc','tnt-conc','Conc','USD','v1') ON CONFLICT DO NOTHING`)
+	_, err = sqlDB.ExecContext(ctx, `INSERT INTO ledgers (id, tenant_id, name, alias, base_asset, chart_version)
+		VALUES ('90000000-0000-4000-8000-000000000018','90000000-0000-4000-8000-000000000008','Conc','conc','USD','v1') ON CONFLICT DO NOTHING`)
 	require.NoError(t, err)
 	_, err = sqlDB.ExecContext(ctx, `INSERT INTO accounts (id, tenant_id, ledger_id, number, name, class, asset_code, status)
-		VALUES ('c-1','tnt-conc','ldg-conc','1000','Cash','ASSET','USD','ACTIVE'),
-		       ('c-2','tnt-conc','ldg-conc','2000','Payable','LIABILITY','USD','ACTIVE')
+		VALUES ('90000000-0000-4000-8000-000000000031','90000000-0000-4000-8000-000000000008','90000000-0000-4000-8000-000000000018','1000','Cash','ASSET','USD','ACTIVE'),
+		       ('90000000-0000-4000-8000-000000000032','90000000-0000-4000-8000-000000000008','90000000-0000-4000-8000-000000000018','2000','Payable','LIABILITY','USD','ACTIVE')
 		ON CONFLICT DO NOTHING`)
 	require.NoError(t, err)
 
@@ -1080,20 +1092,20 @@ func TestConcurrentPostingSpendSerialization(t *testing.T) {
 			eA := fmt.Sprintf("ca000000-0000-4000-8000-%012d", workerID+1)
 			eB := fmt.Sprintf("cb000000-0000-4000-8000-%012d", workerID+1)
 
-			err := postingRepo.Commit(ctx, entity.PostingData{
+			_, err := postingRepo.Commit(ctx, entity.PostingData{
 				ID:          valueobject.PostingID(pID),
-				TenantID:    "tnt-conc",
-				LedgerID:    "ldg-conc",
+				TenantID:    "90000000-0000-4000-8000-000000000008",
+				LedgerID:    "90000000-0000-4000-8000-000000000018",
 				Operation:   "TRANSFER",
 				Description: fmt.Sprintf("concurrent worker %d", workerID),
 				Entries: []entity.Entry{
 					{
 						ID: valueobject.EntryID(eA), PostingID: valueobject.PostingID(pID),
-						AccountID: "c-1", Side: valueobject.DirectionDebit, AmountMinor: 100, AssetCode: "USD",
+						AccountID: "90000000-0000-4000-8000-000000000031", Side: valueobject.DirectionDebit, AmountMinor: 100, AssetCode: "USD",
 					},
 					{
 						ID: valueobject.EntryID(eB), PostingID: valueobject.PostingID(pID),
-						AccountID: "c-2", Side: valueobject.DirectionCredit, AmountMinor: 100, AssetCode: "USD",
+						AccountID: "90000000-0000-4000-8000-000000000032", Side: valueobject.DirectionCredit, AmountMinor: 100, AssetCode: "USD",
 					},
 				},
 				EffectiveAt: now,
@@ -1116,7 +1128,7 @@ func TestConcurrentPostingSpendSerialization(t *testing.T) {
 	entryStore, err := repos.NewEntryStore(repos.EntryStoreParams{DB: pools.Primary})
 	require.NoError(t, err)
 
-	entries, _, err := entryStore.FindByAccount(ctx, "tnt-conc", "c-1", "", 20)
+	entries, _, err := entryStore.FindByAccount(ctx, "90000000-0000-4000-8000-000000000008", "90000000-0000-4000-8000-000000000031", "", 20)
 	require.NoError(t, err)
 	require.Len(t, entries, numWorkers)
 
@@ -1207,6 +1219,72 @@ func TestPostgresSeedEndToEnd(t *testing.T) {
 			var settingsJSON string
 			require.NoError(t, sqlDB.QueryRowContext(tc.ctx, `SELECT settings::text FROM tenants WHERE id = $1`, tc.plan.Tenant.TenantID).Scan(&settingsJSON))
 			assert.Equal(t, "{}", settingsJSON)
+		})
+	}
+}
+
+func TestUUIDRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	pools, sqlDB := openMigrated(t)
+	ctx := context.Background()
+
+	_, err := sqlDB.ExecContext(ctx, `INSERT INTO assets (code) VALUES ('USD') ON CONFLICT DO NOTHING`)
+	require.NoError(t, err)
+
+	ledgerRepo, err := repos.NewLedgerRepository(repos.LedgerRepositoryParams{DB: pools.Primary})
+	require.NoError(t, err)
+
+	tenantID := valueobject.TenantID("90000000-0000-4000-8000-000000000071")
+
+	ledger, err := entity.NewLedger(
+		valueobject.LedgerID("90000000-0000-4000-8000-000000000072"),
+		tenantID, "Roundtrip", "USD", "v1",
+	)
+	require.NoError(t, err)
+	ledger.Alias = "roundtrip"
+
+	storedLedger, err := ledgerRepo.Create(ctx, ledger)
+	require.NoError(t, err)
+	assert.Equal(t, ledger.ID, storedLedger.ID, "explicit IDs must round-trip unchanged")
+
+	type testCase struct {
+		name          string
+		accountNumber string
+	}
+
+	testCases := []testCase{
+		{
+			name:          "omitted ID returns database-assigned canonical UUID",
+			accountNumber: "009001",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var model models.AccountModel
+			model.TenantID = tenantID.String()
+			model.LedgerID = storedLedger.ID.String()
+			model.Number = tc.accountNumber
+			model.Name = "Roundtrip Account"
+			model.Class = "ASSET"
+			model.AssetCode = "USD"
+			model.Status = "ACTIVE"
+			model.Version = 1
+
+			require.NoError(t, pools.Primary.WithContext(ctx).Create(&model).Error)
+			require.NotEmpty(t, model.ID, "postgres must fill the default uuidv7() identity")
+
+			parsed, parseErr := valueobject.ParseAccountID(model.ID)
+			require.NoError(t, parseErr, "assigned ID must be a canonical UUID")
+			assert.NotEqual(t, valueobject.AccountID(""), parsed)
+
+			var reread models.AccountModel
+			require.NoError(t, pools.Primary.WithContext(ctx).
+				Where("tenant_id = ? AND id = ?", tenantID.String(), model.ID).
+				First(&reread).Error)
+			assert.Equal(t, model.ID, reread.ID)
+			assert.Equal(t, tc.accountNumber, reread.Number)
 		})
 	}
 }

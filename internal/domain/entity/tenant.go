@@ -106,6 +106,7 @@ func validateFeatureList(items []string) error {
 type TenantData struct {
 	ID        valueobject.TenantID
 	Name      string
+	Alias     string
 	Region    string
 	Status    TenantStatus
 	Settings  TenantSettings
@@ -114,12 +115,18 @@ type TenantData struct {
 	UpdatedAt time.Time
 }
 
-// Validate checks structural scope and classification.
+// Validate checks structural scope and classification. An empty ID is permitted
+// prior to persistence; if set, it must be a valid canonical UUID.
 func (t TenantData) Validate() error {
-	if strings.TrimSpace(t.ID.String()) == "" {
-		return NewError("TENANT_ID_REQUIRED", "tenant id is required")
+	if t.ID.String() != "" {
+		if _, err := valueobject.ParseTenantID(t.ID.String()); err != nil {
+			return NewError("TENANT_ID_INVALID", "tenant id is invalid")
+		}
 	}
 	if err := ValidateTenantName(t.Name); err != nil {
+		return err
+	}
+	if err := ValidateTenantAlias(t.Alias); err != nil {
 		return err
 	}
 	if err := validateTenantRegion(t.Region); err != nil {
@@ -176,5 +183,44 @@ func ValidateTenantName(name string) error {
 			return NewError("TENANT_NAME_INVALID", "tenant name must not contain control characters")
 		}
 	}
+	return nil
+}
+
+// ValidateTenantAlias checks the URL-safe slug shape when an alias is set.
+// Empty is allowed here (E06-T14 owns assignment at onboarding); the database
+// NOT NULL + UNIQUE constraints reject missing or duplicate aliases at write
+// time, so unset aliases fail closed at the boundary, never silently.
+func ValidateTenantAlias(alias string) error {
+	return ValidateAliasSlug(alias, "TENANT_ALIAS_INVALID", "tenant alias")
+}
+
+// isAliasChar reports whether r belongs in a URL slug.
+func isAliasChar(r rune) bool {
+	return r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-'
+}
+
+// ValidateAliasSlug checks the URL-safe slug shape shared by tenant and
+// ledger aliases: 3–64 lowercase alphanumeric/hyphen characters, never
+// leading or trailing with a hyphen. Empty passes (assignment is a
+// flow-level concern); set values must be well-formed.
+func ValidateAliasSlug(alias, code, kind string) error {
+	if alias == "" {
+		return nil
+	}
+
+	if len(alias) < 3 || len(alias) > 64 {
+		return NewError(code, kind+" must be 3–64 characters")
+	}
+
+	for _, r := range alias {
+		if !isAliasChar(r) {
+			return NewError(code, kind+" must be lowercase alphanumeric with hyphens")
+		}
+	}
+
+	if alias[0] == '-' || alias[len(alias)-1] == '-' {
+		return NewError(code, kind+" must not start or end with a hyphen")
+	}
+
 	return nil
 }

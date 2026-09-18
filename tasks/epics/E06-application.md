@@ -1,7 +1,7 @@
 # Epic E06: Application Layer (Commands, Queries, Ports, Sagas)
 
 **Status:** completed
-**Story Points:** 40
+**Story Points:** 48
 **Phase:** 4
 **Dependencies:** Task-level E02–E05 contracts; the ledger pilot depends only on its E02 subset
 **SDD Gate:** G3 (handlers + sagas tested ≥85% with mocked ports)
@@ -329,9 +329,63 @@ before scheduled transfers, reports, provider sagas, and three public protocols.
 **Related Docs:** `docs/ledger-core.md §3–§9`, `docs/data-flow.md §2`, `docs/api-contracts.md §7`
 **SDD Gate:** G3
 
+---
+
+### E06-T14: UUID identity application port (flows + aliases)
+**Status:** completed
+**Background:** Port application flows to DB-generated UUID identity per
+ADR-019 after E07.1-T06 lands the schema: stop pre-minting entity IDs,
+key provider calls by idempotency key, and assign tenant/ledger aliases.
+**Files:**
+- Modify: `internal/application/command/**` (pre-mint removal, alias assignment),
+  `internal/application/*_test.go` (flow proof updates)
+**Steps:**
+1. Remove entity pre-mint `NewID` calls flow by flow (capture/settlement,
+   refund, payout submit/settle/fail/return, internal/scheduled transfer);
+   read back database-assigned IDs into DTOs.
+2. Audit every external call: switch pre-insert entity-ID usage to the
+   idempotency key; record the per-flow checklist in evidence.
+3. Implement alias assignment (slugify + bounded numeric-suffix retry).
+4. Hold the application suite at ≥85% coverage with `-race -count=3`.
+**Acceptance Criteria:**
+- [ ] Identical-key replay returns original response with original IDs; changed fingerprints conflict (test).
+- [ ] Alias collisions suffix instead of renaming; provider calls keyed by idempotency key in every flow (test + audit).
+- [ ] Application suite ≥85% with `-race -count=3` (test).
+**Story Points:** 3
+**Depends On:** E07.1-T06, E06-T03, E06-T04
+**Related Docs:** `docs/architecture/ADR-019-uuidv7-composite-identity.md`, `docs/ledger-core.md`
+**SDD Gate:** G3
+
+---
+
+### E06-T15: Remove entity pre-mint across flows
+**Status:** completed
+**Background:** Complete the DB-generation conversion after E07.1-T06 widens
+ports: delete entity pre-mint calls, open aggregate/service constructors to
+empty pre-persist IDs, and prove identical behavior with database-assigned
+identifiers. `IDGenerator` stays for events, keys, and correlation.
+**Files:**
+- Modify: `internal/application/command/**` (pre-mint removal),
+  `internal/domain/aggregate/**`, `internal/domain/service/**` (empty-ID entry points + tests)
+**Steps:**
+1. Delete entity pre-mint `NewID` calls flow by flow; use repository-returned IDs downstream.
+2. Open aggregate constructors and service entry points to empty pre-persist IDs (validate-when-set); update their tests to the new codes.
+3. Keep `IDGenerator` wired for event IDs, idempotency keys, correlation.
+4. Hold the application suite at ≥85% with `-race -count=3`.
+**Acceptance Criteria:**
+- [x] Zero entity pre-mint sites remain; DTOs carry database-assigned IDs (grep + test).
+- [x] Empty-ID construction succeeds; malformed IDs fail with `*_INVALID` codes (test).
+- [x] Full application suite green with unchanged replay/eligibility semantics (test).
+**Story Points:** 5
+**Depends On:** E07.1-T06
+**Related Docs:** `docs/architecture/ADR-019-uuidv7-composite-identity.md`, `docs/ledger-core.md`
+**SDD Gate:** G3
+
 ## Acceptance Criteria
 
 - [x] E06-T01 … E06-T13 all `completed` (count 40 SP in `tasks/tracking/PROGRESS.md`)
+- [x] E06-T14 UUID identity port completed (count 48 SP in `tasks/tracking/PROGRESS.md`)
+- [x] E06-T15 pre-mint removal completed (count 48 SP in `tasks/tracking/PROGRESS.md`)
 - [x] Every api-contracts §7 endpoint group has handlers (`check-tasks.py --handlers`)
 - [x] Every money-flow pattern has a saga path; ports complete for E07–E10
 - [x] Application tests ≥85% with `-race -count=3`

@@ -10,8 +10,9 @@ import (
 // AccountRepository persists account classification records. Point lookups are
 // strongly consistent; listings are point-in-time pages with opaque cursors.
 type AccountRepository interface {
-	// Create stores a new account record. Strong write; fails on duplicate ID.
-	Create(ctx context.Context, account entity.AccountData) error
+	// Create stores a new account record and returns it with the database-assigned ID.
+	// Strong write; fails on duplicate ID.
+	Create(ctx context.Context, account entity.AccountData) (entity.AccountData, error)
 	// FindByID returns one account by tenant + ID. Strong read.
 	FindByID(ctx context.Context, tenant valueobject.TenantID, id valueobject.AccountID) (entity.AccountData, error)
 	// FindByTenant returns one page of accounts. Point-in-time page; the

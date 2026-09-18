@@ -15,7 +15,7 @@ func TestTenantDataValidate(t *testing.T) {
 	t.Parallel()
 
 	baseTenant := entity.TenantData{
-		ID:     "t-1",
+		ID:     "10000000-0000-4000-8000-000000000001",
 		Name:   "Acme Corp",
 		Region: "us-east-1",
 		Status: entity.TenantActive,
@@ -41,22 +41,49 @@ func TestTenantDataValidate(t *testing.T) {
 			expectedError: nil,
 		},
 		{
-			name: "missing id",
+			name: "valid alias passes",
+			tenant: func() entity.TenantData {
+				tenant := baseTenant
+				tenant.Alias = "acme-corp"
+				return tenant
+			}(),
+			expectedError: nil,
+		},
+		{
+			name: "malformed alias rejected",
+			tenant: func() entity.TenantData {
+				tenant := baseTenant
+				tenant.Alias = "-Bad_Alias!"
+				return tenant
+			}(),
+			expectedError: entity.NewError("TENANT_ALIAS_INVALID", "tenant alias must be lowercase alphanumeric with hyphens"),
+		},
+		{
+			name: "missing id permitted before persistence",
 			tenant: func() entity.TenantData {
 				d := baseTenant
 				d.ID = ""
 				return d
 			}(),
-			expectedError: entity.NewError("TENANT_ID_REQUIRED", "tenant id is required"),
+			expectedError: nil,
 		},
 		{
-			name: "whitespace id",
+			name: "whitespace id rejected",
 			tenant: func() entity.TenantData {
 				d := baseTenant
 				d.ID = "   "
 				return d
 			}(),
-			expectedError: entity.NewError("TENANT_ID_REQUIRED", "tenant id is required"),
+			expectedError: entity.NewError("TENANT_ID_INVALID", "tenant id is invalid"),
+		},
+		{
+			name: "invalid id format",
+			tenant: func() entity.TenantData {
+				d := baseTenant
+				d.ID = "not-a-uuid"
+				return d
+			}(),
+			expectedError: entity.NewError("TENANT_ID_INVALID", "tenant id is invalid"),
 		},
 		{
 			name: "missing name",

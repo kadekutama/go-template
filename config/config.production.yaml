@@ -12,6 +12,9 @@ database:
   password: "{{ secret:db/production/password }}"
   name: app
   sslmode: verify-full
+  max_open_conns: 25
+  max_idle_conns: 5
+  conn_max_lifetime_sec: 1800
 cache:
   host: valkey.production.svc
   port: 6379
@@ -22,9 +25,17 @@ auth:
 nats:
   url: nats://nats.production.svc:4222
 observability:
+  log_level: warn
   otlp_endpoint: https://tempo.production.svc:4317
   sample_ratio: 0.1
 feature_flags:
   unleash_url: https://unleash.production.svc:4242
 secrets:
   provider: openbao
+coordination:
+  etcd_endpoints:
+    - http://etcd.production.svc:2379
+  etcd_dial_timeout_sec: 5
+  etcd_election_ttl_sec: 5
+  leader_key_prefix: "/finance/worker-leader"
+

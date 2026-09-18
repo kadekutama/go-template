@@ -26,21 +26,31 @@ func (_m *MockPostingRepository) EXPECT() *MockPostingRepository_Expecter {
 }
 
 // Commit provides a mock function with given fields: ctx, posting
-func (_m *MockPostingRepository) Commit(ctx context.Context, posting entity.PostingData) error {
+func (_m *MockPostingRepository) Commit(ctx context.Context, posting entity.PostingData) (entity.PostingData, error) {
 	ret := _m.Called(ctx, posting)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Commit")
 	}
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, entity.PostingData) error); ok {
+	var r0 entity.PostingData
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, entity.PostingData) (entity.PostingData, error)); ok {
+		return rf(ctx, posting)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, entity.PostingData) entity.PostingData); ok {
 		r0 = rf(ctx, posting)
 	} else {
-		r0 = ret.Error(0)
+		r0 = ret.Get(0).(entity.PostingData)
 	}
 
-	return r0
+	if rf, ok := ret.Get(1).(func(context.Context, entity.PostingData) error); ok {
+		r1 = rf(ctx, posting)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // MockPostingRepository_Commit_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Commit'
@@ -62,12 +72,12 @@ func (_c *MockPostingRepository_Commit_Call) Run(run func(ctx context.Context, p
 	return _c
 }
 
-func (_c *MockPostingRepository_Commit_Call) Return(_a0 error) *MockPostingRepository_Commit_Call {
-	_c.Call.Return(_a0)
+func (_c *MockPostingRepository_Commit_Call) Return(_a0 entity.PostingData, _a1 error) *MockPostingRepository_Commit_Call {
+	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *MockPostingRepository_Commit_Call) RunAndReturn(run func(context.Context, entity.PostingData) error) *MockPostingRepository_Commit_Call {
+func (_c *MockPostingRepository_Commit_Call) RunAndReturn(run func(context.Context, entity.PostingData) (entity.PostingData, error)) *MockPostingRepository_Commit_Call {
 	_c.Call.Return(run)
 	return _c
 }

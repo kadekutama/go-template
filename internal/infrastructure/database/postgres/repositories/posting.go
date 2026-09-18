@@ -42,8 +42,10 @@ func NewPostingRepository(params PostingRepositoryParams) (*PostingRepository, e
 // validation, per-asset balance, then a single commit of posting + entries.
 // Anything failing persists nothing. The adapter owns account_seq numbering
 // (per account, after the current max); caller-supplied values are replaced.
-func (r *PostingRepository) Commit(ctx context.Context, posting entity.PostingData) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+func (r *PostingRepository) Commit(ctx context.Context, posting entity.PostingData) (entity.PostingData, error) {
+	var stored entity.PostingData
+
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := scopeTenant(ctx, tx, posting.TenantID); err != nil {
 			return err
 		}
@@ -75,19 +77,48 @@ func (r *PostingRepository) Commit(ctx context.Context, posting entity.PostingDa
 			return fmt.Errorf("postgres: insert posting: %w", err)
 		}
 
-		for _, entry := range sequenced.Entries {
-			entryModel := entryToModel(sequenced, entry)
-			if err := tx.Create(&entryModel).Error; err != nil {
-				if isDuplicate(err) {
-					return ErrConflict
-				}
+		sequenced.ID = valueobject.PostingID(postingModel.ID)
 
-				return fmt.Errorf("postgres: insert entry: %w", err)
-			}
+		storedEntries, err := insertPostingEntries(ctx, tx, sequenced)
+		if err != nil {
+			return err
 		}
+
+		stored = postingToEntity(postingModel, storedEntries)
 
 		return nil
 	})
+	if err != nil {
+		return entity.PostingData{}, err
+	}
+
+	return stored, nil
+}
+
+// insertPostingEntries persists every entry with the stored posting identity
+// and returns them with database-assigned IDs.
+func insertPostingEntries(ctx context.Context, tx *gorm.DB, sequenced entity.PostingData) ([]entity.Entry, error) {
+	entryModels := make([]models.EntryModel, 0, len(sequenced.Entries))
+
+	for _, entry := range sequenced.Entries {
+		entryModel := entryToModel(sequenced, entry)
+		if err := tx.WithContext(ctx).Create(&entryModel).Error; err != nil {
+			if isDuplicate(err) {
+				return nil, ErrConflict
+			}
+
+			return nil, fmt.Errorf("postgres: insert entry: %w", err)
+		}
+
+		entryModels = append(entryModels, entryModel)
+	}
+
+	stored := make([]entity.Entry, 0, len(entryModels))
+	for _, entryModel := range entryModels {
+		stored = append(stored, entryToEntity(entryModel))
+	}
+
+	return stored, nil
 }
 
 // CursorOf returns the ledger cursor (ledger_seq) of a committed posting.

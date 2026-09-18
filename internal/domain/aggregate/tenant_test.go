@@ -1,6 +1,7 @@
 package aggregate_test
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -12,19 +13,41 @@ import (
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
 )
 
-func openTestTenant(t *testing.T) *aggregate.Tenant {
+func openUnassignedTestTenant(t *testing.T) aggregate.Tenant {
 	t.Helper()
 	at := time.Date(2026, 9, 14, 5, 0, 0, 0, time.UTC)
 	tn, err := aggregate.OpenTenant(aggregate.OpenTenantParams{
-		ID:       "t-1",
-		LedgerID: "l-1",
+		ID:       "",
+		LedgerID: testLedgerID,
 		Name:     "Acme Corp",
 		Region:   "us-east-1",
 		Settings: entity.TenantSettings{
 			DefaultCurrency: "USD",
 			Timezone:        "UTC",
 		},
-		OpenedBy:   "u-1",
+		OpenedBy:   testUser1,
+		EventID:    testEvent0,
+		OccurredAt: at,
+	})
+	if err != nil {
+		t.Fatalf("OpenTenant unassigned: %v", err)
+	}
+	return tn
+}
+
+func openTestTenant(t *testing.T) *aggregate.Tenant {
+	t.Helper()
+	at := time.Date(2026, 9, 14, 5, 0, 0, 0, time.UTC)
+	tn, err := aggregate.OpenTenant(aggregate.OpenTenantParams{
+		ID:       testTenantID,
+		LedgerID: testLedgerID,
+		Name:     "Acme Corp",
+		Region:   "us-east-1",
+		Settings: entity.TenantSettings{
+			DefaultCurrency: "USD",
+			Timezone:        "UTC",
+		},
+		OpenedBy:   testUser1,
 		EventID:    "ev-0",
 		OccurredAt: at,
 	})
@@ -45,15 +68,15 @@ func TestOpenTenant(t *testing.T) {
 
 	at := time.Date(2026, 9, 14, 5, 0, 0, 0, time.UTC)
 	baseParams := aggregate.OpenTenantParams{
-		ID:       "t-1",
-		LedgerID: "l-1",
+		ID:       testTenantID,
+		LedgerID: testLedgerID,
 		Name:     "Acme Corp",
 		Region:   "us-east-1",
 		Settings: entity.TenantSettings{
 			DefaultCurrency: "USD",
 			Timezone:        "UTC",
 		},
-		OpenedBy:   "u-1",
+		OpenedBy:   testUser1,
 		EventID:    "ev-0",
 		OccurredAt: at,
 	}
@@ -65,22 +88,40 @@ func TestOpenTenant(t *testing.T) {
 			expectedError: nil,
 		},
 		{
-			name: "missing tenant id",
+			name: "missing tenant id permitted before persistence",
 			p: func() aggregate.OpenTenantParams {
 				p := baseParams
 				p.ID = ""
 				return p
 			}(),
-			expectedError: entity.NewError("TENANT_ID_REQUIRED", "tenant id is required"),
+			expectedError: nil,
 		},
 		{
-			name: "missing ledger",
+			name: "invalid tenant id format",
+			p: func() aggregate.OpenTenantParams {
+				p := baseParams
+				p.ID = "not-a-uuid"
+				return p
+			}(),
+			expectedError: entity.NewError("TENANT_ID_INVALID", "tenant id is invalid"),
+		},
+		{
+			name: "missing ledger permitted before persistence",
 			p: func() aggregate.OpenTenantParams {
 				p := baseParams
 				p.LedgerID = ""
 				return p
 			}(),
-			expectedError: entity.NewError("LEDGER_REQUIRED", "ledger id is required"),
+			expectedError: nil,
+		},
+		{
+			name: "invalid ledger id format",
+			p: func() aggregate.OpenTenantParams {
+				p := baseParams
+				p.LedgerID = "not-a-uuid"
+				return p
+			}(),
+			expectedError: entity.NewError("LEDGER_ID_INVALID", "ledger id is invalid"),
 		},
 		{
 			name: "missing opened by",
@@ -146,8 +187,12 @@ func TestOpenTenant(t *testing.T) {
 				assert.Equal(t, entity.TenantActive, tn.Record().Status)
 				assert.Equal(t, int64(1), tn.Record().Version)
 				evts := tn.UncommittedEvents()
-				require.Len(t, evts, 1)
-				assert.Equal(t, "tenant.created.v1", evts[0].EventType())
+				if tc.p.ID.String() != "" && tc.p.LedgerID.String() != "" {
+					require.Len(t, evts, 1)
+					assert.Equal(t, "tenant.created.v1", evts[0].EventType())
+				} else {
+					assert.Empty(t, evts)
+				}
 			}
 		})
 	}
@@ -158,9 +203,9 @@ func TestTenantLifecycleEmissionOrder(t *testing.T) {
 
 	tn := openTestTenant(t)
 	at := time.Date(2026, 9, 14, 6, 0, 0, 0, time.UTC)
-	ledger := valueobject.LedgerID("l-1")
+	ledger := testLedgerID
 	tr := func(ev string) aggregate.TenantTransitionParams {
-		return aggregate.TenantTransitionParams{Actor: "u-1", EventID: ev, OccurredAt: at}
+		return aggregate.TenantTransitionParams{Actor: testUser1, EventID: ev, OccurredAt: at}
 	}
 	require.NoError(t, tn.Suspend(aggregate.TenantSuspendParams{TenantTransitionParams: tr("ev-1"), Reason: "review"}, ledger))
 	require.NoError(t, tn.Reactivate(tr("ev-2"), ledger))
@@ -172,7 +217,7 @@ func TestTenantLifecycleEmissionOrder(t *testing.T) {
 	require.Len(t, evts, len(want))
 	for i, w := range want {
 		assert.Equal(t, w, evts[i].EventType())
-		assert.Equal(t, "t-1", evts[i].AggregateID())
+		assert.Equal(t, testTenantID.String(), evts[i].AggregateID())
 	}
 	tn.ClearEvents()
 	assert.Empty(t, tn.UncommittedEvents())
@@ -182,9 +227,9 @@ func TestTenantSuspend(t *testing.T) {
 	t.Parallel()
 
 	at := time.Date(2026, 9, 14, 6, 0, 0, 0, time.UTC)
-	baseTransition := aggregate.TenantTransitionParams{Actor: "u-1", EventID: "ev-1", OccurredAt: at}
+	baseTransition := aggregate.TenantTransitionParams{Actor: testUser1, EventID: "ev-1", OccurredAt: at}
 	baseParams := aggregate.TenantSuspendParams{TenantTransitionParams: baseTransition, Reason: "compliance review"}
-	baseLedger := valueobject.LedgerID("l-1")
+	baseLedger := testLedgerID
 
 	type testCase struct {
 		name          string
@@ -275,12 +320,12 @@ func TestTenantSuspend(t *testing.T) {
 			switch tc.initialState {
 			case "suspended":
 				require.NoError(t, tn.Suspend(aggregate.TenantSuspendParams{
-					TenantTransitionParams: aggregate.TenantTransitionParams{Actor: "u-1", EventID: "ev-pre", OccurredAt: at},
+					TenantTransitionParams: aggregate.TenantTransitionParams{Actor: testUser1, EventID: "ev-pre", OccurredAt: at},
 					Reason:                 "setup",
 				}, baseLedger))
 			case "closed":
 				require.NoError(t, tn.Close(aggregate.TenantCloseParams{
-					TenantTransitionParams: aggregate.TenantTransitionParams{Actor: "u-1", EventID: "ev-pre", OccurredAt: at},
+					TenantTransitionParams: aggregate.TenantTransitionParams{Actor: testUser1, EventID: "ev-pre", OccurredAt: at},
 					Reason:                 "setup",
 				}, baseLedger))
 			}
@@ -302,8 +347,8 @@ func TestTenantReactivate(t *testing.T) {
 	t.Parallel()
 
 	at := time.Date(2026, 9, 14, 6, 0, 0, 0, time.UTC)
-	baseTransition := aggregate.TenantTransitionParams{Actor: "u-1", EventID: "ev-reactivate", OccurredAt: at}
-	baseLedger := valueobject.LedgerID("l-1")
+	baseTransition := aggregate.TenantTransitionParams{Actor: testUser1, EventID: "ev-reactivate", OccurredAt: at}
+	baseLedger := testLedgerID
 
 	type testCase struct {
 		name          string
@@ -372,12 +417,12 @@ func TestTenantReactivate(t *testing.T) {
 			switch tc.initialState {
 			case "suspended":
 				require.NoError(t, tn.Suspend(aggregate.TenantSuspendParams{
-					TenantTransitionParams: aggregate.TenantTransitionParams{Actor: "u-1", EventID: "ev-pre", OccurredAt: at},
+					TenantTransitionParams: aggregate.TenantTransitionParams{Actor: testUser1, EventID: "ev-pre", OccurredAt: at},
 					Reason:                 "setup",
 				}, baseLedger))
 			case "closed":
 				require.NoError(t, tn.Close(aggregate.TenantCloseParams{
-					TenantTransitionParams: aggregate.TenantTransitionParams{Actor: "u-1", EventID: "ev-pre", OccurredAt: at},
+					TenantTransitionParams: aggregate.TenantTransitionParams{Actor: testUser1, EventID: "ev-pre", OccurredAt: at},
 					Reason:                 "setup",
 				}, baseLedger))
 			}
@@ -399,9 +444,9 @@ func TestTenantClose(t *testing.T) {
 	t.Parallel()
 
 	at := time.Date(2026, 9, 14, 6, 0, 0, 0, time.UTC)
-	baseTransition := aggregate.TenantTransitionParams{Actor: "u-1", EventID: "ev-close", OccurredAt: at}
+	baseTransition := aggregate.TenantTransitionParams{Actor: testUser1, EventID: "ev-close", OccurredAt: at}
 	baseParams := aggregate.TenantCloseParams{TenantTransitionParams: baseTransition, Reason: "account closure"}
-	baseLedger := valueobject.LedgerID("l-1")
+	baseLedger := testLedgerID
 
 	type testCase struct {
 		name          string
@@ -492,12 +537,12 @@ func TestTenantClose(t *testing.T) {
 			switch tc.initialState {
 			case "suspended":
 				require.NoError(t, tn.Suspend(aggregate.TenantSuspendParams{
-					TenantTransitionParams: aggregate.TenantTransitionParams{Actor: "u-1", EventID: "ev-pre", OccurredAt: at},
+					TenantTransitionParams: aggregate.TenantTransitionParams{Actor: testUser1, EventID: "ev-pre", OccurredAt: at},
 					Reason:                 "setup",
 				}, baseLedger))
 			case "closed":
 				require.NoError(t, tn.Close(aggregate.TenantCloseParams{
-					TenantTransitionParams: aggregate.TenantTransitionParams{Actor: "u-1", EventID: "ev-pre", OccurredAt: at},
+					TenantTransitionParams: aggregate.TenantTransitionParams{Actor: testUser1, EventID: "ev-pre", OccurredAt: at},
 					Reason:                 "setup",
 				}, baseLedger))
 			}
@@ -518,7 +563,7 @@ func TestTenantUpdateSettings(t *testing.T) {
 	t.Parallel()
 
 	at := time.Date(2026, 9, 14, 6, 0, 0, 0, time.UTC)
-	baseTransition := aggregate.TenantTransitionParams{Actor: "u-1", EventID: "ev-update", OccurredAt: at}
+	baseTransition := aggregate.TenantTransitionParams{Actor: testUser1, EventID: "ev-update", OccurredAt: at}
 	validSettings := entity.TenantSettings{
 		DefaultCurrency:       "EUR",
 		Timezone:              "Europe/Berlin",
@@ -526,7 +571,7 @@ func TestTenantUpdateSettings(t *testing.T) {
 		EnabledPaymentMethods: []string{"ach"},
 	}
 	baseParams := aggregate.TenantUpdateSettingsParams{TenantTransitionParams: baseTransition, Settings: validSettings}
-	baseLedger := valueobject.LedgerID("l-1")
+	baseLedger := testLedgerID
 
 	type testCase struct {
 		name          string
@@ -606,12 +651,12 @@ func TestTenantUpdateSettings(t *testing.T) {
 			switch tc.initialState {
 			case "suspended":
 				require.NoError(t, tn.Suspend(aggregate.TenantSuspendParams{
-					TenantTransitionParams: aggregate.TenantTransitionParams{Actor: "u-1", EventID: "ev-pre", OccurredAt: at},
+					TenantTransitionParams: aggregate.TenantTransitionParams{Actor: testUser1, EventID: "ev-pre", OccurredAt: at},
 					Reason:                 "review",
 				}, baseLedger))
 			case "closed":
 				require.NoError(t, tn.Close(aggregate.TenantCloseParams{
-					TenantTransitionParams: aggregate.TenantTransitionParams{Actor: "u-1", EventID: "ev-pre", OccurredAt: at},
+					TenantTransitionParams: aggregate.TenantTransitionParams{Actor: testUser1, EventID: "ev-pre", OccurredAt: at},
 					Reason:                 "done",
 				}, baseLedger))
 			}
@@ -639,12 +684,12 @@ func TestTenantMutationAtomicity(t *testing.T) {
 	// Invalid Suspend call (empty reason) must leave state completely unmutated
 	err := tn.Suspend(aggregate.TenantSuspendParams{
 		TenantTransitionParams: aggregate.TenantTransitionParams{
-			Actor:      "u-1",
+			Actor:      testUser1,
 			EventID:    "ev-fail",
 			OccurredAt: time.Now().UTC(),
 		},
 		Reason: "   ",
-	}, "l-1")
+	}, testLedgerID)
 	assert.Error(t, err)
 	assert.Equal(t, initialRecord.Version, tn.Record().Version)
 	assert.Equal(t, initialRecord.Status, tn.Record().Status)
@@ -653,7 +698,7 @@ func TestTenantMutationAtomicity(t *testing.T) {
 	// Invalid UpdateSettings call (missing timezone) must leave state completely unmutated
 	err = tn.UpdateSettings(aggregate.TenantUpdateSettingsParams{
 		TenantTransitionParams: aggregate.TenantTransitionParams{
-			Actor:      "u-1",
+			Actor:      testUser1,
 			EventID:    "ev-fail2",
 			OccurredAt: time.Now().UTC(),
 		},
@@ -661,9 +706,130 @@ func TestTenantMutationAtomicity(t *testing.T) {
 			DefaultCurrency: "EUR",
 			Timezone:        "",
 		},
-	}, "l-1")
+	}, testLedgerID)
 	assert.Error(t, err)
 	assert.Equal(t, initialRecord.Version, tn.Record().Version)
 	assert.Equal(t, initialRecord.Settings, tn.Record().Settings)
 	assert.Equal(t, len(initialEvents), len(tn.UncommittedEvents()))
+}
+
+func TestTenantAssignID(t *testing.T) {
+	t.Parallel()
+
+	at := time.Date(2026, 9, 14, 5, 0, 0, 0, time.UTC)
+
+	type testCase struct {
+		name          string
+		tn            aggregate.Tenant
+		id            valueobject.TenantID
+		ledgerID      valueobject.LedgerID
+		eventID       string
+		occurredAt    time.Time
+		openedBy      valueobject.UserID
+		expectedError error
+	}
+
+	testCases := []testCase{
+		{
+			name: "successful assignment to unassigned tenant",
+			tn: func() aggregate.Tenant {
+				return openUnassignedTestTenant(t)
+			}(),
+			id:            testTenantID,
+			ledgerID:      testLedgerID,
+			eventID:       testEvent1,
+			occurredAt:    at,
+			openedBy:      testUser1,
+			expectedError: nil,
+		},
+		{
+			name: "double assignment rejected with immutable error",
+			tn: func() aggregate.Tenant {
+				tn := openUnassignedTestTenant(t)
+				err := tn.AssignID(testTenantID, testLedgerID, testEvent1, at, testUser1)
+				require.NoError(t, err)
+				return tn
+			}(),
+			id:            testTenantID,
+			ledgerID:      testLedgerID,
+			eventID:       testEvent2,
+			occurredAt:    at,
+			openedBy:      testUser1,
+			expectedError: entity.NewError("TENANT_ID_IMMUTABLE", "tenant id is already assigned"),
+		},
+		{
+			name: "malformed tenant id rejected",
+			tn: func() aggregate.Tenant {
+				return openUnassignedTestTenant(t)
+			}(),
+			id:            "not-a-valid-uuid",
+			ledgerID:      testLedgerID,
+			eventID:       testEvent1,
+			occurredAt:    at,
+			openedBy:      testUser1,
+			expectedError: entity.NewError("TENANT_ID_INVALID", "tenant id is invalid"),
+		},
+		{
+			name: "empty tenant id rejected",
+			tn: func() aggregate.Tenant {
+				return openUnassignedTestTenant(t)
+			}(),
+			id:            "",
+			ledgerID:      testLedgerID,
+			eventID:       testEvent1,
+			occurredAt:    at,
+			openedBy:      testUser1,
+			expectedError: entity.NewError("TENANT_ID_INVALID", "tenant id is invalid"),
+		},
+		{
+			name: "empty ledger id rejected",
+			tn: func() aggregate.Tenant {
+				return openUnassignedTestTenant(t)
+			}(),
+			id:            testTenantID,
+			ledgerID:      "",
+			eventID:       testEvent1,
+			occurredAt:    at,
+			openedBy:      testUser1,
+			expectedError: errors.New("event: ledger_id is required"),
+		},
+		{
+			name: "empty event id rejected",
+			tn: func() aggregate.Tenant {
+				return openUnassignedTestTenant(t)
+			}(),
+			id:            testTenantID,
+			ledgerID:      testLedgerID,
+			eventID:       "",
+			occurredAt:    at,
+			openedBy:      testUser1,
+			expectedError: errors.New("event: event_id is required"),
+		},
+		{
+			name: "zero occurred at rejected",
+			tn: func() aggregate.Tenant {
+				return openUnassignedTestTenant(t)
+			}(),
+			id:            testTenantID,
+			ledgerID:      testLedgerID,
+			eventID:       testEvent1,
+			occurredAt:    time.Time{},
+			openedBy:      testUser1,
+			expectedError: errors.New("event: occurred_at is required"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.tn.AssignID(tc.id, tc.ledgerID, tc.eventID, tc.occurredAt, tc.openedBy)
+			assert.Equal(t, tc.expectedError, err)
+			if tc.expectedError == nil {
+				assert.Equal(t, tc.id, tc.tn.Record().ID)
+				evts := tc.tn.UncommittedEvents()
+				require.Len(t, evts, 1)
+				assert.Equal(t, "tenant.created.v1", evts[0].EventType())
+				assert.Equal(t, tc.id.String(), evts[0].AggregateID())
+			}
+		})
+	}
 }

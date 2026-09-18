@@ -21,6 +21,7 @@ For architectural patterns, layers, and DDD structure, see the [Clean Architectu
 | [ADR-016](./ADR-016-secrets-management-openbao.md) | Enterprise secrets management & tokenization via OpenBao | Proposed |
 | [ADR-017](./ADR-017-distributed-coordination-etcd.md) | Distributed consensus, dynamic config & leader election via etcd | Proposed |
 | [ADR-018](./ADR-018-database-migrations-goose-and-atlas.md) | Hybrid database migrations via Goose v3, Atlas CI linter & UTC timestamps | Proposed |
+| [ADR-019](./ADR-019-uuidv7-composite-identity.md) | DB-generated UUIDv7 identity with composite tenant PKs | Proposed |
 
 ## How to add an ADR
 

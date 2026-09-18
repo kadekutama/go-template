@@ -10,8 +10,9 @@ import (
 // HoldRepository persists durable holds. All reads used for spend decisions
 // are strongly consistent.
 type HoldRepository interface {
-	// Create stores a new ACTIVE hold. Strong write; fails on duplicate ID.
-	Create(ctx context.Context, hold entity.HoldData) error
+	// Create stores a new ACTIVE hold and returns it with the database-assigned ID.
+	// Strong write; fails on duplicate ID.
+	Create(ctx context.Context, hold entity.HoldData) (entity.HoldData, error)
 	// FindByID returns one hold by tenant + ID. Strong read.
 	FindByID(ctx context.Context, tenant valueobject.TenantID, id valueobject.HoldID) (entity.HoldData, error)
 	// FindActiveByAccount returns ACTIVE holds blocking an account. Strong read.

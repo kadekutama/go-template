@@ -11,8 +11,9 @@ import (
 // PeriodRepository persists accounting periods. Open-period lookups feed
 // posting-time validation and are strongly consistent.
 type PeriodRepository interface {
-	// Create stores a new period. Strong write; fails on duplicate ID.
-	Create(ctx context.Context, period entity.PeriodData) error
+	// Create stores a new period and returns it with the database-assigned ID.
+	// Strong write; fails on duplicate ID.
+	Create(ctx context.Context, period entity.PeriodData) (entity.PeriodData, error)
 	// FindByID returns one period by tenant + ID. Strong read.
 	FindByID(ctx context.Context, tenant valueobject.TenantID, id valueobject.PeriodID) (entity.PeriodData, error)
 	// FindOpen returns the currently open period of a ledger, if any.

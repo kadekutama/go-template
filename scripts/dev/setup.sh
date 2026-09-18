@@ -100,6 +100,7 @@ PIXI_PACKAGES=(
   "k6:Load testing tool for performance tests"
   "syft:SPDX SBOM generator for releases"
   "gopls:Go language server"
+  "atlasgo:Atlas migration linter (atlas CLI v1.3.0)"
 )
 
 install_pixi_packages() {
@@ -184,7 +185,7 @@ GO_TOOLS=(
   "buf:github.com/bufbuild/buf/cmd/buf@latest"
   "oapi-codegen:github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest"
   "air:github.com/air-verse/air@latest"
-  "migrate:github.com/golang-migrate/migrate/v4/cmd/migrate@latest"
+  "goose:github.com/pressly/goose/v3/cmd/goose@v3.28.0"
 )
 
 get_gobin() {
@@ -208,11 +209,7 @@ install_go_tools() {
     bin="${item%%:*}"
     pkg="${item#*:}"
     echo "  -> Installing $bin ($pkg)..."
-    if [[ "$bin" == "migrate" ]]; then
-      go install -tags 'postgres' "$pkg"
-    else
-      go install "$pkg"
-    fi
+    go install "$pkg"
 
     if [[ -d "$PIXI_BIN" && -w "$PIXI_BIN" && -f "$gobin/$bin" ]]; then
       ln -sf "$gobin/$bin" "$PIXI_BIN/$bin"
@@ -236,7 +233,7 @@ check_status() {
   echo ""
 
   echo "--- Toolchains & System Dependencies (Pixi-managed) ---"
-  local check_bins=("go" "clang" "clang++" "make" "shellcheck" "kubectl" "k6" "syft" "gopls")
+  local check_bins=("go" "clang" "clang++" "make" "shellcheck" "kubectl" "k6" "syft" "gopls" "atlas" "goose")
   for b in "${check_bins[@]}"; do
     if command -v "$b" >/dev/null 2>&1; then
       loc="$(command -v "$b")"

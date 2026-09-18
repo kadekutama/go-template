@@ -15,7 +15,7 @@ import (
 // ledgers are few and always read from the primary.
 type LedgerRepository interface {
 	// Create stores a new ledger. Strong write; fails on duplicate ID.
-	Create(ctx context.Context, ledger entity.Ledger) error
+	Create(ctx context.Context, ledger entity.Ledger) (entity.Ledger, error)
 	// FindByID returns one ledger by tenant + ID. Strong read.
 	FindByID(ctx context.Context, tenant valueobject.TenantID, id valueobject.LedgerID) (entity.Ledger, error)
 	// ListByTenant returns all ledgers of a tenant. Strong read; small result.

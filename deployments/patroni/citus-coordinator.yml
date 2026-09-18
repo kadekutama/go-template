@@ -1,0 +1,72 @@
+# Patroni DCS + bootstrap configuration for the Citus coordinator tier (E07.1-T02).
+# Mounted at /etc/patroni/patroni.yml in the coordinator containers. The worker
+# tier uses citus-worker.yml. etcd hostnames resolve on the compose network.
+#
+# DEV-ONLY CREDENTIALS: replicator/postgres passwords below are local-compose
+# placeholders (same posture as config/config.yaml dev defaults). Override per
+# node with PATRONI_POSTGRESQL_AUTHENTICATION_REPLICATION_PASSWORD and
+# PATRONI_POSTGRESQL_AUTHENTICATION_SUPERUSER_PASSWORD environment variables;
+# production secrets come from OpenBao (E09).
+scope: citus-coordinator
+namespace: ledger
+name: citus-coordinator-1
+
+restapi:
+  listen: 0.0.0.0:8008
+  connect_address: citus-coordinator:8008
+
+etcd3:
+  hosts:
+    - etcd1:2379
+    - etcd2:2379
+    - etcd3:2379
+  protocol: http
+
+bootstrap:
+  dcs:
+    ttl: 30
+    loop_wait: 10
+    retry_timeout: 10
+    maximum_lag_on_failover: 1048576
+    synchronous_mode: true
+    synchronous_mode_strict: true
+    synchronous_node_count: 1
+    postgresql:
+      use_pg_rewind: true
+      parameters:
+        max_connections: 200
+        shared_preload_libraries: citus
+        citus.shard_count: 32
+        citus.shard_replication_factor: 1
+        synchronous_commit: "on"
+  initdb:
+    - encoding: UTF8
+    - locale: en_US.UTF-8
+    - data-checksums
+  pg_hba:
+    - host all all 0.0.0.0/0 md5
+    - host replication replicator 0.0.0.0/0 md5
+  # Extension creation and worker registration run in the citus-init compose
+  # service (it retries until every tier is primary-ready).
+
+postgresql:
+  listen: 0.0.0.0:5432
+  connect_address: citus-coordinator:5432
+  data_dir: /var/lib/postgresql/data
+  bin_dir: /usr/lib/postgresql/18/bin
+  pgpass: /tmp/pgpass
+  authentication:
+    replication:
+      username: replicator
+      password: replicator_pw
+    superuser:
+      username: postgres
+      password: postgres_pw
+  parameters:
+    shared_preload_libraries: citus
+    synchronous_commit: "on"
+
+tags:
+  nofailover: false
+  noloadbalance: false
+  clonefrom: false

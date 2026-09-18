@@ -24,12 +24,11 @@ type PostingData struct {
 	Metadata          map[string]string
 }
 
-// Validate checks posting structure (entry count, per-entry validity, required
-// scope and timestamps). Per-asset balance and account checks are construction
-// rules in the aggregate, where the account set is available.
-func (p PostingData) Validate() error {
-	if p.ID.String() == "" {
-		return NewError("POSTING_ID_REQUIRED", "posting id is required")
+func (p PostingData) validateHeader() error {
+	if p.ID.String() != "" {
+		if _, err := valueobject.ParsePostingID(p.ID.String()); err != nil {
+			return NewError("POSTING_ID_INVALID", "posting id is invalid")
+		}
 	}
 	if p.TenantID.String() == "" {
 		return NewError("TENANT_REQUIRED", "tenant id is required")
@@ -40,6 +39,10 @@ func (p PostingData) Validate() error {
 	if p.Operation == "" {
 		return NewError("POSTING_OPERATION_REQUIRED", "operation template name is required")
 	}
+	return nil
+}
+
+func (p PostingData) validateEntries() error {
 	if len(p.Entries) < 2 {
 		return NewError("POSTING_ENTRIES_REQUIRED", "posting requires at least two entries")
 	}
@@ -47,6 +50,19 @@ func (p PostingData) Validate() error {
 		if err := p.Entries[i].Validate(); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// Validate checks posting structure (entry count, per-entry validity, required
+// scope and timestamps). An empty ID is permitted prior to persistence;
+// if set, it must be a valid canonical UUID.
+func (p PostingData) Validate() error {
+	if err := p.validateHeader(); err != nil {
+		return err
+	}
+	if err := p.validateEntries(); err != nil {
+		return err
 	}
 	if p.EffectiveAt.IsZero() {
 		return NewError("POSTING_EFFECTIVE_REQUIRED", "effective_at is required")

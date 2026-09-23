@@ -4,92 +4,311 @@
   "title": "go-template service configuration (E01-T03)",
   "description": "Mirrors internal/infrastructure/config.Config koanf paths. The alignment test proves every koanf leaf exists here.",
   "type": "object",
-  "required": ["app", "server", "database", "cache", "auth", "nats"],
+  "required": [
+    "app",
+    "server",
+    "database",
+    "cache",
+    "auth",
+    "nats"
+  ],
   "properties": {
     "app": {
       "type": "object",
-      "required": ["name", "env"],
+      "required": [
+        "name",
+        "env"
+      ],
       "properties": {
-        "name": { "type": "string", "minLength": 1 },
-        "env": { "type": "string", "enum": ["local", "staging", "production"] }
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "env": {
+          "type": "string",
+          "enum": [
+            "local",
+            "staging",
+            "production"
+          ]
+        }
       }
     },
     "server": {
       "type": "object",
-      "required": ["host", "port"],
+      "required": [
+        "host",
+        "port"
+      ],
       "properties": {
-        "host": { "type": "string", "minLength": 1 },
-        "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+        "host": {
+          "type": "string",
+          "minLength": 1
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        }
       }
     },
     "database": {
       "type": "object",
-      "required": ["host", "port", "user", "password", "name", "sslmode"],
+      "required": [
+        "host",
+        "port",
+        "user",
+        "password",
+        "name",
+        "sslmode"
+      ],
       "properties": {
-        "host": { "type": "string", "minLength": 1 },
-        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
-        "user": { "type": "string", "minLength": 1 },
-        "password": { "type": "string", "minLength": 1 },
-        "name": { "type": "string", "minLength": 1 },
-        "sslmode": { "type": "string", "enum": ["disable", "require", "verify-full"] },
-        "max_open_conns": { "type": "integer", "minimum": 1 },
-        "max_idle_conns": { "type": "integer", "minimum": 0 },
-        "conn_max_lifetime_sec": { "type": "integer", "minimum": 1 }
+        "host": {
+          "type": "string",
+          "minLength": 1
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "user": {
+          "type": "string",
+          "minLength": 1
+        },
+        "password": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sslmode": {
+          "type": "string",
+          "enum": [
+            "disable",
+            "require",
+            "verify-full"
+          ]
+        },
+        "max_open_conns": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_idle_conns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "conn_max_lifetime_sec": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
     },
     "cache": {
       "type": "object",
-      "required": ["host", "port"],
+      "required": [
+        "host",
+        "port"
+      ],
       "properties": {
-        "host": { "type": "string", "minLength": 1 },
-        "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+        "host": {
+          "type": "string",
+          "minLength": 1
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "l1_maximum_size": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "ttls": {
+          "type": "object",
+          "properties": {
+            "balance_sec": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "balance_cursor_sec": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "config_sec": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "config_long_sec": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "fx_sec": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "idempotency_hint_sec": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rate_limit_sec": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "l1_populate_sec": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
       }
     },
     "auth": {
       "type": "object",
-      "required": ["issuer", "access_ttl_min", "refresh_ttl_days"],
+      "required": [
+        "issuer",
+        "access_ttl_min",
+        "refresh_ttl_days"
+      ],
       "properties": {
-        "issuer": { "type": "string", "minLength": 1 },
-        "access_ttl_min": { "type": "integer", "minimum": 1 },
-        "refresh_ttl_days": { "type": "integer", "minimum": 1 }
+        "issuer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "access_ttl_min": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "refresh_ttl_days": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
     },
     "nats": {
       "type": "object",
-      "required": ["url"],
+      "required": [
+        "url"
+      ],
       "properties": {
-        "url": { "type": "string", "minLength": 1 }
+        "url": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "observability": {
       "type": "object",
       "properties": {
-        "log_level": { "type": "string", "enum": ["debug", "info", "warn", "error", ""] },
-        "otlp_endpoint": { "type": "string" },
-        "sample_ratio": { "type": "number", "minimum": 0, "maximum": 1 }
+        "log_level": {
+          "type": "string",
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error",
+            ""
+          ]
+        },
+        "otlp_endpoint": {
+          "type": "string"
+        },
+        "sample_ratio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
       }
     },
     "feature_flags": {
       "type": "object",
       "properties": {
-        "unleash_url": { "type": "string" }
+        "unleash_url": {
+          "type": "string"
+        }
       }
     },
     "secrets": {
       "type": "object",
       "properties": {
-        "provider": { "type": "string", "enum": ["openbao", "bitwarden", "env", ""] }
+        "provider": {
+          "type": "string",
+          "enum": [
+            "openbao",
+            "bitwarden",
+            "env",
+            ""
+          ]
+        }
       }
     },
     "coordination": {
       "type": "object",
       "properties": {
-        "etcd_endpoints": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-        "etcd_dial_timeout_sec": { "type": "integer", "minimum": 1 },
-        "etcd_election_ttl_sec": { "type": "integer", "minimum": 1 },
-        "leader_key_prefix": { "type": "string" }
+        "etcd_endpoints": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "etcd_dial_timeout_sec": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "etcd_election_ttl_sec": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "leader_key_prefix": {
+          "type": "string"
+        }
+      }
+    },
+    "redpanda": {
+      "type": "object",
+      "properties": {
+        "brokers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "topic_ledger_events": {
+          "type": "string"
+        },
+        "topic_outbox_facts": {
+          "type": "string"
+        },
+        "topic_webhook_jobs": {
+          "type": "string"
+        },
+        "topic_audit_streams": {
+          "type": "string"
+        },
+        "partitions": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "retention_hours": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "webhook": {
+      "type": "object",
+      "properties": {
+        "retry_steps_sec": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
       }
     }
   }
 }
-

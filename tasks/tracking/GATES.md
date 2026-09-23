@@ -52,6 +52,15 @@ the capability is not stable or externally exposed until its gate passes.
 - [ ] Auth matrix (journeys §5) green; no secret in code/images.
 - [ ] Provider fakes allow zero-vendor-credential test runs.
 
+**E08 slice status (2026-09-19):** cache invalidation/cursor labeling, Redlock
+coordination, dual-broker topology, outbox-relay publisher, idempotent consumer
+with DLQ + replay-releases-claim, webhook retry/signature, and rate limiter are
+implemented with unit + Testcontainers evidence; `gate-check.sh G4` runs the
+integration suite ×3 and `--migrations --ports --subjects`. Remaining before G4
+closes: E09 identity/security (auth matrix, secret scans) and E10 provider
+fakes, plus the durable Postgres inbox binding (E14 wiring) — the memory/Valkey
+receipt stores prove shape only.
+
 ## G5 — API + worker contracts satisfied
 **Status:** pending
 **Promotes capability for:** end-to-end observability and resilience

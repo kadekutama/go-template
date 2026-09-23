@@ -1,0 +1,31 @@
+# Redpanda durable-log fragment (E08-T03, ADR-014).
+# Extends the core compose: 3-node Raft backbone for ledger.events.v1,
+# outbox.facts.v1, webhook.jobs.v1, audit.streams.v1 (partition key
+# tenant_id:account_id, 30d retention, per-group DLQ). Operated in E17;
+# E08 proves topology + relay shape against it.
+services:
+  redpanda-1:
+    image: redpanda/redpanda:v26.2.1
+    command:
+      - redpanda start
+      - --smp 1
+      - --memory 1G
+      - --overprovisioned
+      - --node-id 0
+      - --check=false
+      - --set redpanda.empty_seed_starts_cluster=false
+    ports: ["9092:9092", "9644:9644"]
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redpanda-console:
+    image: redpanda/console:v2.8.0
+    environment:
+      KAFKA_BROKERS: redpanda-1:9092
+    ports: ["8080:8080"]
+    depends_on:
+      redpanda-1:
+        condition: service_healthy

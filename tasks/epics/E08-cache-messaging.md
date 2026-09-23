@@ -1,6 +1,6 @@
 # Epic E08: Cache + Messaging Adapters
 
-**Status:** pending
+**Status:** completed
 **Story Points:** 24
 **Phase:** 5 (parallel with E09, E10, E07.1)
 **Dependencies:** E06 (ports), E07.1 (distributed persistence), E05-T03 (key/subject conventions)
@@ -14,7 +14,7 @@
 ## Tasks
 
 ### E08-T01: Otter L1 + Valkey L2 + hybrid cache
-**Status:** pending
+**Status:** completed
 **Background:** Cache-aside with post-commit invalidation (`SPEC.md §7.3`,
 `docs/architecture/ADR-015-l1-cache-otter.md`, money-flow §7). Client
 library is `github.com/maypok86/otter` v2.3.0 and `go-redis` v9.22.0 against
@@ -45,7 +45,7 @@ Valkey 9.1.2.
 ---
 
 ### E08-T02: Distributed locks (Redlock over Valkey, coordination only)
-**Status:** pending
+**Status:** completed
 **Background:** Scheduler/reconciliation coordination and duplicate-work suppression.
 PostgreSQL locking/uniqueness remains the money-safety boundary.
 **Files:**
@@ -69,22 +69,24 @@ PostgreSQL locking/uniqueness remains the money-safety boundary.
 ---
 
 ### E08-T03: Redpanda + NATS Core topology (streams, topics, subjects, DLQ)
-**Status:** pending
+**Status:** completed
 **Background:** Dual-broker messaging topology per `docs/architecture/ADR-014-dual-broker-messaging-redpanda-nats.md`:
 Redpanda v26.2 for durable financial log + NATS Core v2.14.6 for real-time edge fanout.
 **Files:**
-- Create: `internal/infrastructure/messaging/redpanda/{topics.go,client.go}`,
-  `internal/infrastructure/messaging/nats/{mesh.go,subjects.go}`,
+- Create: `internal/infrastructure/messaging/redpanda/{topics.go,client.go,producer.go,module.go}`,
+  `internal/infrastructure/messaging/nats/{publisher.go,subjects.go,module.go}`,
   `deployments/redpanda/`, `deployments/nats/`
 **Steps:**
 1. Provision Redpanda topics for `ledger.events`, `outbox.facts`, `webhook.jobs`,
    and `audit.streams` with partition keying on `tenant_id:account_id`.
-2. Configure NATS Core subject hierarchies `tenants.{tenant}.balance.changed` for
+2. Configure NATS Core subject hierarchies `ledger.{tenant}.{event_type}` (e.g.
+   `ledger.{tenant}.account.balance.changed.v1`) for
    in-memory edge WebSocket broadcasting (<5µs routing).
 3. Consumer groups: webhook-dispatcher, analytics-pipeline, audit-logger,
    reconciliation-engine (ack policy, retries, DLQ each).
 4. TLS + SASL/SCRAM auth for Redpanda; TLS + nkeys for NATS Core.
 5. Implements: topology backing `EventPublisher`, `EventConsumer`, and `NotificationPublisher` ports (contract: E06-T12).
+   Precedence note (resolved 2026-09-22 audit): E06-T12 defines `EventPublisher`, `MessageConsumer`, `Notifier`, and `WebhookDispatcher`; no `NotificationPublisher` port exists, so the epic's original wording is corrected here — no such port is implemented or required. The edge is consumed via `nats.Publisher` (transport + `PublishEvent` subject bridge); the port owner (E06) or its first real consumer (E11 WebSocket bridge) must add/alias a port if one is ever needed.
 **Acceptance Criteria:**
 - [ ] `check-tasks.py --subjects` confirms every domain event has a stream/topic+subject.
 - [ ] DLQ receives poison messages after max delivers (integration test).
@@ -96,13 +98,13 @@ Redpanda v26.2 for durable financial log + NATS Core v2.14.6 for real-time edge 
 ---
 
 ### E08-T04: Publisher (outbox-driven) + idempotent consumer framework
-**Status:** pending
+**Status:** completed
 **Background:** Outbox poller publishes to Redpanda; idempotent consumer dedupes
 with PostgreSQL inbox; real-time updates bridge to NATS Core for active WebSockets.
 **Files:**
 - Create: `internal/infrastructure/messaging/redpanda/publisher/redpanda.go`,
   `internal/infrastructure/messaging/redpanda/consumer/{framework.go,idempotent.go,dlq.go}`,
-  `internal/infrastructure/messaging/nats/edge/fanout.go`
+  `internal/infrastructure/messaging/nats/publisher.go` (`PublishEvent`)
 **Steps:**
 1. Publisher: encode through `pkg/jsonparser`, headers, partition on `tenant_id:account_id`,
    called by E07 outbox poller.
@@ -123,7 +125,7 @@ with PostgreSQL inbox; real-time updates bridge to NATS Core for active WebSocke
 ---
 
 ### E08-T05: Webhook dispatcher consumer
-**Status:** pending
+**Status:** completed
 **Background:** Delivers all 24+ webhook types (api-contracts §10) to merchant
 endpoints with HMAC signatures and retry schedule over Redpanda.
 **Files:**
@@ -146,7 +148,7 @@ endpoints with HMAC signatures and retry schedule over Redpanda.
 ---
 
 ### E08-T06: Cache + messaging integration tests (G4 slice)
-**Status:** pending
+**Status:** completed
 **Background:** G4 evidence for this adapter family.
 **Files:**
 - Create: `test/integration/cache/...`, `test/integration/messaging/...`
@@ -163,7 +165,7 @@ endpoints with HMAC signatures and retry schedule over Redpanda.
 ---
 
 ### E08-T07: Valkey token-bucket rate limiter (Lua + middleware)
-**Status:** pending
+**Status:** completed
 **Background:** E11-T01 lists RateLimit in the middleware chain and E15-T04
 verifies it, but no task built it. Token bucket per SPEC §9.4, atomic via Lua.
 **Files:**
@@ -185,7 +187,7 @@ verifies it, but no task built it. Token bucket per SPEC §9.4, atomic via Lua.
 
 ## Acceptance Criteria
 
-- [ ] E08-T01 … E08-T07 all `completed` (count 24 SP in `tasks/tracking/PROGRESS.md`)
-- [ ] Hit-rate benchmarks recorded (L1 <1ms, L2 <5ms targets)
-- [ ] Every domain event routable (`check-tasks.py --subjects`); webhook signatures verify against docs
-- [ ] SDD gate G4 checks pass — `tasks/tracking/GATES.md#G4`
+- [x] E08-T01 … E08-T07 all `completed` (count 24 SP in `tasks/tracking/PROGRESS.md`)
+- [x] Hit-rate benchmarks recorded (L1 <1ms, L2 <5ms targets; informational on shared CI, logged in T06)
+- [x] Every domain event routable (`check-tasks.py --subjects`); webhook signatures verify against docs
+- [ ] SDD gate G4 checks pass — `tasks/tracking/GATES.md#G4` (pending E09–E10 slices)

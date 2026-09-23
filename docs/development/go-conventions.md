@@ -86,6 +86,47 @@ database splitting or event sourcing:
   and the configured linter. Generated code is reproducible and is never edited
   by hand.
 
+## Constructor validation
+
+Constructors validate their Parameter Objects deterministically:
+
+- **Data fields** (`string`, numeric, `time.Duration`, slices, URLs) declare
+  `validate:"..."` tags and are checked through
+  `internal/shared/kernel/validate`, which reports every violation in one
+  joined error: `<scope>: invalid <label> (N violation(s)): Field: rule "x" on
+  value v; ...`. No package may hand-roll per-field if-chains a tag can express.
+- **Defaulted fields** use an explicit "zero means unset" step (for example
+  `TTLSet.WithDefaults`, `TopicsConfig.WithDefaults`) that runs *before*
+  validation; a negative explicit value is an error, never silently replaced
+  by the default.
+- **Dependency seams** (interfaces, function values) cannot be expressed as
+  tags: they get explicit sentinel-error nil checks so callers can
+  `errors.Is`/`Equal` against a named error.
+- **Fakes and test doubles** never live in production packages: they reside in
+  a sibling `fakes` (or `*_test.go`) package so no binary can accidentally
+  select an in-memory store for durable data. The only permitted in-memory
+  production store is the L1 cache (ADR-015).
+
+## Concurrency primitives
+
+Choose the lock by access pattern and write the reason next to the field:
+
+- `sync.RWMutex` when reads dominate a hot path (connection handles, breaker
+  lookups, subscription registries): `RLock` keeps readers parallel.
+- `sync.Mutex` when writes and reads interleave per operation or writes
+  dominate (dedupe receipt maps, attempt counters, recording fakes): the
+  extra RWMutex bookkeeping costs more than it saves.
+- A struct with a lock is never copied; methods use pointer receivers.
+- `sync.WaitGroup.Go` (Go 1.25+) replaces `Add`/`go`/`Done` triples, and
+  background goroutines run under `shared/kernel/safe` so a panic is
+  contained and reported instead of crashing the process.
+- **`sync.Map` is not used in adapters.** It targets append-only/highly
+  read-shared key sets and costs more per write, while our maps need
+  read-modify-write under one lock (attempt counters), snapshot iteration
+  (endpoint registry), size bounds, and compile-time typing. A plain map with
+  a documented `RWMutex`/`Mutex` is simpler to reason about and to test;
+  revisit only with a benchmark that shows contention on one key.
+
 ## Service Encapsulation & The Parameter Object Pattern
 
 All application-layer and infrastructure services, workflow runners, and long-running components must strictly encapsulate their dependencies and follow the **Parameter Object pattern**:

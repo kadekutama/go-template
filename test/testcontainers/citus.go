@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/docker/go-connections/nat"
+	mobyNetwork "github.com/moby/moby/api/types/network"
 	tc "github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/network"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -108,7 +108,7 @@ func startCitusNode(ctx context.Context, networkName, alias, dbname, user, passw
 				"POSTGRES_PASSWORD": password,
 				"POSTGRES_DB":       dbname,
 			},
-			WaitingFor: wait.ForSQL("5432/tcp", "pgx", func(host string, port nat.Port) string {
+			WaitingFor: wait.ForSQL("5432/tcp", "pgx", func(host string, port mobyNetwork.Port) string {
 				return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
 					user, password, host, port.Port(), dbname)
 			}).WithStartupTimeout(citusStartupTimeout).WithPollInterval(time.Second),

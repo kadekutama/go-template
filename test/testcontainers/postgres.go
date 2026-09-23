@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/docker/go-connections/nat"
+	"github.com/moby/moby/api/types/network"
 	tc "github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
@@ -50,7 +50,7 @@ func StartPostgres(t *testing.T, dbname string) (*PostgresHandle, error) {
 			},
 			// SQL-level readiness (not just TCP accept): Postgres opens the
 			// port while still starting up, which flakes first queries.
-			WaitingFor: wait.ForSQL("5432/tcp", "pgx", func(host string, port nat.Port) string {
+			WaitingFor: wait.ForSQL("5432/tcp", "pgx", func(host string, port network.Port) string {
 				return fmt.Sprintf("postgres://ledger:ledger_test_pw@%s:%s/%s?sslmode=disable",
 					host, port.Port(), dbname)
 			}).WithStartupTimeout(StartupTimeout()).WithPollInterval(500 * time.Millisecond),

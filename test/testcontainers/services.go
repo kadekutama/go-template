@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/docker/go-connections/nat"
 	tc "github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
@@ -40,7 +39,7 @@ func startService(t *testing.T, image, port string, env map[string]string, cmd [
 			ExposedPorts: []string{port + "/tcp"},
 			Env:          env,
 			Cmd:          cmd,
-			WaitingFor:   wait.ForListeningPort(nat.Port(port + "/tcp")),
+			WaitingFor:   wait.ForListeningPort(port + "/tcp"),
 		},
 		Started: true,
 	}
@@ -55,7 +54,7 @@ func startService(t *testing.T, image, port string, env map[string]string, cmd [
 		_ = h.Terminate(context.Background())
 	})
 
-	mapped, err := container.MappedPort(ctx, nat.Port(port))
+	mapped, err := container.MappedPort(ctx, port)
 	if err != nil {
 		_ = h.Terminate(context.Background())
 		return nil, fmt.Errorf("map %s port: %w", image, err)

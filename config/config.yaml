@@ -20,6 +20,34 @@ database:
 cache:
   host: 127.0.0.1
   port: 6379
+  # Optional hybrid-cache knobs (E08); zero values keep the code defaults.
+  # l1_maximum_size: 10000
+  # ttls:
+  #   balance_sec: 60
+  #   balance_cursor_sec: 300
+  #   config_sec: 300
+  #   config_long_sec: 1800
+  #   fx_sec: 3600
+  #   idempotency_hint_sec: 86400
+  #   rate_limit_sec: 60
+  #   l1_populate_sec: 60
+redpanda:
+  # Optional ADR-014 backbone overrides; empty names keep the contract
+  # defaults (ledger.events.v1, outbox.facts.v1, webhook.jobs.v1,
+  # audit.streams.v1; 12 partitions; 720h retention).
+  brokers:
+    - 127.0.0.1:9092
+  # topic_ledger_events: ledger.events.v1
+  # topic_outbox_facts: outbox.facts.v1
+  # topic_webhook_jobs: webhook.jobs.v1
+  # topic_audit_streams: audit.streams.v1
+  # partitions: 12
+  # retention_hours: 720
+webhook:
+  # Retry backoff steps in seconds. This is the ONLY place the default lives
+  # (api-contracts §11: 1m → 5m → 15m → 1h → 6h → 24h → 48h ≈ 72h horizon,
+  # then DLQ). No Go file hardcodes it; empty lists fail at wiring time.
+  retry_steps_sec: [60, 300, 900, 3600, 21600, 86400, 172800]
 auth:
   issuer: http://127.0.0.1:8080
   access_ttl_min: 15

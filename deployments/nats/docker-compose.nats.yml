@@ -1,0 +1,14 @@
+# NATS Core edge-mesh fragment (E08-T03, ADR-014).
+# Pure in-memory pub/sub for ledger.{tenant}.{event} deltas and live
+# WebSocket fanout (<5µs routing). JetStream stays disabled per ADR-014;
+# durable state lives in Redpanda + PostgreSQL, never here.
+services:
+  nats:
+    image: nats:2.14.6
+    command: ["-m", "8222"]
+    ports: ["4222:4222", "8222:8222"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8222/varz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5

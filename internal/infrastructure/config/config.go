@@ -19,6 +19,8 @@ type Config struct {
 	Cache         CacheConfig         `koanf:"cache" validate:"required"`
 	Auth          AuthConfig          `koanf:"auth" validate:"required"`
 	NATS          NATSConfig          `koanf:"nats" validate:"required"`
+	Redpanda      RedpandaConfig      `koanf:"redpanda"`
+	Webhook       WebhookConfig       `koanf:"webhook"`
 	Observability ObservabilityConfig `koanf:"observability"`
 	FeatureFlags  FeatureFlagConfig   `koanf:"feature_flags"`
 	Secrets       SecretsConfig       `koanf:"secrets"`
@@ -59,10 +61,50 @@ func (c DatabaseConfig) PoolSettings() (maxOpen, maxIdle int, lifetime time.Dura
 	return c.MaxOpenConns, c.MaxIdleConns, time.Duration(c.ConnMaxLifetimeSec) * time.Second
 }
 
-// CacheConfig points at the Valkey L2 (E08 owns L1/L2 behavior).
+// CacheConfig points at the Valkey L2 and the hybrid-cache knobs (E08 owns
+// L1/L2 behavior).
 type CacheConfig struct {
 	Host string `koanf:"host" validate:"required"`
 	Port int    `koanf:"port" validate:"required,min=1,max=65535"`
+
+	// L1 sizing; zero selects the local.OtterCache default.
+	L1MaximumSize int `koanf:"l1_maximum_size" validate:"omitempty,min=1"`
+
+	// Per-data-class staleness bounds in seconds; zero values keep the
+	// hybrid.DefaultTTLs contract defaults (E14 wiring maps them to Set).
+	TTLs CacheTTLsConfig `koanf:"ttls"`
+}
+
+// CacheTTLsConfig overrides hybrid.DefaultTTLs per data class (seconds;
+// zero values keep the contract defaults).
+type CacheTTLsConfig struct {
+	BalanceSec         int `koanf:"balance_sec" validate:"omitempty,min=1"`
+	BalanceCursorSec   int `koanf:"balance_cursor_sec" validate:"omitempty,min=1"`
+	ConfigSec          int `koanf:"config_sec" validate:"omitempty,min=1"`
+	ConfigLongSec      int `koanf:"config_long_sec" validate:"omitempty,min=1"`
+	FXSec              int `koanf:"fx_sec" validate:"omitempty,min=1"`
+	IdempotencyHintSec int `koanf:"idempotency_hint_sec" validate:"omitempty,min=1"`
+	RateLimitSec       int `koanf:"rate_limit_sec" validate:"omitempty,min=1"`
+	L1PopulateSec      int `koanf:"l1_populate_sec" validate:"omitempty,min=1"`
+}
+
+// RedpandaConfig points at the Redpanda event backbone (ADR-014). Topic
+// names are optional: zero values keep the ADR-014 contract defaults, and
+// E14 wiring maps them to redpanda.TopicsConfig.
+type RedpandaConfig struct {
+	Brokers      []string `koanf:"brokers" validate:"omitempty,dive,hostname_port"`
+	LedgerEvents string   `koanf:"topic_ledger_events" validate:"omitempty"`
+	OutboxFacts  string   `koanf:"topic_outbox_facts" validate:"omitempty"`
+	WebhookJobs  string   `koanf:"topic_webhook_jobs" validate:"omitempty"`
+	AuditStreams string   `koanf:"topic_audit_streams" validate:"omitempty"`
+	Partitions   int      `koanf:"partitions" validate:"omitempty,min=1"`
+	RetentionHrs int      `koanf:"retention_hours" validate:"omitempty,min=1"`
+}
+
+// WebhookConfig carries the configurable retry backoff (seconds per step,
+// 1m→5m→15m→1h→6h→24h→48h by default per api-contracts §11).
+type WebhookConfig struct {
+	RetryStepsSec []int `koanf:"retry_steps_sec" validate:"omitempty,dive,min=1"`
 }
 
 // AuthConfig carries JWT issuer parameters (E09 owns key material).

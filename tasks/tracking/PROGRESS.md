@@ -1,6 +1,6 @@
 # Progress Dashboard (single source of truth for progress)
 
-**Last updated:** 2026-09-19
+**Last updated:** 2026-09-28
 **How to update:** flip task `**Status:**` in the epic file, then tick the box here.
 Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 
@@ -18,7 +18,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | E07 | Persistence adapters | 34 | 34/34 | completed | G4 |
 | E07.1 | Distributed persistence (Citus, Patroni, CloudNativePG, etcd) | 24 | 24/24 | completed | G4 |
 | E08 | Cache + messaging adapters | 24 | 24/24 | completed | G4 |
-| E09 | Identity + security adapters | 22 | 0/22 | pending | G4 |
+| E09 | Identity + security adapters | 22 | 22/22 | completed | G4 |
 | E10 | Platform integrations | 17 | 0/17 | pending | G4 |
 | E11 | REST API | 43 | 0/43 | pending | G5 |
 | E12 | gRPC API | 16 | 0/16 | pending | G5 |
@@ -27,10 +27,10 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | E15 | Observability + resilience | 18 | 0/18 | pending | G6 |
 | E16 | Verification (contract, perf, chaos) | 14 | 0/14 | pending | G7 |
 | E17 | Delivery (CI/CD, images, K8s) | 16 | 0/16 | pending | G7 |
-| E18 | Docs + DX | 16 | 0/16 | pending | G8 |
+| E18 | Docs + DX | 27 | 11/27 | in_progress | G8 |
 | E19 | Hardening + release | 13 | 0/13 | pending | G8 |
 
-**Total:** 255/464 SP completed.
+**Total:** 288/475 SP completed.
 
 ## Task checklists (tick as epic files flip to completed)
 
@@ -139,13 +139,13 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 - [x] E08-T07 rate limiter impl
 
 ### E09 — Identity + security
-- [ ] E09-T01 JWT
-- [ ] E09-T02 OAuth2/OIDC
-- [ ] E09-T03 Casbin
-- [ ] E09-T04 API keys
-- [ ] E09-T05 OpenBao
-- [ ] E09-T06 envelope crypto + PII
-- [ ] E09-T07 audit logger
+- [x] E09-T01 JWT
+- [x] E09-T02 OAuth2/OIDC
+- [x] E09-T03 Casbin
+- [x] E09-T04 API keys
+- [x] E09-T05 OpenBao
+- [x] E09-T06 envelope crypto + PII
+- [x] E09-T07 audit logger
 
 ### E10 — Integrations
 - [ ] E10-T01 feature flags
@@ -217,6 +217,14 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 - [ ] E18-T03 API docs publishing
 - [ ] E18-T04 runbooks
 - [ ] E18-T05 SDKs + sandbox + onboarding
+- [x] E18-T06 durable review records
+- [x] E18-T07 review hardening (prompt-validator alignment)
+- [x] E18-T08 validator precision + handbook coverage
+- [x] E18-T09 reviewer frontmatter + least-privilege permissions
+- [x] E18-T10 reviewer persistence checklist
+- [x] E18-T11 review feedback loop + owner override
+- [x] E18-T12 AGENTS.md review-response duty
+- [x] E18-T13 shared review file + section ownership
 
 ### E19 — Hardening + release
 - [ ] E19-T01 security sign-off

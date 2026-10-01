@@ -14,12 +14,6 @@ import (
 	"github.com/kadekutama/go-template/internal/shared/kernel/validate"
 )
 
-// Default timeouts for the edge publisher.
-const (
-	DefaultConnectTimeout = 5 * time.Second
-	DefaultRequestTimeout = 3 * time.Second
-)
-
 // PublisherParams carries publisher configuration (Parameter Object pattern). NKeySeed
 // (nkeys) and UseTLS are validated at construction and applied on dial;
 // production requires both, local/dev may run plaintext.
@@ -27,7 +21,8 @@ type PublisherParams struct {
 	URL            string        `validate:"required"`
 	NKeySeed       string        `validate:"-"`
 	UseTLS         bool          `validate:"-"`
-	ConnectTimeout time.Duration `validate:"omitempty,gt=0"`
+	ConnectTimeout time.Duration `validate:"required,gt=0"`
+	RequestTimeout time.Duration `validate:"required,gt=0"`
 	Logger         log.Logger    `validate:"-"`
 }
 
@@ -43,11 +38,12 @@ type Publisher struct {
 	url            string
 	useTLS         bool
 	connectTimeout time.Duration
+	requestTimeout time.Duration
 	logger         log.Logger
 	conn           *natsgo.Conn
 }
 
-// NewPublisher validates the URL, TLS flag, and nkey seed, then dials within
+// NewPublisher validates the URL, TLS flag, timeouts, and nkey seed, then dials within
 // the connect timeout. Misconfiguration and unreachable brokers both fail
 // here, before the process serves anything.
 func NewPublisher(params PublisherParams) (*Publisher, error) {
@@ -60,13 +56,8 @@ func NewPublisher(params PublisherParams) (*Publisher, error) {
 		return nil, fmt.Errorf("nats: url is required")
 	}
 
-	connectTimeout := params.ConnectTimeout
-	if connectTimeout <= 0 {
-		connectTimeout = DefaultConnectTimeout
-	}
-
 	options := []natsgo.Option{
-		natsgo.Timeout(connectTimeout),
+		natsgo.Timeout(params.ConnectTimeout),
 		natsgo.MaxReconnects(-1),
 	}
 
@@ -92,7 +83,8 @@ func NewPublisher(params PublisherParams) (*Publisher, error) {
 	return &Publisher{
 		url:            trimmed,
 		useTLS:         params.UseTLS,
-		connectTimeout: connectTimeout,
+		connectTimeout: params.ConnectTimeout,
+		requestTimeout: params.RequestTimeout,
 		logger:         params.Logger,
 		conn:           conn,
 	}, nil
@@ -193,10 +185,19 @@ func (m *Publisher) UsesTLS() bool {
 // ConnectTimeout reports the effective dial timeout.
 func (m *Publisher) ConnectTimeout() time.Duration {
 	if m == nil {
-		return DefaultConnectTimeout
+		return 0
 	}
 
 	return m.connectTimeout
+}
+
+// RequestTimeout reports the flush/request timeout.
+func (m *Publisher) RequestTimeout() time.Duration {
+	if m == nil {
+		return 0
+	}
+
+	return m.requestTimeout
 }
 
 // Close flushes buffered publishes (bounded by the request timeout) and then
@@ -209,7 +210,7 @@ func (m *Publisher) Close() error {
 		return nil
 	}
 
-	if err := m.conn.FlushTimeout(DefaultRequestTimeout); err != nil && m.logger != nil {
+	if err := m.conn.FlushTimeout(m.requestTimeout); err != nil && m.logger != nil {
 		m.logger.Warn(context.Background(), "nats.flush.failed", "cause", err)
 	}
 

@@ -53,31 +53,23 @@ var (
 	// ErrL1Required reports a constructor call without the L1 seam.
 	ErrL1Required = errors.New("cache: L1 is required")
 
+	// ErrCodecRequired reports a constructor call without an explicit codec.
+	// Serialization strategy is wiring-owned (ADR-021: no silent defaults).
+	ErrCodecRequired = errors.New("cache: codec is required")
+
 	// ErrUnsupportedValueType reports a value whose Go type can never be
 	// cached (function, channel, unsafe pointer, complex). Nil values of
 	// nil-able types (slice/map/pointer/interface) stay legal: they are the
 	// negative-cache marker.
 	ErrUnsupportedValueType = errors.New("cache: unsupported value type")
-)
 
-// Per-data-class staleness defaults (ADR-015 + E08-T01 §3). They are
-// unexported on purpose: runtime values come from configuration through
-// TTLSet/DefaultTTLs, so no caller hardcodes them.
-const (
-	defaultBalanceTTL         = time.Minute
-	defaultBalanceCursorTTL   = 5 * time.Minute
-	defaultConfigTTL          = 5 * time.Minute
-	defaultConfigLongTTL      = 30 * time.Minute
-	defaultFXTTL              = time.Hour
-	defaultIdempotencyHintTTL = 24 * time.Hour
-	defaultRateLimitTTL       = time.Minute
-	defaultL1PopulateTTL      = time.Minute
+	// ErrL1PopulateTTLRequired reports a non-positive L1PopulateTTL on construction.
+	ErrL1PopulateTTLRequired = errors.New("cache: L1PopulateTTL must be positive")
 )
 
 // TTLSet carries the per-data-class staleness bounds so wiring can override
-// them per environment; DefaultTTLs returns the contract defaults. Callers
-// pass the chosen TTL to Set; L1Populate bounds how long an L2 hit may live
-// in L1.
+// them per environment. Callers pass the chosen TTL to Set; L1Populate bounds
+// how long an L2 hit may live in L1.
 type TTLSet struct {
 	Balance         time.Duration
 	BalanceCursor   time.Duration
@@ -87,64 +79,6 @@ type TTLSet struct {
 	IdempotencyHint time.Duration
 	RateLimit       time.Duration
 	L1Populate      time.Duration
-}
-
-// DefaultTTLs returns the contract TTL defaults.
-func DefaultTTLs() TTLSet {
-	return TTLSet{
-		Balance:         defaultBalanceTTL,
-		BalanceCursor:   defaultBalanceCursorTTL,
-		Config:          defaultConfigTTL,
-		ConfigLong:      defaultConfigLongTTL,
-		FX:              defaultFXTTL,
-		IdempotencyHint: defaultIdempotencyHintTTL,
-		RateLimit:       defaultRateLimitTTL,
-		L1Populate:      defaultL1PopulateTTL,
-	}
-}
-
-// WithDefaults fills every zero field from DefaultTTLs (zero means "unset")
-// and rejects negative bounds: partial configuration overlays the contract
-// defaults, while an explicit negative value is a configuration error rather
-// than something to silently replace.
-func (t TTLSet) WithDefaults() (TTLSet, error) {
-	defaults := DefaultTTLs()
-
-	fields := []struct {
-		name  string
-		value *time.Duration
-	}{
-		{"balance", &t.Balance},
-		{"balance_cursor", &t.BalanceCursor},
-		{"config", &t.Config},
-		{"config_long", &t.ConfigLong},
-		{"fx", &t.FX},
-		{"idempotency_hint", &t.IdempotencyHint},
-		{"rate_limit", &t.RateLimit},
-		{"l1_populate", &t.L1Populate},
-	}
-
-	fallbacks := []time.Duration{
-		defaults.Balance,
-		defaults.BalanceCursor,
-		defaults.Config,
-		defaults.ConfigLong,
-		defaults.FX,
-		defaults.IdempotencyHint,
-		defaults.RateLimit,
-		defaults.L1Populate,
-	}
-
-	for idx, field := range fields {
-		switch {
-		case *field.value < 0:
-			return TTLSet{}, fmt.Errorf("cache: ttl %s must not be negative", field.name)
-		case *field.value == 0:
-			*field.value = fallbacks[idx]
-		}
-	}
-
-	return t, nil
 }
 
 // Validate rejects negative TTLs after defaults are applied; every cached
@@ -247,19 +181,18 @@ func New(params Params) (*Cache, error) {
 
 	codec := params.Codec
 	if codec == nil {
-		codec = JSONCodec{}
+		return nil, ErrCodecRequired
 	}
 
-	l1PopulateTTL := params.L1PopulateTTL
-	if l1PopulateTTL <= 0 {
-		l1PopulateTTL = defaultL1PopulateTTL
+	if params.L1PopulateTTL <= 0 {
+		return nil, ErrL1PopulateTTLRequired
 	}
 
 	return &Cache{
 		l1:            params.L1,
 		l2:            params.L2,
 		sharedCodec:   codec,
-		l1PopulateTTL: l1PopulateTTL,
+		l1PopulateTTL: params.L1PopulateTTL,
 		logger:        params.Logger,
 	}, nil
 }

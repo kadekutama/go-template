@@ -3,7 +3,6 @@ package command_test
 import (
 	"context"
 	"fmt"
-	"sync"
 	"testing"
 	"time"
 
@@ -14,7 +13,6 @@ import (
 	"github.com/kadekutama/go-template/internal/application/port"
 	"github.com/kadekutama/go-template/internal/application/query"
 	"github.com/kadekutama/go-template/internal/domain/entity"
-	"github.com/kadekutama/go-template/internal/domain/repository"
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
 )
 
@@ -28,37 +26,6 @@ const (
 
 var tfrAt = time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
 
-type tfrAccounts struct {
-	mu       sync.Mutex
-	accounts map[valueobject.AccountID]entity.AccountData
-}
-
-func (f *tfrAccounts) Create(_ context.Context, _ entity.AccountData) (entity.AccountData, error) {
-	return entity.AccountData{}, nil
-}
-
-func (f *tfrAccounts) FindByID(_ context.Context, _ valueobject.TenantID, id valueobject.AccountID) (entity.AccountData, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	account, ok := f.accounts[id]
-	if !ok {
-		return entity.AccountData{}, entity.NewError("ACCOUNT_NOT_FOUND", "account "+string(id)+" is unknown")
-	}
-	return account, nil
-}
-
-func (f *tfrAccounts) FindByTenant(_ context.Context, _ valueobject.TenantID, _ string, _ int) ([]entity.AccountData, string, error) {
-	return nil, "", nil
-}
-
-func (f *tfrAccounts) UpdateMetadata(_ context.Context, _ entity.AccountData, _ int64) error {
-	return nil
-}
-
-func (f *tfrAccounts) UpdateStatus(_ context.Context, _ valueobject.TenantID, _ valueobject.AccountID, _ valueobject.AccountStatus, _ int64) error {
-	return nil
-}
-
 func tfrTestAccounts() map[valueobject.AccountID]entity.AccountData {
 	return map[valueobject.AccountID]entity.AccountData{
 		tfrSrc: {ID: tfrSrc, TenantID: tfrTenant, LedgerID: tfrLedger, Number: "7000", Name: "src", Class: valueobject.ClassLiability, AssetCode: tfrAsset, Status: valueobject.StatusActive, Version: 1},
@@ -66,290 +33,14 @@ func tfrTestAccounts() map[valueobject.AccountID]entity.AccountData {
 	}
 }
 
-type tfrBalances struct {
-	available map[valueobject.AccountID]int64
-	err       error
-}
-
-func (s *tfrBalances) Execute(_ context.Context, query port.BalanceQuery) (port.BalanceView, error) {
-	if s.err != nil {
-		return port.BalanceView{}, s.err
-	}
-	return port.BalanceView{AccountID: query.AccountID, AssetCode: query.AssetCode, AvailableMinor: s.available[query.AccountID], Cursor: "cursor-b"}, nil
-}
-
-type tfrStore struct {
-	mu        sync.Mutex
-	transfers map[string]command.TransferRecord
-	batches   map[string]command.BatchRecord
-	items     map[string][]command.BatchItem
-}
-
-func (s *tfrStore) CreateTransfer(_ context.Context, record command.TransferRecord) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.transfers == nil {
-		s.transfers = map[string]command.TransferRecord{}
-	}
-	if _, dup := s.transfers[record.ID]; dup {
-		return entity.NewError("TRANSFER_CONFLICT", "transfer id already exists")
-	}
-	s.transfers[record.ID] = record
-	return nil
-}
-
-func (s *tfrStore) FindTransfer(_ context.Context, _ valueobject.TenantID, id string) (command.TransferRecord, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	record, ok := s.transfers[id]
-	if !ok {
-		return command.TransferRecord{}, entity.NewError("TRANSFER_NOT_FOUND", "transfer is unknown")
-	}
-	return record, nil
-}
-
-func (s *tfrStore) UpdateTransfer(_ context.Context, record command.TransferRecord) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.transfers[record.ID] = record
-	return nil
-}
-
-func (s *tfrStore) ListTransfers(_ context.Context, filter command.TransferListFilter) ([]command.TransferRecord, string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var out []command.TransferRecord
-	for _, record := range s.transfers {
-		if record.TenantID != filter.TenantID {
-			continue
-		}
-		if filter.Status != "" && record.Status != filter.Status {
-			continue
-		}
-		out = append(out, record)
-	}
-	return out, "", nil
-}
-
-func (s *tfrStore) CreateBatch(_ context.Context, batch command.BatchRecord, items []command.BatchItem) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.batches == nil {
-		s.batches = map[string]command.BatchRecord{}
-		s.items = map[string][]command.BatchItem{}
-	}
-	s.batches[batch.ID] = batch
-	s.items[batch.ID] = append([]command.BatchItem(nil), items...)
-	return nil
-}
-
-func (s *tfrStore) FindBatch(_ context.Context, _ valueobject.TenantID, id string) (command.BatchRecord, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	batch, ok := s.batches[id]
-	if !ok {
-		return command.BatchRecord{}, entity.NewError("BATCH_NOT_FOUND", "batch is unknown")
-	}
-	return batch, nil
-}
-
-func (s *tfrStore) UpdateBatchState(_ context.Context, _ valueobject.TenantID, id, state string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	batch := s.batches[id]
-	batch.State = state
-	s.batches[id] = batch
-	return nil
-}
-
-func (s *tfrStore) UpdateBatchItem(_ context.Context, _ valueobject.TenantID, batchID string, index int, status, errorCode string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for i, item := range s.items[batchID] {
-		if item.Index == index {
-			s.items[batchID][i].Status = status
-			s.items[batchID][i].ErrorCode = errorCode
-		}
-	}
-	return nil
-}
-
-func (s *tfrStore) ListBatchItems(_ context.Context, _ valueobject.TenantID, batchID string) ([]command.BatchItem, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return append([]command.BatchItem(nil), s.items[batchID]...), nil
-}
-
-type tfrIdemEntry struct {
-	fingerprint string
-	response    []byte
-	completed   bool
-}
-
-type tfrUOW struct {
-	mu     sync.Mutex
-	outbox []port.OutboxFact
-	idem   map[string]tfrIdemEntry
-}
-
-func (u *tfrUOW) Do(ctx context.Context, fn func(ctx context.Context, tx port.Tx) error) error {
-	u.mu.Lock()
-	defer u.mu.Unlock()
-	stagedOutbox := []port.OutboxFact{}
-	stagedIdem := map[string]tfrIdemEntry{}
-	tx := &tfrTx{uow: u, outbox: &stagedOutbox, idem: stagedIdem}
-	if err := fn(ctx, tx); err != nil {
-		return err
-	}
-	u.outbox = append(u.outbox, stagedOutbox...)
-	if u.idem == nil {
-		u.idem = map[string]tfrIdemEntry{}
-	}
-	for key, entry := range stagedIdem {
-		u.idem[key] = entry
-	}
-	return nil
-}
-
-type tfrTx struct {
-	uow    *tfrUOW
-	outbox *[]port.OutboxFact
-	idem   map[string]tfrIdemEntry
-	staged map[valueobject.PostingID]entity.PostingData
-}
-
-func (t *tfrTx) Postings() repository.PostingRepository { return &tfrTxPostings{tx: t} }
-func (t *tfrTx) Holds() repository.HoldRepository       { return nil }
-func (t *tfrTx) Idempotency() port.IdempotencyStore     { return &tfrTxIdem{tx: t} }
-func (t *tfrTx) Outbox() port.EventOutbox               { return &tfrTxOutbox{tx: t} }
-func (t *tfrTx) Cursor() string                         { return "cursor-5" }
-
-type tfrTxPostings struct {
-	tx *tfrTx
-}
-
-func (p *tfrTxPostings) Commit(_ context.Context, posting entity.PostingData) (entity.PostingData, error) {
-	if p.tx.staged == nil {
-		p.tx.staged = map[valueobject.PostingID]entity.PostingData{}
-	}
-	if posting.ID == "" {
-		posting.ID = valueobject.PostingID(fmt.Sprintf("123e4567-e89b-12d3-a456-%012x", 0x426614174000+int64(len(p.tx.staged))))
-	}
-	for i := range posting.Entries {
-		if posting.Entries[i].ID == "" {
-			posting.Entries[i].ID = valueobject.EntryID(fmt.Sprintf("123e4567-e89b-12d3-a456-%012x", 0x426614174000+int64(len(p.tx.staged))+int64(i)+1))
-		}
-		if posting.Entries[i].PostingID == "" {
-			posting.Entries[i].PostingID = posting.ID
-		}
-	}
-	p.tx.staged[posting.ID] = posting
-	return posting, nil
-}
-
-func (p *tfrTxPostings) FindByID(_ context.Context, _ valueobject.TenantID, _ valueobject.PostingID) (entity.PostingData, error) {
-	return entity.PostingData{}, entity.NewError("POSTING_NOT_FOUND", "posting is unknown")
-}
-
-func (p *tfrTxPostings) FindByExternalReference(_ context.Context, _ valueobject.TenantID, _ string) (entity.PostingData, error) {
-	return entity.PostingData{}, entity.NewError("POSTING_NOT_FOUND", "posting is unknown")
-}
-
-func (p *tfrTxPostings) FindByAccount(_ context.Context, _ valueobject.TenantID, _ valueobject.AccountID, _ string, _ int) ([]entity.PostingData, string, error) {
-	return nil, "", nil
-}
-
-type tfrTxIdem struct {
-	tx *tfrTx
-}
-
-func (s *tfrTxIdem) Reserve(_ context.Context, rec port.IdempotencyRecord) (port.ReserveOutcome, error) {
-	if entry, ok := s.tx.uow.idem[rec.Key]; ok {
-		if entry.fingerprint != rec.Fingerprint {
-			return port.ReserveOutcome{}, entity.NewError("IDEMPOTENCY_CONFLICT", "idempotency key leased for a different request")
-		}
-		s.tx.idem[rec.Key] = entry
-		if entry.completed {
-			return port.ReserveOutcome{Replay: true, Response: entry.response}, nil
-		}
-		return port.ReserveOutcome{}, nil
-	}
-	if entry, ok := s.tx.idem[rec.Key]; ok {
-		if entry.fingerprint != rec.Fingerprint {
-			return port.ReserveOutcome{}, entity.NewError("IDEMPOTENCY_CONFLICT", "idempotency key leased for a different request")
-		}
-		return port.ReserveOutcome{}, nil
-	}
-	s.tx.idem[rec.Key] = tfrIdemEntry{fingerprint: rec.Fingerprint}
-	return port.ReserveOutcome{}, nil
-}
-
-func (s *tfrTxIdem) Complete(_ context.Context, key string, response []byte) error {
-	entry, ok := s.tx.idem[key]
-	if !ok {
-		entry = s.tx.uow.idem[key]
-	}
-	entry.response = response
-	entry.completed = true
-	s.tx.idem[key] = entry
-	return nil
-}
-
-type tfrTxOutbox struct {
-	tx *tfrTx
-}
-
-func (o *tfrTxOutbox) Append(_ context.Context, facts ...port.OutboxFact) error {
-	*o.tx.outbox = append(*o.tx.outbox, facts...)
-	return nil
-}
-
-type tfrClock struct{}
-
-func (tfrClock) Now() time.Time { return tfrAt }
-
-type tfrIDs struct {
-	mu   sync.Mutex
-	next []string
-}
-
-func (f *tfrIDs) NewID() string {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	id := f.next[0]
-	f.next = f.next[1:]
-	return id
-}
-
-func tfrTestIDs(n int) []string {
-	ids := make([]string, 0, n)
-	for i := 1; i <= n; i++ {
-		ids = append(ids, fmt.Sprintf("tfr-%02d", i))
-	}
-	return ids
-}
-
-type tfrAuthz struct {
-	denied map[string]bool
-	calls  int
-}
-
-func (a *tfrAuthz) Authorize(_ context.Context, subject port.Subject, action, resource string) error {
-	a.calls++
-	if a.denied[subject.ID+"|"+action+"|"+resource] {
-		return entity.NewError("FORBIDDEN", "subject is not authorized for this action")
-	}
-	return nil
-}
-
-func newTransferService(uow *tfrUOW, store *tfrStore, balances *tfrBalances, authz *tfrAuthz) *command.TransferService {
+func newTransferService(t *testing.T, uow port.UnitOfWork, store command.TransferStore, balances port.GetBalance, authz port.Authorizer) *command.TransferService {
 	return command.NewTransferService(command.TransferServiceParams{
 		UoW:       uow,
-		Accounts:  &tfrAccounts{accounts: tfrTestAccounts()},
+		Accounts:  newMockAccountRepository(t, tfrTestAccounts()),
 		Balances:  balances,
 		Transfers: store,
-		Clock:     tfrClock{},
-		IDs:       &tfrIDs{next: tfrTestIDs(60)},
+		Clock:     newMockClock(t, tfrAt),
+		IDs:       newMockIDGenerator(t, tfrTestIDs(60)...),
 		Authz:     authz,
 	})
 }
@@ -368,7 +59,7 @@ func TestTransferCreate(t *testing.T) {
 		name               string
 		cmd                port.TransferRequest
 		available          int64
-		preload            func(uow *tfrUOW, svc *command.TransferService)
+		preload            func(uow port.UnitOfWork, svc *command.TransferService)
 		expectedStatus     string
 		expectedError      error
 		expectedRecords    int
@@ -380,7 +71,7 @@ func TestTransferCreate(t *testing.T) {
 			name:               "immediate transfer posts on funds",
 			cmd:                transferTestCommand(),
 			available:          9000,
-			preload:            func(_ *tfrUOW, _ *command.TransferService) {},
+			preload:            func(_ port.UnitOfWork, _ *command.TransferService) {},
 			expectedStatus:     command.TransferCompleted,
 			expectedError:      nil,
 			expectedRecords:    1,
@@ -390,7 +81,7 @@ func TestTransferCreate(t *testing.T) {
 			name:      "corrupt idempotency replay returns IDEMPOTENCY_RECORD_INVALID",
 			cmd:       transferTestCommand(),
 			available: 9000,
-			preload: func(uow *tfrUOW, _ *command.TransferService) {
+			preload: func(uow port.UnitOfWork, _ *command.TransferService) {
 				req := transferTestCommand()
 				fp := command.Fingerprint(
 					req.IdempotencyKey, string(req.TenantID), string(req.LedgerID),
@@ -398,13 +89,7 @@ func TestTransferCreate(t *testing.T) {
 					fmt.Sprintf("%d", req.AmountMinor),
 					req.ExecuteAt.UTC().Format(time.RFC3339Nano), req.Recurrence,
 				)
-				uow.idem = map[string]tfrIdemEntry{
-					req.IdempotencyKey: {
-						fingerprint: fp,
-						response:    []byte("{corrupt-json"),
-						completed:   true,
-					},
-				}
+				setUOWIdem(uow, req.IdempotencyKey, fp, []byte("{corrupt-json"))
 			},
 			expectedStatus:     "",
 			expectedError:      entity.NewError("IDEMPOTENCY_RECORD_INVALID", "stored idempotency response is corrupt"),
@@ -415,7 +100,7 @@ func TestTransferCreate(t *testing.T) {
 			name:               "immediate transfer fails without funds",
 			cmd:                transferTestCommand(),
 			available:          100,
-			preload:            func(_ *tfrUOW, _ *command.TransferService) {},
+			preload:            func(_ port.UnitOfWork, _ *command.TransferService) {},
 			expectedStatus:     "",
 			expectedError:      entity.NewError("INSUFFICIENT_FUNDS", "source available balance below transfer amount"),
 			expectedRecords:    0,
@@ -429,7 +114,7 @@ func TestTransferCreate(t *testing.T) {
 				return c
 			}(),
 			available:          0,
-			preload:            func(_ *tfrUOW, _ *command.TransferService) {},
+			preload:            func(_ port.UnitOfWork, _ *command.TransferService) {},
 			expectedStatus:     command.TransferPending,
 			expectedError:      nil,
 			expectedRecords:    1,
@@ -439,7 +124,7 @@ func TestTransferCreate(t *testing.T) {
 			name:      "duplicate replay returns original single record",
 			cmd:       transferTestCommand(),
 			available: 9000,
-			preload: func(_ *tfrUOW, svc *command.TransferService) {
+			preload: func(_ port.UnitOfWork, svc *command.TransferService) {
 				_, err := svc.CreateTransfer(context.Background(), transferTestCommand())
 				require.NoError(t, err)
 			},
@@ -456,7 +141,7 @@ func TestTransferCreate(t *testing.T) {
 				return c
 			}(),
 			available:          9000,
-			preload:            func(_ *tfrUOW, _ *command.TransferService) {},
+			preload:            func(_ port.UnitOfWork, _ *command.TransferService) {},
 			expectedStatus:     "",
 			expectedError:      entity.NewError("TENANT_REQUIRED", "tenant id is required"),
 			expectedRecords:    0,
@@ -470,7 +155,7 @@ func TestTransferCreate(t *testing.T) {
 				return c
 			}(),
 			available:          9000,
-			preload:            func(_ *tfrUOW, _ *command.TransferService) {},
+			preload:            func(_ port.UnitOfWork, _ *command.TransferService) {},
 			expectedStatus:     "",
 			expectedError:      entity.NewError("LEDGER_REQUIRED", "ledger id is required"),
 			expectedRecords:    0,
@@ -484,7 +169,7 @@ func TestTransferCreate(t *testing.T) {
 				return c
 			}(),
 			available:          9000,
-			preload:            func(_ *tfrUOW, _ *command.TransferService) {},
+			preload:            func(_ port.UnitOfWork, _ *command.TransferService) {},
 			expectedStatus:     "",
 			expectedError:      entity.NewError("TRANSFER_ACCOUNT_REQUIRED", "transfer requires source and destination accounts"),
 			expectedRecords:    0,
@@ -498,7 +183,7 @@ func TestTransferCreate(t *testing.T) {
 				return c
 			}(),
 			available:          9000,
-			preload:            func(_ *tfrUOW, _ *command.TransferService) {},
+			preload:            func(_ port.UnitOfWork, _ *command.TransferService) {},
 			expectedStatus:     "",
 			expectedError:      entity.NewError("TRANSFER_ASSET_REQUIRED", "transfer requires an asset code"),
 			expectedRecords:    0,
@@ -512,7 +197,7 @@ func TestTransferCreate(t *testing.T) {
 				return c
 			}(),
 			available:          9000,
-			preload:            func(_ *tfrUOW, _ *command.TransferService) {},
+			preload:            func(_ port.UnitOfWork, _ *command.TransferService) {},
 			expectedStatus:     "",
 			expectedError:      entity.NewError("INVALID_TRANSFER_AMOUNT", "transfer amount must be positive"),
 			expectedRecords:    0,
@@ -526,7 +211,7 @@ func TestTransferCreate(t *testing.T) {
 				return c
 			}(),
 			available:          9000,
-			preload:            func(_ *tfrUOW, _ *command.TransferService) {},
+			preload:            func(_ port.UnitOfWork, _ *command.TransferService) {},
 			expectedStatus:     "",
 			expectedError:      entity.NewError("CROSS_CURRENCY_UNSUPPORTED", "cross-currency transfers need FX settlement lots (E10 follow-up)"),
 			expectedRecords:    0,
@@ -540,7 +225,7 @@ func TestTransferCreate(t *testing.T) {
 				return c
 			}(),
 			available:          9000,
-			preload:            func(_ *tfrUOW, _ *command.TransferService) {},
+			preload:            func(_ port.UnitOfWork, _ *command.TransferService) {},
 			expectedStatus:     "",
 			expectedError:      entity.NewError("ACTOR_REQUIRED", "transfer actor is required"),
 			expectedRecords:    0,
@@ -554,7 +239,7 @@ func TestTransferCreate(t *testing.T) {
 				return c
 			}(),
 			available:          9000,
-			preload:            func(_ *tfrUOW, _ *command.TransferService) {},
+			preload:            func(_ port.UnitOfWork, _ *command.TransferService) {},
 			expectedStatus:     "",
 			expectedError:      entity.NewError("IDEMPOTENCY_KEY_REQUIRED", "transfer requires an idempotency key"),
 			expectedRecords:    0,
@@ -564,19 +249,19 @@ func TestTransferCreate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
-			store := &tfrStore{}
-			authz := &tfrAuthz{denied: map[string]bool{}}
-			balances := &tfrBalances{available: map[valueobject.AccountID]int64{tfrSrc: tc.available}}
-			svc := newTransferService(uow, store, balances, authz)
+			uow := newMockUOW(t, "cursor-5")
+			store := newMockTransferStore(t)
+			authz := newMockAuthorizer(t)
+			balances := newMockBalances(t, map[valueobject.AccountID]int64{tfrSrc: tc.available})
+			svc := newTransferService(t, uow, store, balances, authz)
 			tc.preload(uow, svc)
 			actualResult, err := svc.CreateTransfer(context.Background(), tc.cmd)
 			assert.Equal(t, tc.expectedError, err)
 			if tc.expectedError == nil {
 				assert.Equal(t, tc.expectedStatus, actualResult.Status)
 			}
-			assert.Len(t, store.transfers, tc.expectedRecords)
-			assert.Equal(t, tc.expectedAuthzCalls, authz.calls)
+			assert.Equal(t, tc.expectedRecords, transferCount(store))
+			assert.Equal(t, tc.expectedAuthzCalls, authzCalls(authz))
 		})
 	}
 }
@@ -660,13 +345,14 @@ func TestTransferExecute(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
-			store := &tfrStore{}
-			authz := &tfrAuthz{denied: map[string]bool{}}
-			balances := &tfrBalances{available: map[valueobject.AccountID]int64{tfrSrc: 0}}
-			svc := newTransferService(uow, store, balances, authz)
+			uow := newMockUOW(t, "cursor-5")
+			store := newMockTransferStore(t)
+			authz := newMockAuthorizer(t)
+			balancesMap := map[valueobject.AccountID]int64{tfrSrc: 0}
+			balances := newMockBalances(t, balancesMap)
+			svc := newTransferService(t, uow, store, balances, authz)
 			id := seedPending(t, svc)
-			balances.available[tfrSrc] = tc.available
+			balancesMap[tfrSrc] = tc.available
 			tc.preload(t, svc, id)
 			actualResult, err := svc.ExecuteTransfer(context.Background(), tc.tenant, id, tc.actor)
 			assert.Equal(t, tc.expectedError, err)
@@ -759,15 +445,15 @@ func TestTransferCancel(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
-			store := &tfrStore{}
-			authz := &tfrAuthz{denied: map[string]bool{}}
-			balances := &tfrBalances{available: map[valueobject.AccountID]int64{tfrSrc: 9000}}
-			svc := newTransferService(uow, store, balances, authz)
+			uow := newMockUOW(t, "cursor-5")
+			store := newMockTransferStore(t)
+			authz := newMockAuthorizer(t)
+			balances := newMockBalances(t, map[valueobject.AccountID]int64{tfrSrc: 9000})
+			svc := newTransferService(t, uow, store, balances, authz)
 			id := seedPending(t, svc)
 			query := tc.query(id)
 			if tc.denied {
-				authz.denied["u-1|transfer.cancel|ledger/"+id] = true
+				setAuthzDenied(authz, "u-1|transfer.cancel|ledger/"+id)
 			}
 			tc.preload(t, svc, id)
 			actualResult, err := svc.CancelTransfer(context.Background(), query)
@@ -800,7 +486,7 @@ func TestTransferBatch(t *testing.T) {
 		name              string
 		req               port.BatchTransferRequest
 		available         int64
-		preload           func(uow *tfrUOW)
+		preload           func(uow port.UnitOfWork)
 		expectedState     string
 		expectedError     error
 		expectedBatches   int
@@ -823,19 +509,13 @@ func TestTransferBatch(t *testing.T) {
 			name:      "corrupt idempotency replay returns IDEMPOTENCY_RECORD_INVALID",
 			req:       batchCommand(2, tfrTenant),
 			available: 90000,
-			preload: func(uow *tfrUOW) {
+			preload: func(uow port.UnitOfWork) {
 				req := batchCommand(2, tfrTenant)
 				parts := []string{req.IdempotencyKey, string(req.TenantID), string(req.LedgerID), fmt.Sprintf("%d", len(req.Items))}
 				for _, it := range req.Items {
 					parts = append(parts, string(it.Source), string(it.Dest), string(it.AssetCode), fmt.Sprintf("%d", it.AmountMinor))
 				}
-				uow.idem = map[string]tfrIdemEntry{
-					req.IdempotencyKey: {
-						fingerprint: command.Fingerprint(parts...),
-						response:    []byte("{corrupt-json"),
-						completed:   true,
-					},
-				}
+				setUOWIdem(uow, req.IdempotencyKey, command.Fingerprint(parts...), []byte("{corrupt-json"))
 			},
 			expectedState:   "",
 			expectedError:   entity.NewError("IDEMPOTENCY_RECORD_INVALID", "stored idempotency response is corrupt"),
@@ -943,17 +623,17 @@ func TestTransferBatch(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
+			uow := newMockUOW(t, "cursor-5")
 			if tc.preload != nil {
 				tc.preload(uow)
 			}
-			store := &tfrStore{}
-			authz := &tfrAuthz{denied: map[string]bool{}}
-			balances := &tfrBalances{available: map[valueobject.AccountID]int64{tfrSrc: tc.available}}
-			svc := newTransferService(uow, store, balances, authz)
+			store := newMockTransferStore(t)
+			authz := newMockAuthorizer(t)
+			balances := newMockBalances(t, map[valueobject.AccountID]int64{tfrSrc: tc.available})
+			svc := newTransferService(t, uow, store, balances, authz)
 			actualResult, err := svc.CreateBatchTransfer(context.Background(), tc.req)
 			assert.Equal(t, tc.expectedError, err)
-			assert.Len(t, store.batches, tc.expectedBatches)
+			assert.Equal(t, tc.expectedBatches, batchCount(store))
 			if tc.expectedError != nil {
 				return
 			}

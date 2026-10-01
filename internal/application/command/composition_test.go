@@ -7,12 +7,13 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/kadekutama/go-template/internal/application/command"
 	"github.com/kadekutama/go-template/internal/application/port"
-	"github.com/kadekutama/go-template/internal/application/query"
 	"github.com/kadekutama/go-template/internal/domain/entity"
+	mockapplication "github.com/kadekutama/go-template/test/mock/application"
 )
 
 type createAccountCmd struct {
@@ -26,16 +27,12 @@ type createAccountRes struct {
 	id string
 }
 
-type createAccountQuery struct {
-	id string
-}
-
 // createAccountHandler is the E06-T01 sample: it composes the shared stages
 // (command contract, query contract asserted below, idempotency,
-// translation at the caller, authorization) around trivial logic with fakes.
+// translation at the caller, authorization) around trivial logic with mocks.
 type createAccountHandler struct {
 	authz      port.Authorizer
-	store      *sampleIdemStore
+	store      port.IdempotencyStore
 	executions int
 }
 
@@ -66,63 +63,6 @@ func (h *createAccountHandler) Handle(ctx context.Context, cmd createAccountCmd)
 		return createAccountRes{}, unmarshalErr
 	}
 	return createAccountRes{id: payload.ID}, nil
-}
-
-type createAccountReader struct{}
-
-var _ query.QueryHandler[createAccountQuery, createAccountRes] = (*createAccountReader)(nil)
-
-func (*createAccountReader) Handle(_ context.Context, q createAccountQuery) (createAccountRes, error) {
-	return createAccountRes(q), nil
-}
-
-type sampleIdemEntry struct {
-	fingerprint string
-	response    []byte
-	completed   bool
-}
-
-type sampleIdemStore struct {
-	entries map[string]sampleIdemEntry
-}
-
-func (s *sampleIdemStore) Reserve(_ context.Context, rec port.IdempotencyRecord) (port.ReserveOutcome, error) {
-	if s.entries == nil {
-		s.entries = map[string]sampleIdemEntry{}
-	}
-	entry, ok := s.entries[rec.Key]
-	if !ok {
-		s.entries[rec.Key] = sampleIdemEntry{fingerprint: rec.Fingerprint}
-		return port.ReserveOutcome{}, nil
-	}
-	if entry.fingerprint != rec.Fingerprint {
-		return port.ReserveOutcome{}, entity.NewError("IDEMPOTENCY_CONFLICT", "idempotency key leased for a different request")
-	}
-	if entry.completed {
-		return port.ReserveOutcome{Replay: true, Response: entry.response}, nil
-	}
-	return port.ReserveOutcome{}, nil
-}
-
-func (s *sampleIdemStore) Complete(_ context.Context, key string, response []byte) error {
-	entry := s.entries[key]
-	entry.response = response
-	entry.completed = true
-	s.entries[key] = entry
-	return nil
-}
-
-type sampleAuthorizer struct {
-	denied map[string]bool
-	calls  int
-}
-
-func (a *sampleAuthorizer) Authorize(_ context.Context, subject port.Subject, action, resource string) error {
-	a.calls++
-	if a.denied[subject.ID+"|"+action+"|"+resource] {
-		return entity.NewError("FORBIDDEN", "subject is not authorized for this action")
-	}
-	return nil
 }
 
 func TestCreateAccountPipeline(t *testing.T) {
@@ -231,8 +171,21 @@ func TestCreateAccountPipeline(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			authorizer := &sampleAuthorizer{denied: map[string]bool{"u-9|account.open|tenant/t-1": true}}
-			handler := &createAccountHandler{authz: authorizer, store: &sampleIdemStore{}}
+			authorizer := mockapplication.NewMockAuthorizer(t)
+			var authzCalls int
+			authorizer.EXPECT().Authorize(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				RunAndReturn(func(_ context.Context, subject port.Subject, action, resource string) error {
+					authzCalls++
+					if subject.ID == "u-9" && action == "account.open" && resource == "tenant/t-1" {
+						return entity.NewError("FORBIDDEN", "subject is not authorized for this action")
+					}
+					return nil
+				}).Maybe()
+
+			handler := &createAccountHandler{
+				authz: authorizer,
+				store: newMockIdempotencyStore(t),
+			}
 			if tc.firstFingerprint != "" {
 				_, firstErr := handler.Handle(context.Background(), createAccountCmd{
 					name:        tc.accountName,
@@ -255,7 +208,7 @@ func TestCreateAccountPipeline(t *testing.T) {
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
 			assert.Equal(t, tc.expectedExecutions, handler.executions)
-			assert.Equal(t, tc.expectedAuthzCalls, authorizer.calls)
+			assert.Equal(t, tc.expectedAuthzCalls, authzCalls)
 		})
 	}
 }

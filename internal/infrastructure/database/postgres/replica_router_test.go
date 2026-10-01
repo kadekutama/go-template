@@ -184,29 +184,69 @@ func TestLagAlertShape(t *testing.T) {
 
 	type testCase struct {
 		name           string
-		expectedMetric string
-		minThreshold   float64
-		expectSeverity bool
+		metric         string
+		threshold      float64
+		severity       string
+		expectedResult postgres.LagAlertRule
+		expectedError  error
 	}
 
 	testCases := []testCase{
 		{
-			name:           "canonical metric and threshold present",
-			expectedMetric: "replication_lag_seconds",
-			minThreshold:   0,
-			expectSeverity: true,
+			name:      "canonical metric and threshold present",
+			metric:    "replication_lag_seconds",
+			threshold: 30.0,
+			severity:  "warning",
+			expectedResult: postgres.LagAlertRule{
+				Metric:    "replication_lag_seconds",
+				Threshold: 30.0,
+				Severity:  "warning",
+			},
+			expectedError: nil,
+		},
+		{
+			name:           "missing metric rejected",
+			metric:         "",
+			threshold:      30.0,
+			severity:       "warning",
+			expectedResult: postgres.LagAlertRule{},
+			expectedError:  errors.New("postgres: lag alert metric is required"),
+		},
+		{
+			name:           "zero threshold rejected",
+			metric:         "replication_lag_seconds",
+			threshold:      0,
+			severity:       "warning",
+			expectedResult: postgres.LagAlertRule{},
+			expectedError:  errors.New("postgres: lag alert threshold must be positive"),
+		},
+		{
+			name:           "negative threshold rejected",
+			metric:         "replication_lag_seconds",
+			threshold:      -1.5,
+			severity:       "warning",
+			expectedResult: postgres.LagAlertRule{},
+			expectedError:  errors.New("postgres: lag alert threshold must be positive"),
+		},
+		{
+			name:           "missing severity rejected",
+			metric:         "replication_lag_seconds",
+			threshold:      30.0,
+			severity:       "",
+			expectedResult: postgres.LagAlertRule{},
+			expectedError:  errors.New("postgres: lag alert severity is required"),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			rule := postgres.DefaultLagAlertRule()
-			assert.Equal(t, tc.expectedMetric, rule.Metric)
-			assert.Equal(t, postgres.LagMetricName, rule.Metric)
-			assert.Greater(t, rule.Threshold, tc.minThreshold)
-			if tc.expectSeverity {
-				assert.NotEmpty(t, rule.Severity)
+			actualResult, err := postgres.NewLagAlertRule(tc.metric, tc.threshold, tc.severity)
+			assert.Equal(t, tc.expectedResult, actualResult)
+			if tc.expectedError != nil {
+				assert.EqualError(t, err, tc.expectedError.Error())
+				return
 			}
+			assert.NoError(t, err)
 		})
 	}
 }

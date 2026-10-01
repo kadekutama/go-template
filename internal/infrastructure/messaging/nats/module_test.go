@@ -2,6 +2,7 @@ package nats_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/fx"
@@ -18,7 +19,11 @@ func TestModule(t *testing.T) {
 	err := fx.ValidateApp(
 		edgenats.Module(),
 		fx.Provide(func() edgenats.PublisherParams {
-			return edgenats.PublisherParams{URL: "nats://127.0.0.1:4222"}
+			return edgenats.PublisherParams{
+				URL:            "nats://127.0.0.1:4222",
+				ConnectTimeout: 5 * time.Second,
+				RequestTimeout: 3 * time.Second,
+			}
 		}),
 	)
 	require.NoError(t, err)

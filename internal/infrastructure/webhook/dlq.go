@@ -47,7 +47,7 @@ type DLQMessage struct {
 
 // DLQSink records exhausted deliveries for replay operations. Production
 // uses the durable Redpanda webhook DLQ sink (E08-T05 consumer adapter);
-// tests use the fakes package double.
+// tests use the mockwebhook package.
 type DLQSink interface {
 	Record(ctx context.Context, msg DLQMessage) error
 }

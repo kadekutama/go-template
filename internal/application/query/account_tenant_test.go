@@ -5,10 +5,13 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 
 	"github.com/kadekutama/go-template/internal/application/port"
 	"github.com/kadekutama/go-template/internal/application/query"
 	"github.com/kadekutama/go-template/internal/domain/entity"
+	mockcommand "github.com/kadekutama/go-template/test/mock/command"
+	mockdomain "github.com/kadekutama/go-template/test/mock/domain"
 )
 
 func TestAccountQueryServiceGetAccount(t *testing.T) {
@@ -18,8 +21,9 @@ func TestAccountQueryServiceGetAccount(t *testing.T) {
 
 	type testCase struct {
 		name           string
-		accounts       *stubAccounts
 		query          port.AccountQuery
+		programmed     entity.AccountData
+		programmedErr  error
 		expectedResult port.AccountResult
 		expectedError  error
 	}
@@ -27,13 +31,12 @@ func TestAccountQueryServiceGetAccount(t *testing.T) {
 	testCases := []testCase{
 		{
 			name: "find by id succeeds",
-			accounts: &stubAccounts{
-				account: stored,
-			},
 			query: port.AccountQuery{
 				TenantID:  "t-1",
 				AccountID: "a-1",
 			},
+			programmed:    stored,
+			programmedErr: nil,
 			expectedResult: port.AccountResult{
 				Account: stored,
 			},
@@ -41,13 +44,12 @@ func TestAccountQueryServiceGetAccount(t *testing.T) {
 		},
 		{
 			name: "account not found returns error",
-			accounts: &stubAccounts{
-				err: entity.NewError("ACCOUNT_NOT_FOUND", "account is unknown"),
-			},
 			query: port.AccountQuery{
 				TenantID:  "t-1",
 				AccountID: "a-missing",
 			},
+			programmed:     entity.AccountData{},
+			programmedErr:  entity.NewError("ACCOUNT_NOT_FOUND", "account is unknown"),
 			expectedResult: port.AccountResult{},
 			expectedError:  entity.NewError("ACCOUNT_NOT_FOUND", "account is unknown"),
 		},
@@ -55,7 +57,13 @@ func TestAccountQueryServiceGetAccount(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			svc := query.NewAccountQueryService(query.AccountQueryServiceParams{Accounts: tc.accounts})
+			accounts := mockdomain.NewMockAccountRepository(t)
+			accounts.EXPECT().
+				FindByID(mock.Anything, tc.query.TenantID, tc.query.AccountID).
+				Return(tc.programmed, tc.programmedErr).
+				Once()
+
+			svc := query.NewAccountQueryService(query.AccountQueryServiceParams{Accounts: accounts})
 			actualResult, err := svc.GetAccount(context.Background(), tc.query)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -73,8 +81,10 @@ func TestAccountQueryServiceListAccounts(t *testing.T) {
 
 	type testCase struct {
 		name           string
-		accounts       *stubAccounts
 		query          port.AccountListQuery
+		programmed     []entity.AccountData
+		programmedNext string
+		programmedErr  error
 		expectedResult port.AccountPage
 		expectedError  error
 	}
@@ -82,14 +92,13 @@ func TestAccountQueryServiceListAccounts(t *testing.T) {
 	testCases := []testCase{
 		{
 			name: "page accounts returns slice and cursor",
-			accounts: &stubAccounts{
-				accounts: stored,
-				next:     "cur-2",
-			},
 			query: port.AccountListQuery{
 				TenantID: "t-1",
 				Limit:    10,
 			},
+			programmed:     stored,
+			programmedNext: "cur-2",
+			programmedErr:  nil,
 			expectedResult: port.AccountPage{
 				Accounts:   stored,
 				NextCursor: "cur-2",
@@ -98,20 +107,41 @@ func TestAccountQueryServiceListAccounts(t *testing.T) {
 		},
 		{
 			name: "list accounts error propagates",
-			accounts: &stubAccounts{
-				err: entity.NewError("DB_UNAVAILABLE", "database timeout"),
-			},
 			query: port.AccountListQuery{
 				TenantID: "t-1",
+				Limit:    10,
 			},
+			programmed:     nil,
+			programmedNext: "",
+			programmedErr:  entity.NewError("DB_UNAVAILABLE", "database timeout"),
 			expectedResult: port.AccountPage{},
 			expectedError:  entity.NewError("DB_UNAVAILABLE", "database timeout"),
+		},
+		{
+			name: "non-positive limit returns validation error",
+			query: port.AccountListQuery{
+				TenantID: "t-1",
+				Limit:    0,
+			},
+			programmed:     nil,
+			programmedNext: "",
+			programmedErr:  nil,
+			expectedResult: port.AccountPage{},
+			expectedError:  entity.NewError("INVALID_PAGE_LIMIT", "limit must be between 1 and 100"),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			svc := query.NewAccountQueryService(query.AccountQueryServiceParams{Accounts: tc.accounts})
+			accounts := mockdomain.NewMockAccountRepository(t)
+			if tc.query.Limit > 0 && tc.query.Limit <= 100 {
+				accounts.EXPECT().
+					FindByTenant(mock.Anything, tc.query.TenantID, tc.query.Cursor, tc.query.Limit).
+					Return(tc.programmed, tc.programmedNext, tc.programmedErr).
+					Once()
+			}
+
+			svc := query.NewAccountQueryService(query.AccountQueryServiceParams{Accounts: accounts})
 			actualResult, err := svc.ListAccounts(context.Background(), tc.query)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -126,8 +156,9 @@ func TestTenantQueryServiceGetTenant(t *testing.T) {
 
 	type testCase struct {
 		name           string
-		tenants        *stubTenants
 		query          port.TenantQuery
+		programmed     entity.TenantData
+		programmedErr  error
 		expectedResult port.TenantResult
 		expectedError  error
 	}
@@ -135,12 +166,11 @@ func TestTenantQueryServiceGetTenant(t *testing.T) {
 	testCases := []testCase{
 		{
 			name: "find by id succeeds",
-			tenants: &stubTenants{
-				tenant: stored,
-			},
 			query: port.TenantQuery{
 				TenantID: "t-1",
 			},
+			programmed:    stored,
+			programmedErr: nil,
 			expectedResult: port.TenantResult{
 				Tenant: stored,
 			},
@@ -148,12 +178,11 @@ func TestTenantQueryServiceGetTenant(t *testing.T) {
 		},
 		{
 			name: "tenant not found returns error",
-			tenants: &stubTenants{
-				err: entity.NewError("TENANT_NOT_FOUND", "tenant is unknown"),
-			},
 			query: port.TenantQuery{
 				TenantID: "t-missing",
 			},
+			programmed:     entity.TenantData{},
+			programmedErr:  entity.NewError("TENANT_NOT_FOUND", "tenant is unknown"),
 			expectedResult: port.TenantResult{},
 			expectedError:  entity.NewError("TENANT_NOT_FOUND", "tenant is unknown"),
 		},
@@ -161,7 +190,13 @@ func TestTenantQueryServiceGetTenant(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			svc := query.NewTenantQueryService(query.TenantQueryServiceParams{Tenants: tc.tenants})
+			tenants := mockcommand.NewMockTenantStore(t)
+			tenants.EXPECT().
+				FindByID(mock.Anything, tc.query.TenantID).
+				Return(tc.programmed, tc.programmedErr).
+				Once()
+
+			svc := query.NewTenantQueryService(query.TenantQueryServiceParams{Tenants: tenants})
 			actualResult, err := svc.GetTenant(context.Background(), tc.query)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -179,25 +214,24 @@ func TestTenantQueryServiceListTenants(t *testing.T) {
 
 	type testCase struct {
 		name           string
-		tenants        *stubTenants
+		programmed     []entity.TenantData
+		programmedErr  error
 		expectedResult []entity.TenantData
 		expectedError  error
 	}
 
 	testCases := []testCase{
 		{
-			name: "list tenants returns all tenants",
-			tenants: &stubTenants{
-				tenants: stored,
-			},
+			name:           "list tenants returns all tenants",
+			programmed:     stored,
+			programmedErr:  nil,
 			expectedResult: stored,
 			expectedError:  nil,
 		},
 		{
-			name: "list error propagates",
-			tenants: &stubTenants{
-				err: entity.NewError("DB_UNAVAILABLE", "database timeout"),
-			},
+			name:           "list error propagates",
+			programmed:     nil,
+			programmedErr:  entity.NewError("DB_UNAVAILABLE", "database timeout"),
 			expectedResult: nil,
 			expectedError:  entity.NewError("DB_UNAVAILABLE", "database timeout"),
 		},
@@ -205,7 +239,13 @@ func TestTenantQueryServiceListTenants(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			svc := query.NewTenantQueryService(query.TenantQueryServiceParams{Tenants: tc.tenants})
+			tenants := mockcommand.NewMockTenantStore(t)
+			tenants.EXPECT().
+				ListTenants(mock.Anything).
+				Return(tc.programmed, tc.programmedErr).
+				Once()
+
+			svc := query.NewTenantQueryService(query.TenantQueryServiceParams{Tenants: tenants})
 			actualResult, err := svc.ListTenants(context.Background())
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)

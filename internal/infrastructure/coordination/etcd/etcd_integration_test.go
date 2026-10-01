@@ -59,12 +59,21 @@ func startEtcd(t *testing.T) string {
 	return fmt.Sprintf("http://%s:%s", host, mapped.Port())
 }
 
+func testEtcdConfigWithEndpoint(endpoint string) coordination.Config {
+	return coordination.Config{
+		Endpoints:          []string{endpoint},
+		DialTimeout:        5 * time.Second,
+		ElectionTTLSeconds: 5,
+		LeaderKeyPrefix:    "/finance/test-leader",
+	}
+}
+
 func TestEtcdWatcherStreamsMutations(t *testing.T) {
 	endpoint := startEtcd(t)
 	ctx := context.Background()
 
 	client, err := coordination.NewClient(coordination.ClientParams{
-		Config: coordination.Config{Endpoints: []string{endpoint}},
+		Config: testEtcdConfigWithEndpoint(endpoint),
 	})
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
@@ -105,7 +114,7 @@ func TestEtcdElectionCampaignResign(t *testing.T) {
 		t.Helper()
 
 		client, err := coordination.NewClient(coordination.ClientParams{
-			Config: coordination.Config{Endpoints: []string{endpoint}},
+			Config: testEtcdConfigWithEndpoint(endpoint),
 		})
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = client.Close() })
@@ -185,7 +194,7 @@ func TestEtcdElectionCancelCleanup(t *testing.T) {
 	ctx := context.Background()
 
 	client, err := coordination.NewClient(coordination.ClientParams{
-		Config: coordination.Config{Endpoints: []string{endpoint}},
+		Config: testEtcdConfigWithEndpoint(endpoint),
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = client.Close() })
@@ -218,7 +227,7 @@ func TestEtcdElectionTrimsCandidate(t *testing.T) {
 	ctx := context.Background()
 
 	client, err := coordination.NewClient(coordination.ClientParams{
-		Config: coordination.Config{Endpoints: []string{endpoint}},
+		Config: testEtcdConfigWithEndpoint(endpoint),
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = client.Close() })

@@ -7,9 +7,6 @@ import (
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
 )
 
-// DefaultRefundWindowDays is the configurable default refund window.
-const DefaultRefundWindowDays = 90
-
 // FeeRefundPolicy carries the explicit processor/platform fee-refund outcome.
 // Proportions are never assumed.
 type FeeRefundPolicy struct {
@@ -94,11 +91,10 @@ func validateRefundAmounts(req RefundRequest, originalExists bool) error {
 }
 
 func validateRefundWindow(req RefundRequest) error {
-	window := req.WindowDays
-	if window <= 0 {
-		window = DefaultRefundWindowDays
+	if req.WindowDays <= 0 {
+		return entity.NewError("INVALID_REFUND_WINDOW", "refund window days must be positive")
 	}
-	if req.Now.Sub(req.OriginalAt) > time.Duration(window)*24*time.Hour {
+	if req.Now.Sub(req.OriginalAt) > time.Duration(req.WindowDays)*24*time.Hour {
 		return entity.NewError("REFUND_WINDOW_EXPIRED", "refund window has expired")
 	}
 	return nil

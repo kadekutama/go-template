@@ -16,6 +16,12 @@ import (
 func TestNewPublisher(t *testing.T) {
 	t.Parallel()
 
+	baseParams := edgenats.PublisherParams{
+		URL:            "nats://127.0.0.1:4222",
+		ConnectTimeout: 5 * time.Second,
+		RequestTimeout: 3 * time.Second,
+	}
+
 	type testCase struct {
 		name          string
 		params        edgenats.PublisherParams
@@ -24,25 +30,66 @@ func TestNewPublisher(t *testing.T) {
 
 	testCases := []testCase{
 		{
-			name: "blank rejected",
-			params: edgenats.PublisherParams{
-				URL: "",
-			},
+			name: "blank url rejected",
+			params: func() edgenats.PublisherParams {
+				p := baseParams
+				p.URL = ""
+				return p
+			}(),
 			expectedError: errors.New("nats: invalid params (1 violation(s)): URL: rule \"required\" on value "),
 		},
 		{
 			name: "whitespace url rejected",
-			params: edgenats.PublisherParams{
-				URL: "   ",
-			},
+			params: func() edgenats.PublisherParams {
+				p := baseParams
+				p.URL = "   "
+				return p
+			}(),
 			expectedError: errors.New("nats: url is required"),
 		},
 		{
+			name: "missing connect timeout rejected",
+			params: func() edgenats.PublisherParams {
+				p := baseParams
+				p.ConnectTimeout = 0
+				return p
+			}(),
+			expectedError: errors.New("nats: invalid params (1 violation(s)): ConnectTimeout: rule \"required\" on value 0s"),
+		},
+		{
+			name: "negative connect timeout rejected",
+			params: func() edgenats.PublisherParams {
+				p := baseParams
+				p.ConnectTimeout = -time.Second
+				return p
+			}(),
+			expectedError: errors.New("nats: invalid params (1 violation(s)): ConnectTimeout: rule \"gt\" on value -1s"),
+		},
+		{
+			name: "missing request timeout rejected",
+			params: func() edgenats.PublisherParams {
+				p := baseParams
+				p.RequestTimeout = 0
+				return p
+			}(),
+			expectedError: errors.New("nats: invalid params (1 violation(s)): RequestTimeout: rule \"required\" on value 0s"),
+		},
+		{
+			name: "negative request timeout rejected",
+			params: func() edgenats.PublisherParams {
+				p := baseParams
+				p.RequestTimeout = -time.Second
+				return p
+			}(),
+			expectedError: errors.New("nats: invalid params (1 violation(s)): RequestTimeout: rule \"gt\" on value -1s"),
+		},
+		{
 			name: "invalid seed rejected before dialing",
-			params: edgenats.PublisherParams{
-				URL:      "nats://127.0.0.1:4222",
-				NKeySeed: "SU-not-a-seed",
-			},
+			params: func() edgenats.PublisherParams {
+				p := baseParams
+				p.NKeySeed = "SU-not-a-seed"
+				return p
+			}(),
 			expectedError: errors.New(
 				"nats: invalid nkey seed: illegal base32 data at input byte 2",
 			),
@@ -57,19 +104,20 @@ func TestNewPublisher(t *testing.T) {
 					return seed
 				}()
 
-				return edgenats.PublisherParams{
-					URL:      "nats://127.0.0.1:4222",
-					NKeySeed: string(account),
-				}
+				p := baseParams
+				p.NKeySeed = string(account)
+				return p
 			}(),
 			expectedError: errors.New("nats: seed is not a user nkey"),
 		},
 		{
 			name: "unreachable broker fails fast",
-			params: edgenats.PublisherParams{
-				URL:            "nats://127.0.0.1:1",
-				ConnectTimeout: time.Second,
-			},
+			params: func() edgenats.PublisherParams {
+				p := baseParams
+				p.URL = "nats://127.0.0.1:1"
+				p.ConnectTimeout = time.Second
+				return p
+			}(),
 			expectedError: errors.New("nats: connect: nats: no servers available for connection"),
 		},
 	}

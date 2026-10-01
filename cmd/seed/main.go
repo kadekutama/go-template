@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"go.uber.org/fx"
 	"gorm.io/gorm"
@@ -24,7 +25,16 @@ import (
 var version = "dev"
 
 func main() {
-	logger := di.ProvideLogger()
+	cfg, err := di.ProvideLoggingConfig()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "seed: "+err.Error())
+		os.Exit(1)
+	}
+	logger, err := di.ProvideLoggerWithConfig(cfg)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "seed: "+err.Error())
+		os.Exit(1)
+	}
 
 	var runner *seedRunner
 
@@ -76,7 +86,12 @@ func providePool(lc fx.Lifecycle) (*gorm.DB, error) {
 		return nil, fmt.Errorf("seed: DATABASE_URL is required")
 	}
 
-	db, err := postgres.Open(postgres.DefaultConfig(dsn))
+	db, err := postgres.Open(postgres.Config{
+		DSN:             dsn,
+		MaxOpen:         25,
+		MaxIdle:         5,
+		ConnMaxLifetime: 30 * time.Minute,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("seed: open database: %w", err)
 	}

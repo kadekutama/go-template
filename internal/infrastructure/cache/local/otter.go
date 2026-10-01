@@ -15,15 +15,8 @@ import (
 	"github.com/kadekutama/go-template/internal/infrastructure/cache/store"
 )
 
-// DefaultMaximumWeight bounds L1 memory when wiring omits sizing (64 MiB of
-// payload bytes; W-TinyLFU cost accounting makes the budget mean memory).
-const DefaultMaximumWeight = 64 << 20
-
-// DefaultTTL bounds L1 staleness when wiring omits a default.
-const DefaultTTL = time.Minute
-
 // OtterParams carries constructor dependencies (Parameter Object pattern).
-// Zero values select the defaults above; per-key TTLs always come from Set.
+// Both MaximumWeight and DefaultTTL are required and must be positive.
 type OtterParams struct {
 	MaximumWeight uint64
 	DefaultTTL    time.Duration
@@ -45,26 +38,23 @@ var _ store.Store = (*OtterCache)(nil)
 // NewOtterCache builds the L1 cache with W-TinyLFU eviction keyed on byte
 // cost and write-based expiry.
 func NewOtterCache(params OtterParams) (*OtterCache, error) {
-	maxWeight := params.MaximumWeight
-	if maxWeight == 0 {
-		maxWeight = DefaultMaximumWeight
+	if params.MaximumWeight == 0 {
+		return nil, fmt.Errorf("otter: maximum weight must be positive")
 	}
-
-	defaultTTL := params.DefaultTTL
-	if defaultTTL <= 0 {
-		defaultTTL = DefaultTTL
+	if params.DefaultTTL <= 0 {
+		return nil, fmt.Errorf("otter: default TTL must be positive")
 	}
 
 	cache, err := otter.New(&otter.Options[string, []byte]{
-		MaximumWeight:    maxWeight,
+		MaximumWeight:    params.MaximumWeight,
 		Weigher:          weighBytes,
-		ExpiryCalculator: otter.ExpiryWriting[string, []byte](defaultTTL),
+		ExpiryCalculator: otter.ExpiryWriting[string, []byte](params.DefaultTTL),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("otter: new cache: %w", err)
 	}
 
-	return &OtterCache{cache: cache, maxWeight: maxWeight, defaultTTL: defaultTTL}, nil
+	return &OtterCache{cache: cache, maxWeight: params.MaximumWeight, defaultTTL: params.DefaultTTL}, nil
 }
 
 // Get returns a copy of the cached value when present and unexpired, else
@@ -153,7 +143,7 @@ func (c *OtterCache) MaximumWeight() uint64 {
 // DefaultTTLValue reports the fallback TTL wired at construction.
 func (c *OtterCache) DefaultTTLValue() time.Duration {
 	if c == nil {
-		return DefaultTTL
+		return 0
 	}
 
 	return c.defaultTTL

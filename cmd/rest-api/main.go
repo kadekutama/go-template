@@ -2,6 +2,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/kadekutama/go-template/internal/shared/di"
@@ -13,7 +14,17 @@ import (
 var version = "dev"
 
 func main() {
-	os.Exit(di.RunApp(di.ProvideLogger(), "rest-api", version, nil,
+	cfg, err := di.ProvideLoggingConfig()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "rest-api: "+err.Error())
+		os.Exit(1)
+	}
+	logger, err := di.ProvideLoggerWithConfig(cfg)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "rest-api: "+err.Error())
+		os.Exit(1)
+	}
+	os.Exit(di.RunApp(logger, "rest-api", version, nil,
 		di.DomainModule(),
 		di.ApplicationModule(),
 		di.InfrastructureModule(),

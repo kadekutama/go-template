@@ -18,9 +18,6 @@ const (
 	TenantPurposeSuspense  = "suspense"
 )
 
-// MaxOnboardingAssets bounds the per-tenant default chart expansion.
-const MaxOnboardingAssets = 8
-
 // OnboardingRequest carries the self-serve provisioning command. ExistingNames
 // and AllowedRegions are caller-supplied authority (repository/config); the
 // domain never reads global state.
@@ -32,6 +29,7 @@ type OnboardingRequest struct {
 	Region          string
 	Settings        entity.TenantSettings
 	Assets          []valueobject.AssetCode
+	MaxAssets       int
 	ExistingNames   []string
 	ExistingAliases []string
 	AllowedRegions  []string
@@ -167,12 +165,15 @@ func IsNameTaken(name string, existing []string) bool {
 
 // DefaultAccountsForAssets expands operating + fee + suspense per asset with
 // deterministic numbers, names, and classes.
-func DefaultAccountsForAssets(assets []valueobject.AssetCode) ([]DefaultAccount, error) {
+func DefaultAccountsForAssets(assets []valueobject.AssetCode, maxAssets int) ([]DefaultAccount, error) {
+	if maxAssets <= 0 {
+		return nil, entity.NewError("ONBOARDING_ASSETS_INVALID", "max assets must be positive")
+	}
 	if len(assets) == 0 {
 		return nil, entity.NewError("ONBOARDING_ASSETS_REQUIRED", "onboarding requires at least one asset")
 	}
-	if len(assets) > MaxOnboardingAssets {
-		return nil, entity.NewError("ONBOARDING_ASSETS_INVALID", "onboarding requests too many assets")
+	if len(assets) > maxAssets {
+		return nil, entity.NewError("ONBOARDING_ASSETS_EXCEEDED", "onboarding requests too many assets")
 	}
 	seen := make(map[valueobject.AssetCode]struct{}, len(assets))
 	out := make([]DefaultAccount, 0, len(assets)*3)
@@ -198,6 +199,9 @@ func DefaultAccountsForAssets(assets []valueobject.AssetCode) ([]DefaultAccount,
 // ValidateOnboarding checks the full checklist and returns a complete plan or
 // an error with no partial plan.
 func ValidateOnboarding(req OnboardingRequest) (OnboardingPlan, error) {
+	if req.MaxAssets <= 0 {
+		return OnboardingPlan{}, entity.NewError("ONBOARDING_ASSETS_INVALID", "max assets must be positive")
+	}
 	if err := validateOnboardingIdentity(req); err != nil {
 		return OnboardingPlan{}, err
 	}
@@ -207,7 +211,7 @@ func ValidateOnboarding(req OnboardingRequest) (OnboardingPlan, error) {
 	if err := validateOnboardingEnvelope(req); err != nil {
 		return OnboardingPlan{}, err
 	}
-	accounts, err := DefaultAccountsForAssets(req.Assets)
+	accounts, err := DefaultAccountsForAssets(req.Assets, req.MaxAssets)
 	if err != nil {
 		return OnboardingPlan{}, err
 	}

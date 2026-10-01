@@ -14,6 +14,8 @@ import (
 	"github.com/kadekutama/go-template/internal/domain/entity"
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
 	mockapplication "github.com/kadekutama/go-template/test/mock/application"
+	mockcommand "github.com/kadekutama/go-template/test/mock/command"
+	mockdomain "github.com/kadekutama/go-template/test/mock/domain"
 )
 
 func TestTransferQueryServiceGetTransfer(t *testing.T) {
@@ -28,8 +30,9 @@ func TestTransferQueryServiceGetTransfer(t *testing.T) {
 
 	type testCase struct {
 		name           string
-		transfers      *stubTransfers
 		query          port.TransferQuery
+		programmed     port.TransferRecord
+		programmedErr  error
 		expectedResult port.TransferView
 		expectedError  error
 	}
@@ -37,13 +40,12 @@ func TestTransferQueryServiceGetTransfer(t *testing.T) {
 	testCases := []testCase{
 		{
 			name: "find transfer succeeds",
-			transfers: &stubTransfers{
-				transfer: record,
-			},
 			query: port.TransferQuery{
 				TenantID:   "t-1",
 				TransferID: "x-1",
 			},
+			programmed:    record,
+			programmedErr: nil,
 			expectedResult: port.TransferView{
 				TransferID: "x-1",
 				Status:     "COMPLETED",
@@ -53,13 +55,12 @@ func TestTransferQueryServiceGetTransfer(t *testing.T) {
 		},
 		{
 			name: "transfer not found propagates error",
-			transfers: &stubTransfers{
-				err: entity.NewError("TRANSFER_NOT_FOUND", "transfer is unknown"),
-			},
 			query: port.TransferQuery{
 				TenantID:   "t-1",
 				TransferID: "ghost",
 			},
+			programmed:     port.TransferRecord{},
+			programmedErr:  entity.NewError("TRANSFER_NOT_FOUND", "transfer is unknown"),
 			expectedResult: port.TransferView{},
 			expectedError:  entity.NewError("TRANSFER_NOT_FOUND", "transfer is unknown"),
 		},
@@ -67,7 +68,13 @@ func TestTransferQueryServiceGetTransfer(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			svc := query.NewTransferQueryService(query.TransferQueryServiceParams{Transfers: tc.transfers})
+			transfers := mockcommand.NewMockTransferStore(t)
+			transfers.EXPECT().
+				FindTransfer(mock.Anything, tc.query.TenantID, tc.query.TransferID).
+				Return(tc.programmed, tc.programmedErr).
+				Once()
+
+			svc := query.NewTransferQueryService(query.TransferQueryServiceParams{Transfers: transfers})
 			actualResult, err := svc.GetTransfer(context.Background(), tc.query)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -89,24 +96,27 @@ func TestTransferQueryServiceGetBatchStatus(t *testing.T) {
 	}
 
 	type testCase struct {
-		name           string
-		transfers      *stubTransfers
-		query          port.BatchStatusQuery
-		expectedResult port.BatchStatusResult
-		expectedError  error
+		name               string
+		query              port.BatchStatusQuery
+		programmedBatch    port.BatchRecord
+		programmedBatchErr error
+		programmedItems    []port.BatchItem
+		programmedItemsErr error
+		expectedResult     port.BatchStatusResult
+		expectedError      error
 	}
 
 	testCases := []testCase{
 		{
 			name: "batch status computes counts and items",
-			transfers: &stubTransfers{
-				batch:      batch,
-				batchItems: items,
-			},
 			query: port.BatchStatusQuery{
 				TenantID: "t-1",
 				BatchID:  "b-1",
 			},
+			programmedBatch:    batch,
+			programmedBatchErr: nil,
+			programmedItems:    items,
+			programmedItemsErr: nil,
 			expectedResult: port.BatchStatusResult{
 				BatchID:   "b-1",
 				State:     "PARTIAL",
@@ -121,21 +131,34 @@ func TestTransferQueryServiceGetBatchStatus(t *testing.T) {
 		},
 		{
 			name: "batch not found propagates error",
-			transfers: &stubTransfers{
-				err: entity.NewError("BATCH_NOT_FOUND", "batch is unknown"),
-			},
 			query: port.BatchStatusQuery{
 				TenantID: "t-1",
 				BatchID:  "b-missing",
 			},
-			expectedResult: port.BatchStatusResult{},
-			expectedError:  entity.NewError("BATCH_NOT_FOUND", "batch is unknown"),
+			programmedBatch:    port.BatchRecord{},
+			programmedBatchErr: entity.NewError("BATCH_NOT_FOUND", "batch is unknown"),
+			programmedItems:    nil,
+			programmedItemsErr: nil,
+			expectedResult:     port.BatchStatusResult{},
+			expectedError:      entity.NewError("BATCH_NOT_FOUND", "batch is unknown"),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			svc := query.NewTransferQueryService(query.TransferQueryServiceParams{Transfers: tc.transfers})
+			transfers := mockcommand.NewMockTransferStore(t)
+			transfers.EXPECT().
+				FindBatch(mock.Anything, tc.query.TenantID, tc.query.BatchID).
+				Return(tc.programmedBatch, tc.programmedBatchErr).
+				Once()
+			if tc.programmedBatchErr == nil {
+				transfers.EXPECT().
+					ListBatchItems(mock.Anything, tc.query.TenantID, tc.query.BatchID).
+					Return(tc.programmedItems, tc.programmedItemsErr).
+					Once()
+			}
+
+			svc := query.NewTransferQueryService(query.TransferQueryServiceParams{Transfers: transfers})
 			actualResult, err := svc.GetBatchStatus(context.Background(), tc.query)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -172,13 +195,16 @@ func TestTransactionQueryDelegation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			posting := new(mockapplication.MockGetPosting)
-			posting.On("Execute", mock.Anything, port.GetPostingQuery{TenantID: valueobject.TenantID("t-1"), PostingID: tc.postingID}).Return(tc.programmed, tc.programmedErr).Once()
+			posting := mockapplication.NewMockGetPosting(t)
+			posting.EXPECT().
+				Execute(mock.Anything, port.GetPostingQuery{TenantID: valueobject.TenantID("t-1"), PostingID: tc.postingID}).
+				Return(tc.programmed, tc.programmedErr).
+				Once()
+
 			svc := query.NewTransactionQueryService(query.TransactionQueryServiceParams{Posting: posting})
 			actualResult, err := svc.GetTransaction(context.Background(), valueobject.TenantID("t-1"), tc.postingID)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
-			posting.AssertExpectations(t)
 		})
 	}
 }
@@ -211,38 +237,42 @@ func TestTransactionQueryGetStatement(t *testing.T) {
 
 	testCases := []testCase{
 		{
-			name:      "valid statement gathers account entries in window",
-			account:   account,
-			tenant:    valueobject.TenantID("t-1"),
-			ledger:    valueobject.LedgerID("l-1"),
-			accountID: valueobject.AccountID("a-1"),
-			from:      from,
-			to:        to,
+			name:       "valid statement gathers account entries in window",
+			account:    account,
+			accountErr: nil,
+			tenant:     valueobject.TenantID("t-1"),
+			ledger:     valueobject.LedgerID("l-1"),
+			accountID:  valueobject.AccountID("a-1"),
+			from:       from,
+			to:         to,
 			setupQuery: func(q *mockapplication.MockPostingQuery) {
-				q.On("Search", mock.Anything, port.PostingFilter{
-					TenantID: valueobject.TenantID("t-1"),
-					Cursor:   "",
-					Limit:    500,
-				}).Return(port.PostingSearchPage{
-					Postings: []entity.PostingData{
-						{
-							ID:         "p-1",
-							RecordedAt: from.Add(time.Hour),
-							Entries: []entity.Entry{
-								{ID: "e-1", AccountID: valueobject.AccountID("a-1"), AmountMinor: 1000},
-								{ID: "e-2", AccountID: valueobject.AccountID("a-other"), AmountMinor: 1000},
+				q.EXPECT().
+					Search(mock.Anything, port.PostingFilter{
+						TenantID: valueobject.TenantID("t-1"),
+						Cursor:   "",
+						Limit:    500,
+					}).
+					Return(port.PostingSearchPage{
+						Postings: []entity.PostingData{
+							{
+								ID:         "p-1",
+								RecordedAt: from.Add(time.Hour),
+								Entries: []entity.Entry{
+									{ID: "e-1", AccountID: valueobject.AccountID("a-1"), AmountMinor: 1000},
+									{ID: "e-2", AccountID: valueobject.AccountID("a-other"), AmountMinor: 1000},
+								},
+							},
+							{
+								ID:         "p-outside",
+								RecordedAt: to.Add(time.Hour),
+								Entries: []entity.Entry{
+									{ID: "e-3", AccountID: valueobject.AccountID("a-1"), AmountMinor: 500},
+								},
 							},
 						},
-						{
-							ID:         "p-outside",
-							RecordedAt: to.Add(time.Hour),
-							Entries: []entity.Entry{
-								{ID: "e-3", AccountID: valueobject.AccountID("a-1"), AmountMinor: 500},
-							},
-						},
-					},
-					NextCursor: "",
-				}, nil).Once()
+						NextCursor: "",
+					}, nil).
+					Once()
 			},
 			expectedCount: 1,
 			expectedError: nil,
@@ -250,6 +280,7 @@ func TestTransactionQueryGetStatement(t *testing.T) {
 		{
 			name:          "account on different ledger returns LEDGER_MISMATCH",
 			account:       account,
+			accountErr:    nil,
 			tenant:        valueobject.TenantID("t-1"),
 			ledger:        valueobject.LedgerID("l-different"),
 			accountID:     valueobject.AccountID("a-1"),
@@ -260,13 +291,14 @@ func TestTransactionQueryGetStatement(t *testing.T) {
 			expectedError: entity.NewError("LEDGER_MISMATCH", "account belongs to a different ledger"),
 		},
 		{
-			name:      "statement scan exceeding max pages returns STATEMENT_TOO_LARGE",
-			account:   account,
-			tenant:    valueobject.TenantID("t-1"),
-			ledger:    valueobject.LedgerID("l-1"),
-			accountID: valueobject.AccountID("a-1"),
-			from:      from,
-			to:        to,
+			name:       "statement scan exceeding max pages returns STATEMENT_TOO_LARGE",
+			account:    account,
+			accountErr: nil,
+			tenant:     valueobject.TenantID("t-1"),
+			ledger:     valueobject.LedgerID("l-1"),
+			accountID:  valueobject.AccountID("a-1"),
+			from:       from,
+			to:         to,
 			setupQuery: func(q *mockapplication.MockPostingQuery) {
 				for i := 0; i < 20; i++ {
 					cursor := ""
@@ -274,14 +306,17 @@ func TestTransactionQueryGetStatement(t *testing.T) {
 						cursor = fmt.Sprintf("cursor-%d", i)
 					}
 					next := fmt.Sprintf("cursor-%d", i+1)
-					q.On("Search", mock.Anything, port.PostingFilter{
-						TenantID: valueobject.TenantID("t-1"),
-						Cursor:   cursor,
-						Limit:    500,
-					}).Return(port.PostingSearchPage{
-						Postings:   nil,
-						NextCursor: next,
-					}, nil).Once()
+					q.EXPECT().
+						Search(mock.Anything, port.PostingFilter{
+							TenantID: valueobject.TenantID("t-1"),
+							Cursor:   cursor,
+							Limit:    500,
+						}).
+						Return(port.PostingSearchPage{
+							Postings:   nil,
+							NextCursor: next,
+						}, nil).
+						Once()
 				}
 			},
 			expectedCount: 0,
@@ -291,12 +326,17 @@ func TestTransactionQueryGetStatement(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			postingQuery := new(mockapplication.MockPostingQuery)
+			postingQuery := mockapplication.NewMockPostingQuery(t)
 			tc.setupQuery(postingQuery)
-			acctRepo := &stubAccounts{account: tc.account, err: tc.accountErr}
+
+			acctRepo := mockdomain.NewMockAccountRepository(t)
+			acctRepo.EXPECT().
+				FindByID(mock.Anything, tc.tenant, tc.accountID).
+				Return(tc.account, tc.accountErr).
+				Maybe()
 
 			svc := query.NewTransactionQueryService(query.TransactionQueryServiceParams{
-				Posting:  new(mockapplication.MockGetPosting),
+				Posting:  mockapplication.NewMockGetPosting(t),
 				Query:    postingQuery,
 				Accounts: acctRepo,
 			})
@@ -307,7 +347,6 @@ func TestTransactionQueryGetStatement(t *testing.T) {
 				assert.Equal(t, tc.expectedCount, len(stmt.Entries))
 				assert.Equal(t, tc.account.ID, stmt.Account.ID)
 			}
-			postingQuery.AssertExpectations(t)
 		})
 	}
 }

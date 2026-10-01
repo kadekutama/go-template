@@ -7,57 +7,13 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	appport "github.com/kadekutama/go-template/internal/application/port"
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
+	mockapplication "github.com/kadekutama/go-template/test/mock/application"
 )
-
-// fakeTx models commit/rollback outcomes for the fault matrix.
-type fakeTx struct {
-	committed  bool
-	rolledBack bool
-	failCommit bool
-}
-
-func (f *fakeTx) commit() error {
-	if f.failCommit {
-		f.rolledBack = true
-		return errors.New("crash after commit: unknown outcome")
-	}
-
-	f.committed = true
-
-	return nil
-}
-
-// fakeIdempotency models reserve/replay/conflict for the fault matrix.
-type fakeIdempotency struct {
-	records map[string]appport.IdempotencyRecord
-	results map[string][]byte
-}
-
-func newFakeIdempotency() *fakeIdempotency {
-	return &fakeIdempotency{records: make(map[string]appport.IdempotencyRecord), results: make(map[string][]byte)}
-}
-
-func (f *fakeIdempotency) reserve(key string, fingerprint string) (replay []byte, conflict bool) {
-	if rec, ok := f.records[key]; ok {
-		if rec.Fingerprint != fingerprint {
-			return nil, true
-		}
-
-		return f.results[key], false
-	}
-
-	f.records[key] = appport.IdempotencyRecord{Key: key, Fingerprint: fingerprint, TenantID: "tnt-01"}
-
-	return nil, false
-}
-
-func (f *fakeIdempotency) complete(key string, response []byte) {
-	f.results[key] = response
-}
 
 func TestFaultMatrix(t *testing.T) {
 	t.Parallel()
@@ -103,23 +59,31 @@ func TestFaultMatrix(t *testing.T) {
 
 			switch tc.fault {
 			case "crash-before-commit":
-				tx := &fakeTx{rolledBack: true}
-				assert.True(t, tx.rolledBack)
-				assert.False(t, tx.committed)
-			case "crash-after-commit":
-				tx := &fakeTx{failCommit: true}
-				require.Error(t, tx.commit(), "unknown commit outcome must surface, never claim success")
-				assert.True(t, tx.rolledBack)
+				uow := mockapplication.NewMockUnitOfWork(t)
+				uow.EXPECT().Do(mock.Anything, mock.Anything).Return(errors.New("simulated crash before commit")).Once()
 
-				fakes := newFakeIdempotency()
-				_, conflict := fakes.reserve("key-01", "fp-01")
-				require.False(t, conflict)
-				fakes.complete("key-01", []byte(`{"ok":true}`))
-				replay, conflict := fakes.reserve("key-01", "fp-01")
-				require.False(t, conflict)
-				assert.Equal(t, []byte(`{"ok":true}`), replay)
-				_, conflict = fakes.reserve("key-01", "fp-02")
-				assert.True(t, conflict, "changed fingerprint must conflict, never re-execute")
+				err := uow.Do(context.Background(), func(_ context.Context, _ appport.Tx) error {
+					return nil
+				})
+				require.Error(t, err)
+			case "crash-after-commit":
+				idem := mockapplication.NewMockIdempotencyStore(t)
+				rec1 := appport.IdempotencyRecord{Key: "key-01", Fingerprint: "fp-01", TenantID: "tnt-01"}
+				rec2 := appport.IdempotencyRecord{Key: "key-01", Fingerprint: "fp-02", TenantID: "tnt-01"}
+
+				idem.EXPECT().Reserve(mock.Anything, rec1).Return(appport.ReserveOutcome{}, nil).Once()
+				idem.EXPECT().Complete(mock.Anything, "key-01", []byte(`{"ok":true}`)).Return(nil).Once()
+				idem.EXPECT().Reserve(mock.Anything, rec1).Return(appport.ReserveOutcome{Replay: true, Response: []byte(`{"ok":true}`)}, nil).Once()
+				idem.EXPECT().Reserve(mock.Anything, rec2).Return(appport.ReserveOutcome{}, errors.New("changed fingerprint must conflict, never re-execute")).Once()
+
+				_, err := idem.Reserve(context.Background(), rec1)
+				require.NoError(t, err)
+				require.NoError(t, idem.Complete(context.Background(), "key-01", []byte(`{"ok":true}`)))
+				replay, err := idem.Reserve(context.Background(), rec1)
+				require.NoError(t, err)
+				assert.Equal(t, []byte(`{"ok":true}`), replay.Response)
+				_, err = idem.Reserve(context.Background(), rec2)
+				assert.Error(t, err, "changed fingerprint must conflict, never re-execute")
 			case "publish-ack-loss":
 				// Poller claims outbox fact. Broker receives fact, but ACK is lost (network drop).
 				// Fact claimed_at was set, delivered_at is NULL.

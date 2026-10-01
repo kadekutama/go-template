@@ -2,12 +2,13 @@ package command_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/kadekutama/go-template/internal/application/command"
 	"github.com/kadekutama/go-template/internal/application/port"
@@ -29,81 +30,34 @@ func payTestAccounts() map[valueobject.AccountID]entity.AccountData {
 	return accounts
 }
 
-type refundStoreFake struct {
-	mu      sync.Mutex
-	refunds map[string]command.RefundRecord
-}
-
-func (s *refundStoreFake) CreateRefund(_ context.Context, record command.RefundRecord) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.refunds == nil {
-		s.refunds = map[string]command.RefundRecord{}
-	}
-	s.refunds[record.ID] = record
-	return nil
-}
-
-func (s *refundStoreFake) FindRefund(_ context.Context, _ valueobject.TenantID, id string) (command.RefundRecord, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	record, ok := s.refunds[id]
-	if !ok {
-		return command.RefundRecord{}, entity.NewError("REFUND_NOT_FOUND", "refund is unknown")
-	}
-	return record, nil
-}
-
-func (s *refundStoreFake) ListRefunds(_ context.Context, _ valueobject.TenantID, limit int) ([]command.RefundRecord, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var out []command.RefundRecord
-	for _, record := range s.refunds {
-		out = append(out, record)
-		if limit > 0 && len(out) >= limit {
-			break
-		}
-	}
-	return out, nil
-}
-
-func (s *refundStoreFake) SumPriorRefunds(_ context.Context, _ valueobject.TenantID, originalTxn string) (int64, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var total int64
-	for _, record := range s.refunds {
-		if record.OriginalTxn == originalTxn && record.Status == command.RefundSucceeded {
-			total += record.AmountMinor
-		}
-	}
-	return total, nil
-}
-
-func newRefundService(uow *tfrUOW, refunds *refundStoreFake, intents *intentStoreFake, processor *fakeProcessor, authz *tfrAuthz) *command.RefundService {
-	return command.NewRefundService(command.RefundServiceParams{
+func newRefundService(t *testing.T, uow port.UnitOfWork, refunds command.RefundStore, intents command.IntentStore, processor port.PaymentProcessor, authz port.Authorizer) *command.RefundService {
+	svc, err := command.NewRefundService(command.RefundServiceParams{
 		UoW:       uow,
 		Refunds:   refunds,
 		Intents:   intents,
 		Processor: processor,
-		Accounts:  &tfrAccounts{accounts: payTestAccounts()},
+		Accounts:  newMockAccountRepository(t, payTestAccounts()),
 		Settlement: command.SettlementAccounts{
 			MerchantPayable: payMerchant, RefundsPayable: payRefunds, CashAccount: payCash,
 		},
 		WindowDays: 90,
-		Clock:      tfrClock{},
-		IDs:        &tfrIDs{next: tfrTestIDs(40)},
+		Clock:      newMockClock(t, tfrAt),
+		IDs:        newMockIDGenerator(t, tfrTestIDs(40)...),
 		Authz:      authz,
 	})
+	require.NoError(t, err)
+	return svc
 }
 
-func seedIntent(t *testing.T, store *intentStoreFake, createdAt time.Time) string {
+func seedIntent(t *testing.T, store command.IntentStore, createdAt time.Time) string {
 	t.Helper()
-	id := fmt.Sprintf("intent-%02d", len(store.intents))
-	store.intents[id] = command.IntentRecord{
+	id := "intent-00"
+	err := store.CreateIntent(context.Background(), command.IntentRecord{
 		ID: id, TenantID: tfrTenant, LedgerID: tfrLedger, AmountMinor: 5000,
 		AssetCode: tfrAsset, Method: valueobject.MethodCard, Status: command.IntentPending,
 		CreatedAt: createdAt,
-	}
+	})
+	require.NoError(t, err)
 	return id
 }
 
@@ -129,7 +83,7 @@ func TestRefundCreate(t *testing.T) {
 		originalAge    time.Duration
 		priorRefund    int64
 		processorErr   error
-		preload        func(uow *tfrUOW)
+		preload        func(uow port.UnitOfWork)
 		denied         bool
 		expectedStatus string
 		expectedError  error
@@ -151,17 +105,11 @@ func TestRefundCreate(t *testing.T) {
 			name:         "corrupt idempotency replay returns IDEMPOTENCY_RECORD_INVALID",
 			req:          baseCmd,
 			seedOriginal: true,
-			preload: func(uow *tfrUOW) {
+			preload: func(uow port.UnitOfWork) {
 				fp := command.Fingerprint(
 					baseCmd.IdempotencyKey, string(baseCmd.TenantID), baseCmd.OriginalTxn, fmt.Sprintf("%d", baseCmd.AmountMinor),
 				)
-				uow.idem = map[string]tfrIdemEntry{
-					baseCmd.IdempotencyKey: {
-						fingerprint: fp,
-						response:    []byte("{corrupt-json"),
-						completed:   true,
-					},
-				}
+				setUOWIdem(uow, baseCmd.IdempotencyKey, fp, []byte("{corrupt-json"))
 			},
 			denied:         false,
 			expectedStatus: "",
@@ -299,16 +247,16 @@ func TestRefundCreate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
+			uow := newMockUOW(t)
 			if tc.preload != nil {
 				tc.preload(uow)
 			}
-			intents := &intentStoreFake{intents: map[string]command.IntentRecord{}}
-			refunds := &refundStoreFake{}
-			processor := &fakeProcessor{refundErr: tc.processorErr}
-			authz := &tfrAuthz{denied: map[string]bool{}}
+			intents := newMockIntentStore(t)
+			refunds := newMockRefundStore(t)
+			processor := newMockPaymentProcessor(t, mockProcessorParams{RefundErr: tc.processorErr})
+			authz := newMockAuthorizer(t)
 			if tc.denied {
-				authz.denied[tc.req.Actor+"|refund.create|payment/"+tc.req.OriginalTxn] = true
+				setAuthzDenied(authz, tc.req.Actor+"|refund.create|payment/"+tc.req.OriginalTxn)
 			}
 
 			if tc.seedOriginal {
@@ -324,7 +272,7 @@ func TestRefundCreate(t *testing.T) {
 				})
 			}
 
-			svc := newRefundService(uow, refunds, intents, processor, authz)
+			svc := newRefundService(t, uow, refunds, intents, processor, authz)
 
 			res, err := svc.CreateRefund(context.Background(), tc.req)
 			assert.Equal(t, tc.expectedError, err)
@@ -382,11 +330,11 @@ func TestRefundGetAndList(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
-			intents := &intentStoreFake{intents: map[string]command.IntentRecord{}}
-			refunds := &refundStoreFake{}
-			processor := &fakeProcessor{}
-			authz := &tfrAuthz{denied: map[string]bool{}}
+			uow := newMockUOW(t)
+			intents := newMockIntentStore(t)
+			refunds := newMockRefundStore(t)
+			processor := newMockPaymentProcessor(t)
+			authz := newMockAuthorizer(t)
 
 			if tc.seedRefund {
 				_ = refunds.CreateRefund(context.Background(), command.RefundRecord{
@@ -398,7 +346,7 @@ func TestRefundGetAndList(t *testing.T) {
 				})
 			}
 
-			svc := newRefundService(uow, refunds, intents, processor, authz)
+			svc := newRefundService(t, uow, refunds, intents, processor, authz)
 
 			if tc.queryID != "" {
 				res, err := svc.GetRefund(context.Background(), port.PaymentQuery{TenantID: string(tfrTenant), ID: tc.queryID})
@@ -411,6 +359,49 @@ func TestRefundGetAndList(t *testing.T) {
 				list, err := svc.ListRefunds(context.Background(), tfrTenant, tc.listLimit)
 				assert.NoError(t, err)
 				assert.Len(t, list, tc.expectedCount)
+			}
+		})
+	}
+}
+
+func TestNewRefundServiceValidation(t *testing.T) {
+	t.Parallel()
+
+	type testCase struct {
+		name          string
+		windowDays    int
+		expectedError error
+	}
+
+	testCases := []testCase{
+		{
+			name:          "positive window accepted",
+			windowDays:    90,
+			expectedError: nil,
+		},
+		{
+			name:          "zero window rejected",
+			windowDays:    0,
+			expectedError: errors.New("refund: window days must be positive"),
+		},
+		{
+			name:          "negative window rejected",
+			windowDays:    -3,
+			expectedError: errors.New("refund: window days must be positive"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, err := command.NewRefundService(command.RefundServiceParams{
+				WindowDays: tc.windowDays,
+			})
+			if tc.expectedError != nil {
+				assert.EqualError(t, err, tc.expectedError.Error())
+				assert.Nil(t, svc)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, svc)
 			}
 		})
 	}

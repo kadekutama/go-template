@@ -2,31 +2,26 @@ package valueobject_test
 
 import (
 	"fmt"
-	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
+	mockapplication "github.com/kadekutama/go-template/test/mock/application"
 )
 
-// seqIDs is a deterministic IDGenerator stub: the domain owns the port, tests
-// (and the kernel UUIDGenerator in production) implement it.
-type seqIDs struct {
-	mu sync.Mutex
-	n  int
-}
-
-var _ valueobject.IDGenerator = (*seqIDs)(nil)
-
-func (s *seqIDs) NewID() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.n++
-	return fmt.Sprintf("00000000-0000-7000-8000-%012x", s.n)
+func newMockIDGenerator(t *testing.T) *mockapplication.MockIDGenerator {
+	gen := mockapplication.NewMockIDGenerator(t)
+	var n atomic.Int64
+	gen.EXPECT().NewID().RunAndReturn(func() string {
+		val := n.Add(1)
+		return fmt.Sprintf("00000000-0000-7000-8000-%012x", val)
+	}).Maybe()
+	return gen
 }
 
 func TestIDRoundTripAndParse(t *testing.T) {
 	t.Parallel()
-	gen := &seqIDs{}
+	gen := newMockIDGenerator(t)
 	id, err := valueobject.ParseAccountID(gen.NewID())
 	if err != nil {
 		t.Fatalf("ParseAccountID: %v", err)
@@ -50,7 +45,7 @@ func TestIDRoundTripAndParse(t *testing.T) {
 
 func TestGeneratorPortYieldsUniqueIDs(t *testing.T) {
 	t.Parallel()
-	gen := &seqIDs{}
+	gen := newMockIDGenerator(t)
 	seen := map[string]bool{}
 	for i := 0; i < 100; i++ {
 		s := gen.NewID()
@@ -66,7 +61,7 @@ func TestGeneratorPortYieldsUniqueIDs(t *testing.T) {
 
 func TestTransactionIDAlias(t *testing.T) {
 	t.Parallel()
-	gen := &seqIDs{}
+	gen := newMockIDGenerator(t)
 	post, err := valueobject.ParsePostingID(gen.NewID())
 	if err != nil {
 		t.Fatalf("ParsePostingID: %v", err)
@@ -79,7 +74,7 @@ func TestTransactionIDAlias(t *testing.T) {
 
 func TestOtherIDTypes(t *testing.T) {
 	t.Parallel()
-	gen := &seqIDs{}
+	gen := newMockIDGenerator(t)
 	types := []struct {
 		name  string
 		parse func(string) error

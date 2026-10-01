@@ -2,6 +2,7 @@ package hybrid_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -9,7 +10,7 @@ import (
 
 	"github.com/kadekutama/go-template/internal/infrastructure/cache/hybrid"
 	"github.com/kadekutama/go-template/internal/infrastructure/cache/store"
-	"github.com/kadekutama/go-template/test/fakes"
+	mockstore "github.com/kadekutama/go-template/test/mock/store"
 )
 
 // txView is a second projection type used to prove shared-engine binding.
@@ -21,8 +22,13 @@ func TestTyped(t *testing.T) {
 	t.Parallel()
 
 	t.Run("views bind to the shared engine", func(t *testing.T) {
-		shared := fakes.NewCacheStore()
-		engine, err := hybrid.New(hybrid.Params{L1: shared, L2: shared})
+		shared := mockstore.NewMockExpiringStore(t)
+		engine, err := hybrid.New(hybrid.Params{
+			L1:            shared,
+			L2:            shared,
+			L1PopulateTTL: time.Minute,
+			Codec:         hybrid.JSONCodec{},
+		})
 		require.NoError(t, err)
 
 		balances := hybrid.Typed[cacheBalance](engine)
@@ -43,8 +49,8 @@ func TestTyped(t *testing.T) {
 	})
 
 	t.Run("seam conformance for both adapters", func(t *testing.T) {
-		var _ store.Store = fakes.NewCacheStore()
-		var _ store.ExpiringStore = fakes.NewCacheStore()
+		var _ store.Store = (*mockstore.MockStore)(nil)
+		var _ store.ExpiringStore = (*mockstore.MockExpiringStore)(nil)
 	})
 }
 
@@ -56,7 +62,11 @@ func TestModule(t *testing.T) {
 	err := fx.ValidateApp(
 		hybrid.Module(),
 		fx.Provide(func() hybrid.Params {
-			return hybrid.Params{L1: fakes.NewCacheStore()}
+			return hybrid.Params{
+				L1:            &mockstore.MockStore{},
+				L1PopulateTTL: time.Minute,
+				Codec:         hybrid.JSONCodec{},
+			}
 		}),
 	)
 	require.NoError(t, err)

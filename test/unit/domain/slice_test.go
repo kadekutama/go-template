@@ -10,6 +10,7 @@ import (
 	"github.com/kadekutama/go-template/internal/domain/entity"
 	"github.com/kadekutama/go-template/internal/domain/specification"
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
+	mockapplication "github.com/kadekutama/go-template/test/mock/application"
 )
 
 const (
@@ -23,14 +24,6 @@ const (
 	testPeriod1  = "60000000-0000-4000-8000-000000000001"
 	testTransfer = "transfer.v1"
 )
-
-// sliceIDs mints deterministic entry IDs for the slice reversal.
-type sliceIDs struct{ n int }
-
-func (s *sliceIDs) NewID() string {
-	s.n++
-	return fmt.Sprintf("22222222-2222-4222-8222-%012x", s.n)
-}
 
 func setupSliceAccounts(t *testing.T, at time.Time) (aggregate.Account, aggregate.Account, map[valueobject.AccountID]entity.AccountData) {
 	t.Helper()
@@ -138,8 +131,15 @@ func TestLedgerSlice(t *testing.T) {
 	posting := constructSlicePosting(t, accounts, at)
 	verifySliceSpecifications(t, ctx, posting, accounts, at)
 
+	var seq int
+	idGen := mockapplication.NewMockIDGenerator(t)
+	idGen.EXPECT().NewID().RunAndReturn(func() string {
+		seq++
+		return fmt.Sprintf("22222222-2222-4222-8222-%012x", seq)
+	}).Maybe()
+
 	rev, err := aggregate.ReversePosting(posting, accounts, aggregate.ReverseParams{
-		NewID: testPosting2, Reason: "slice test", Actor: "u-1", EventID: "ev-2", At: at, IDGen: &sliceIDs{},
+		NewID: testPosting2, Reason: "slice test", Actor: "u-1", EventID: "ev-2", At: at, IDGen: idGen,
 	})
 	if err != nil {
 		t.Fatalf("ReversePosting: %v", err)

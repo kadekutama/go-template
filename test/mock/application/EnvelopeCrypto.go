@@ -144,6 +144,63 @@ func (_c *MockEnvelopeCrypto_Encrypt_Call) RunAndReturn(run func(context.Context
 	return _c
 }
 
+// Rewrap provides a mock function with given fields: ctx, envelope
+func (_m *MockEnvelopeCrypto) Rewrap(ctx context.Context, envelope port.EncryptedEnvelope) (port.EncryptedEnvelope, error) {
+	ret := _m.Called(ctx, envelope)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Rewrap")
+	}
+
+	var r0 port.EncryptedEnvelope
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, port.EncryptedEnvelope) (port.EncryptedEnvelope, error)); ok {
+		return rf(ctx, envelope)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, port.EncryptedEnvelope) port.EncryptedEnvelope); ok {
+		r0 = rf(ctx, envelope)
+	} else {
+		r0 = ret.Get(0).(port.EncryptedEnvelope)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, port.EncryptedEnvelope) error); ok {
+		r1 = rf(ctx, envelope)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockEnvelopeCrypto_Rewrap_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Rewrap'
+type MockEnvelopeCrypto_Rewrap_Call struct {
+	*mock.Call
+}
+
+// Rewrap is a helper method to define mock.On call
+//   - ctx context.Context
+//   - envelope port.EncryptedEnvelope
+func (_e *MockEnvelopeCrypto_Expecter) Rewrap(ctx interface{}, envelope interface{}) *MockEnvelopeCrypto_Rewrap_Call {
+	return &MockEnvelopeCrypto_Rewrap_Call{Call: _e.mock.On("Rewrap", ctx, envelope)}
+}
+
+func (_c *MockEnvelopeCrypto_Rewrap_Call) Run(run func(ctx context.Context, envelope port.EncryptedEnvelope)) *MockEnvelopeCrypto_Rewrap_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(port.EncryptedEnvelope))
+	})
+	return _c
+}
+
+func (_c *MockEnvelopeCrypto_Rewrap_Call) Return(_a0 port.EncryptedEnvelope, _a1 error) *MockEnvelopeCrypto_Rewrap_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockEnvelopeCrypto_Rewrap_Call) RunAndReturn(run func(context.Context, port.EncryptedEnvelope) (port.EncryptedEnvelope, error)) *MockEnvelopeCrypto_Rewrap_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockEnvelopeCrypto creates a new instance of MockEnvelopeCrypto. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockEnvelopeCrypto(t interface {

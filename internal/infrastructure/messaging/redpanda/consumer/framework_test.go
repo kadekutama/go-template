@@ -3,16 +3,19 @@ package consumer_test
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	appport "github.com/kadekutama/go-template/internal/application/port"
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
 	"github.com/kadekutama/go-template/internal/infrastructure/messaging/redpanda/consumer"
 	"github.com/kadekutama/go-template/internal/shared/kernel/log"
-	fakes "github.com/kadekutama/go-template/test/fakes"
+	"github.com/kadekutama/go-template/test/doubles"
+	mockconsumer "github.com/kadekutama/go-template/test/mock/consumer"
 )
 
 type handleObservation struct {
@@ -34,8 +37,9 @@ func TestNewFramework(t *testing.T) {
 		{
 			name: "valid params",
 			params: consumer.FrameworkParams{
-				Consumer: "test-group",
-				Receipts: fakes.NewReceiptStore(),
+				Consumer:    "test-group",
+				Receipts:    mockconsumer.NewMockReceiptStore(t),
+				MaxDelivers: 5,
 			},
 			expectedResult: true,
 			expectedError:  nil,
@@ -43,8 +47,9 @@ func TestNewFramework(t *testing.T) {
 		{
 			name: "blank consumer rejected",
 			params: consumer.FrameworkParams{
-				Consumer: "",
-				Receipts: fakes.NewReceiptStore(),
+				Consumer:    "",
+				Receipts:    mockconsumer.NewMockReceiptStore(t),
+				MaxDelivers: 5,
 			},
 			expectedResult: false,
 			expectedError:  errors.New("consumer: invalid params (1 violation(s)): Consumer: rule \"required\" on value "),
@@ -52,8 +57,9 @@ func TestNewFramework(t *testing.T) {
 		{
 			name: "whitespace consumer rejected",
 			params: consumer.FrameworkParams{
-				Consumer: "   ",
-				Receipts: fakes.NewReceiptStore(),
+				Consumer:    "   ",
+				Receipts:    mockconsumer.NewMockReceiptStore(t),
+				MaxDelivers: 5,
 			},
 			expectedResult: false,
 			expectedError:  errors.New("consumer: invalid params (1 violation(s)): Consumer: rule \"required\" on value "),
@@ -61,11 +67,32 @@ func TestNewFramework(t *testing.T) {
 		{
 			name: "nil receipts rejected",
 			params: consumer.FrameworkParams{
-				Consumer: "test-group",
-				Receipts: nil,
+				Consumer:    "test-group",
+				Receipts:    nil,
+				MaxDelivers: 5,
 			},
 			expectedResult: false,
 			expectedError:  errors.New("consumer: receipt store is required"),
+		},
+		{
+			name: "zero max delivers rejected",
+			params: consumer.FrameworkParams{
+				Consumer:    "test-group",
+				Receipts:    mockconsumer.NewMockReceiptStore(t),
+				MaxDelivers: 0,
+			},
+			expectedResult: false,
+			expectedError:  errors.New("consumer: invalid params (1 violation(s)): MaxDelivers: rule \"required\" on value 0"),
+		},
+		{
+			name: "negative max delivers rejected",
+			params: consumer.FrameworkParams{
+				Consumer:    "test-group",
+				Receipts:    mockconsumer.NewMockReceiptStore(t),
+				MaxDelivers: -1,
+			},
+			expectedResult: false,
+			expectedError:  errors.New("consumer: invalid params (1 violation(s)): MaxDelivers: rule \"gt\" on value -1"),
 		},
 	}
 
@@ -113,8 +140,9 @@ func TestFrameworkHandleValidation(t *testing.T) {
 			name: "blank id rejected",
 			framework: func() *consumer.Framework {
 				f, _ := consumer.NewFramework(consumer.FrameworkParams{
-					Consumer: "g",
-					Receipts: fakes.NewReceiptStore(),
+					Consumer:    "g",
+					Receipts:    mockconsumer.NewMockReceiptStore(t),
+					MaxDelivers: 5,
 				})
 				return f
 			},
@@ -129,8 +157,9 @@ func TestFrameworkHandleValidation(t *testing.T) {
 			name: "whitespace id rejected",
 			framework: func() *consumer.Framework {
 				f, _ := consumer.NewFramework(consumer.FrameworkParams{
-					Consumer: "g",
-					Receipts: fakes.NewReceiptStore(),
+					Consumer:    "g",
+					Receipts:    mockconsumer.NewMockReceiptStore(t),
+					MaxDelivers: 5,
 				})
 				return f
 			},
@@ -145,8 +174,9 @@ func TestFrameworkHandleValidation(t *testing.T) {
 			name: "nil handler rejected",
 			framework: func() *consumer.Framework {
 				f, _ := consumer.NewFramework(consumer.FrameworkParams{
-					Consumer: "g",
-					Receipts: fakes.NewReceiptStore(),
+					Consumer:    "g",
+					Receipts:    mockconsumer.NewMockReceiptStore(t),
+					MaxDelivers: 5,
 				})
 				return f
 			},
@@ -161,8 +191,9 @@ func TestFrameworkHandleValidation(t *testing.T) {
 			name: "canceled context rejected",
 			framework: func() *consumer.Framework {
 				f, _ := consumer.NewFramework(consumer.FrameworkParams{
-					Consumer: "g",
-					Receipts: fakes.NewReceiptStore(),
+					Consumer:    "g",
+					Receipts:    mockconsumer.NewMockReceiptStore(t),
+					MaxDelivers: 5,
 				})
 				return f
 			},
@@ -330,13 +361,25 @@ func TestFrameworkHandle(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			receipts := fakes.NewReceiptStore()
-			dlq := fakes.NewMessageDLQ()
+			receipts := mockconsumer.NewMockReceiptStore(t)
+			dlq := mockconsumer.NewMockDLQSink(t)
+			var dlqCount atomic.Int32
+
+			receipts.EXPECT().Claim(mock.Anything, "test-group", tc.msg.ID).Return(false, nil)
+			if tc.handlerErr != nil || tc.panics {
+				if tc.msg.Redelivered >= 5 {
+					dlq.EXPECT().Record(mock.Anything, tc.msg).Run(func(_ context.Context, _ appport.Message) {
+						dlqCount.Add(1)
+					}).Return(nil).Once()
+				}
+				receipts.EXPECT().Release(mock.Anything, "test-group", tc.msg.ID).Return(nil).Once()
+			}
 
 			framework, err := consumer.NewFramework(consumer.FrameworkParams{
-				Consumer: "test-group",
-				Receipts: receipts,
-				DLQ:      dlq,
+				Consumer:    "test-group",
+				Receipts:    receipts,
+				DLQ:         dlq,
+				MaxDelivers: 5,
 			})
 			require.NoError(t, err)
 
@@ -350,7 +393,7 @@ func TestFrameworkHandle(t *testing.T) {
 			}
 
 			err = framework.Handle(context.Background(), tc.msg, handler)
-			assert.Equal(t, tc.expectedResult, handleObservation{ran: ran, dlq: dlq.Len()})
+			assert.Equal(t, tc.expectedResult, handleObservation{ran: ran, dlq: int(dlqCount.Load())})
 
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
@@ -359,21 +402,6 @@ func TestFrameworkHandle(t *testing.T) {
 			}
 		})
 	}
-}
-
-type releaseFailingStore struct {
-	inner *fakes.ReceiptStore
-	err   error
-	calls int
-}
-
-func (s *releaseFailingStore) Claim(ctx context.Context, consumer, eventID string) (bool, error) {
-	return s.inner.Claim(ctx, consumer, eventID)
-}
-
-func (s *releaseFailingStore) Release(_ context.Context, _, _ string) error {
-	s.calls++
-	return s.err
 }
 
 func TestFrameworkRedeliveryReleasesClaim(t *testing.T) {
@@ -425,13 +453,25 @@ func TestFrameworkRedeliveryReleasesClaim(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			receipts := fakes.NewReceiptStore()
-			dlq := fakes.NewMessageDLQ()
-
+			receipts := mockconsumer.NewMockReceiptStore(t)
+			claimed := &doubles.DedupSet{}
+			var dlqCount atomic.Int32
 			var dlqSink consumer.DLQSink
 			if tc.hasDLQ {
-				dlqSink = dlq
+				mockDLQ := mockconsumer.NewMockDLQSink(t)
+				mockDLQ.EXPECT().Record(mock.Anything, mock.Anything).Run(func(_ context.Context, _ appport.Message) {
+					dlqCount.Add(1)
+				}).Return(nil).Maybe()
+				dlqSink = mockDLQ
 			}
+
+			receipts.EXPECT().Claim(mock.Anything, "test-group", "redeliver-test-id").RunAndReturn(func(_ context.Context, c, id string) (bool, error) {
+				return claimed.Claim(c, id), nil
+			}).Maybe()
+			receipts.EXPECT().Release(mock.Anything, "test-group", "redeliver-test-id").RunAndReturn(func(_ context.Context, c, id string) error {
+				claimed.Release(c, id)
+				return nil
+			}).Maybe()
 
 			framework, err := consumer.NewFramework(consumer.FrameworkParams{
 				Consumer:    "test-group",
@@ -464,7 +504,7 @@ func TestFrameworkRedeliveryReleasesClaim(t *testing.T) {
 			}
 
 			assert.Equal(t, tc.expectedRuns, runs)
-			assert.Equal(t, tc.expectedDLQ, dlq.Len())
+			assert.Equal(t, tc.expectedDLQ, int(dlqCount.Load()))
 			if tc.expectedError != nil {
 				assert.EqualError(t, lastErr, tc.expectedError.Error())
 			} else {
@@ -513,15 +553,24 @@ func TestFrameworkReleaseFailureSurfaces(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			store := &releaseFailingStore{inner: fakes.NewReceiptStore(), err: tc.releaseErr}
+			var releaseCalls int
+			mockStore := mockconsumer.NewMockReceiptStore(t)
+			mockStore.EXPECT().Claim(mock.Anything, "test-group", "stuck-1").Return(false, nil)
+			mockStore.EXPECT().Release(mock.Anything, "test-group", "stuck-1").RunAndReturn(func(context.Context, string, string) error {
+				releaseCalls++
+				return tc.releaseErr
+			})
+
 			var dlq consumer.DLQSink
 			if tc.hasDLQ {
-				dlq = fakes.NewMessageDLQ()
+				mockDLQ := mockconsumer.NewMockDLQSink(t)
+				mockDLQ.EXPECT().Record(mock.Anything, mock.Anything).Return(nil).Maybe()
+				dlq = mockDLQ
 			}
 
 			framework, err := consumer.NewFramework(consumer.FrameworkParams{
 				Consumer:    "test-group",
-				Receipts:    store,
+				Receipts:    mockStore,
 				DLQ:         dlq,
 				MaxDelivers: tc.maxDelivers,
 			})
@@ -542,7 +591,7 @@ func TestFrameworkReleaseFailureSurfaces(t *testing.T) {
 			require.Error(t, err)
 			assert.ErrorIs(t, err, tc.handlerErr)
 			assert.ErrorIs(t, err, tc.releaseErr)
-			assert.Equal(t, tc.expectedCalls, store.calls)
+			assert.Equal(t, tc.expectedCalls, releaseCalls)
 		})
 	}
 }
@@ -574,8 +623,13 @@ func TestFrameworkCorrelation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			receipts := fakes.NewReceiptStore()
-			framework, err := consumer.NewFramework(consumer.FrameworkParams{Consumer: "g", Receipts: receipts})
+			receipts := mockconsumer.NewMockReceiptStore(t)
+			receipts.EXPECT().Claim(mock.Anything, "g", "corr-msg").Return(false, nil).Once()
+			framework, err := consumer.NewFramework(consumer.FrameworkParams{
+				Consumer:    "g",
+				Receipts:    receipts,
+				MaxDelivers: 5,
+			})
 			require.NoError(t, err)
 
 			var gotTrace, gotRequest string

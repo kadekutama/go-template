@@ -2,9 +2,7 @@ package command_test
 
 import (
 	"context"
-	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,72 +13,21 @@ import (
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
 )
 
-type subscriptionStoreFake struct {
-	mu   sync.Mutex
-	subs map[string]command.Subscription
-}
-
-func (s *subscriptionStoreFake) CreateSubscription(_ context.Context, sub command.Subscription) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.subs == nil {
-		s.subs = map[string]command.Subscription{}
-	}
-	s.subs[sub.ID] = sub
-	return nil
-}
-
-func (s *subscriptionStoreFake) FindSubscription(_ context.Context, _ valueobject.TenantID, id string) (command.Subscription, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	sub, ok := s.subs[id]
-	if !ok {
-		return command.Subscription{}, entity.NewError("SUBSCRIPTION_NOT_FOUND", "subscription is unknown")
-	}
-	return sub, nil
-}
-
-func (s *subscriptionStoreFake) UpdateSubscription(_ context.Context, sub command.Subscription) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.subs[sub.ID] = sub
-	return nil
-}
-
-func (s *subscriptionStoreFake) DeleteSubscription(_ context.Context, _ valueobject.TenantID, id string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	delete(s.subs, id)
-	return nil
-}
-
-func (s *subscriptionStoreFake) ListDueSubscriptions(_ context.Context, _ valueobject.TenantID, now time.Time) ([]command.Subscription, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var out []command.Subscription
-	for _, sub := range s.subs {
-		if !sub.LastRun.After(now.Add(-24 * time.Hour)) {
-			out = append(out, sub)
-		}
-	}
-	return out, nil
-}
-
-func newSubscriptionService(uow *tfrUOW, subs *subscriptionStoreFake, authz *tfrAuthz) *command.SubscriptionService {
-	storage := &objectStoreFake{}
+func newSubscriptionService(t *testing.T, uow port.UnitOfWork, subs command.SubscriptionStore, authz port.Authorizer) *command.SubscriptionService {
+	storage := newMockObjectStorage(t)
 	return command.NewSubscriptionService(command.SubscriptionServiceParams{
 		UoW:           uow,
 		Subscriptions: subs,
 		Reports: command.NewReportService(command.ReportServiceParams{
 			UoW:     uow,
-			Reports: &reportStoreFake{},
+			Reports: newMockReportStore(t),
 			Storage: storage,
-			Clock:   tfrClock{},
-			IDs:     &tfrIDs{next: tfrTestIDs(40)},
+			Clock:   newMockClock(t, tfrAt),
+			IDs:     newMockIDGenerator(t, tfrTestIDs(40)...),
 			Authz:   authz,
 		}),
-		Clock: tfrClock{},
-		IDs:   &tfrIDs{next: tfrTestIDs(40)},
+		Clock: newMockClock(t, tfrAt),
+		IDs:   newMockIDGenerator(t, tfrTestIDs(40)...),
 		Authz: authz,
 	})
 }
@@ -96,7 +43,7 @@ func TestSubscriptionSubscribe(t *testing.T) {
 		destination   string
 		actor         string
 		key           string
-		preload       func(uow *tfrUOW)
+		preload       func(uow port.UnitOfWork)
 		expectedError error
 	}
 
@@ -109,7 +56,7 @@ func TestSubscriptionSubscribe(t *testing.T) {
 			destination:   "webhook:ops",
 			actor:         "u-1",
 			key:           "key-sub-1",
-			preload:       func(_ *tfrUOW) {},
+			preload:       func(_ port.UnitOfWork) {},
 			expectedError: nil,
 		},
 		{
@@ -120,15 +67,9 @@ func TestSubscriptionSubscribe(t *testing.T) {
 			destination: "webhook:ops",
 			actor:       "u-1",
 			key:         "key-sub-1",
-			preload: func(uow *tfrUOW) {
+			preload: func(uow port.UnitOfWork) {
 				fp := command.Fingerprint("key-sub-1", string(tfrTenant), "settlement", "0 9 * * *", "webhook:ops")
-				uow.idem = map[string]tfrIdemEntry{
-					"key-sub-1": {
-						fingerprint: fp,
-						response:    []byte("{corrupt-json"),
-						completed:   true,
-					},
-				}
+				setUOWIdem(uow, "key-sub-1", fp, []byte("{corrupt-json"))
 			},
 			expectedError: entity.NewError("IDEMPOTENCY_RECORD_INVALID", "stored idempotency response is corrupt"),
 		},
@@ -140,7 +81,7 @@ func TestSubscriptionSubscribe(t *testing.T) {
 			destination:   "webhook:ops",
 			actor:         "u-1",
 			key:           "key-sub-1",
-			preload:       func(_ *tfrUOW) {},
+			preload:       func(_ port.UnitOfWork) {},
 			expectedError: entity.NewError("REPORT_TEMPLATE_UNKNOWN", "report template is unknown"),
 		},
 		{
@@ -151,18 +92,18 @@ func TestSubscriptionSubscribe(t *testing.T) {
 			destination:   "webhook:ops",
 			actor:         "u-1",
 			key:           "key-sub-1",
-			preload:       func(_ *tfrUOW) {},
+			preload:       func(_ port.UnitOfWork) {},
 			expectedError: entity.NewError("TENANT_REQUIRED", "tenant id is required"),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
-			subs := &subscriptionStoreFake{}
-			authz := &tfrAuthz{denied: map[string]bool{}}
+			uow := newMockUOW(t)
+			subs := newMockSubscriptionStore(t)
+			authz := newMockAuthorizer(t)
 			tc.preload(uow)
-			svc := newSubscriptionService(uow, subs, authz)
+			svc := newSubscriptionService(t, uow, subs, authz)
 
 			actualResult, err := svc.Subscribe(context.Background(), tc.tenant, tc.template, tc.cron, tc.destination, tc.actor, tc.key)
 			assert.Equal(t, tc.expectedError, err)
@@ -183,10 +124,10 @@ func TestSubscriptions(t *testing.T) {
 	t.Parallel()
 
 	t.Run("deliver due subscription and unsubscribe", func(t *testing.T) {
-		uow := &tfrUOW{}
-		subs := &subscriptionStoreFake{}
-		authz := &tfrAuthz{denied: map[string]bool{}}
-		svc := newSubscriptionService(uow, subs, authz)
+		uow := newMockUOW(t)
+		subs := newMockSubscriptionStore(t)
+		authz := newMockAuthorizer(t)
+		svc := newSubscriptionService(t, uow, subs, authz)
 
 		sub, err := svc.Subscribe(context.Background(), tfrTenant, "transaction-volume", "0 9 * * *", "webhook:ops", "u-1", "key-sub-1")
 		require.NoError(t, err)
@@ -256,13 +197,13 @@ func TestRegulatoryAllTypes(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
-			store := &complianceStoreFake{}
-			storage := &objectStoreFake{}
-			authz := &tfrAuthz{denied: map[string]bool{}}
+			uow := newMockUOW(t)
+			store := newMockComplianceStore(t)
+			storage := newMockObjectStorage(t)
+			authz := newMockAuthorizer(t)
 			svc := command.NewComplianceService(command.ComplianceServiceParams{
-				UoW: uow, Reviews: store, Storage: storage, Clock: tfrClock{},
-				IDs: &tfrIDs{next: tfrTestIDs(40)}, Authz: authz,
+				UoW: uow, Reviews: store, Storage: storage, Clock: newMockClock(t, tfrAt),
+				IDs: newMockIDGenerator(t, tfrTestIDs(40)...), Authz: authz,
 			})
 			actualResult, err := svc.ExportRegulatoryReport(context.Background(), port.RegulatoryExportRequest{
 				TenantID: tfrTenant, ReportType: tc.reportType, PeriodID: "2026-09",

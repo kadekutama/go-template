@@ -11,23 +11,20 @@ import (
 	"time"
 )
 
-// DefaultDrainTimeout bounds connection draining when callers pass no timeout.
-const DefaultDrainTimeout = 10 * time.Second
-
 // Run blocks in serve until ctx is done or SIGTERM/SIGINT arrives, then runs
-// drain with timeout. A nil or non-positive timeout selects DefaultDrainTimeout.
+// drain with timeout. timeout must be positive.
 // The drain error (if any) is returned; serve errors are returned immediately.
-func Run(ctx context.Context, timeout *time.Duration, serve func(ctx context.Context) error, drain func(ctx context.Context) error) error {
+func Run(ctx context.Context, timeout time.Duration, serve func(ctx context.Context) error, drain func(ctx context.Context) error) error {
 	if serve == nil {
 		return errors.New("shutdown: serve func must not be nil")
+	}
+	if timeout <= 0 {
+		return errors.New("shutdown: drain timeout must be positive")
 	}
 	if drain == nil {
 		drain = func(context.Context) error { return nil }
 	}
-	drainTimeout := DefaultDrainTimeout
-	if timeout != nil && *timeout > 0 {
-		drainTimeout = *timeout
-	}
+	drainTimeout := timeout
 
 	ctx, stop := signal.NotifyContext(ctx, syscall.SIGTERM, syscall.SIGINT)
 	defer stop()

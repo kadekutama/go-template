@@ -31,8 +31,9 @@ func TestRedpandaPublishConsumeRoundTrip(t *testing.T) {
 	defer cancel()
 
 	producer, err := redpanda.NewProducer(redpanda.ProducerParams{
-		Seeds:    []string{handle.Seed()},
-		ClientID: "ledger-e08-test",
+		Seeds:       []string{handle.Seed()},
+		ClientID:    "ledger-e08-test",
+		DialTimeout: 5 * time.Second,
 	})
 	require.NoError(t, err)
 	defer func() { _ = producer.Close() }()

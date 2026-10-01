@@ -87,24 +87,11 @@ func (w *Writer) AppendTx(ctx context.Context, tx *gorm.DB, facts ...appport.Out
 	return nil
 }
 
-// DefaultMaxBatch bounds one claim batch.
-const DefaultMaxBatch = 100
-
-// DefaultBaseBackoff seeds jittered retry waits.
-const DefaultBaseBackoff = 500 * time.Millisecond
-
-// DefaultClaimTimeout is the duration a claimed batch remains locked before
-// an undelivered event can be reclaimed by peer pollers.
-const DefaultClaimTimeout = 60 * time.Second
-
-// PollerParams carries poller dependencies.
+// PollerParams carries poller dependencies. All fields must be explicitly configured.
 type PollerParams struct {
-	Publisher appport.EventPublisher
-	// MaxBatch bounds one claim batch; 0 means DefaultMaxBatch.
-	MaxBatch int
-	// BaseBackoff seeds jittered retry waits; 0 means DefaultBaseBackoff.
-	BaseBackoff time.Duration
-	// ClaimTimeout is the lease duration for in-flight batches; 0 means DefaultClaimTimeout.
+	Publisher    appport.EventPublisher
+	MaxBatch     int
+	BaseBackoff  time.Duration
 	ClaimTimeout time.Duration
 	// Alert, when set, fires after each failed batch.
 	Alert func(ctx context.Context, err error)
@@ -119,32 +106,29 @@ type Poller struct {
 	alert        func(ctx context.Context, err error)
 }
 
-// NewPoller builds the poller; Publisher must be non-nil.
+// NewPoller builds the poller; Publisher, positive MaxBatch, BaseBackoff, and ClaimTimeout are required.
 func NewPoller(params PollerParams) (*Poller, error) {
 	if params.Publisher == nil {
 		return nil, fmt.Errorf("outbox: poller needs a publisher")
 	}
 
-	maxBatch := params.MaxBatch
-	if maxBatch <= 0 {
-		maxBatch = DefaultMaxBatch
+	if params.MaxBatch <= 0 {
+		return nil, fmt.Errorf("outbox: max batch must be positive")
 	}
 
-	backoff := params.BaseBackoff
-	if backoff <= 0 {
-		backoff = DefaultBaseBackoff
+	if params.BaseBackoff <= 0 {
+		return nil, fmt.Errorf("outbox: base backoff must be positive")
 	}
 
-	claimTimeout := params.ClaimTimeout
-	if claimTimeout <= 0 {
-		claimTimeout = DefaultClaimTimeout
+	if params.ClaimTimeout <= 0 {
+		return nil, fmt.Errorf("outbox: claim timeout must be positive")
 	}
 
 	return &Poller{
 		publisher:    params.Publisher,
-		maxBatch:     maxBatch,
-		baseBackoff:  backoff,
-		claimTimeout: claimTimeout,
+		maxBatch:     params.MaxBatch,
+		baseBackoff:  params.BaseBackoff,
+		claimTimeout: params.ClaimTimeout,
 		alert:        params.Alert,
 	}, nil
 }
@@ -182,7 +166,7 @@ func (p *Poller) RunOnce(ctx context.Context, db *gorm.DB) (int, error) {
 
 	claimSec := int64(p.claimTimeout.Seconds())
 	if claimSec <= 0 {
-		claimSec = int64(DefaultClaimTimeout.Seconds())
+		claimSec = 1
 	}
 
 	if err := db.WithContext(ctx).Raw(ClaimSQL, claimSec, p.maxBatch).Scan(&rows).Error; err != nil {

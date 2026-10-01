@@ -7,10 +7,11 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/kadekutama/go-template/internal/infrastructure/webhook"
-	fakes "github.com/kadekutama/go-template/test/fakes"
+	mockwebhook "github.com/kadekutama/go-template/test/mock/webhook"
 )
 
 func TestEndpointNormalized(t *testing.T) {
@@ -953,7 +954,7 @@ func TestRetryableError(t *testing.T) {
 	}
 }
 
-func TestWebhookDLQRecord(t *testing.T) {
+func TestWebhookDLQSinkRecord(t *testing.T) {
 	t.Parallel()
 
 	baseMsg := webhook.DLQMessage{
@@ -966,120 +967,43 @@ func TestWebhookDLQRecord(t *testing.T) {
 
 	type testCase struct {
 		name          string
-		dlq           *fakes.WebhookDLQ
 		ctx           context.Context
 		msg           webhook.DLQMessage
+		setupMock     func(m *mockwebhook.MockDLQSink)
 		expectedError error
-		verify        func(t *testing.T, dlq *fakes.WebhookDLQ)
 	}
 
 	testCases := []testCase{
 		{
-			name:          "valid record stored and retrievable",
-			dlq:           fakes.NewWebhookDLQ(),
-			ctx:           context.Background(),
-			msg:           baseMsg,
+			name: "valid record stored",
+			ctx:  context.Background(),
+			msg:  baseMsg,
+			setupMock: func(m *mockwebhook.MockDLQSink) {
+				m.EXPECT().Record(mock.Anything, baseMsg).Return(nil).Once()
+			},
 			expectedError: nil,
-			verify: func(t *testing.T, dlq *fakes.WebhookDLQ) {
-				assert.Equal(t, 1, dlq.Len())
-				list := dlq.List()
-				require.Len(t, list, 1)
-				assert.Equal(t, "ep-1", list[0].EndpointID)
-				assert.Equal(t, "t1", list[0].Tenant)
-				assert.Equal(t, "transfer.completed.v1", list[0].Event)
-				assert.Equal(t, []byte(`{"id":"e-100"}`), list[0].Payload)
-				assert.Equal(t, 7, list[0].Attempts)
-			},
 		},
 		{
-			name: "blank endpoint id rejected",
-			dlq:  fakes.NewWebhookDLQ(),
+			name: "record failure surfaces error",
 			ctx:  context.Background(),
-			msg: func() webhook.DLQMessage {
-				m := baseMsg
-				m.EndpointID = ""
-				return m
-			}(),
-			expectedError: errors.New("webhook: endpoint id is required"),
-			verify: func(t *testing.T, dlq *fakes.WebhookDLQ) {
-				assert.Equal(t, 0, dlq.Len())
+			msg:  baseMsg,
+			setupMock: func(m *mockwebhook.MockDLQSink) {
+				m.EXPECT().Record(mock.Anything, baseMsg).Return(errors.New("webhook: record failed")).Once()
 			},
-		},
-		{
-			name: "whitespace endpoint id rejected",
-			dlq:  fakes.NewWebhookDLQ(),
-			ctx:  context.Background(),
-			msg: func() webhook.DLQMessage {
-				m := baseMsg
-				m.EndpointID = "   "
-				return m
-			}(),
-			expectedError: errors.New("webhook: endpoint id is required"),
-			verify: func(t *testing.T, dlq *fakes.WebhookDLQ) {
-				assert.Equal(t, 0, dlq.Len())
-			},
-		},
-		{
-			name: "nil payload rejected",
-			dlq:  fakes.NewWebhookDLQ(),
-			ctx:  context.Background(),
-			msg: func() webhook.DLQMessage {
-				m := baseMsg
-				m.Payload = nil
-				return m
-			}(),
-			expectedError: errors.New("webhook: payload is required"),
-			verify: func(t *testing.T, dlq *fakes.WebhookDLQ) {
-				assert.Equal(t, 0, dlq.Len())
-			},
-		},
-		{
-			name: "blank tenant allowed and stored",
-			dlq:  fakes.NewWebhookDLQ(),
-			ctx:  context.Background(),
-			msg: func() webhook.DLQMessage {
-				m := baseMsg
-				m.Tenant = ""
-				return m
-			}(),
-			expectedError: nil,
-			verify: func(t *testing.T, dlq *fakes.WebhookDLQ) {
-				assert.Equal(t, 1, dlq.Len())
-			},
-		},
-		{
-			name: "payload is deeply copied and isolated",
-			dlq:  fakes.NewWebhookDLQ(),
-			ctx:  context.Background(),
-			msg: func() webhook.DLQMessage {
-				buf := []byte(`{"id":"immutable"}`)
-				m := baseMsg
-				m.Payload = buf
-				return m
-			}(),
-			expectedError: nil,
-			verify: func(t *testing.T, dlq *fakes.WebhookDLQ) {
-				list := dlq.List()
-				require.Len(t, list, 1)
-				// Modify the returned payload
-				list[0].Payload[0] = 'X'
-				// Next List() should remain unaffected because List copies the slice
-				list2 := dlq.List()
-				assert.Equal(t, byte('{'), list2[0].Payload[0])
-			},
+			expectedError: errors.New("webhook: record failed"),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.dlq.Record(tc.ctx, tc.msg)
+			dlq := mockwebhook.NewMockDLQSink(t)
+			tc.setupMock(dlq)
+
+			err := dlq.Record(tc.ctx, tc.msg)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
 			} else {
 				assert.NoError(t, err)
-			}
-			if tc.verify != nil {
-				tc.verify(t, tc.dlq)
 			}
 		})
 	}

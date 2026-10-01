@@ -19,7 +19,7 @@ var _ store.Store = (*local.OtterCache)(nil)
 func mustStore(t *testing.T) *local.OtterCache {
 	t.Helper()
 
-	cache, err := local.NewOtterCache(local.OtterParams{MaximumWeight: 1 << 20})
+	cache, err := local.NewOtterCache(local.OtterParams{MaximumWeight: 1 << 20, DefaultTTL: time.Minute})
 	require.NoError(t, err)
 
 	return cache
@@ -33,6 +33,7 @@ func TestNewOtterCache(t *testing.T) {
 		params         local.OtterParams
 		expectedWeight uint64
 		expectedTTL    time.Duration
+		expectedError  error
 	}
 
 	testCases := []testCase{
@@ -44,18 +45,48 @@ func TestNewOtterCache(t *testing.T) {
 			},
 			expectedWeight: 1024,
 			expectedTTL:    2 * time.Minute,
+			expectedError:  nil,
 		},
 		{
-			name:           "zero selects defaults",
-			params:         local.OtterParams{},
-			expectedWeight: local.DefaultMaximumWeight,
-			expectedTTL:    local.DefaultTTL,
+			name: "zero weight rejected",
+			params: local.OtterParams{
+				MaximumWeight: 0,
+				DefaultTTL:    2 * time.Minute,
+			},
+			expectedWeight: 0,
+			expectedTTL:    0,
+			expectedError:  assert.AnError,
+		},
+		{
+			name: "zero ttl rejected",
+			params: local.OtterParams{
+				MaximumWeight: 1024,
+				DefaultTTL:    0,
+			},
+			expectedWeight: 0,
+			expectedTTL:    0,
+			expectedError:  assert.AnError,
+		},
+		{
+			name: "negative ttl rejected",
+			params: local.OtterParams{
+				MaximumWeight: 1024,
+				DefaultTTL:    -time.Second,
+			},
+			expectedWeight: 0,
+			expectedTTL:    0,
+			expectedError:  assert.AnError,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			cache, err := local.NewOtterCache(tc.params)
+			if tc.expectedError != nil {
+				assert.Error(t, err)
+				assert.Nil(t, cache)
+				return
+			}
 			require.NoError(t, err)
 			require.NotNil(t, cache)
 			assert.Equal(t, tc.expectedWeight, cache.MaximumWeight())

@@ -15,8 +15,8 @@ import (
 func TestSagaUnknownStep(t *testing.T) {
 	t.Parallel()
 
-	store := &sagaStoreFake{}
-	runner := newRunner(store)
+	store := newMockSagaStore(t)
+	runner := newRunner(t, store)
 
 	started, err := runner.Start(context.Background(), "t-1", "transfer", "saga-unknown", []workflow.Step{
 		{Name: "a", MaxAttempts: 1, Run: func(context.Context) error { return nil }},
@@ -34,8 +34,8 @@ func TestSagaUnknownStep(t *testing.T) {
 func TestSagaResumeUnknownStepFails(t *testing.T) {
 	t.Parallel()
 
-	store := &sagaStoreFake{}
-	runner := newRunner(store)
+	store := newMockSagaStore(t)
+	runner := newRunner(t, store)
 	effects := &keyedEffects{}
 
 	ctx, cancel := context.WithCancel(context.Background())

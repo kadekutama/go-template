@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
+	"sync/atomic"
 
 	"go.etcd.io/etcd/client/v3/concurrency"
 )
@@ -33,6 +33,12 @@ type ElectionParams struct {
 	TTLSeconds int
 }
 
+const (
+	electionStateIdle        uint32 = 0
+	electionStateCampaigning uint32 = 1
+	electionStateLeader      uint32 = 2
+)
+
 // election is the etcd-backed LeaderElector implementation. At most one
 // holder wins per prefix; lease expiry or Resign hands leadership to the
 // next waiter without manual intervention.
@@ -41,14 +47,13 @@ type election struct {
 	prefix string
 	ttl    int
 
-	mu          sync.Mutex
-	campaigning bool
-	session     *concurrency.Session
-	election    *concurrency.Election
+	state    atomic.Uint32
+	session  atomic.Pointer[concurrency.Session]
+	election atomic.Pointer[concurrency.Election]
 }
 
-// NewElection builds a LeaderElector. Campaign creates the lease lazily so
-// construction performs no network I/O.
+// NewElection builds a LeaderElector. Client, KeyPrefix, and positive TTLSeconds are required.
+// Campaign creates the lease lazily so construction performs no network I/O.
 func NewElection(params ElectionParams) (LeaderElector, error) {
 	if params.Client == nil || params.Client.inner == nil {
 		return nil, fmt.Errorf("etcd: election requires an initialized client")
@@ -56,15 +61,14 @@ func NewElection(params ElectionParams) (LeaderElector, error) {
 
 	prefix := strings.TrimSpace(params.KeyPrefix)
 	if prefix == "" {
-		prefix = DefaultLeaderKeyPrefix
+		return nil, fmt.Errorf("etcd: election requires a key prefix")
 	}
 
-	ttl := params.TTLSeconds
-	if ttl <= 0 {
-		ttl = DefaultElectionTTLSeconds
+	if params.TTLSeconds <= 0 {
+		return nil, fmt.Errorf("etcd: election requires a positive TTL")
 	}
 
-	return &election{client: params.Client, prefix: prefix, ttl: ttl}, nil
+	return &election{client: params.Client, prefix: prefix, ttl: params.TTLSeconds}, nil
 }
 
 // Campaign blocks until this candidate holds prefix leadership or ctx ends.
@@ -79,19 +83,13 @@ func (e *election) Campaign(ctx context.Context, candidateID string) error {
 		return fmt.Errorf("etcd: candidate id must not be blank")
 	}
 
-	e.mu.Lock()
-	if e.campaigning {
-		e.mu.Unlock()
+	if !e.state.CompareAndSwap(electionStateIdle, electionStateCampaigning) {
 		return fmt.Errorf("etcd: already campaigning for %s; resign before campaigning again", e.prefix)
 	}
-	e.campaigning = true
-	e.mu.Unlock()
 
 	session, err := concurrency.NewSession(e.client.inner, concurrency.WithTTL(e.ttl))
 	if err != nil {
-		e.mu.Lock()
-		e.campaigning = false
-		e.mu.Unlock()
+		e.state.Store(electionStateIdle)
 		return fmt.Errorf("etcd: create election session: %w", err)
 	}
 
@@ -99,16 +97,13 @@ func (e *election) Campaign(ctx context.Context, candidateID string) error {
 
 	if err := poll.Campaign(ctx, trimmedCandidate); err != nil {
 		_ = session.Close()
-		e.mu.Lock()
-		e.campaigning = false
-		e.mu.Unlock()
+		e.state.Store(electionStateIdle)
 		return fmt.Errorf("etcd: campaign %s: %w", trimmedCandidate, err)
 	}
 
-	e.mu.Lock()
-	e.session = session
-	e.election = poll
-	e.mu.Unlock()
+	e.session.Store(session)
+	e.election.Store(poll)
+	e.state.Store(electionStateLeader)
 
 	return nil
 }
@@ -120,13 +115,12 @@ func (e *election) Resign(ctx context.Context) error {
 		return fmt.Errorf("etcd: election is not initialized")
 	}
 
-	e.mu.Lock()
-	poll := e.election
-	session := e.session
-	e.election = nil
-	e.session = nil
-	e.campaigning = false
-	e.mu.Unlock()
+	if !e.state.CompareAndSwap(electionStateLeader, electionStateIdle) {
+		return fmt.Errorf("etcd: no active leadership to resign")
+	}
+
+	poll := e.election.Swap(nil)
+	session := e.session.Swap(nil)
 
 	if poll == nil || session == nil {
 		return fmt.Errorf("etcd: no active leadership to resign")

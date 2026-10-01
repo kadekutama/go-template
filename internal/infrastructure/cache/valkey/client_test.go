@@ -12,8 +12,20 @@ import (
 	"github.com/kadekutama/go-template/internal/infrastructure/cache/valkey"
 )
 
+func validTestParams() valkey.ValkeyParams {
+	return valkey.ValkeyParams{
+		Addr:         "127.0.0.1:6379",
+		PoolSize:     10,
+		DialTimeout:  5 * time.Second,
+		ReadTimeout:  3 * time.Second,
+		WriteTimeout: 3 * time.Second,
+	}
+}
+
 func TestNewValkeyClient(t *testing.T) {
 	t.Parallel()
+
+	baseParams := validTestParams()
 
 	type testCase struct {
 		name           string
@@ -24,55 +36,140 @@ func TestNewValkeyClient(t *testing.T) {
 
 	testCases := []testCase{
 		{
-			name: "addr required",
-			params: valkey.ValkeyParams{
-				Addr: "127.0.0.1:6379",
-			},
+			name:           "valid params accepted",
+			params:         baseParams,
 			expectedResult: true,
 			expectedError:  nil,
 		},
 		{
 			name: "blank addr rejected",
-			params: valkey.ValkeyParams{
-				Addr: "",
-			},
+			params: func() valkey.ValkeyParams {
+				p := baseParams
+				p.Addr = ""
+				return p
+			}(),
 			expectedResult: false,
 			expectedError:  errors.New("valkey: invalid params (1 violation(s)): Addr: rule \"required\" on value "),
 		},
 		{
 			name: "whitespace addr rejected",
-			params: valkey.ValkeyParams{
-				Addr: "   ",
-			},
+			params: func() valkey.ValkeyParams {
+				p := baseParams
+				p.Addr = "   "
+				return p
+			}(),
 			expectedResult: false,
 			expectedError:  errors.New("valkey: addr is required"),
 		},
 		{
 			name: "invalid negative db rejected",
-			params: valkey.ValkeyParams{
-				Addr: "127.0.0.1:6379",
-				DB:   -1,
-			},
+			params: func() valkey.ValkeyParams {
+				p := baseParams
+				p.DB = -1
+				return p
+			}(),
 			expectedResult: false,
 			expectedError:  errors.New("valkey: invalid params (1 violation(s)): DB: rule \"gte\" on value -1"),
 		},
 		{
 			name: "invalid high db rejected",
-			params: valkey.ValkeyParams{
-				Addr: "127.0.0.1:6379",
-				DB:   16,
-			},
+			params: func() valkey.ValkeyParams {
+				p := baseParams
+				p.DB = 16
+				return p
+			}(),
 			expectedResult: false,
 			expectedError:  errors.New("valkey: invalid params (1 violation(s)): DB: rule \"lte\" on value 16"),
 		},
 		{
 			name: "with tls enabled",
-			params: valkey.ValkeyParams{
-				Addr:   "127.0.0.1:6379",
-				UseTLS: true,
-			},
+			params: func() valkey.ValkeyParams {
+				p := baseParams
+				p.UseTLS = true
+				return p
+			}(),
 			expectedResult: true,
 			expectedError:  nil,
+		},
+		{
+			name: "missing pool size rejected",
+			params: func() valkey.ValkeyParams {
+				p := baseParams
+				p.PoolSize = 0
+				return p
+			}(),
+			expectedResult: false,
+			expectedError:  errors.New("valkey: invalid params (1 violation(s)): PoolSize: rule \"required\" on value 0"),
+		},
+		{
+			name: "negative pool size rejected",
+			params: func() valkey.ValkeyParams {
+				p := baseParams
+				p.PoolSize = -1
+				return p
+			}(),
+			expectedResult: false,
+			expectedError:  errors.New("valkey: invalid params (1 violation(s)): PoolSize: rule \"gt\" on value -1"),
+		},
+		{
+			name: "missing dial timeout rejected",
+			params: func() valkey.ValkeyParams {
+				p := baseParams
+				p.DialTimeout = 0
+				return p
+			}(),
+			expectedResult: false,
+			expectedError:  errors.New("valkey: invalid params (1 violation(s)): DialTimeout: rule \"required\" on value 0s"),
+		},
+		{
+			name: "negative dial timeout rejected",
+			params: func() valkey.ValkeyParams {
+				p := baseParams
+				p.DialTimeout = -time.Second
+				return p
+			}(),
+			expectedResult: false,
+			expectedError:  errors.New("valkey: invalid params (1 violation(s)): DialTimeout: rule \"gt\" on value -1s"),
+		},
+		{
+			name: "missing read timeout rejected",
+			params: func() valkey.ValkeyParams {
+				p := baseParams
+				p.ReadTimeout = 0
+				return p
+			}(),
+			expectedResult: false,
+			expectedError:  errors.New("valkey: invalid params (1 violation(s)): ReadTimeout: rule \"required\" on value 0s"),
+		},
+		{
+			name: "negative read timeout rejected",
+			params: func() valkey.ValkeyParams {
+				p := baseParams
+				p.ReadTimeout = -time.Second
+				return p
+			}(),
+			expectedResult: false,
+			expectedError:  errors.New("valkey: invalid params (1 violation(s)): ReadTimeout: rule \"gt\" on value -1s"),
+		},
+		{
+			name: "missing write timeout rejected",
+			params: func() valkey.ValkeyParams {
+				p := baseParams
+				p.WriteTimeout = 0
+				return p
+			}(),
+			expectedResult: false,
+			expectedError:  errors.New("valkey: invalid params (1 violation(s)): WriteTimeout: rule \"required\" on value 0s"),
+		},
+		{
+			name: "negative write timeout rejected",
+			params: func() valkey.ValkeyParams {
+				p := baseParams
+				p.WriteTimeout = -time.Second
+				return p
+			}(),
+			expectedResult: false,
+			expectedError:  errors.New("valkey: invalid params (1 violation(s)): WriteTimeout: rule \"gt\" on value -1s"),
 		},
 	}
 
@@ -118,7 +215,7 @@ func TestValkeyClientPingValidation(t *testing.T) {
 		{
 			name: "canceled context aborts ping",
 			c: func() *valkey.ValkeyClient {
-				client, err := valkey.NewValkeyClient(valkey.ValkeyParams{Addr: "127.0.0.1:6379"})
+				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
@@ -181,7 +278,7 @@ func TestValkeyClientGetValidation(t *testing.T) {
 		{
 			name: "empty key rejected",
 			c: func() *valkey.ValkeyClient {
-				client, err := valkey.NewValkeyClient(valkey.ValkeyParams{Addr: "127.0.0.1:6379"})
+				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
@@ -195,7 +292,7 @@ func TestValkeyClientGetValidation(t *testing.T) {
 		{
 			name: "canceled context aborts get",
 			c: func() *valkey.ValkeyClient {
-				client, err := valkey.NewValkeyClient(valkey.ValkeyParams{Addr: "127.0.0.1:6379"})
+				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
@@ -269,7 +366,7 @@ func TestValkeyClientSetValidation(t *testing.T) {
 		{
 			name: "empty key rejected",
 			c: func() *valkey.ValkeyClient {
-				client, err := valkey.NewValkeyClient(valkey.ValkeyParams{Addr: "127.0.0.1:6379"})
+				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
@@ -284,7 +381,7 @@ func TestValkeyClientSetValidation(t *testing.T) {
 		{
 			name: "zero ttl rejected",
 			c: func() *valkey.ValkeyClient {
-				client, err := valkey.NewValkeyClient(valkey.ValkeyParams{Addr: "127.0.0.1:6379"})
+				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
@@ -299,7 +396,7 @@ func TestValkeyClientSetValidation(t *testing.T) {
 		{
 			name: "negative ttl rejected",
 			c: func() *valkey.ValkeyClient {
-				client, err := valkey.NewValkeyClient(valkey.ValkeyParams{Addr: "127.0.0.1:6379"})
+				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
@@ -314,7 +411,7 @@ func TestValkeyClientSetValidation(t *testing.T) {
 		{
 			name: "canceled context aborts set",
 			c: func() *valkey.ValkeyClient {
-				client, err := valkey.NewValkeyClient(valkey.ValkeyParams{Addr: "127.0.0.1:6379"})
+				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
@@ -380,7 +477,7 @@ func TestValkeyClientDeleteValidation(t *testing.T) {
 		{
 			name: "empty key rejected",
 			c: func() *valkey.ValkeyClient {
-				client, err := valkey.NewValkeyClient(valkey.ValkeyParams{Addr: "127.0.0.1:6379"})
+				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
@@ -393,7 +490,7 @@ func TestValkeyClientDeleteValidation(t *testing.T) {
 		{
 			name: "canceled context aborts delete",
 			c: func() *valkey.ValkeyClient {
-				client, err := valkey.NewValkeyClient(valkey.ValkeyParams{Addr: "127.0.0.1:6379"})
+				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
@@ -460,7 +557,7 @@ func TestValkeyClientTTLValidation(t *testing.T) {
 		{
 			name: "empty key rejected",
 			c: func() *valkey.ValkeyClient {
-				client, err := valkey.NewValkeyClient(valkey.ValkeyParams{Addr: "127.0.0.1:6379"})
+				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
@@ -474,7 +571,7 @@ func TestValkeyClientTTLValidation(t *testing.T) {
 		{
 			name: "canceled context aborts ttl",
 			c: func() *valkey.ValkeyClient {
-				client, err := valkey.NewValkeyClient(valkey.ValkeyParams{Addr: "127.0.0.1:6379"})
+				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
@@ -551,7 +648,7 @@ func TestValkeyClientSetNXValidation(t *testing.T) {
 		{
 			name: "empty key rejected",
 			c: func() *valkey.ValkeyClient {
-				client, err := valkey.NewValkeyClient(valkey.ValkeyParams{Addr: "127.0.0.1:6379"})
+				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
@@ -567,7 +664,7 @@ func TestValkeyClientSetNXValidation(t *testing.T) {
 		{
 			name: "zero ttl rejected",
 			c: func() *valkey.ValkeyClient {
-				client, err := valkey.NewValkeyClient(valkey.ValkeyParams{Addr: "127.0.0.1:6379"})
+				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
@@ -583,7 +680,7 @@ func TestValkeyClientSetNXValidation(t *testing.T) {
 		{
 			name: "negative ttl rejected",
 			c: func() *valkey.ValkeyClient {
-				client, err := valkey.NewValkeyClient(valkey.ValkeyParams{Addr: "127.0.0.1:6379"})
+				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
@@ -599,7 +696,7 @@ func TestValkeyClientSetNXValidation(t *testing.T) {
 		{
 			name: "canceled context aborts setnx",
 			c: func() *valkey.ValkeyClient {
-				client, err := valkey.NewValkeyClient(valkey.ValkeyParams{Addr: "127.0.0.1:6379"})
+				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
@@ -678,7 +775,7 @@ func TestValkeyClientEvalValidation(t *testing.T) {
 		{
 			name: "canceled context aborts eval",
 			c: func() *valkey.ValkeyClient {
-				client, err := valkey.NewValkeyClient(valkey.ValkeyParams{Addr: "127.0.0.1:6379"})
+				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
@@ -742,7 +839,7 @@ func TestValkeyClientClose(t *testing.T) {
 		{
 			name: "initialized client closes cleanly",
 			c: func() *valkey.ValkeyClient {
-				client, err := valkey.NewValkeyClient(valkey.ValkeyParams{Addr: "127.0.0.1:6379"})
+				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}

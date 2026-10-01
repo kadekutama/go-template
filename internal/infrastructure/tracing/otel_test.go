@@ -116,14 +116,18 @@ func TestBootstrapValidation(t *testing.T) {
 			cfg: Config{
 				ServiceVersion: testServiceVersion,
 				Env:            testEnv,
+				SampleRatio:    0.1,
+				ExcludedRoutes: []string{"/healthz"},
 			},
 			expectedError: true,
 		},
 		{
 			name: "missing service version",
 			cfg: Config{
-				ServiceName: testServiceName,
-				Env:         testEnv,
+				ServiceName:    testServiceName,
+				Env:            testEnv,
+				SampleRatio:    0.1,
+				ExcludedRoutes: []string{"/healthz"},
 			},
 			expectedError: true,
 		},
@@ -134,6 +138,7 @@ func TestBootstrapValidation(t *testing.T) {
 				ServiceVersion: testServiceVersion,
 				Env:            testEnv,
 				SampleRatio:    9,
+				ExcludedRoutes: []string{"/healthz"},
 			},
 			expectedError: true,
 		},
@@ -144,6 +149,40 @@ func TestBootstrapValidation(t *testing.T) {
 				ServiceVersion: testServiceVersion,
 				Env:            testEnv,
 				SampleRatio:    -0.5,
+				ExcludedRoutes: []string{"/healthz"},
+			},
+			expectedError: true,
+		},
+		{
+			name: "sample ratio zero rejected",
+			cfg: Config{
+				ServiceName:    testServiceName,
+				ServiceVersion: testServiceVersion,
+				Env:            testEnv,
+				SampleRatio:    0,
+				ExcludedRoutes: []string{"/healthz"},
+			},
+			expectedError: true,
+		},
+		{
+			name: "missing excluded routes",
+			cfg: Config{
+				ServiceName:    testServiceName,
+				ServiceVersion: testServiceVersion,
+				Env:            testEnv,
+				SampleRatio:    0.1,
+				ExcludedRoutes: nil,
+			},
+			expectedError: true,
+		},
+		{
+			name: "blank excluded route item",
+			cfg: Config{
+				ServiceName:    testServiceName,
+				ServiceVersion: testServiceVersion,
+				Env:            testEnv,
+				SampleRatio:    0.1,
+				ExcludedRoutes: []string{"/healthz", "   "},
 			},
 			expectedError: true,
 		},
@@ -154,6 +193,8 @@ func TestBootstrapValidation(t *testing.T) {
 				ServiceVersion: testServiceVersion,
 				Env:            testEnv,
 				OTLPEndpoint:   "://bad",
+				SampleRatio:    0.1,
+				ExcludedRoutes: []string{"/healthz"},
 			},
 			expectedError: true,
 		},
@@ -163,6 +204,8 @@ func TestBootstrapValidation(t *testing.T) {
 				ServiceName:    testServiceName,
 				ServiceVersion: testServiceVersion,
 				Env:            "production",
+				SampleRatio:    0.1,
+				ExcludedRoutes: []string{"/healthz"},
 			},
 			expectedError: true,
 		},
@@ -172,6 +215,8 @@ func TestBootstrapValidation(t *testing.T) {
 				ServiceName:    testServiceName,
 				ServiceVersion: testServiceVersion,
 				Env:            testEnv,
+				SampleRatio:    0.1,
+				ExcludedRoutes: []string{"/healthz", "/readyz", "/livez"},
 			},
 			expectedError: false,
 		},
@@ -184,9 +229,31 @@ func TestBootstrapValidation(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
-				assert.False(t, provider.Exporting())
-				_ = provider.Shutdown(context.Background())
+				if assert.NotNil(t, provider) {
+					assert.False(t, provider.Exporting())
+					_ = provider.Shutdown(context.Background())
+				}
 			}
 		})
 	}
+}
+
+func TestProviderExcludedRoutes(t *testing.T) {
+	t.Parallel()
+
+	provider, err := Bootstrap(Config{
+		ServiceName:    testServiceName,
+		ServiceVersion: testServiceVersion,
+		Env:            testEnv,
+		SampleRatio:    0.1,
+		ExcludedRoutes: []string{"/healthz", "/readyz", "/livez"},
+	})
+	assert.NoError(t, err)
+	defer func() { _ = provider.Shutdown(context.Background()) }()
+
+	assert.True(t, provider.IsExcludedRoute("/healthz"))
+	assert.True(t, provider.IsExcludedRoute("/readyz"))
+	assert.True(t, provider.IsExcludedRoute("/livez"))
+	assert.False(t, provider.IsExcludedRoute("/api/v1/payments"))
+	assert.Equal(t, []string{"/healthz", "/readyz", "/livez"}, provider.ExcludedRoutes())
 }

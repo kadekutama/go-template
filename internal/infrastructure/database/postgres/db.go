@@ -19,20 +19,27 @@ type Config struct {
 	ConnMaxLifetime time.Duration
 }
 
-// DefaultConfig returns pool defaults honoring E01-T03 sizing knobs.
-func DefaultConfig(dsn string) Config {
-	return Config{
-		DSN:             dsn,
-		MaxOpen:         25,
-		MaxIdle:         5,
-		ConnMaxLifetime: 30 * time.Minute,
+// Validate verifies all required PostgreSQL pool configuration fields are set.
+func (c Config) Validate() error {
+	if c.DSN == "" {
+		return fmt.Errorf("postgres: DSN is required")
 	}
+	if c.MaxOpen <= 0 {
+		return fmt.Errorf("postgres: MaxOpen must be positive")
+	}
+	if c.MaxIdle <= 0 {
+		return fmt.Errorf("postgres: MaxIdle must be positive")
+	}
+	if c.ConnMaxLifetime <= 0 {
+		return fmt.Errorf("postgres: ConnMaxLifetime must be positive")
+	}
+	return nil
 }
 
 // Open connects with the postgres dialect and applies pool settings.
 func Open(cfg Config) (*gorm.DB, error) {
-	if cfg.DSN == "" {
-		return nil, fmt.Errorf("postgres: DSN is required")
+	if err := cfg.Validate(); err != nil {
+		return nil, err
 	}
 
 	db, err := gorm.Open(postgres.Open(cfg.DSN), &gorm.Config{

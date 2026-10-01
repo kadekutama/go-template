@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -21,18 +22,33 @@ import (
 	testcontainers "github.com/kadekutama/go-template/test/testcontainers"
 )
 
+func newTestValkeyClient(addr string) (*valkey.ValkeyClient, error) {
+	return valkey.NewValkeyClient(valkey.ValkeyParams{
+		Addr:         addr,
+		PoolSize:     10,
+		DialTimeout:  5 * time.Second,
+		ReadTimeout:  3 * time.Second,
+		WriteTimeout: 3 * time.Second,
+	})
+}
+
 func newHybrid(t *testing.T, addr string) *hybrid.Cache {
 	t.Helper()
 
-	l1, err := local.NewOtterCache(local.OtterParams{MaximumWeight: 1 << 20})
+	l1, err := local.NewOtterCache(local.OtterParams{MaximumWeight: 1 << 20, DefaultTTL: time.Minute})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = l1.Close() })
 
-	l2, err := valkey.NewValkeyClient(valkey.ValkeyParams{Addr: addr})
+	l2, err := newTestValkeyClient(addr)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = l2.Close() })
 
-	engine, err := hybrid.New(hybrid.Params{L1: l1, L2: l2})
+	engine, err := hybrid.New(hybrid.Params{
+		L1:            l1,
+		L2:            l2,
+		L1PopulateTTL: time.Minute,
+		Codec:         hybrid.JSONCodec{},
+	})
 	require.NoError(t, err)
 
 	return engine
@@ -119,15 +135,20 @@ func TestHybridBenchmarks(t *testing.T) {
 
 	ctx := context.Background()
 
-	l1, err := local.NewOtterCache(local.OtterParams{MaximumWeight: 1 << 20})
+	l1, err := local.NewOtterCache(local.OtterParams{MaximumWeight: 1 << 20, DefaultTTL: time.Minute})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = l1.Close() })
 
-	l2, err := valkey.NewValkeyClient(valkey.ValkeyParams{Addr: handle.Addr()})
+	l2, err := newTestValkeyClient(handle.Addr())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = l2.Close() })
 
-	cache, err := hybrid.New(hybrid.Params{L1: l1, L2: l2})
+	cache, err := hybrid.New(hybrid.Params{
+		L1:            l1,
+		L2:            l2,
+		L1PopulateTTL: time.Minute,
+		Codec:         hybrid.JSONCodec{},
+	})
 	require.NoError(t, err)
 
 	require.NoError(t, cache.Set(ctx, "balance:t1:bench:USD", []byte(`{"minor":7}`), time.Minute))
@@ -154,7 +175,7 @@ func TestRedlockOneWinner(t *testing.T) {
 	handle, err := testcontainers.StartValkey(t)
 	require.NoError(t, err)
 
-	client, err := valkey.NewValkeyClient(valkey.ValkeyParams{Addr: handle.Addr()})
+	client, err := newTestValkeyClient(handle.Addr())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = client.Close() })
 
@@ -167,8 +188,7 @@ func TestRedlockOneWinner(t *testing.T) {
 	ctx := context.Background()
 	const contenders = 8
 
-	var mu sync.Mutex
-	winners := 0
+	var winners atomic.Int64
 
 	var wg sync.WaitGroup
 	for i := 0; i < contenders; i++ {
@@ -179,16 +199,14 @@ func TestRedlockOneWinner(t *testing.T) {
 			}
 			defer func() { _ = lease.Release(context.Background()) }()
 
-			mu.Lock()
-			winners++
-			mu.Unlock()
+			winners.Add(1)
 
 			time.Sleep(50 * time.Millisecond)
 		})
 	}
 	wg.Wait()
 
-	assert.Equal(t, 1, winners)
+	assert.Equal(t, int64(1), winners.Load())
 }
 
 func TestRedlockRefresh(t *testing.T) {
@@ -197,7 +215,7 @@ func TestRedlockRefresh(t *testing.T) {
 	handle, err := testcontainers.StartValkey(t)
 	require.NoError(t, err)
 
-	client, err := valkey.NewValkeyClient(valkey.ValkeyParams{Addr: handle.Addr()})
+	client, err := newTestValkeyClient(handle.Addr())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = client.Close() })
 
@@ -224,7 +242,7 @@ func TestRedlockReleaseDoesNotSteal(t *testing.T) {
 	handle, err := testcontainers.StartValkey(t)
 	require.NoError(t, err)
 
-	client, err := valkey.NewValkeyClient(valkey.ValkeyParams{Addr: handle.Addr()})
+	client, err := newTestValkeyClient(handle.Addr())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = client.Close() })
 
@@ -253,7 +271,7 @@ func TestWithLockDurableEffect(t *testing.T) {
 	handle, err := testcontainers.StartValkey(t)
 	require.NoError(t, err)
 
-	client, err := valkey.NewValkeyClient(valkey.ValkeyParams{Addr: handle.Addr()})
+	client, err := newTestValkeyClient(handle.Addr())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = client.Close() })
 
@@ -268,22 +286,22 @@ func TestWithLockDurableEffect(t *testing.T) {
 
 	const contenders = 8
 
-	var mu sync.Mutex
-	committed := 0
+	var committed atomic.Int64
 
 	var wg sync.WaitGroup
 	for i := 0; i < contenders; i++ {
 		wg.Go(func() {
-			err := lock.WithLock(ctx, lock.GuardParams{Locker: redlock}, tenant, "durable-job", 30*time.Second, func(ctx context.Context) error {
+			err := lock.WithLock(ctx, lock.GuardParams{
+				Locker:          redlock,
+				RefreshInterval: 10 * time.Second,
+			}, tenant, "durable-job", 30*time.Second, func(ctx context.Context) error {
 				won, err := client.SetNX(ctx, effectKey, []byte("1"), time.Minute)
 				if err != nil {
 					return err
 				}
 
 				if won {
-					mu.Lock()
-					committed++
-					mu.Unlock()
+					committed.Add(1)
 				}
 
 				return nil
@@ -296,7 +314,7 @@ func TestWithLockDurableEffect(t *testing.T) {
 	}
 	wg.Wait()
 
-	assert.Equal(t, 1, committed)
+	assert.Equal(t, int64(1), committed.Load())
 }
 
 func TestRateLimiterBurst(t *testing.T) {
@@ -305,7 +323,7 @@ func TestRateLimiterBurst(t *testing.T) {
 	handle, err := testcontainers.StartValkey(t)
 	require.NoError(t, err)
 
-	client, err := valkey.NewValkeyClient(valkey.ValkeyParams{Addr: handle.Addr()})
+	client, err := newTestValkeyClient(handle.Addr())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = client.Close() })
 

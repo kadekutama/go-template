@@ -85,7 +85,7 @@ func TestWatcherServeErrorPaths(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			w := &watcher{cache: make(map[string][]byte), errCh: make(chan error, 4)}
+			w := &watcher{errCh: make(chan error, 4)}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -136,7 +136,7 @@ func TestWatcherSpawnRecoversPanics(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			w := &watcher{cache: make(map[string][]byte), errCh: make(chan error, 4)}
+			w := &watcher{errCh: make(chan error, 4)}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -169,7 +169,7 @@ func TestWatcherSpawnRecoversPanics(t *testing.T) {
 func TestWatcherServeMutation(t *testing.T) {
 	t.Parallel()
 
-	w := &watcher{cache: make(map[string][]byte), errCh: make(chan error, 4)}
+	w := &watcher{errCh: make(chan error, 4)}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

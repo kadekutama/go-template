@@ -8,117 +8,12 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	appport "github.com/kadekutama/go-template/internal/application/port"
-	"github.com/kadekutama/go-template/internal/domain/valueobject"
 	"github.com/kadekutama/go-template/internal/infrastructure/messaging/redpanda/consumer"
-	fakes "github.com/kadekutama/go-template/test/fakes"
+	mockconsumer "github.com/kadekutama/go-template/test/mock/consumer"
 )
-
-func TestReceiptStoreFake(t *testing.T) {
-	t.Parallel()
-
-	type testCase struct {
-		name          string
-		consumer      string
-		eventID       string
-		expectedError bool
-	}
-
-	testCases := []testCase{
-		{
-			name:          "first claim wins",
-			consumer:      "g",
-			eventID:       "e-1",
-			expectedError: false,
-		},
-		{
-			name:          "blank consumer rejected",
-			consumer:      "",
-			eventID:       "e-1",
-			expectedError: true,
-		},
-		{
-			name:          "blank event rejected",
-			consumer:      "g",
-			eventID:       "",
-			expectedError: true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			store := fakes.NewReceiptStore()
-			duplicate, err := store.Claim(context.Background(), tc.consumer, tc.eventID)
-			if tc.expectedError {
-				assert.Error(t, err)
-				return
-			}
-			require.NoError(t, err)
-			assert.False(t, duplicate)
-
-			duplicateAgain, err := store.Claim(context.Background(), tc.consumer, tc.eventID)
-			require.NoError(t, err)
-			assert.True(t, duplicateAgain)
-		})
-	}
-}
-
-func TestMessageDLQFake(t *testing.T) {
-	t.Parallel()
-
-	type testCase struct {
-		name          string
-		msg           appport.Message
-		expectedError error
-	}
-
-	testCases := []testCase{
-		{
-			name: "valid message recorded",
-			msg: appport.Message{
-				ID: "dlq-1",
-				TenantID: func() valueobject.TenantID {
-					t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000040")
-					return t
-				}(),
-				Subject:     "ledger.t1.transfer.completed.v1",
-				Payload:     []byte(`{"minor":1}`),
-				Redelivered: 5,
-			},
-			expectedError: nil,
-		},
-		{
-			name: "empty id rejected",
-			msg: appport.Message{
-				ID: "",
-				TenantID: func() valueobject.TenantID {
-					t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000040")
-					return t
-				}(),
-				Subject:     "ledger.t1.transfer.completed.v1",
-				Payload:     []byte(`{"minor":1}`),
-				Redelivered: 5,
-			},
-			expectedError: errors.New("dlq: message id is required"),
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			dlq := fakes.NewMessageDLQ()
-			err := dlq.Record(context.Background(), tc.msg)
-			if tc.expectedError != nil {
-				assert.Error(t, err)
-				return
-			}
-			require.NoError(t, err)
-			assert.Equal(t, 1, dlq.Len())
-			assert.Len(t, dlq.List(), 1)
-		})
-	}
-}
 
 func TestValkeyReceiptStoreValidation(t *testing.T) {
 	t.Parallel()
@@ -134,13 +29,23 @@ func TestValkeyReceiptStoreValidation(t *testing.T) {
 			name: "nil client rejected",
 			params: consumer.ValkeyReceiptParams{
 				Client: nil,
+				TTL:    time.Hour,
 			},
-			expectedError: errors.New("consumer: valkey client is required"),
+			expectedError: errors.New("consumer: invalid receipt params (1 violation(s)): Client: rule \"required\" on value <nil>"),
+		},
+		{
+			name: "non-positive ttl rejected",
+			params: consumer.ValkeyReceiptParams{
+				Client: mockconsumer.NewMockReceiptKV(t),
+				TTL:    0,
+			},
+			expectedError: errors.New("consumer: invalid receipt params (1 violation(s)): TTL: rule \"required\" on value 0s"),
 		},
 		{
 			name: "valid client accepted",
 			params: consumer.ValkeyReceiptParams{
-				Client: &fakeKV{},
+				Client: mockconsumer.NewMockReceiptKV(t),
+				TTL:    time.Hour,
 			},
 			expectedError: nil,
 		},
@@ -160,108 +65,27 @@ func TestValkeyReceiptStoreValidation(t *testing.T) {
 	}
 }
 
-// fakeKV is an in-memory SetNX seam for receipt tests.
-type fakeKV struct {
-	mu   sync.Mutex
-	data map[string]struct{}
-	fail error
-}
-
-func (f *fakeKV) SetNX(_ context.Context, key string, _ []byte, _ time.Duration) (bool, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	if f.fail != nil {
-		return false, f.fail
-	}
-
-	if f.data == nil {
-		f.data = make(map[string]struct{})
-	}
-
-	if _, ok := f.data[key]; ok {
-		return false, nil
-	}
-
-	f.data[key] = struct{}{}
-
-	return true, nil
-}
-
-func (f *fakeKV) Delete(_ context.Context, key string) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	if f.fail != nil {
-		return f.fail
-	}
-
-	delete(f.data, key)
-
-	return nil
-}
-
-func TestReceiptStoreFakeRelease(t *testing.T) {
-	t.Parallel()
-
-	type testCase struct {
-		name          string
-		consumer      string
-		eventID       string
-		preClaim      bool
-		expectedError error
-	}
-
-	testCases := []testCase{
-		{
-			name:          "successful release",
-			consumer:      "g",
-			eventID:       "e-1",
-			preClaim:      true,
-			expectedError: nil,
-		},
-		{
-			name:          "release missing receipt succeeds",
-			consumer:      "g",
-			eventID:       "e-missing",
-			preClaim:      false,
-			expectedError: nil,
-		},
-		{
-			name:          "blank consumer rejected",
-			consumer:      "",
-			eventID:       "e-1",
-			preClaim:      false,
-			expectedError: errors.New("receipt: consumer is required"),
-		},
-		{
-			name:          "blank event rejected",
-			consumer:      "g",
-			eventID:       "",
-			preClaim:      false,
-			expectedError: errors.New("receipt: event id is required"),
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			store := fakes.NewReceiptStore()
-			ctx := context.Background()
-
-			if tc.preClaim {
-				dup, err := store.Claim(ctx, tc.consumer, tc.eventID)
-				require.NoError(t, err)
-				assert.False(t, dup)
+func newMockReceiptKV(t *testing.T, fail error) *mockconsumer.MockReceiptKV {
+	t.Helper()
+	m := mockconsumer.NewMockReceiptKV(t)
+	var data sync.Map
+	m.EXPECT().SetNX(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, key string, _ []byte, _ time.Duration) (bool, error) {
+			if fail != nil {
+				return false, fail
 			}
-
-			err := store.Release(ctx, tc.consumer, tc.eventID)
-			if tc.expectedError != nil {
-				assert.Error(t, err)
-				return
+			_, loaded := data.LoadOrStore(key, struct{}{})
+			return !loaded, nil
+		}).Maybe()
+	m.EXPECT().Delete(mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, key string) error {
+			if fail != nil {
+				return fail
 			}
-			require.NoError(t, err)
-		})
-	}
+			data.Delete(key)
+			return nil
+		}).Maybe()
+	return m
 }
 
 func TestValkeyReceiptStoreClaim(t *testing.T) {
@@ -318,8 +142,8 @@ func TestValkeyReceiptStoreClaim(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			kv := &fakeKV{fail: tc.kvFail}
-			store, err := consumer.NewValkeyReceiptStore(consumer.ValkeyReceiptParams{Client: kv})
+			kv := newMockReceiptKV(t, tc.kvFail)
+			store, err := consumer.NewValkeyReceiptStore(consumer.ValkeyReceiptParams{Client: kv, TTL: time.Hour})
 			require.NoError(t, err)
 
 			if tc.preClaim {
@@ -379,8 +203,8 @@ func TestValkeyReceiptStoreRelease(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			kv := &fakeKV{fail: tc.kvFail}
-			store, err := consumer.NewValkeyReceiptStore(consumer.ValkeyReceiptParams{Client: kv})
+			kv := newMockReceiptKV(t, tc.kvFail)
+			store, err := consumer.NewValkeyReceiptStore(consumer.ValkeyReceiptParams{Client: kv, TTL: time.Hour})
 			require.NoError(t, err)
 
 			if tc.preClaim {

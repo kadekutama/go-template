@@ -23,10 +23,10 @@ type Client struct {
 // NewClient builds a connected-capable etcd client. clientv3 dials lazily,
 // so this returns without network I/O; Health verifies reachability.
 func NewClient(params ClientParams) (*Client, error) {
-	cfg := params.Config.withDefaults()
-	if err := cfg.Validate(); err != nil {
+	if err := params.Config.Validate(); err != nil {
 		return nil, err
 	}
+	cfg := params.Config
 
 	cli, err := clientv3.New(clientv3.Config{
 		Endpoints:   cfg.Endpoints,

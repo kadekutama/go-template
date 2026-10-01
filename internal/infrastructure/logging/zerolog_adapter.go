@@ -18,12 +18,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// Config tunes the adapter. Unknown levels fail open to info: logging must
-// never break the caller (observability degrades, money logic does not).
-type Config struct {
-	Level string
-}
-
 // configureShape pins the process-wide zerolog JSON shape once (the sanctioned
 // exception to no-global-state, mirroring the OTel globals in E01-T05):
 // RFC3339Nano UTC timestamps, conventional field names, and the "msg" message

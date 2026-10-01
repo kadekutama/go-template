@@ -27,13 +27,16 @@ func openCitus(t *testing.T, dbname string) (*testcontainers.CitusHandle, *sql.D
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = sqlDB.Close() })
 
-	runner, err := migration.NewRunner(migration.RunnerParams{DB: sqlDB})
+	runner, err := migration.NewRunner(migration.RunnerParams{
+		DB:      sqlDB,
+		Timeout: 30 * time.Second,
+	})
 	require.NoError(t, err)
 	require.NoError(t, runner.Up(context.Background()))
 
 	version, err := runner.Version(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, int64(20260901000005), version)
+	assert.Equal(t, int64(20261001000010), version)
 
 	return handle, sqlDB
 }
@@ -262,10 +265,13 @@ VALUES ('60000000-0000-4000-8000-000000000025', '60000000-0000-4000-8000-0000000
 	require.NoError(t, recovered.QueryRowContext(ctx, `SELECT COUNT(*) FROM accounts`).Scan(&after))
 	assert.Equal(t, before, after, "ungraceful kill must lose zero committed rows (RPO=0)")
 
-	version, err := migration.NewRunner(migration.RunnerParams{DB: recovered})
+	version, err := migration.NewRunner(migration.RunnerParams{
+		DB:      recovered,
+		Timeout: 30 * time.Second,
+	})
 	require.NoError(t, err)
 
 	current, err := version.Version(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, int64(20260901000005), current)
+	assert.Equal(t, int64(20261001000010), current)
 }

@@ -24,6 +24,7 @@ func baseOnboardingRequest() service.OnboardingRequest {
 			Timezone:        "UTC",
 		},
 		Assets:         []valueobject.AssetCode{"USD", "EUR"},
+		MaxAssets:      8,
 		ExistingNames:  []string{"Other Corp"},
 		AllowedRegions: []string{"us-east-1", "eu-west-1"},
 		RequestedBy:    "30000000-0000-4000-8000-000000000001",
@@ -58,6 +59,16 @@ func TestValidateOnboarding(t *testing.T) {
 			}(),
 			expectedCount: 0,
 			expectedError: entity.NewError("TENANT_NAME_DUPLICATE", "tenant name is already taken"),
+		},
+		{
+			name: "zero max assets rejected",
+			req: func() service.OnboardingRequest {
+				r := baseOnboardingRequest()
+				r.MaxAssets = 0
+				return r
+			}(),
+			expectedCount: 0,
+			expectedError: entity.NewError("ONBOARDING_ASSETS_INVALID", "max assets must be positive"),
 		},
 		{
 			name: "disallowed region rejected",
@@ -242,6 +253,7 @@ func TestDefaultAccountsForAssets(t *testing.T) {
 	type testCase struct {
 		name          string
 		assets        []valueobject.AssetCode
+		maxAssets     int
 		expectedCount int
 		expectedError error
 	}
@@ -250,62 +262,85 @@ func TestDefaultAccountsForAssets(t *testing.T) {
 		{
 			name:          "single asset yields three accounts",
 			assets:        []valueobject.AssetCode{"USD"},
+			maxAssets:     8,
 			expectedCount: 3,
 			expectedError: nil,
 		},
 		{
 			name:          "two assets yield six accounts",
 			assets:        []valueobject.AssetCode{"USD", "EUR"},
+			maxAssets:     8,
 			expectedCount: 6,
 			expectedError: nil,
 		},
 		{
 			name:          "maximum eight assets passes",
 			assets:        []valueobject.AssetCode{"A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8"},
+			maxAssets:     8,
 			expectedCount: 24,
 			expectedError: nil,
 		},
 		{
 			name:          "empty assets rejected",
 			assets:        nil,
+			maxAssets:     8,
 			expectedCount: 0,
 			expectedError: entity.NewError("ONBOARDING_ASSETS_REQUIRED", "onboarding requires at least one asset"),
 		},
 		{
 			name:          "empty asset code rejected",
 			assets:        []valueobject.AssetCode{""},
+			maxAssets:     8,
 			expectedCount: 0,
 			expectedError: entity.NewError("ONBOARDING_ASSET_INVALID", "onboarding asset code is required"),
 		},
 		{
 			name:          "whitespace asset code rejected",
 			assets:        []valueobject.AssetCode{"   "},
+			maxAssets:     8,
 			expectedCount: 0,
 			expectedError: entity.NewError("ONBOARDING_ASSET_INVALID", "onboarding asset code is required"),
 		},
 		{
 			name:          "duplicate assets rejected",
 			assets:        []valueobject.AssetCode{"USD", "USD"},
+			maxAssets:     8,
 			expectedCount: 0,
 			expectedError: entity.NewError("ONBOARDING_ASSET_INVALID", "onboarding assets must be unique"),
 		},
 		{
 			name:          "duplicate assets with whitespace rejected",
 			assets:        []valueobject.AssetCode{"USD", " USD "},
+			maxAssets:     8,
 			expectedCount: 0,
 			expectedError: entity.NewError("ONBOARDING_ASSET_INVALID", "onboarding assets must be unique"),
 		},
 		{
 			name:          "too many assets rejected",
 			assets:        []valueobject.AssetCode{"A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9"},
+			maxAssets:     8,
 			expectedCount: 0,
-			expectedError: entity.NewError("ONBOARDING_ASSETS_INVALID", "onboarding requests too many assets"),
+			expectedError: entity.NewError("ONBOARDING_ASSETS_EXCEEDED", "onboarding requests too many assets"),
+		},
+		{
+			name:          "zero max assets rejected",
+			assets:        []valueobject.AssetCode{"USD"},
+			maxAssets:     0,
+			expectedCount: 0,
+			expectedError: entity.NewError("ONBOARDING_ASSETS_INVALID", "max assets must be positive"),
+		},
+		{
+			name:          "negative max assets rejected",
+			assets:        []valueobject.AssetCode{"USD"},
+			maxAssets:     -1,
+			expectedCount: 0,
+			expectedError: entity.NewError("ONBOARDING_ASSETS_INVALID", "max assets must be positive"),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			accounts, err := service.DefaultAccountsForAssets(tc.assets)
+			accounts, err := service.DefaultAccountsForAssets(tc.assets, tc.maxAssets)
 			assert.Equal(t, tc.expectedError, err)
 			assert.Len(t, accounts, tc.expectedCount)
 			if tc.expectedError == nil {

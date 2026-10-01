@@ -25,14 +25,16 @@ func TestNewProducer(t *testing.T) {
 		{
 			name: "blank seeds rejected without dialing",
 			params: redpanda.ProducerParams{
-				Seeds: nil,
+				Seeds:       nil,
+				DialTimeout: 5 * time.Second,
 			},
 			expectedError: errors.New("redpanda: at least one seed is required"),
 		},
 		{
 			name: "whitespace seeds rejected",
 			params: redpanda.ProducerParams{
-				Seeds: []string{"  ", ""},
+				Seeds:       []string{"  ", ""},
+				DialTimeout: 5 * time.Second,
 			},
 			expectedError: errors.New("redpanda: at least one seed is required"),
 		},
@@ -43,8 +45,28 @@ func TestNewProducer(t *testing.T) {
 				SASLUser:      "app",
 				SASLPass:      "secret",
 				SASLMechanism: "oauthbearer",
+				DialTimeout:   5 * time.Second,
 			},
 			expectedError: errors.New(`redpanda: unknown sasl mechanism "oauthbearer"`),
+		},
+		{
+			name: "missing sasl mechanism rejected when user is provided",
+			params: redpanda.ProducerParams{
+				Seeds:         []string{"127.0.0.1:9092"},
+				SASLUser:      "app",
+				SASLPass:      "secret",
+				SASLMechanism: "",
+				DialTimeout:   5 * time.Second,
+			},
+			expectedError: errors.New("redpanda: sasl mechanism is required when sasl credentials are provided"),
+		},
+		{
+			name: "missing dial timeout rejected",
+			params: redpanda.ProducerParams{
+				Seeds:       []string{"127.0.0.1:9092"},
+				DialTimeout: 0,
+			},
+			expectedError: errors.New(`redpanda: invalid producer params (1 violation(s)): DialTimeout: rule "required" on value 0s`),
 		},
 		{
 			name: "negative dial timeout rejected",
@@ -58,6 +80,7 @@ func TestNewProducer(t *testing.T) {
 			name: "negative buffer rejected",
 			params: redpanda.ProducerParams{
 				Seeds:            []string{"127.0.0.1:9092"},
+				DialTimeout:      5 * time.Second,
 				MaxBufferedBytes: -1,
 			},
 			expectedError: errors.New(`redpanda: invalid producer params (1 violation(s)): MaxBufferedBytes: rule "gt" on value -1`),
@@ -103,7 +126,10 @@ func TestProducerPublishValidation(t *testing.T) {
 		{
 			name: "blank topic rejected",
 			producer: func() *redpanda.Producer {
-				p, err := redpanda.NewProducer(redpanda.ProducerParams{Seeds: []string{"127.0.0.1:1"}})
+				p, err := redpanda.NewProducer(redpanda.ProducerParams{
+					Seeds:       []string{"127.0.0.1:1"},
+					DialTimeout: 5 * time.Second,
+				})
 				if err != nil {
 					panic(err)
 				}
@@ -119,7 +145,10 @@ func TestProducerPublishValidation(t *testing.T) {
 		{
 			name: "canceled context aborts",
 			producer: func() *redpanda.Producer {
-				p, err := redpanda.NewProducer(redpanda.ProducerParams{Seeds: []string{"127.0.0.1:1"}})
+				p, err := redpanda.NewProducer(redpanda.ProducerParams{
+					Seeds:       []string{"127.0.0.1:1"},
+					DialTimeout: 5 * time.Second,
+				})
 				if err != nil {
 					panic(err)
 				}
@@ -139,7 +168,10 @@ func TestProducerPublishValidation(t *testing.T) {
 		{
 			name: "publish after close returns client closed error",
 			producer: func() *redpanda.Producer {
-				p, err := redpanda.NewProducer(redpanda.ProducerParams{Seeds: []string{"127.0.0.1:1"}})
+				p, err := redpanda.NewProducer(redpanda.ProducerParams{
+					Seeds:       []string{"127.0.0.1:1"},
+					DialTimeout: 5 * time.Second,
+				})
 				if err != nil {
 					panic(err)
 				}
@@ -192,7 +224,10 @@ func TestProducerClose(t *testing.T) {
 		{
 			name: "constructed producer close succeeds",
 			producer: func() *redpanda.Producer {
-				p, err := redpanda.NewProducer(redpanda.ProducerParams{Seeds: []string{"127.0.0.1:1"}})
+				p, err := redpanda.NewProducer(redpanda.ProducerParams{
+					Seeds:       []string{"127.0.0.1:1"},
+					DialTimeout: 5 * time.Second,
+				})
 				if err != nil {
 					panic(err)
 				}

@@ -15,3 +15,100 @@ packages:
       dir: test/mock/application
       outpkg: mockapplication
       filename: "{{.InterfaceName}}.go"
+  github.com/kadekutama/go-template/internal/application/command:
+    config:
+      all: true
+      dir: test/mock/command
+      outpkg: mockcommand
+      filename: "{{.InterfaceName}}.go"
+  github.com/kadekutama/go-template/internal/application/service:
+    config:
+      all: true
+      dir: test/mock/service
+      outpkg: mockservice
+      filename: "{{.InterfaceName}}.go"
+  github.com/kadekutama/go-template/internal/application/workflow:
+    config:
+      all: true
+      dir: test/mock/workflow
+      outpkg: mockworkflow
+      filename: "{{.InterfaceName}}.go"
+  github.com/kadekutama/go-template/internal/infrastructure/messaging/redpanda:
+    config:
+      all: true
+      dir: test/mock/redpanda
+      outpkg: mockredpanda
+      filename: "{{.InterfaceName}}.go"
+  github.com/kadekutama/go-template/internal/infrastructure/messaging/redpanda/consumer:
+    config:
+      all: true
+      dir: test/mock/consumer
+      outpkg: mockconsumer
+      filename: "{{.InterfaceName}}.go"
+  github.com/kadekutama/go-template/internal/infrastructure/webhook:
+    config:
+      all: true
+      dir: test/mock/webhook
+      outpkg: mockwebhook
+      filename: "{{.InterfaceName}}.go"
+  github.com/kadekutama/go-template/internal/infrastructure/audit:
+    config:
+      all: true
+      dir: test/mock/audit
+      outpkg: mockaudit
+      filename: "{{.InterfaceName}}.go"
+  github.com/kadekutama/go-template/internal/infrastructure/auth/oauth2:
+    config:
+      all: true
+      dir: test/mock/oauth2
+      outpkg: mockoauth2
+      filename: "{{.InterfaceName}}.go"
+  github.com/kadekutama/go-template/internal/infrastructure/auth/rbac:
+    config:
+      all: true
+      dir: test/mock/rbac
+      outpkg: mockrbac
+      filename: "{{.InterfaceName}}.go"
+  github.com/kadekutama/go-template/internal/infrastructure/cache/valkey:
+    config:
+      all: true
+      dir: test/mock/valkey
+      outpkg: mockvalkey
+      filename: "{{.InterfaceName}}.go"
+  github.com/kadekutama/go-template/internal/infrastructure/lock:
+    config:
+      all: true
+      dir: test/mock/lock
+      outpkg: mocklock
+      filename: "{{.InterfaceName}}.go"
+  github.com/kadekutama/go-template/internal/infrastructure/database/seed:
+    config:
+      all: true
+      dir: test/mock/seed
+      outpkg: mockseed
+      filename: "{{.InterfaceName}}.go"
+  github.com/kadekutama/go-template/internal/infrastructure/crypto:
+    config:
+      all: true
+      dir: test/mock/crypto
+      outpkg: mockcrypto
+      filename: "{{.InterfaceName}}.go"
+  github.com/kadekutama/go-template/internal/infrastructure/cache/store:
+    config:
+      all: true
+      dir: test/mock/store
+      outpkg: mockstore
+      filename: "{{.InterfaceName}}.go"
+  github.com/kadekutama/go-template/internal/infrastructure/coordination/etcd:
+    config:
+      all: true
+      dir: test/mock/etcd
+      outpkg: mocketcd
+      filename: "{{.InterfaceName}}.go"
+  github.com/kadekutama/go-template/internal/infrastructure/httpclient:
+    config:
+      all: true
+      dir: test/mock/httpclient
+      outpkg: mockhttpclient
+      filename: "{{.InterfaceName}}.go"
+

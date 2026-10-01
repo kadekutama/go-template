@@ -350,7 +350,7 @@ func TestAllIDTypesTable(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			gen := &seqIDs{}
+			gen := newMockIDGenerator(t)
 			a, b := gen.NewID(), gen.NewID()
 			assert.NotEqual(t, a, b, "generated ids must be unique")
 
@@ -440,7 +440,7 @@ func checkScopeIDEquivalence(t *testing.T, s1, s2 string) {
 func TestIDEqualsAllTypes(t *testing.T) {
 	t.Parallel()
 
-	gen := &seqIDs{}
+	gen := newMockIDGenerator(t)
 	s1, s2 := gen.NewID(), gen.NewID()
 	checkIDEquivalence(t, s1, s2)
 	checkScopeIDEquivalence(t, s1, s2)

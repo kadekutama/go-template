@@ -2,7 +2,6 @@ package command_test
 
 import (
 	"context"
-	"sync"
 	"testing"
 	"time"
 
@@ -18,121 +17,12 @@ import (
 
 var opsAt = time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
 
-type reconStoreFake struct {
-	mu      sync.Mutex
-	runs    map[string]command.ReconRunRecord
-	breaks  map[string]command.BreakRecord
-	openN   int
-	openErr error
-}
-
-func (s *reconStoreFake) CreateRun(_ context.Context, run command.ReconRunRecord) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.runs == nil {
-		s.runs = map[string]command.ReconRunRecord{}
-	}
-	s.runs[run.ID] = run
-	return nil
-}
-
-func (s *reconStoreFake) FindRun(_ context.Context, _ valueobject.TenantID, id string) (command.ReconRunRecord, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	run, ok := s.runs[id]
-	if !ok {
-		return command.ReconRunRecord{}, entity.NewError("RUN_NOT_FOUND", "reconciliation run is unknown")
-	}
-	return run, nil
-}
-
-func (s *reconStoreFake) UpdateRun(_ context.Context, run command.ReconRunRecord) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.runs[run.ID] = run
-	return nil
-}
-
-func (s *reconStoreFake) CreateBreaks(_ context.Context, breaks []command.BreakRecord) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.breaks == nil {
-		s.breaks = map[string]command.BreakRecord{}
-	}
-	for _, br := range breaks {
-		s.breaks[br.Break.BreakID] = br
-	}
-	return nil
-}
-
-func (s *reconStoreFake) FindBreak(_ context.Context, _ valueobject.TenantID, id string) (command.BreakRecord, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	record, ok := s.breaks[id]
-	if !ok {
-		return command.BreakRecord{}, entity.NewError("BREAK_NOT_FOUND", "break is unknown")
-	}
-	return record, nil
-}
-
-func (s *reconStoreFake) UpdateBreak(_ context.Context, record command.BreakRecord) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.breaks[record.Break.BreakID] = record
-	return nil
-}
-
-func (s *reconStoreFake) ListBreaksByRun(_ context.Context, _ valueobject.TenantID, runID string) ([]command.BreakRecord, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var out []command.BreakRecord
-	for _, record := range s.breaks {
-		if record.Break.RunID == runID {
-			out = append(out, record)
-		}
-	}
-	return out, nil
-}
-
-func (s *reconStoreFake) CountOpenBreaks(_ context.Context, _ valueobject.TenantID, _ valueobject.LedgerID) (int, error) {
-	return s.openN, s.openErr
-}
-
-func (s *reconStoreFake) ListRuns(_ context.Context, _ valueobject.TenantID, limit int) ([]command.ReconRunRecord, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var out []command.ReconRunRecord
-	for _, run := range s.runs {
-		out = append(out, run)
-		if limit > 0 && len(out) >= limit {
-			break
-		}
-	}
-	return out, nil
-}
-
-func (s *reconStoreFake) ListBreaks(_ context.Context, _ valueobject.TenantID, status string, limit int) ([]command.BreakRecord, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var out []command.BreakRecord
-	for _, record := range s.breaks {
-		if status != "" && string(record.Status) != status {
-			continue
-		}
-		out = append(out, record)
-		if limit > 0 && len(out) >= limit {
-			break
-		}
-	}
-	return out, nil
-}
-
-func newReconService(uow *tfrUOW, store *reconStoreFake, authz *tfrAuthz) *command.ReconService {
+func newReconService(t *testing.T, uow port.UnitOfWork, store command.ReconStore, authz port.Authorizer) *command.ReconService {
 	return command.NewReconService(command.ReconServiceParams{
 		UoW:               uow,
 		Runs:              store,
-		Clock:             tfrClock{},
-		IDs:               &tfrIDs{next: tfrTestIDs(40)},
+		Clock:             newMockClock(t, tfrAt),
+		IDs:               newMockIDGenerator(t, tfrTestIDs(40)...),
 		Authz:             authz,
 		SoDThresholdMinor: 10000,
 	})
@@ -162,7 +52,7 @@ func TestReconTrigger(t *testing.T) {
 	type testCase struct {
 		name           string
 		req            port.ReconRunRequest
-		preload        func(uow *tfrUOW)
+		preload        func(uow port.UnitOfWork)
 		denied         bool
 		expectedStatus string
 		expectedError  error
@@ -172,7 +62,7 @@ func TestReconTrigger(t *testing.T) {
 		{
 			name:           "valid trigger starts pending run with outbox fact",
 			req:            baseReq,
-			preload:        func(_ *tfrUOW) {},
+			preload:        func(_ port.UnitOfWork) {},
 			denied:         false,
 			expectedStatus: command.ReconRunPending,
 			expectedError:  nil,
@@ -180,15 +70,9 @@ func TestReconTrigger(t *testing.T) {
 		{
 			name: "corrupt idempotency replay returns IDEMPOTENCY_RECORD_INVALID",
 			req:  baseReq,
-			preload: func(uow *tfrUOW) {
+			preload: func(uow port.UnitOfWork) {
 				fp := command.Fingerprint(baseReq.IdempotencyKey, string(baseReq.TenantID), baseReq.Source, baseReq.WindowStart.UTC().Format(time.RFC3339Nano), baseReq.WindowEnd.UTC().Format(time.RFC3339Nano))
-				uow.idem = map[string]tfrIdemEntry{
-					baseReq.IdempotencyKey: {
-						fingerprint: fp,
-						response:    []byte("{corrupt-json"),
-						completed:   true,
-					},
-				}
+				setUOWIdem(uow, baseReq.IdempotencyKey, fp, []byte("{corrupt-json"))
 			},
 			denied:         false,
 			expectedStatus: "",
@@ -201,7 +85,7 @@ func TestReconTrigger(t *testing.T) {
 				r.TenantID = ""
 				return r
 			}(),
-			preload:        func(_ *tfrUOW) {},
+			preload:        func(_ port.UnitOfWork) {},
 			denied:         false,
 			expectedStatus: "",
 			expectedError:  entity.NewError("TENANT_REQUIRED", "tenant id is required"),
@@ -213,7 +97,7 @@ func TestReconTrigger(t *testing.T) {
 				r.Actor = ""
 				return r
 			}(),
-			preload:        func(_ *tfrUOW) {},
+			preload:        func(_ port.UnitOfWork) {},
 			denied:         false,
 			expectedStatus: "",
 			expectedError:  entity.NewError("ACTOR_REQUIRED", "reconciliation actor is required"),
@@ -225,7 +109,7 @@ func TestReconTrigger(t *testing.T) {
 				r.IdempotencyKey = ""
 				return r
 			}(),
-			preload:        func(_ *tfrUOW) {},
+			preload:        func(_ port.UnitOfWork) {},
 			denied:         false,
 			expectedStatus: "",
 			expectedError:  entity.NewError("IDEMPOTENCY_KEY_REQUIRED", "reconciliation requires an idempotency key"),
@@ -233,7 +117,7 @@ func TestReconTrigger(t *testing.T) {
 		{
 			name:           "denied subject returns FORBIDDEN",
 			req:            baseReq,
-			preload:        func(_ *tfrUOW) {},
+			preload:        func(_ port.UnitOfWork) {},
 			denied:         true,
 			expectedStatus: "",
 			expectedError:  entity.NewError("FORBIDDEN", "subject is not authorized for this action"),
@@ -242,13 +126,13 @@ func TestReconTrigger(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
-			store := &reconStoreFake{}
-			authz := &tfrAuthz{denied: map[string]bool{}}
+			uow := newMockUOW(t)
+			store := newMockReconStore(t)
+			authz := newMockAuthorizer(t)
 			if tc.denied {
-				authz.denied[tc.req.Actor+"|recon.trigger|ledger/"+string(tc.req.LedgerID)] = true
+				setAuthzDenied(authz, tc.req.Actor+"|recon.trigger|ledger/"+string(tc.req.LedgerID))
 			}
-			svc := newReconService(uow, store, authz)
+			svc := newReconService(t, uow, store, authz)
 			tc.preload(uow)
 
 			res, err := svc.TriggerReconRun(context.Background(), tc.req)
@@ -303,10 +187,10 @@ func TestReconExecuteRun(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
-			store := &reconStoreFake{}
-			authz := &tfrAuthz{denied: map[string]bool{}}
-			svc := newReconService(uow, store, authz)
+			uow := newMockUOW(t)
+			store := newMockReconStore(t)
+			authz := newMockAuthorizer(t)
+			svc := newReconService(t, uow, store, authz)
 
 			if tc.seedRun {
 				_ = store.CreateRun(context.Background(), command.ReconRunRecord{
@@ -335,7 +219,7 @@ func TestReconExecuteRun(t *testing.T) {
 			assert.Equal(t, tc.expectedError, err)
 			if tc.expectedError == nil {
 				assert.Equal(t, command.ReconRunCompleted, res.Status)
-				assert.Len(t, store.breaks, 1)
+				store.AssertNumberOfCalls(t, "CreateBreaks", 1)
 				assert.Contains(t, outboxTypes(uow), command.EventReconRunCompleted)
 				assert.Contains(t, outboxTypes(uow), command.EventReconBreakFound)
 			}
@@ -473,13 +357,13 @@ func TestBreakResolveAndAcknowledge(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
-			store := &reconStoreFake{}
-			authz := &tfrAuthz{denied: map[string]bool{}}
+			uow := newMockUOW(t)
+			store := newMockReconStore(t)
+			authz := newMockAuthorizer(t)
 			if tc.denied {
-				authz.denied[tc.req.Actor+"|recon.resolve|recon/"+tc.req.BreakID] = true
+				setAuthzDenied(authz, tc.req.Actor+"|recon.resolve|recon/"+tc.req.BreakID)
 			}
-			svc := newReconService(uow, store, authz)
+			svc := newReconService(t, uow, store, authz)
 
 			if tc.seedBreak {
 				_ = store.CreateBreaks(context.Background(), []command.BreakRecord{

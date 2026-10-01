@@ -29,6 +29,17 @@ accepted ADRs, or `docs/ledger-core.md`.
   MUST operate in separate Git worktrees (`git worktree add ../go-template-<TASK-ID>`)
   and must not declare overlapping change surfaces.
 
+**Review response duty:** After implementation and before marking complete,
+check `tasks/reviews/<TASK-ID>.md`. If a review exists with non-terminal
+findings, append a dated `### Implementer reply` entry under its
+`## Resolution Notes` stating per finding ID whether it is `fixed` (with
+verifying commit/test) or `contested` (with reason and counter-evidence), fix
+what you accept within your change surface, and request reviewer
+adjudication; never edit findings, metadata, or adjudication
+text. New packets coordinate the review path for such replies. If the task
+claim is released, reopen it first. A task with OPEN findings above Low is not
+complete (`tasks/SDD.md` §3.4).
+
 The phrase **Specification-Driven Delivery** refers to this repository workflow.
 The **Specification pattern** refers only to executable domain business rules.
 

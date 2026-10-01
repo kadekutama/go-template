@@ -253,7 +253,10 @@ func (s *PayoutService) GetPayout(ctx context.Context, query port.PaymentQuery) 
 
 // ListPayouts returns one tenant's payouts, newest first (bounded). Strong read.
 func (s *PayoutService) ListPayouts(ctx context.Context, tenant valueobject.TenantID, limit int) ([]port.PayoutResult, error) {
-	records, err := s.payouts.ListPayouts(ctx, tenant, clampPageLimit(limit))
+	if err := validatePageLimit(limit); err != nil {
+		return nil, err
+	}
+	records, err := s.payouts.ListPayouts(ctx, tenant, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -505,7 +508,10 @@ func (s *TopupService) GetTopup(ctx context.Context, tenant valueobject.TenantID
 
 // ListTopups returns one tenant's top-ups, newest first (bounded). Strong read.
 func (s *TopupService) ListTopups(ctx context.Context, tenant valueobject.TenantID, limit int) ([]port.TopupResult, error) {
-	records, err := s.topups.ListTopups(ctx, tenant, clampPageLimit(limit))
+	if err := validatePageLimit(limit); err != nil {
+		return nil, err
+	}
+	records, err := s.topups.ListTopups(ctx, tenant, limit)
 	if err != nil {
 		return nil, err
 	}

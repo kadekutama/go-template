@@ -49,9 +49,36 @@ func TestNewRunner(t *testing.T) {
 		{
 			name: "nil database handle rejected",
 			params: migration.RunnerParams{
-				DB: nil,
+				DB:      nil,
+				Timeout: 5 * time.Second,
 			},
 			expectedError: "migration: DB is required",
+		},
+		{
+			name: "missing timeout rejected",
+			params: func() migration.RunnerParams {
+				db, err := sql.Open("pgx", "postgres://localhost:5432/test?sslmode=disable")
+				require.NoError(t, err)
+				t.Cleanup(func() { _ = db.Close() })
+				return migration.RunnerParams{
+					DB:      db,
+					Timeout: 0,
+				}
+			}(),
+			expectedError: "migration: timeout must be positive",
+		},
+		{
+			name: "negative timeout rejected",
+			params: func() migration.RunnerParams {
+				db, err := sql.Open("pgx", "postgres://localhost:5432/test?sslmode=disable")
+				require.NoError(t, err)
+				t.Cleanup(func() { _ = db.Close() })
+				return migration.RunnerParams{
+					DB:      db,
+					Timeout: -time.Second,
+				}
+			}(),
+			expectedError: "migration: timeout must be positive",
 		},
 		{
 			name: "invalid subdirectory path rejected",
@@ -60,9 +87,10 @@ func TestNewRunner(t *testing.T) {
 				require.NoError(t, err)
 				t.Cleanup(func() { _ = db.Close() })
 				return migration.RunnerParams{
-					DB:  db,
-					FS:  fstest.MapFS{},
-					Dir: "/invalid_leading_slash",
+					DB:      db,
+					FS:      fstest.MapFS{},
+					Dir:     "/invalid_leading_slash",
+					Timeout: 5 * time.Second,
 				}
 			}(),
 			expectedError: "migration: sub fs /invalid_leading_slash",
@@ -103,9 +131,9 @@ func TestMigrationListVersions(t *testing.T) {
 
 	testCases := []testCase{
 		{
-			name:             "timestamped baseline plus citus distribution in order",
-			expectedCount:    5,
-			expectedVersions: []int64{20260901000001, 20260901000002, 20260901000003, 20260901000004, 20260901000005},
+			name:             "timestamped baseline plus citus distribution plus identity tables in order",
+			expectedCount:    10,
+			expectedVersions: []int64{20260901000001, 20260901000002, 20260901000003, 20260901000004, 20260901000005, 20260923000006, 20260923000007, 20260923000008, 20260923000009, 20261001000010},
 		},
 	}
 
@@ -259,6 +287,29 @@ func TestMigrationSQLContent(t *testing.T) {
 			mustNotMatch: []string{},
 		},
 		{
+			name: "identity tables distribute outside transactions",
+			file: "versions/20260923000009_identity_citus.sql",
+			mustContain: []string{
+				"-- +goose NO TRANSACTION",
+				"-- +goose Up",
+				"-- +goose Down",
+				"create_distributed_table",
+			},
+			mustNotMatch: []string{},
+		},
+		{
+			name: "casbin rules use standard six-column global schema",
+			file: "versions/20261001000010_casbin_rules.sql",
+			mustContain: []string{
+				"-- +goose Up",
+				"-- +goose Down",
+				"CREATE TABLE IF NOT EXISTS casbin_rules",
+				"ptype",
+				"DROP TABLE IF EXISTS casbin_rules",
+			},
+			mustNotMatch: []string{},
+		},
+		{
 			name: "rls policies wrap dynamic blocks in statement delimiters",
 			file: "versions/20260901000004_rls_policies.sql",
 			mustContain: []string{
@@ -368,7 +419,11 @@ func TestLegacyBootstrap(t *testing.T) {
 	_, err = sqlDB.ExecContext(ctx, `INSERT INTO schema_migrations (version) VALUES (1), (2), (3), (4)`)
 	require.NoError(t, err)
 
-	first, err := migration.NewRunner(migration.RunnerParams{DB: sqlDB, Logger: noFatalLogger{}})
+	first, err := migration.NewRunner(migration.RunnerParams{
+		DB:      sqlDB,
+		Logger:  noFatalLogger{},
+		Timeout: 30 * time.Second,
+	})
 	require.NoError(t, err)
 
 	var copied []int64
@@ -386,7 +441,10 @@ func TestLegacyBootstrap(t *testing.T) {
 	require.NoError(t, rows.Err())
 	assert.Equal(t, []int64{1, 2, 3, 4}, copied, "bootstrap must copy legacy versions 1..4")
 
-	second, err := migration.NewRunner(migration.RunnerParams{DB: sqlDB})
+	second, err := migration.NewRunner(migration.RunnerParams{
+		DB:      sqlDB,
+		Timeout: 30 * time.Second,
+	})
 	require.NoError(t, err)
 
 	var count int
@@ -397,7 +455,7 @@ func TestLegacyBootstrap(t *testing.T) {
 
 	version, err := second.Version(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, int64(20260901000005), version)
+	assert.Equal(t, int64(20261001000010), version)
 
 	require.NoError(t, first.Up(ctx), "re-running Up must stay idempotent")
 }

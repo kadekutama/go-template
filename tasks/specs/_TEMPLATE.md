@@ -1,9 +1,11 @@
 # Task Specification: TASK-ID — Title
 
 **Task:** TASK-ID  
+**SDD Packet Version:** 2
 **Spec Status:** draft  
 **Author:** unassigned  
 **Reviewer:** unassigned  
+**Review Requirement:** self
 **Last Updated:** YYYY-MM-DD
 
 ## Objective
@@ -79,5 +81,6 @@ implementation.
 **Decision:** pending  
 **Approved By:** unassigned  
 **Date:** YYYY-MM-DD  
-**Notes:** High-risk tasks require a reviewer different from the author.
-
+**Notes:** Use `independent` review for high-risk tasks; `none` requires rationale.
+Required review outcomes are recorded at `tasks/reviews/<TASK-ID>.md` and linked
+from the task handoff. See `tasks/SDD.md` §§2–3.4.

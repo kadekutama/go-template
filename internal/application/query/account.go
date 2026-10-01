@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/kadekutama/go-template/internal/application/port"
+	"github.com/kadekutama/go-template/internal/domain/entity"
 	"github.com/kadekutama/go-template/internal/domain/repository"
 )
 
@@ -39,13 +40,10 @@ func (s *AccountQueryService) GetAccount(ctx context.Context, query port.Account
 
 // ListAccounts pages tenant accounts. Point-in-time page.
 func (s *AccountQueryService) ListAccounts(ctx context.Context, query port.AccountListQuery) (port.AccountPage, error) {
-	limit := query.Limit
-	if limit <= 0 {
-		limit = 50
-	} else if limit > 100 {
-		limit = 100
+	if query.Limit <= 0 || query.Limit > 100 {
+		return port.AccountPage{}, entity.NewError("INVALID_PAGE_LIMIT", "limit must be between 1 and 100")
 	}
-	accounts, next, err := s.accounts.FindByTenant(ctx, query.TenantID, query.Cursor, limit)
+	accounts, next, err := s.accounts.FindByTenant(ctx, query.TenantID, query.Cursor, query.Limit)
 	if err != nil {
 		return port.AccountPage{}, err
 	}

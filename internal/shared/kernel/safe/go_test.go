@@ -3,7 +3,7 @@ package safe
 import (
 	"context"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -12,13 +12,14 @@ import (
 	"github.com/kadekutama/go-template/internal/shared/kernel/log"
 )
 
+type errCall struct {
+	msg  string
+	args []any
+}
+
 type testLogger struct {
-	mu       sync.Mutex
 	errChan  chan struct{}
-	errCalls []struct {
-		msg  string
-		args []any
-	}
+	errCalls atomic.Pointer[[]errCall]
 }
 
 func (l *testLogger) Trace(context.Context, string, ...any) {}
@@ -26,12 +27,21 @@ func (l *testLogger) Debug(context.Context, string, ...any) {}
 func (l *testLogger) Info(context.Context, string, ...any)  {}
 func (l *testLogger) Warn(context.Context, string, ...any)  {}
 func (l *testLogger) Error(_ context.Context, msg string, args ...any) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.errCalls = append(l.errCalls, struct {
-		msg  string
-		args []any
-	}{msg: msg, args: args})
+	call := errCall{msg: msg, args: args}
+	for {
+		old := l.errCalls.Load()
+		var next []errCall
+		if old != nil {
+			next = make([]errCall, len(*old)+1)
+			copy(next, *old)
+			next[len(*old)] = call
+		} else {
+			next = []errCall{call}
+		}
+		if l.errCalls.CompareAndSwap(old, &next) {
+			break
+		}
+	}
 	if l.errChan != nil {
 		select {
 		case l.errChan <- struct{}{}:
@@ -39,18 +49,26 @@ func (l *testLogger) Error(_ context.Context, msg string, args ...any) {
 		}
 	}
 }
+func (l *testLogger) calls() []errCall {
+	old := l.errCalls.Load()
+	if old == nil {
+		return nil
+	}
+	out := make([]errCall, len(*old))
+	copy(out, *old)
+	return out
+}
 func (l *testLogger) Panic(_ context.Context, msg string, _ ...any) { panic(msg) }
 func (l *testLogger) Fatal(context.Context, string, ...any)         {}
 func (l *testLogger) With(...any) log.Logger                        { return l }
 
 func assertPanicLogged(t *testing.T, logger *testLogger) {
 	t.Helper()
-	logger.mu.Lock()
-	defer logger.mu.Unlock()
-	if len(logger.errCalls) != 1 {
-		t.Fatalf("expected 1 error log, got %d", len(logger.errCalls))
+	calls := logger.calls()
+	if len(calls) != 1 {
+		t.Fatalf("expected 1 error log, got %d", len(calls))
 	}
-	call := logger.errCalls[0]
+	call := calls[0]
 	if call.msg != "recovered panic in goroutine" {
 		t.Errorf("unexpected log msg: %s", call.msg)
 	}
@@ -122,10 +140,9 @@ func TestGoSilentOnSuccess(t *testing.T) {
 	case <-time.After(50 * time.Millisecond):
 	}
 
-	logger.mu.Lock()
-	defer logger.mu.Unlock()
-	if len(logger.errCalls) != 0 {
-		t.Fatalf("expected 0 error logs on success, got %d", len(logger.errCalls))
+	calls := logger.calls()
+	if len(calls) != 0 {
+		t.Fatalf("expected 0 error logs on success, got %d", len(calls))
 	}
 }
 
@@ -178,10 +195,9 @@ func TestGoWithNilOnPanic(t *testing.T) {
 		t.Fatal("timed out waiting for panic log")
 	}
 
-	logger.mu.Lock()
-	defer logger.mu.Unlock()
-	if len(logger.errCalls) != 1 {
-		t.Fatalf("expected panic to be logged even when onPanic is nil, got %d calls", len(logger.errCalls))
+	calls := logger.calls()
+	if len(calls) != 1 {
+		t.Fatalf("expected panic to be logged even when onPanic is nil, got %d calls", len(calls))
 	}
 }
 

@@ -23,10 +23,6 @@ import (
 
 var gooseFile = regexp.MustCompile(`^(\d{6}|\d{14})_[a-z0-9_]+\.sql$`)
 
-// BootstrapDefaultTimeout bounds the legacy-ledger bootstrap when
-// RunnerParams carries no explicit Timeout.
-const BootstrapDefaultTimeout = 30 * time.Second
-
 // Migration is one versioned Goose SQL file.
 type Migration struct {
 	Version int64
@@ -36,9 +32,8 @@ type Migration struct {
 
 // RunnerParams carries Runner dependencies (Parameter Object pattern).
 // Logger receives goose operational output and stays nil-tolerant: a nil
-// logger keeps goose silent. Timeout bounds the legacy bootstrap only;
-// non-positive selects BootstrapDefaultTimeout. Up/Down honor the caller's
-// context instead.
+// logger keeps goose silent. Timeout bounds the legacy bootstrap. Up/Down
+// honor the caller's context instead.
 type RunnerParams struct {
 	DB      *sql.DB
 	FS      fs.FS
@@ -54,12 +49,16 @@ type Runner struct {
 	provider *goose.Provider
 }
 
-// NewRunner builds a Runner; DB must be non-nil. It bootstraps the legacy
-// schema_migrations ledger into goose_db_version once, idempotently, so
-// existing databases never replay migrations 1..4 on upgrade.
+// NewRunner builds a Runner; DB must be non-nil and Timeout must be positive.
+// It bootstraps the legacy schema_migrations ledger into goose_db_version once,
+// idempotently, so existing databases never replay migrations 1..4 on upgrade.
 func NewRunner(params RunnerParams) (*Runner, error) {
 	if params.DB == nil {
 		return nil, fmt.Errorf("migration: DB is required")
+	}
+
+	if params.Timeout <= 0 {
+		return nil, fmt.Errorf("migration: timeout must be positive")
 	}
 
 	fsys := params.FS
@@ -77,8 +76,7 @@ func NewRunner(params RunnerParams) (*Runner, error) {
 		return nil, err
 	}
 
-	timeout := resolveTimeout(params.Timeout)
-	bootCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	bootCtx, cancel := context.WithTimeout(context.Background(), params.Timeout)
 	defer cancel()
 
 	if err := bootstrapLegacyLedger(bootCtx, params.DB); err != nil {
@@ -122,16 +120,6 @@ func gooseLog(logger log.Logger) goose.Logger {
 	}
 
 	return gooseLogger{logger: logger}
-}
-
-// resolveTimeout normalizes the bootstrap timeout: non-positive selects
-// BootstrapDefaultTimeout so callers get a bounded bootstrap by default.
-func resolveTimeout(timeout time.Duration) time.Duration {
-	if timeout <= 0 {
-		return BootstrapDefaultTimeout
-	}
-
-	return timeout
 }
 
 // subFS resolves dir inside fsys ("." means the FS root itself).

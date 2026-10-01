@@ -86,7 +86,7 @@ func TestMissingRequiredListsAllViolations(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected validation error, got nil")
 	}
-	for _, want := range []string{"Server", "Database", "Cache", "Auth", "NATS"} {
+	for _, want := range []string{"Server", "Database", "Cache", "Auth", "NATS", "Redpanda", "Webhook", "Coordination", "Tenancy"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error should name missing section %s, got: %v", want, err)
 		}
@@ -108,7 +108,7 @@ func TestEnvOverrideWins(t *testing.T) {
 func TestOverlayWins(t *testing.T) {
 	t.Parallel()
 
-	base := writeTemp(t, "server:\n  host: 127.0.0.1\n  port: 1\napp:\n  name: x\n  env: local\ndatabase:\n  host: h\n  port: 1\n  user: u\n  password: p\n  name: n\n  sslmode: disable\ncache:\n  host: h\n  port: 1\nauth:\n  issuer: http://x\n  access_ttl_min: 1\n  refresh_ttl_days: 1\nnats:\n  url: nats://x:4222\n")
+	base := repoConfig("config.yaml")
 	overlay := writeTemp(t, "server:\n  port: 1234\n")
 
 	cfg, err := Load(base, overlay)
@@ -238,7 +238,7 @@ func TestSchemaAlignsWithStruct(t *testing.T) {
 		name, _ := entry.(string)
 		have[name] = true
 	}
-	for _, section := range []string{"app", "server", "database", "cache", "auth", "nats"} {
+	for _, section := range []string{"app", "server", "database", "cache", "auth", "nats", "redpanda", "webhook", "coordination", "tenancy"} {
 		if !have[section] {
 			t.Errorf("schema root required[] missing section %q", section)
 		}

@@ -1,10 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -49,8 +48,9 @@ func TestSeedGraphValidates(t *testing.T) {
 
 func TestSeedAppRequiresDSN(t *testing.T) {
 	t.Setenv("DATABASE_URL", "")
-	t.Setenv("APP_FX_START_TIMEOUT", "")
-	t.Setenv("APP_FX_STOP_TIMEOUT", "")
+	t.Setenv("APP_FX_START_TIMEOUT", "30s")
+	t.Setenv("APP_FX_STOP_TIMEOUT", "30s")
+	t.Setenv("APP_LOG_LEVEL", "info")
 
 	var output testLogBuffer
 
@@ -71,22 +71,34 @@ func TestSeedAppRequiresDSN(t *testing.T) {
 
 // testLogBuffer captures logger output for assertions.
 type testLogBuffer struct {
-	mu  sync.Mutex
-	buf bytes.Buffer
+	buf atomic.Pointer[[]byte]
 }
 
 func (b *testLogBuffer) Write(p []byte) (int, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	return b.buf.Write(p)
+	for {
+		old := b.buf.Load()
+		var next []byte
+		if old != nil {
+			next = make([]byte, len(*old)+len(p))
+			copy(next, *old)
+			copy(next[len(*old):], p)
+		} else {
+			next = make([]byte, len(p))
+			copy(next, p)
+		}
+		if b.buf.CompareAndSwap(old, &next) {
+			break
+		}
+	}
+	return len(p), nil
 }
 
 func (b *testLogBuffer) lines() string {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	return b.buf.String()
+	old := b.buf.Load()
+	if old == nil {
+		return ""
+	}
+	return string(*old)
 }
 
 // testLogger builds a buffer-backed kernel logger for hermetic assertions.

@@ -26,27 +26,6 @@ var reverseUUIDs = []string{
 	"123e4567-e89b-12d3-a456-426614174009",
 }
 
-type reversePostings struct {
-	posting entity.PostingData
-	err     error
-}
-
-func (s *reversePostings) Commit(_ context.Context, posting entity.PostingData) (entity.PostingData, error) {
-	return posting, nil
-}
-
-func (s *reversePostings) FindByID(_ context.Context, _ valueobject.TenantID, _ valueobject.PostingID) (entity.PostingData, error) {
-	return s.posting, s.err
-}
-
-func (s *reversePostings) FindByExternalReference(_ context.Context, _ valueobject.TenantID, _ string) (entity.PostingData, error) {
-	return entity.PostingData{}, s.err
-}
-
-func (s *reversePostings) FindByAccount(_ context.Context, _ valueobject.TenantID, _ valueobject.AccountID, _ string, _ int) ([]entity.PostingData, string, error) {
-	return nil, "", s.err
-}
-
 func reverseOriginal() entity.PostingData {
 	return entity.PostingData{
 		ID: "123e4567-e89b-12d3-a456-426614174010", TenantID: tfrTenant, LedgerID: tfrLedger,
@@ -59,21 +38,21 @@ func reverseOriginal() entity.PostingData {
 	}
 }
 
-func newTransactionService(uow *tfrUOW, authz *tfrAuthz, original entity.PostingData, findErr error) *command.TransactionService {
+func newTransactionService(t *testing.T, uow port.UnitOfWork, authz port.Authorizer, original entity.PostingData, findErr error) *command.TransactionService {
 	posting := command.NewPostingService(command.PostingServiceParams{
 		UoW:      uow,
-		Accounts: &tfrAccounts{accounts: tfrTestAccounts()},
-		Clock:    tfrClock{},
-		IDs:      &tfrIDs{next: append([]string(nil), reverseUUIDs...)},
+		Accounts: newMockAccountRepository(t, tfrTestAccounts()),
+		Clock:    newMockClock(t, tfrAt),
+		IDs:      newMockIDGenerator(t, reverseUUIDs...),
 		Authz:    authz,
 	})
 	return command.NewTransactionService(command.TransactionServiceParams{
 		Posting:  posting,
 		UoW:      uow,
-		Postings: &reversePostings{posting: original, err: findErr},
-		Accounts: &tfrAccounts{accounts: tfrTestAccounts()},
-		Clock:    tfrClock{},
-		IDs:      &tfrIDs{next: append([]string(nil), reverseUUIDs...)},
+		Postings: newMockPostingRepository(t, original, findErr),
+		Accounts: newMockAccountRepository(t, tfrTestAccounts()),
+		Clock:    newMockClock(t, tfrAt),
+		IDs:      newMockIDGenerator(t, reverseUUIDs...),
 		Authz:    authz,
 	})
 }
@@ -149,17 +128,18 @@ func TestReverseTransaction(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
-			authz := &tfrAuthz{denied: map[string]bool{}}
-			svc := newTransactionService(uow, authz, tc.original, tc.findErr)
+			uow := newMockUOW(t, "cursor-5")
+			authz := newMockAuthorizer(t)
+			svc := newTransactionService(t, uow, authz, tc.original, tc.findErr)
 			tc.preload(svc)
 			actualResult, err := svc.ReverseTransaction(context.Background(), tc.req)
 			assert.Equal(t, tc.expectedError, err)
 			if tc.expectedError == nil {
 				assert.Equal(t, reverseUUIDs[0], string(actualResult.PostingID))
 				assert.Equal(t, tc.expectedCursor, actualResult.Cursor)
-				assert.Len(t, uow.outbox, 1)
-				assert.Equal(t, "transaction.reversed.v1", uow.outbox[0].EventType)
+				facts := outboxFacts(uow)
+				assert.Len(t, facts, 1)
+				assert.Equal(t, "transaction.reversed.v1", facts[0].EventType)
 			} else {
 				assert.Equal(t, port.PostingResult{}, actualResult)
 			}
@@ -170,13 +150,13 @@ func TestReverseTransaction(t *testing.T) {
 func TestPostTransactionDelegates(t *testing.T) {
 	t.Parallel()
 
-	uow := &postUOW{}
-	authz := &postAuthz{denied: map[string]bool{}}
+	uow := newMockUOW(t, "cursor-7")
+	authz := newMockAuthorizer(t)
 	posting := command.NewPostingService(command.PostingServiceParams{
 		UoW:      uow,
-		Accounts: &postAccounts{accounts: postTestAccounts()},
-		Clock:    postClock{},
-		IDs:      &postIDs{next: postTestIDs(20)},
+		Accounts: newMockAccountRepository(t, postTestAccounts()),
+		Clock:    newMockClock(t, postAt),
+		IDs:      newMockIDGenerator(t, postTestIDs(20)...),
 		Authz:    authz,
 	})
 	svc := command.NewTransactionService(command.TransactionServiceParams{Posting: posting})

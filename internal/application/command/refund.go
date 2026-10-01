@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -91,7 +92,12 @@ type RefundService struct {
 }
 
 // NewRefundService constructs a RefundService with the supplied dependencies.
-func NewRefundService(params RefundServiceParams) *RefundService {
+// WindowDays must be positive: a zero value would fail every refund
+// at runtime instead of at wiring time.
+func NewRefundService(params RefundServiceParams) (*RefundService, error) {
+	if params.WindowDays <= 0 {
+		return nil, errors.New("refund: window days must be positive")
+	}
 	return &RefundService{
 		uow:        params.UoW,
 		refunds:    params.Refunds,
@@ -103,7 +109,7 @@ func NewRefundService(params RefundServiceParams) *RefundService {
 		clock:      params.Clock,
 		ids:        params.IDs,
 		authz:      params.Authz,
-	}
+	}, nil
 }
 
 // CreateRefund validates, charges back through the processor, and persists
@@ -144,7 +150,10 @@ func (s *RefundService) GetRefund(ctx context.Context, query port.PaymentQuery) 
 
 // ListRefunds returns one tenant's refunds, newest first (bounded). Strong read.
 func (s *RefundService) ListRefunds(ctx context.Context, tenant valueobject.TenantID, limit int) ([]port.RefundResult, error) {
-	records, err := s.refunds.ListRefunds(ctx, tenant, clampPageLimit(limit))
+	if err := validatePageLimit(limit); err != nil {
+		return nil, err
+	}
+	records, err := s.refunds.ListRefunds(ctx, tenant, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -265,11 +274,8 @@ func (s *RefundService) loadRefundAccounts(ctx context.Context, tenant valueobje
 	return accounts, nil
 }
 
-// effectiveWindowDays returns the configured refund window or the domain default.
+// effectiveWindowDays returns the configured refund window.
 func (s *RefundService) effectiveWindowDays() int {
-	if s.windowDays <= 0 {
-		return service.DefaultRefundWindowDays
-	}
 	return s.windowDays
 }
 

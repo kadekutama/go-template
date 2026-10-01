@@ -26,4 +26,6 @@ type EnvelopeCrypto interface {
 	Encrypt(ctx context.Context, tenant valueobject.TenantID, purpose string, plaintext []byte) (EncryptedEnvelope, error)
 	// Decrypt opens one envelope. Fails closed on tamper or unknown key.
 	Decrypt(ctx context.Context, tenant valueobject.TenantID, envelope EncryptedEnvelope) ([]byte, error)
+	// Rewrap rotates the envelope's wrapped DEK under the latest KEK version without decrypting payload data.
+	Rewrap(ctx context.Context, envelope EncryptedEnvelope) (EncryptedEnvelope, error)
 }

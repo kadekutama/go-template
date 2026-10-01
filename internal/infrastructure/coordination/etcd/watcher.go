@@ -45,8 +45,7 @@ type watcher struct {
 	client *Client
 	logger log.Logger
 
-	mu    sync.RWMutex
-	cache map[string][]byte
+	cache sync.Map // string -> []byte
 
 	errCh chan error
 }
@@ -60,7 +59,6 @@ func NewWatcher(params WatcherParams) (Watcher, error) {
 	return &watcher{
 		client: params.Client,
 		logger: params.Logger,
-		cache:  make(map[string][]byte),
 		errCh:  make(chan error, 4),
 	}, nil
 }
@@ -87,15 +85,11 @@ func (w *watcher) WatchPrefix(ctx context.Context, prefix string, onChange Watch
 		return fmt.Errorf("etcd: watch prefix load %s: %w", prefix, err)
 	}
 
-	w.mu.Lock()
-
 	for _, kv := range resp.Kvs {
 		cached := make([]byte, len(kv.Value))
 		copy(cached, kv.Value)
-		w.cache[string(kv.Key)] = cached
+		w.cache.Store(string(kv.Key), cached)
 	}
-
-	w.mu.Unlock()
 
 	stream := w.client.inner.Watch(ctx, prefix, clientv3.WithPrefix(), clientv3.WithRev(resp.Header.Revision))
 
@@ -121,10 +115,12 @@ func (w *watcher) Cached(key string) ([]byte, bool) {
 		return nil, false
 	}
 
-	w.mu.RLock()
-	defer w.mu.RUnlock()
+	val, ok := w.cache.Load(key)
+	if !ok {
+		return nil, false
+	}
 
-	value, ok := w.cache[key]
+	value, ok := val.([]byte)
 	if !ok {
 		return nil, false
 	}
@@ -180,17 +176,13 @@ func (w *watcher) serve(ctx context.Context, prefix string, stream clientv3.Watc
 
 				key := string(event.Kv.Key)
 
-				w.mu.Lock()
-
 				if event.IsCreate() || event.IsModify() {
 					copied := make([]byte, len(event.Kv.Value))
 					copy(copied, event.Kv.Value)
-					w.cache[key] = copied
+					w.cache.Store(key, copied)
 				} else {
-					delete(w.cache, key)
+					w.cache.Delete(key)
 				}
-
-				w.mu.Unlock()
 
 				onChange(event.Kv.Key, event.Kv.Value)
 			}

@@ -643,17 +643,12 @@ func TestScreenViaProviderPort(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			provider := fakeAMLProvider{}
-			actualDecision, reason, err := provider.Screen(tc.ctx, tc.req)
+			actualDecision, reason, err := service.ScreenTransaction(tc.req, service.ScreeningPolicy{
+				MaxAmountMinor: 1000, MaxDayCount: 10, MaxDaySumMinor: 10000, RuleVersion: "v1",
+			})
 			assert.Equal(t, tc.expectedDecision, actualDecision)
 			assert.Equal(t, tc.expectedReason, reason)
 			assert.Equal(t, tc.expectedError, err)
 		})
 	}
-}
-
-type fakeAMLProvider struct{}
-
-func (fakeAMLProvider) Screen(_ context.Context, req repository.ScreeningRequest) (repository.ScreeningDecision, string, error) {
-	return service.ScreenTransaction(req, service.ScreeningPolicy{MaxAmountMinor: 1000, MaxDayCount: 10, MaxDaySumMinor: 10000, RuleVersion: "v1"})
 }

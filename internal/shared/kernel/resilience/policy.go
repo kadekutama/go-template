@@ -1,16 +1,11 @@
 package resilience
 
-import "time"
-
-// Defaults keep zero-value policies safe: one attempt, fixed short backoff.
-const (
-	DefaultMaxAttempts    = 1
-	DefaultInitialBackoff = 100 * time.Millisecond
-	DefaultMaxBackoff     = 5 * time.Second
-	DefaultMultiplier     = 2.0
+import (
+	"errors"
+	"time"
 )
 
-// RetryPolicy bounds retries. Use Normalize before executing.
+// RetryPolicy bounds retries. All parameters must be explicit and validated.
 type RetryPolicy struct {
 	MaxAttempts    int
 	InitialBackoff time.Duration
@@ -18,27 +13,29 @@ type RetryPolicy struct {
 	Multiplier     float64
 }
 
-// Normalize fills zero values with defaults.
-func (p RetryPolicy) Normalize() RetryPolicy {
+// Validate ensures all policy parameters are explicitly positive and valid.
+func (p RetryPolicy) Validate() error {
 	if p.MaxAttempts <= 0 {
-		p.MaxAttempts = DefaultMaxAttempts
+		return errors.New("resilience: max attempts must be positive")
 	}
 	if p.InitialBackoff <= 0 {
-		p.InitialBackoff = DefaultInitialBackoff
+		return errors.New("resilience: initial backoff must be positive")
 	}
-	if p.MaxBackoff <= 0 {
-		p.MaxBackoff = DefaultMaxBackoff
+	if p.MaxBackoff < p.InitialBackoff {
+		return errors.New("resilience: max backoff must be greater than or equal to initial backoff")
 	}
-	if p.Multiplier <= 0 {
-		p.Multiplier = DefaultMultiplier
+	if p.Multiplier < 1.0 {
+		return errors.New("resilience: multiplier must be at least 1.0")
 	}
-	return p
+	return nil
 }
 
 // BackoffFor returns the wait before attempt number (1-based first retry).
 // Growth is exponential by Multiplier, capped at MaxBackoff.
-func (p RetryPolicy) BackoffFor(retryNumber int) time.Duration {
-	p = p.Normalize()
+func (p RetryPolicy) BackoffFor(retryNumber int) (time.Duration, error) {
+	if err := p.Validate(); err != nil {
+		return 0, err
+	}
 	if retryNumber <= 0 {
 		retryNumber = 1
 	}
@@ -46,13 +43,13 @@ func (p RetryPolicy) BackoffFor(retryNumber int) time.Duration {
 	for i := 1; i < retryNumber; i++ {
 		wait *= p.Multiplier
 		if wait >= float64(p.MaxBackoff) {
-			return p.MaxBackoff
+			return p.MaxBackoff, nil
 		}
 	}
 	if wait >= float64(p.MaxBackoff) {
-		return p.MaxBackoff
+		return p.MaxBackoff, nil
 	}
-	return time.Duration(wait)
+	return time.Duration(wait), nil
 }
 
 // ShouldRetry encodes the no-blind-retry rule: Permanent never retries;

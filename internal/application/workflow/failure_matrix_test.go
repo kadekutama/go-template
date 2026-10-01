@@ -18,8 +18,8 @@ import (
 func TestSagaFailureDBCrashMidTransaction(t *testing.T) {
 	t.Parallel()
 
-	store := &sagaStoreFake{}
-	runner := newRunner(store)
+	store := newMockSagaStore(t)
+	runner := newRunner(t, store)
 	effects := &keyedEffects{}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -53,8 +53,8 @@ func TestSagaFailureDBCrashMidTransaction(t *testing.T) {
 func TestSagaFailureCacheDown(t *testing.T) {
 	t.Parallel()
 
-	store := &sagaStoreFake{}
-	runner := newRunner(store)
+	store := newMockSagaStore(t)
+	runner := newRunner(t, store)
 	effects := &keyedEffects{}
 	cacheAvailable := false
 
@@ -85,8 +85,8 @@ func TestSagaFailureCacheDown(t *testing.T) {
 func TestSagaFailureNatsDown(t *testing.T) {
 	t.Parallel()
 
-	store := &sagaStoreFake{}
-	runner := newRunner(store)
+	store := newMockSagaStore(t)
+	runner := newRunner(t, store)
 	ledgerWrites := &keyedEffects{}
 	holds := &keyedEffects{}
 
@@ -112,8 +112,8 @@ func TestSagaFailureNatsDown(t *testing.T) {
 func TestSagaFailureProcessorTimeout(t *testing.T) {
 	t.Parallel()
 
-	store := &sagaStoreFake{}
-	runner := newRunner(store)
+	store := newMockSagaStore(t)
+	runner := newRunner(t, store)
 	charges := map[string]int{}
 	timeout := errors.New("processor timeout")
 
@@ -142,8 +142,8 @@ func TestSagaFailureProcessorTimeout(t *testing.T) {
 func TestSagaFailureStaleFX(t *testing.T) {
 	t.Parallel()
 
-	store := &sagaStoreFake{}
-	runner := newRunner(store)
+	store := newMockSagaStore(t)
+	runner := newRunner(t, store)
 
 	steps := []workflow.Step{
 		{
@@ -166,8 +166,8 @@ func TestSagaFailureStaleFX(t *testing.T) {
 func TestSagaFailureReconBreak(t *testing.T) {
 	t.Parallel()
 
-	store := &sagaStoreFake{}
-	runner := newRunner(store)
+	store := newMockSagaStore(t)
+	runner := newRunner(t, store)
 	ledgerWrites := &keyedEffects{}
 	breaks := &keyedEffects{}
 
@@ -180,7 +180,7 @@ func TestSagaFailureReconBreak(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, workflow.SagaCompleted, record.State)
 	assert.Equal(t, 1, breaks.count("break:ref-9"))
-	assert.Empty(t, ledgerWrites.order)
+	assert.Empty(t, ledgerWrites.orderList())
 }
 
 // TestSagaFailureDuplicateSubmit maps §10 row 7: the second start returns the
@@ -188,8 +188,8 @@ func TestSagaFailureReconBreak(t *testing.T) {
 func TestSagaFailureDuplicateSubmit(t *testing.T) {
 	t.Parallel()
 
-	store := &sagaStoreFake{}
-	runner := newRunner(store)
+	store := newMockSagaStore(t)
+	runner := newRunner(t, store)
 	effects := &keyedEffects{}
 
 	steps := workflow.BatchSteps(workflow.BatchActions{
@@ -211,8 +211,8 @@ func TestSagaFailureDuplicateSubmit(t *testing.T) {
 func TestSagaFailureAuthExpiry(t *testing.T) {
 	t.Parallel()
 
-	store := &sagaStoreFake{}
-	runner := newRunner(store)
+	store := newMockSagaStore(t)
+	runner := newRunner(t, store)
 	effects := &keyedEffects{}
 
 	steps := []workflow.Step{
@@ -241,8 +241,8 @@ func TestSagaFailureAuthExpiry(t *testing.T) {
 func TestSagaFailureOverCapture(t *testing.T) {
 	t.Parallel()
 
-	store := &sagaStoreFake{}
-	runner := newRunner(store)
+	store := newMockSagaStore(t)
+	runner := newRunner(t, store)
 	effects := &keyedEffects{}
 
 	steps := workflow.TransferSteps(workflow.TransferActions{
@@ -267,8 +267,8 @@ func TestSagaFailureOverCapture(t *testing.T) {
 func TestSagaFailureDisputeLost(t *testing.T) {
 	t.Parallel()
 
-	store := &sagaStoreFake{}
-	runner := newRunner(store)
+	store := newMockSagaStore(t)
+	runner := newRunner(t, store)
 	effects := &keyedEffects{}
 
 	steps := workflow.RefundSteps(workflow.RefundActions{
@@ -289,8 +289,8 @@ func TestSagaFailureDisputeLost(t *testing.T) {
 func TestSagaFailurePeriodGates(t *testing.T) {
 	t.Parallel()
 
-	store := &sagaStoreFake{}
-	runner := newRunner(store)
+	store := newMockSagaStore(t)
+	runner := newRunner(t, store)
 	effects := &keyedEffects{}
 
 	steps := workflow.PeriodCloseSteps(workflow.PeriodCloseActions{

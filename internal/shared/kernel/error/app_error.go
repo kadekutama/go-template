@@ -7,9 +7,10 @@ package apperror
 
 import (
 	"fmt"
+	"maps"
 	"net/http"
 	"regexp"
-	"sync"
+	"sync/atomic"
 )
 
 // Code is a stable UPPER_SNAKE error identifier, e.g. VALIDATION_FAILED.
@@ -35,25 +36,42 @@ func (e *AppError) Unwrap() error { return e.Cause }
 
 var codePattern = regexp.MustCompile(`^[A-Z][A-Z0-9]*(_[A-Z0-9]+)*$`)
 
-var (
-	registryMu sync.RWMutex
-	registry   = defaultCodes()
-)
+var registry atomic.Pointer[map[Code]int]
+
+func init() {
+	initial := defaultCodes()
+	registry.Store(&initial)
+}
 
 // Register adds codes with their default HTTP status. It panics on blank,
 // malformed, or duplicate codes: registration happens at package load of the
 // owning layer, where a panic fails fast before serving traffic.
 func Register(codes map[Code]int) {
-	registryMu.Lock()
-	defer registryMu.Unlock()
-	for code, status := range codes {
+	for code := range codes {
 		if code == "" || !codePattern.MatchString(string(code)) {
 			panic(fmt.Sprintf("apperror: malformed code %q (want UPPER_SNAKE)", code))
 		}
-		if _, dup := registry[code]; dup {
-			panic(fmt.Sprintf("apperror: duplicate code %q", code))
+	}
+
+	for {
+		oldPtr := registry.Load()
+		var oldMap map[Code]int
+		if oldPtr != nil {
+			oldMap = *oldPtr
 		}
-		registry[code] = status
+		for code := range codes {
+			if _, dup := oldMap[code]; dup {
+				panic(fmt.Sprintf("apperror: duplicate code %q", code))
+			}
+		}
+
+		newMap := make(map[Code]int, len(oldMap)+len(codes))
+		maps.Copy(newMap, oldMap)
+		maps.Copy(newMap, codes)
+
+		if registry.CompareAndSwap(oldPtr, &newMap) {
+			break
+		}
 	}
 }
 
@@ -78,16 +96,21 @@ func WithHTTPStatus(status int) Option {
 // New builds an *AppError. Unknown codes fail: every code must be registered
 // by its owning layer (see codes.go and later epics).
 func New(code Code, message string, opts ...Option) (*AppError, error) {
-	registryMu.RLock()
-	status, ok := registry[code]
-	registryMu.RUnlock()
+	ptr := registry.Load()
+	if ptr == nil {
+		return nil, fmt.Errorf("apperror: unregistered code %q", code)
+	}
+
+	status, ok := (*ptr)[code]
 	if !ok {
 		return nil, fmt.Errorf("apperror: unregistered code %q", code)
 	}
+
 	err := &AppError{Code: code, Message: message, HTTPStatus: status}
 	for _, opt := range opts {
 		opt(err)
 	}
+
 	return err, nil
 }
 
@@ -98,15 +121,18 @@ func MustNew(code Code, message string, opts ...Option) *AppError {
 	if newErr != nil {
 		panic(newErr)
 	}
+
 	return err
 }
 
 // HTTPStatusFor reports the registry default for code, or 500 when unknown.
 func HTTPStatusFor(code Code) int {
-	registryMu.RLock()
-	defer registryMu.RUnlock()
-	if status, ok := registry[code]; ok {
-		return status
+	ptr := registry.Load()
+	if ptr != nil {
+		if status, ok := (*ptr)[code]; ok {
+			return status
+		}
 	}
+
 	return http.StatusInternalServerError
 }

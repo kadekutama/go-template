@@ -4,9 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,109 +13,20 @@ import (
 	"github.com/kadekutama/go-template/internal/application/port"
 	"github.com/kadekutama/go-template/internal/domain/entity"
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
-	"github.com/kadekutama/go-template/pkg/jsonparser"
 )
 
-type fakeProcessor struct {
-	mu              sync.Mutex
-	chargeResult    port.ChargeResult
-	chargeErr       error
-	chargeKeys      []string
-	onCharge        func()
-	refundErr       error
-	challengeResult port.ChargeResult
-	challengeErr    error
-	challengeCalls  int
-}
-
-func (f *fakeProcessor) Charge(_ context.Context, req port.ChargeRequest) (port.ChargeResult, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.chargeKeys = append(f.chargeKeys, req.IdempotencyKey)
-	if f.onCharge != nil {
-		f.onCharge()
-	}
-	if f.chargeErr != nil {
-		return port.ChargeResult{}, f.chargeErr
-	}
-	return f.chargeResult, nil
-}
-
-func (f *fakeProcessor) RefundCharge(_ context.Context, _ port.RefundChargeRequest) (port.ChargeResult, error) {
-	if f.refundErr != nil {
-		return port.ChargeResult{}, f.refundErr
-	}
-	return port.ChargeResult{ProviderID: "pr-1", Status: "SUCCEEDED", TraceID: "trace-1"}, nil
-}
-
-func (f *fakeProcessor) GetStatus(_ context.Context, _ valueobject.TenantID, _ string, _ time.Duration) (port.ChargeResult, error) {
-	return f.chargeResult, f.chargeErr
-}
-
-func (f *fakeProcessor) CompleteChallenge(_ context.Context, _ port.ChallengeCompletion) (port.ChargeResult, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.challengeCalls++
-	if f.challengeErr != nil {
-		return port.ChargeResult{}, f.challengeErr
-	}
-	return f.challengeResult, nil
-}
-
-type intentStoreFake struct {
-	mu      sync.Mutex
-	intents map[string]command.IntentRecord
-}
-
-func (s *intentStoreFake) CreateIntent(_ context.Context, record command.IntentRecord) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.intents == nil {
-		s.intents = map[string]command.IntentRecord{}
-	}
-	s.intents[record.ID] = record
-	return nil
-}
-
-func (s *intentStoreFake) FindIntent(_ context.Context, _ valueobject.TenantID, id string) (command.IntentRecord, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	record, ok := s.intents[id]
-	if !ok {
-		return command.IntentRecord{}, entity.NewError("INTENT_NOT_FOUND", "intent is unknown")
-	}
-	return record, nil
-}
-
-func (s *intentStoreFake) ListIntents(_ context.Context, _ valueobject.TenantID, limit int) ([]command.IntentRecord, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var out []command.IntentRecord
-	for _, record := range s.intents {
-		out = append(out, record)
-		if limit > 0 && len(out) >= limit {
-			break
-		}
-	}
-	return out, nil
-}
-
-func (s *intentStoreFake) UpdateIntent(_ context.Context, record command.IntentRecord) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.intents[record.ID] = record
-	return nil
-}
-
-func newIntentService(uow *tfrUOW, store *intentStoreFake, processor *fakeProcessor, authz *tfrAuthz) *command.IntentService {
-	return command.NewIntentService(command.IntentServiceParams{
-		UoW:       uow,
-		Intents:   store,
-		Processor: processor,
-		Clock:     tfrClock{},
-		IDs:       &tfrIDs{next: tfrTestIDs(40)},
-		Authz:     authz,
+func newIntentService(t *testing.T, uow port.UnitOfWork, store command.IntentStore, processor port.PaymentProcessor, authz port.Authorizer) *command.IntentService {
+	svc, err := command.NewIntentService(command.IntentServiceParams{
+		UoW:            uow,
+		Intents:        store,
+		Processor:      processor,
+		Clock:          newMockClock(t, tfrAt),
+		IDs:            newMockIDGenerator(t, tfrTestIDs(40)...),
+		Authz:          authz,
+		AuthExpiryDays: 7,
 	})
+	require.NoError(t, err)
+	return svc
 }
 
 func intentTestCommand() port.PaymentIntentRequest {
@@ -140,7 +49,7 @@ func TestIntentCreate(t *testing.T) {
 	type testCase struct {
 		name          string
 		req           port.PaymentIntentRequest
-		preload       func(uow *tfrUOW)
+		preload       func(uow port.UnitOfWork)
 		denied        bool
 		expectedError error
 	}
@@ -149,14 +58,14 @@ func TestIntentCreate(t *testing.T) {
 		{
 			name:          "valid intent creates pending intent",
 			req:           baseReq,
-			preload:       func(_ *tfrUOW) {},
+			preload:       func(_ port.UnitOfWork) {},
 			denied:        false,
 			expectedError: nil,
 		},
 		{
 			name: "corrupt idempotency replay returns IDEMPOTENCY_RECORD_INVALID",
 			req:  baseReq,
-			preload: func(uow *tfrUOW) {
+			preload: func(uow port.UnitOfWork) {
 				fp := command.Fingerprint(
 					baseReq.IdempotencyKey,
 					string(baseReq.TenantID),
@@ -165,13 +74,7 @@ func TestIntentCreate(t *testing.T) {
 					string(baseReq.AssetCode),
 					string(baseReq.Method),
 				)
-				uow.idem = map[string]tfrIdemEntry{
-					baseReq.IdempotencyKey: {
-						fingerprint: fp,
-						response:    []byte("{corrupt-json"),
-						completed:   true,
-					},
-				}
+				setUOWIdem(uow, baseReq.IdempotencyKey, fp, []byte("{corrupt-json"))
 			},
 			denied:        false,
 			expectedError: entity.NewError("IDEMPOTENCY_RECORD_INVALID", "stored idempotency response is corrupt"),
@@ -183,7 +86,7 @@ func TestIntentCreate(t *testing.T) {
 				r.TenantID = ""
 				return r
 			}(),
-			preload:       func(_ *tfrUOW) {},
+			preload:       func(_ port.UnitOfWork) {},
 			denied:        false,
 			expectedError: entity.NewError("TENANT_REQUIRED", "tenant id is required"),
 		},
@@ -194,7 +97,7 @@ func TestIntentCreate(t *testing.T) {
 				r.LedgerID = ""
 				return r
 			}(),
-			preload:       func(_ *tfrUOW) {},
+			preload:       func(_ port.UnitOfWork) {},
 			denied:        false,
 			expectedError: entity.NewError("LEDGER_REQUIRED", "ledger id is required"),
 		},
@@ -205,7 +108,7 @@ func TestIntentCreate(t *testing.T) {
 				r.AmountMinor = 0
 				return r
 			}(),
-			preload:       func(_ *tfrUOW) {},
+			preload:       func(_ port.UnitOfWork) {},
 			denied:        false,
 			expectedError: entity.NewError("INVALID_INTENT_AMOUNT", "intent amount must be positive"),
 		},
@@ -216,7 +119,7 @@ func TestIntentCreate(t *testing.T) {
 				r.AmountMinor = -500
 				return r
 			}(),
-			preload:       func(_ *tfrUOW) {},
+			preload:       func(_ port.UnitOfWork) {},
 			denied:        false,
 			expectedError: entity.NewError("INVALID_INTENT_AMOUNT", "intent amount must be positive"),
 		},
@@ -227,7 +130,7 @@ func TestIntentCreate(t *testing.T) {
 				r.AssetCode = ""
 				return r
 			}(),
-			preload:       func(_ *tfrUOW) {},
+			preload:       func(_ port.UnitOfWork) {},
 			denied:        false,
 			expectedError: entity.NewError("INTENT_ASSET_REQUIRED", "intent requires an asset code"),
 		},
@@ -238,7 +141,7 @@ func TestIntentCreate(t *testing.T) {
 				r.Actor = ""
 				return r
 			}(),
-			preload:       func(_ *tfrUOW) {},
+			preload:       func(_ port.UnitOfWork) {},
 			denied:        false,
 			expectedError: entity.NewError("ACTOR_REQUIRED", "payment actor is required"),
 		},
@@ -249,14 +152,14 @@ func TestIntentCreate(t *testing.T) {
 				r.IdempotencyKey = ""
 				return r
 			}(),
-			preload:       func(_ *tfrUOW) {},
+			preload:       func(_ port.UnitOfWork) {},
 			denied:        false,
 			expectedError: entity.NewError("IDEMPOTENCY_KEY_REQUIRED", "payment requires an idempotency key"),
 		},
 		{
 			name:          "denied subject returns FORBIDDEN",
 			req:           baseReq,
-			preload:       func(_ *tfrUOW) {},
+			preload:       func(_ port.UnitOfWork) {},
 			denied:        true,
 			expectedError: entity.NewError("FORBIDDEN", "subject is not authorized for this action"),
 		},
@@ -264,17 +167,17 @@ func TestIntentCreate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
+			uow := newMockUOW(t)
 			if tc.preload != nil {
 				tc.preload(uow)
 			}
-			store := &intentStoreFake{}
-			processor := &fakeProcessor{}
-			authz := &tfrAuthz{denied: map[string]bool{}}
+			store := newMockIntentStore(t)
+			processor := newMockPaymentProcessor(t)
+			authz := newMockAuthorizer(t)
 			if tc.denied {
-				authz.denied[tc.req.Actor+"|payment.create|ledger/"+string(tc.req.LedgerID)] = true
+				setAuthzDenied(authz, tc.req.Actor+"|payment.create|ledger/"+string(tc.req.LedgerID))
 			}
-			svc := newIntentService(uow, store, processor, authz)
+			svc := newIntentService(t, uow, store, processor, authz)
 
 			res, err := svc.CreateIntent(context.Background(), tc.req)
 			assert.Equal(t, tc.expectedError, err)
@@ -468,11 +371,11 @@ func TestIntentConfirm(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
-			store := &intentStoreFake{}
-			processor := &fakeProcessor{chargeResult: tc.processorRes, chargeErr: tc.processorErr}
+			uow := newMockUOW(t)
+			store := newMockIntentStore(t)
+			var onCharge func()
 			if tc.mutateOnCharge {
-				processor.onCharge = func() {
+				onCharge = func() {
 					_ = store.UpdateIntent(context.Background(), command.IntentRecord{
 						ID:       tc.req.IntentID,
 						TenantID: tc.req.TenantID,
@@ -480,9 +383,14 @@ func TestIntentConfirm(t *testing.T) {
 					})
 				}
 			}
-			authz := &tfrAuthz{denied: map[string]bool{}}
+			processor := newMockPaymentProcessor(t, mockProcessorParams{
+				ChargeResult: tc.processorRes,
+				ChargeErr:    tc.processorErr,
+				OnCharge:     onCharge,
+			})
+			authz := newMockAuthorizer(t)
 			if tc.denied {
-				authz.denied[tc.req.Actor+"|payment.confirm|intent/"+tc.req.IntentID] = true
+				setAuthzDenied(authz, tc.req.Actor+"|payment.confirm|intent/"+tc.req.IntentID)
 			}
 
 			// Preload intent
@@ -498,7 +406,7 @@ func TestIntentConfirm(t *testing.T) {
 				ProviderID:  "pr-1",
 			})
 
-			svc := newIntentService(uow, store, processor, authz)
+			svc := newIntentService(t, uow, store, processor, authz)
 
 			res, err := svc.ConfirmIntent(context.Background(), tc.req)
 			assert.Equal(t, tc.expectedError, err)
@@ -589,12 +497,12 @@ func TestIntentCancel(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
-			store := &intentStoreFake{}
-			processor := &fakeProcessor{}
-			authz := &tfrAuthz{denied: map[string]bool{}}
+			uow := newMockUOW(t)
+			store := newMockIntentStore(t)
+			processor := newMockPaymentProcessor(t)
+			authz := newMockAuthorizer(t)
 			if tc.denied {
-				authz.denied[tc.query.Actor+"|payment.cancel|intent/"+tc.query.ID] = true
+				setAuthzDenied(authz, tc.query.Actor+"|payment.cancel|intent/"+tc.query.ID)
 			}
 
 			if tc.seedIntent {
@@ -609,7 +517,7 @@ func TestIntentCancel(t *testing.T) {
 				})
 			}
 
-			svc := newIntentService(uow, store, processor, authz)
+			svc := newIntentService(t, uow, store, processor, authz)
 
 			res, err := svc.CancelIntent(context.Background(), tc.query)
 			assert.Equal(t, tc.expectedError, err)
@@ -706,12 +614,15 @@ func TestIntentCompleteChallenge(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
-			store := &intentStoreFake{}
-			processor := &fakeProcessor{challengeResult: tc.processorRes, challengeErr: tc.processorErr}
-			authz := &tfrAuthz{denied: map[string]bool{}}
+			uow := newMockUOW(t)
+			store := newMockIntentStore(t)
+			processor := newMockPaymentProcessor(t, mockProcessorParams{
+				ChallengeResult: tc.processorRes,
+				ChallengeErr:    tc.processorErr,
+			})
+			authz := newMockAuthorizer(t)
 			if tc.denied {
-				authz.denied["u-1|payment.confirm|intent/"+tc.intentID] = true
+				setAuthzDenied(authz, "u-1|payment.confirm|intent/"+tc.intentID)
 			}
 
 			if tc.seedIntent {
@@ -728,7 +639,7 @@ func TestIntentCompleteChallenge(t *testing.T) {
 				})
 			}
 
-			svc := newIntentService(uow, store, processor, authz)
+			svc := newIntentService(t, uow, store, processor, authz)
 
 			res, err := svc.CompleteChallenge(context.Background(), tfrTenant, tc.intentID, tc.succeeded, "u-1", "key-chal-"+tc.intentID)
 			assert.Equal(t, tc.expectedError, err)
@@ -785,10 +696,10 @@ func TestIntentGetAndList(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
-			store := &intentStoreFake{}
-			processor := &fakeProcessor{}
-			authz := &tfrAuthz{denied: map[string]bool{}}
+			uow := newMockUOW(t)
+			store := newMockIntentStore(t)
+			processor := newMockPaymentProcessor(t)
+			authz := newMockAuthorizer(t)
 
 			if tc.seedIntent {
 				_ = store.CreateIntent(context.Background(), command.IntentRecord{
@@ -802,7 +713,7 @@ func TestIntentGetAndList(t *testing.T) {
 				})
 			}
 
-			svc := newIntentService(uow, store, processor, authz)
+			svc := newIntentService(t, uow, store, processor, authz)
 
 			if tc.queryID != "" {
 				res, err := svc.GetIntent(context.Background(), port.PaymentQuery{TenantID: string(tfrTenant), ID: tc.queryID})
@@ -819,27 +730,45 @@ func TestIntentGetAndList(t *testing.T) {
 	}
 }
 
-func outboxTypes(uow *tfrUOW) []string {
-	uow.mu.Lock()
-	defer uow.mu.Unlock()
-	types := make([]string, 0, len(uow.outbox))
-	for _, fact := range uow.outbox {
-		types = append(types, fact.EventType)
-	}
-	return types
-}
+func TestNewIntentServiceValidation(t *testing.T) {
+	t.Parallel()
 
-func outboxPayload(t *testing.T, uow *tfrUOW, eventType string) map[string]string {
-	t.Helper()
-	uow.mu.Lock()
-	defer uow.mu.Unlock()
-	for _, fact := range uow.outbox {
-		if fact.EventType == eventType {
-			var payload map[string]string
-			require.NoError(t, jsonparser.Unmarshal(fact.Payload, &payload))
-			return payload
-		}
+	type testCase struct {
+		name           string
+		authExpiryDays int
+		expectedError  error
 	}
-	t.Fatalf("no outbox fact %s", eventType)
-	return nil
+
+	testCases := []testCase{
+		{
+			name:           "positive expiry accepted",
+			authExpiryDays: 7,
+			expectedError:  nil,
+		},
+		{
+			name:           "zero expiry rejected",
+			authExpiryDays: 0,
+			expectedError:  errors.New("payment: auth expiry days must be positive"),
+		},
+		{
+			name:           "negative expiry rejected",
+			authExpiryDays: -1,
+			expectedError:  errors.New("payment: auth expiry days must be positive"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, err := command.NewIntentService(command.IntentServiceParams{
+				AuthExpiryDays: tc.authExpiryDays,
+			})
+			if tc.expectedError != nil {
+				assert.EqualError(t, err, tc.expectedError.Error())
+				assert.Nil(t, svc)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, svc)
+			}
+		})
+	}
 }

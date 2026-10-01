@@ -7,7 +7,7 @@ require (
 	github.com/bytedance/sonic v1.15.4
 	github.com/casbin/casbin/v2 v2.8.0
 	github.com/dgraph-io/ristretto/v2 v2.4.2
-	github.com/go-co-op/gocron v1.5.0
+	github.com/go-co-op/gocron v1.37.0
 	github.com/go-playground/validator/v10 v10.22.0
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/golang-jwt/jwt/v5 v5.3.1

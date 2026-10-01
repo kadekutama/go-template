@@ -25,7 +25,7 @@ require (
 	github.com/nats-io/nats.go v1.53.1
 	github.com/nats-io/nkeys v0.4.15
 	github.com/nicksnyder/go-i18n/v2 v2.6.1
-	github.com/open-feature/go-sdk v1.17.2
+	github.com/open-feature/go-sdk v1.19.0
 	github.com/pressly/goose/v3 v3.28.0
 	github.com/redis/go-redis/v9 v9.22.0
 	github.com/rs/zerolog v1.35.1

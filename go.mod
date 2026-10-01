@@ -22,8 +22,8 @@ require (
 	github.com/labstack/echo/v5 v5.3.1
 	github.com/maypok86/otter/v2 v2.3.0
 	github.com/moby/moby/api v1.55.0
-	github.com/nats-io/nats.go v1.53.1
-	github.com/nats-io/nkeys v0.4.15
+	github.com/nats-io/nats.go v1.54.0
+	github.com/nats-io/nkeys v0.4.16
 	github.com/nicksnyder/go-i18n/v2 v2.6.1
 	github.com/open-feature/go-sdk v1.19.0
 	github.com/pressly/goose/v3 v3.28.0

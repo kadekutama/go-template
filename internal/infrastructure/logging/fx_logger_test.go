@@ -3,7 +3,7 @@ package logging_test
 import (
 	"context"
 	"errors"
-	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 
@@ -17,14 +17,24 @@ import (
 
 // recordingLogger captures the level of every emitted line.
 type recordingLogger struct {
-	mu     sync.Mutex
-	levels []string
+	levels atomic.Pointer[[]string]
 }
 
 func (l *recordingLogger) emit(level string) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.levels = append(l.levels, level)
+	for {
+		old := l.levels.Load()
+		var next []string
+		if old != nil {
+			next = make([]string, len(*old)+1)
+			copy(next, *old)
+			next[len(*old)] = level
+		} else {
+			next = []string{level}
+		}
+		if l.levels.CompareAndSwap(old, &next) {
+			break
+		}
+	}
 }
 
 func (l *recordingLogger) Trace(context.Context, string, ...any) { l.emit("trace") }
@@ -39,11 +49,12 @@ func (l *recordingLogger) Fatal(context.Context, string, ...any) {}
 func (l *recordingLogger) With(...any) log.Logger                { return l }
 
 func (l *recordingLogger) recorded() []string {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	out := make([]string, len(l.levels))
-	copy(out, l.levels)
+	old := l.levels.Load()
+	if old == nil {
+		return nil
+	}
+	out := make([]string, len(*old))
+	copy(out, *old)
 
 	return out
 }
@@ -112,7 +123,7 @@ func TestFxLoggerLevels(t *testing.T) {
 		},
 		{
 			name:          "provided wiring at debug",
-			event:         &fxevent.Provided{ConstructorName: "di.ProvideLogger", OutputTypeNames: []string{"log.Logger"}},
+			event:         &fxevent.Provided{ConstructorName: "di.ProvideLoggerWithConfig", OutputTypeNames: []string{"log.Logger"}},
 			expectedLevel: "debug",
 		},
 		{

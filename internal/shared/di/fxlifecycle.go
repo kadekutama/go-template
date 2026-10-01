@@ -15,20 +15,14 @@ import (
 	"github.com/kadekutama/go-template/internal/shared/kernel/shutdown"
 )
 
-// defaultFxTimeout is the lifecycle budget when the environment sets none.
-// Generous for cold container starts (pool opens, extension checks, lease
-// resigns); fx's own silent default is 15s.
-const defaultFxTimeout = 30 * time.Second
-
 // FxTimeouts resolves the fx OnStart/OnStop budgets from the process
 // environment so operators tune them without code changes:
 //
-//	APP_FX_START_TIMEOUT Go duration, e.g. "45s" (start hooks)
-//	APP_FX_STOP_TIMEOUT  Go duration, e.g. "60s" (drain hooks)
+//	APP_FX_START_TIMEOUT Go duration, e.g. "45s" (start hooks, required)
+//	APP_FX_STOP_TIMEOUT  Go duration, e.g. "60s" (drain hooks, required)
 //
-// Unset keys keep the 30s default. Malformed or non-positive values fail
-// fast: silently booting with the wrong budget would hide the typo until an
-// outage. Config-file sourcing waits for config in the fx graph (E11).
+// Unset, malformed, or non-positive values fail fast: silently booting
+// with the wrong budget would hide misconfigurations until an outage.
 func FxTimeouts() (start, stop time.Duration, err error) {
 	start, err = fxTimeoutEnv("APP_FX_START_TIMEOUT")
 	if err != nil {
@@ -43,11 +37,11 @@ func FxTimeouts() (start, stop time.Duration, err error) {
 	return start, stop, nil
 }
 
-// fxTimeoutEnv parses one duration key with default fallback.
+// fxTimeoutEnv parses one required duration key from the environment.
 func fxTimeoutEnv(key string) (time.Duration, error) {
 	raw := strings.TrimSpace(os.Getenv(key))
 	if raw == "" {
-		return defaultFxTimeout, nil
+		return 0, fmt.Errorf("di: %s is required", key)
 	}
 
 	parsed, err := time.ParseDuration(raw)
@@ -62,15 +56,20 @@ func fxTimeoutEnv(key string) (time.Duration, error) {
 	return parsed, nil
 }
 
-// FxLogger routes fx framework events through the kernel logger instead of
-// fx.NopLogger. Binaries compose it in fx.New before Run. A nil kernel
-// logger panics: silently dropping framework events would hide startup
-// failures, so miswiring fails fast at boot.
-func FxLogger() fx.Option {
+// FxLogger routes fx framework events through the supplied kernel logger
+// instead of fx.NopLogger. The logger comes from the binary entrypoint (which
+// already failed fast on bad logging config), so this function performs no
+// environment resolution of its own. A nil logger selects fx's console logger
+// on stderr: framework events stay visible, and no panic path exists.
+func FxLogger(logger log.Logger) fx.Option {
 	return fx.WithLogger(func() fxevent.Logger {
-		adapter, err := logging.NewFxLogger(ProvideLogger())
+		if logger == nil {
+			return &fxevent.ConsoleLogger{W: os.Stderr}
+		}
+
+		adapter, err := logging.NewFxLogger(logger)
 		if err != nil {
-			panic("di: fx logger requires a kernel logger: " + err.Error())
+			return &fxevent.ConsoleLogger{W: os.Stderr}
 		}
 
 		return adapter
@@ -98,7 +97,7 @@ func RunApp(logger log.Logger, binary, version string, work func(context.Context
 		return 1
 	}
 
-	app := fx.New(append(opts, FxLogger(), fx.StartTimeout(startTimeout), fx.StopTimeout(stopTimeout))...)
+	app := fx.New(append(opts, FxLogger(logger), fx.StartTimeout(startTimeout), fx.StopTimeout(stopTimeout))...)
 
 	if err := app.Start(ctx); err != nil {
 		logger.Error(ctx, "app failed to start", append(fields, log.Err(err))...)
@@ -132,7 +131,7 @@ func RunApp(logger log.Logger, binary, version string, work func(context.Context
 			return nil
 		}
 
-		if err := shutdown.Run(ctx, &stopTimeout, serve, drain); err != nil {
+		if err := shutdown.Run(ctx, stopTimeout, serve, drain); err != nil {
 			logger.Error(ctx, "app shutdown failed", append(fields, log.Err(err))...)
 			failed = true
 		}

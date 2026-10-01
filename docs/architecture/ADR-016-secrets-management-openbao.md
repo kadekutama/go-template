@@ -42,3 +42,25 @@ In response, the **Linux Foundation** (along with IBM, Red Hat, Docker, and SUSE
 
 - `SPEC.md §7.7`, `§14.2`, and `tasks/epics/E09-identity-security.md` are updated to specify OpenBao v2.6.2.
 - `deployments/docker/` includes a 3-node OpenBao cluster definition with Raft storage.
+
+## Deferral Note (2026-10-01, CR-004)
+
+Per-envelope key-version destruction through the adapter (`TransitKEK.DestroyKey`)
+is deferred pending an owner-run OpenBao Transit engine-capability check
+(per-version destruction vs operator rotation/SOP). The current stub fails closed
+with `ErrShredded` by design — no caller can mistake it for a working path — and
+shred semantics are proven on test doubles only. The E09 epic acceptance checkbox
+for production shred stays unticked until a production-path test proves destroyed
+versions fail closed while others open. GDPR erasure via crypto-shredding (above)
+remains the target architecture; this note records the gap, not a scope cut.
+
+## Future Scope Note (2026-10-01, owner directive)
+
+No live OpenBao exists in any environment: the E09 adapters are HTTP clients
+proven against mocks only, with no Vault SDK, no compose service, and no
+Testcontainers module. Live provisioning (local compose service + integration
+test backing), live verification of the KV/Transit/lease paths, and the
+CR-004 engine-capability check are **E17 delivery scope** (E17 already lists
+OpenBao 2.6.2 among its compose dependencies). Until E17 lands, the E09
+"shred proven" epic checkbox stays unticked and T05/T06 carry the status
+"client complete, integration unproven."

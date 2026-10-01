@@ -32,7 +32,7 @@ cross-harness takeover.
 | Requirements | SHALL requirements and scenarios | user stories and acceptance criteria | stable `Rxx`/`Sxx` requirements and scenarios |
 | Technical design | `design.md` | `plan.md` | packet interfaces/data/failure sections plus linked design docs |
 | Implementation list | change `tasks.md` | feature `tasks.md` | dependency-ordered epic tasks and packet proof plan |
-| Review/analysis | human agreement before apply | clarify/checklist/analyze | packet approval, validator, reviewer, and promotion gates |
+| Review/analysis | human agreement before apply | clarify/checklist/analyze | packet approval, validator, reviewer, required `tasks/reviews/<TASK-ID>.md` record, and promotion gates |
 | Execution | `/opsx:apply` | `/speckit.implement` | claim → implement → evidence → handoff |
 | Completion | archive deltas into specs | converge until no gaps remain | close task, retain evidence, update canonical docs/ADR, release claim |
 | Coordination | tool-managed change state | feature state/branch conventions | Git claim lease, exact base commit, handoff, and acyclic DAG |
@@ -52,7 +52,7 @@ copying its directory tree:
 | Implement / apply | Create a claim, mark the task `in_progress`, modify only the allowed surface, and update the handoff at checkpoints. |
 | Analyze / checklist | Run `python3 tasks/scripts/check-tasks.py --format --graph --sdd` plus the relevant content checks and packet commands. |
 | Converge | Re-run the gate, compare every requirement with evidence, and append a new task for every remaining gap. Never silently widen a task. |
-| Archive | Mark the task completed only after evidence/review; keep the packet, evidence, and final handoff, and update the canonical design/ADR. |
+| Archive | Mark the task completed only after evidence/review; keep the packet, evidence, required review record, and final handoff, and update the canonical design/ADR. |
 | Delta spec | Describe the exact before/after in **Change Surface** and the affected canonical document sections. Do not maintain a parallel delta-spec tree. |
 
 ## Cross-harness handoff contract

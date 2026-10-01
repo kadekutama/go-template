@@ -39,12 +39,16 @@ func (r balanceReader) BalanceMinor(ctx context.Context, key string) (int64, err
 // mustEngine builds the example L1-only engine, mirroring what the
 // composition root wires once from configuration.
 func mustEngine() *hybrid.Cache {
-	l1, err := local.NewOtterCache(local.OtterParams{MaximumWeight: 1 << 20})
+	l1, err := local.NewOtterCache(local.OtterParams{MaximumWeight: 1 << 20, DefaultTTL: time.Minute})
 	if err != nil {
 		panic(err)
 	}
 
-	engine, err := hybrid.New(hybrid.Params{L1: l1})
+	engine, err := hybrid.New(hybrid.Params{
+		L1:            l1,
+		L1PopulateTTL: time.Minute,
+		Codec:         hybrid.JSONCodec{},
+	})
 	if err != nil {
 		panic(err)
 	}
@@ -67,7 +71,7 @@ func ExampleCache_typedView() {
 	}
 
 	ctx := context.Background()
-	if err := balances.Set(ctx, key, cacheBalance{Minor: 4200}, hybrid.DefaultTTLs().Balance); err != nil {
+	if err := balances.Set(ctx, key, cacheBalance{Minor: 4200}, time.Minute); err != nil {
 		panic(err)
 	}
 
@@ -119,7 +123,7 @@ func ExampleCache_portCache() {
 	}
 
 	ctx := context.Background()
-	if err := cache.Set(ctx, key, []byte(`{"minor":9710}`), hybrid.DefaultTTLs().BalanceCursor); err != nil {
+	if err := cache.Set(ctx, key, []byte(`{"minor":9710}`), 5*time.Minute); err != nil {
 		panic(err)
 	}
 
@@ -138,7 +142,7 @@ func TestBalanceReader(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-	require.NoError(t, balances.Set(ctx, key, cacheBalance{Minor: 4200}, hybrid.DefaultTTLs().Balance))
+	require.NoError(t, balances.Set(ctx, key, cacheBalance{Minor: 4200}, time.Minute))
 
 	reader := balanceReader{balances: balances}
 

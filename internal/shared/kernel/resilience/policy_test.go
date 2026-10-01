@@ -115,7 +115,7 @@ func TestBackoffFor(t *testing.T) {
 		InitialBackoff: 100 * time.Millisecond,
 		MaxBackoff:     250 * time.Millisecond,
 		Multiplier:     10,
-	}.Normalize()
+	}
 
 	type testCase struct {
 		name           string
@@ -148,38 +148,81 @@ func TestBackoffFor(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actualResult := policy.BackoffFor(tc.attempt)
+			actualResult, err := policy.BackoffFor(tc.attempt)
+			assert.NoError(t, err)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
 	}
 }
 
-func TestNormalizePolicy(t *testing.T) {
+func TestRetryPolicyValidate(t *testing.T) {
 	t.Parallel()
 
+	validPolicy := RetryPolicy{
+		MaxAttempts:    3,
+		InitialBackoff: 100 * time.Millisecond,
+		MaxBackoff:     1 * time.Second,
+		Multiplier:     2.0,
+	}
+
 	type testCase struct {
-		name           string
-		policy         RetryPolicy
-		expectedResult RetryPolicy
+		name          string
+		policy        RetryPolicy
+		expectedError error
 	}
 
 	testCases := []testCase{
 		{
-			name:   "zero policy defaulted",
-			policy: RetryPolicy{},
-			expectedResult: RetryPolicy{
-				MaxAttempts:    DefaultMaxAttempts,
-				InitialBackoff: DefaultInitialBackoff,
-				MaxBackoff:     DefaultMaxBackoff,
-				Multiplier:     DefaultMultiplier,
-			},
+			name:          "valid policy passes",
+			policy:        validPolicy,
+			expectedError: nil,
+		},
+		{
+			name: "zero max attempts rejected",
+			policy: func() RetryPolicy {
+				p := validPolicy
+				p.MaxAttempts = 0
+				return p
+			}(),
+			expectedError: errors.New("resilience: max attempts must be positive"),
+		},
+		{
+			name: "zero initial backoff rejected",
+			policy: func() RetryPolicy {
+				p := validPolicy
+				p.InitialBackoff = 0
+				return p
+			}(),
+			expectedError: errors.New("resilience: initial backoff must be positive"),
+		},
+		{
+			name: "max backoff less than initial backoff rejected",
+			policy: func() RetryPolicy {
+				p := validPolicy
+				p.MaxBackoff = 50 * time.Millisecond
+				return p
+			}(),
+			expectedError: errors.New("resilience: max backoff must be greater than or equal to initial backoff"),
+		},
+		{
+			name: "multiplier less than 1 rejected",
+			policy: func() RetryPolicy {
+				p := validPolicy
+				p.Multiplier = 0.5
+				return p
+			}(),
+			expectedError: errors.New("resilience: multiplier must be at least 1.0"),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actualResult := tc.policy.Normalize()
-			assert.Equal(t, tc.expectedResult, actualResult)
+			err := tc.policy.Validate()
+			if tc.expectedError != nil {
+				assert.EqualError(t, err, tc.expectedError.Error())
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }

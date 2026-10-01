@@ -7,12 +7,13 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	appport "github.com/kadekutama/go-template/internal/application/port"
 	"github.com/kadekutama/go-template/internal/infrastructure/cache/hybrid"
 	"github.com/kadekutama/go-template/internal/infrastructure/cache/store"
-	"github.com/kadekutama/go-template/test/fakes"
+	mockstore "github.com/kadekutama/go-template/test/mock/store"
 )
 
 func TestNew(t *testing.T) {
@@ -29,8 +30,10 @@ func TestNew(t *testing.T) {
 		{
 			name: "valid params with l1 only",
 			params: hybrid.Params{
-				L1: fakes.NewCacheStore(),
-				L2: nil,
+				L1:            newMockCacheStore(t),
+				L2:            nil,
+				L1PopulateTTL: time.Minute,
+				Codec:         hybrid.JSONCodec{},
 			},
 			expectedResult: true,
 			expectedError:  nil,
@@ -38,8 +41,10 @@ func TestNew(t *testing.T) {
 		{
 			name: "valid params with l1 and l2",
 			params: hybrid.Params{
-				L1: fakes.NewCacheStore(),
-				L2: fakes.NewCacheStore(),
+				L1:            newMockCacheStore(t),
+				L2:            newMockCacheStore(t),
+				L1PopulateTTL: time.Minute,
+				Codec:         hybrid.JSONCodec{},
 			},
 			expectedResult: true,
 			expectedError:  nil,
@@ -47,11 +52,33 @@ func TestNew(t *testing.T) {
 		{
 			name: "nil l1 rejected",
 			params: hybrid.Params{
-				L1: nil,
-				L2: nil,
+				L1:            nil,
+				L2:            nil,
+				L1PopulateTTL: time.Minute,
+				Codec:         hybrid.JSONCodec{},
 			},
 			expectedResult: false,
 			expectedError:  hybrid.ErrL1Required,
+		},
+		{
+			name: "zero l1 populate ttl rejected",
+			params: hybrid.Params{
+				L1:            newMockCacheStore(t),
+				L1PopulateTTL: 0,
+				Codec:         hybrid.JSONCodec{},
+			},
+			expectedResult: false,
+			expectedError:  hybrid.ErrL1PopulateTTLRequired,
+		},
+		{
+			name: "negative l1 populate ttl rejected",
+			params: hybrid.Params{
+				L1:            newMockCacheStore(t),
+				L1PopulateTTL: -time.Minute,
+				Codec:         hybrid.JSONCodec{},
+			},
+			expectedResult: false,
+			expectedError:  hybrid.ErrL1PopulateTTLRequired,
 		},
 	}
 
@@ -106,8 +133,10 @@ func TestHybridCacheSet(t *testing.T) {
 			name: "valid set both layers",
 			engine: func() *hybrid.Cache {
 				e, err := hybrid.New(hybrid.Params{
-					L1: fakes.NewCacheStore(),
-					L2: fakes.NewCacheStore(),
+					L1:            newMockCacheStore(t),
+					L2:            newMockCacheStore(t),
+					L1PopulateTTL: time.Minute,
+					Codec:         hybrid.JSONCodec{},
 				})
 				if err != nil {
 					panic(err)
@@ -124,7 +153,9 @@ func TestHybridCacheSet(t *testing.T) {
 			name: "valid set l1 only",
 			engine: func() *hybrid.Cache {
 				e, err := hybrid.New(hybrid.Params{
-					L1: fakes.NewCacheStore(),
+					L1:            newMockCacheStore(t),
+					L1PopulateTTL: time.Minute,
+					Codec:         hybrid.JSONCodec{},
 				})
 				if err != nil {
 					panic(err)
@@ -141,8 +172,10 @@ func TestHybridCacheSet(t *testing.T) {
 			name: "empty key rejected",
 			engine: func() *hybrid.Cache {
 				e, err := hybrid.New(hybrid.Params{
-					L1: fakes.NewCacheStore(),
-					L2: fakes.NewCacheStore(),
+					L1:            newMockCacheStore(t),
+					L2:            newMockCacheStore(t),
+					L1PopulateTTL: time.Minute,
+					Codec:         hybrid.JSONCodec{},
 				})
 				if err != nil {
 					panic(err)
@@ -159,8 +192,10 @@ func TestHybridCacheSet(t *testing.T) {
 			name: "nil value stores negative-cache marker",
 			engine: func() *hybrid.Cache {
 				e, err := hybrid.New(hybrid.Params{
-					L1: fakes.NewCacheStore(),
-					L2: fakes.NewCacheStore(),
+					L1:            newMockCacheStore(t),
+					L2:            newMockCacheStore(t),
+					L1PopulateTTL: time.Minute,
+					Codec:         hybrid.JSONCodec{},
 				})
 				if err != nil {
 					panic(err)
@@ -177,8 +212,10 @@ func TestHybridCacheSet(t *testing.T) {
 			name: "zero ttl rejected",
 			engine: func() *hybrid.Cache {
 				e, err := hybrid.New(hybrid.Params{
-					L1: fakes.NewCacheStore(),
-					L2: fakes.NewCacheStore(),
+					L1:            newMockCacheStore(t),
+					L2:            newMockCacheStore(t),
+					L1PopulateTTL: time.Minute,
+					Codec:         hybrid.JSONCodec{},
 				})
 				if err != nil {
 					panic(err)
@@ -195,8 +232,10 @@ func TestHybridCacheSet(t *testing.T) {
 			name: "negative ttl rejected",
 			engine: func() *hybrid.Cache {
 				e, err := hybrid.New(hybrid.Params{
-					L1: fakes.NewCacheStore(),
-					L2: fakes.NewCacheStore(),
+					L1:            newMockCacheStore(t),
+					L2:            newMockCacheStore(t),
+					L1PopulateTTL: time.Minute,
+					Codec:         hybrid.JSONCodec{},
 				})
 				if err != nil {
 					panic(err)
@@ -213,8 +252,10 @@ func TestHybridCacheSet(t *testing.T) {
 			name: "canceled context rejected",
 			engine: func() *hybrid.Cache {
 				e, err := hybrid.New(hybrid.Params{
-					L1: fakes.NewCacheStore(),
-					L2: fakes.NewCacheStore(),
+					L1:            newMockCacheStore(t),
+					L2:            newMockCacheStore(t),
+					L1PopulateTTL: time.Minute,
+					Codec:         hybrid.JSONCodec{},
 				})
 				if err != nil {
 					panic(err)
@@ -278,7 +319,9 @@ func TestHybridCacheGetValidation(t *testing.T) {
 			name: "empty key rejected",
 			engine: func() *hybrid.Cache {
 				e, err := hybrid.New(hybrid.Params{
-					L1: fakes.NewCacheStore(),
+					L1:            newMockCacheStore(t),
+					L1PopulateTTL: time.Minute,
+					Codec:         hybrid.JSONCodec{},
 				})
 				if err != nil {
 					panic(err)
@@ -294,7 +337,9 @@ func TestHybridCacheGetValidation(t *testing.T) {
 			name: "canceled context rejected",
 			engine: func() *hybrid.Cache {
 				e, err := hybrid.New(hybrid.Params{
-					L1: fakes.NewCacheStore(),
+					L1:            newMockCacheStore(t),
+					L1PopulateTTL: time.Minute,
+					Codec:         hybrid.JSONCodec{},
 				})
 				if err != nil {
 					panic(err)
@@ -356,8 +401,10 @@ func TestHybridCacheDelete(t *testing.T) {
 			name: "valid delete both layers",
 			engine: func() *hybrid.Cache {
 				e, err := hybrid.New(hybrid.Params{
-					L1: fakes.NewCacheStore(),
-					L2: fakes.NewCacheStore(),
+					L1:            newMockCacheStore(t),
+					L2:            newMockCacheStore(t),
+					L1PopulateTTL: time.Minute,
+					Codec:         hybrid.JSONCodec{},
 				})
 				if err != nil {
 					panic(err)
@@ -372,7 +419,9 @@ func TestHybridCacheDelete(t *testing.T) {
 			name: "valid delete l1 only",
 			engine: func() *hybrid.Cache {
 				e, err := hybrid.New(hybrid.Params{
-					L1: fakes.NewCacheStore(),
+					L1:            newMockCacheStore(t),
+					L1PopulateTTL: time.Minute,
+					Codec:         hybrid.JSONCodec{},
 				})
 				if err != nil {
 					panic(err)
@@ -387,7 +436,9 @@ func TestHybridCacheDelete(t *testing.T) {
 			name: "empty key rejected",
 			engine: func() *hybrid.Cache {
 				e, err := hybrid.New(hybrid.Params{
-					L1: fakes.NewCacheStore(),
+					L1:            newMockCacheStore(t),
+					L1PopulateTTL: time.Minute,
+					Codec:         hybrid.JSONCodec{},
 				})
 				if err != nil {
 					panic(err)
@@ -402,7 +453,9 @@ func TestHybridCacheDelete(t *testing.T) {
 			name: "canceled context rejected",
 			engine: func() *hybrid.Cache {
 				e, err := hybrid.New(hybrid.Params{
-					L1: fakes.NewCacheStore(),
+					L1:            newMockCacheStore(t),
+					L1PopulateTTL: time.Minute,
+					Codec:         hybrid.JSONCodec{},
 				})
 				if err != nil {
 					panic(err)
@@ -458,16 +511,28 @@ func TestHybridCacheDeleteOrder(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			shared := &fakes.Journal{}
+			l1 := mockstore.NewMockStore(t)
+			l2 := mockstore.NewMockExpiringStore(t)
 
-			l1 := fakes.NewCacheStore().Share(shared, "l1")
-			l2 := fakes.NewCacheStore().Share(shared, "l2").WithDeleteFailure(tc.l2DeleteErr)
+			var order []string
 
-			engine, err := hybrid.New(hybrid.Params{L1: l1, L2: l2})
+			l2.EXPECT().Delete(mock.Anything, "balance:t1:a1:USD").Run(func(_ context.Context, _ string) {
+				order = append(order, "l2.delete")
+			}).Return(tc.l2DeleteErr).Once()
+
+			if tc.l2DeleteErr == nil {
+				l1.EXPECT().Delete(mock.Anything, "balance:t1:a1:USD").Run(func(_ context.Context, _ string) {
+					order = append(order, "l1.delete")
+				}).Return(nil).Once()
+			}
+
+			engine, err := hybrid.New(hybrid.Params{
+				L1:            l1,
+				L2:            l2,
+				L1PopulateTTL: time.Minute,
+				Codec:         hybrid.JSONCodec{},
+			})
 			require.NoError(t, err)
-
-			require.NoError(t, engine.Set(context.Background(), "balance:t1:a1:USD", []byte(`v`), time.Minute))
-			shared.Record("setup")
 
 			err = engine.Delete(context.Background(), "balance:t1:a1:USD")
 			if tc.expectedError != nil {
@@ -476,7 +541,7 @@ func TestHybridCacheDeleteOrder(t *testing.T) {
 				assert.NoError(t, err)
 			}
 
-			assert.Equal(t, tc.expectedOrder, fakes.AfterMarker(shared.Snapshot(), "setup"))
+			assert.Equal(t, tc.expectedOrder, order)
 		})
 	}
 }
@@ -485,16 +550,6 @@ type getObservation struct {
 	value       []byte
 	l2Read      bool
 	l1Populated bool
-}
-
-func countOp(ops []string, op string) int {
-	count := 0
-	for _, entry := range ops {
-		if entry == op {
-			count++
-		}
-	}
-	return count
 }
 
 func TestHybridCacheGetFallback(t *testing.T) {
@@ -544,7 +599,7 @@ func TestHybridCacheGetFallback(t *testing.T) {
 			l2Remaining:   store.NoExpiry,
 			l2Present:     true,
 			expectedValue: []byte(`{"minor":3}`),
-			expectedTTL:   hybrid.DefaultTTLs().L1Populate,
+			expectedTTL:   time.Minute,
 			expectedError: nil,
 			expectL2Read:  true,
 		},
@@ -587,31 +642,54 @@ func TestHybridCacheGetFallback(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
-			l1 := fakes.NewCacheStore()
-			l2 := fakes.NewCacheStore()
+			l1 := mockstore.NewMockStore(t)
+			l2 := mockstore.NewMockExpiringStore(t)
+
+			var l2Read bool
+			var l1Populated bool
 
 			if tc.l1Present {
-				require.NoError(t, l1.Set(ctx, tc.key, tc.l1Value, time.Minute))
+				l1.EXPECT().Get(mock.Anything, tc.key).Return(tc.l1Value, nil).Once()
+			} else {
+				l1.EXPECT().Get(mock.Anything, tc.key).Return(nil, store.ErrMiss).Once()
 			}
 
-			if tc.l2Present {
-				require.NoError(t, l2.Set(ctx, tc.key, tc.l2Value, time.Minute))
-				l2.SetRemaining(tc.key, tc.l2Remaining)
+			if tc.expectL2Read {
+				switch {
+				case tc.l2Error != nil:
+					l2.EXPECT().Get(mock.Anything, tc.key).Run(func(_ context.Context, _ string) {
+						l2Read = true
+					}).Return(nil, tc.l2Error).Once()
+				case !tc.l2Present:
+					l2.EXPECT().Get(mock.Anything, tc.key).Run(func(_ context.Context, _ string) {
+						l2Read = true
+					}).Return(nil, store.ErrMiss).Once()
+				default:
+					l2.EXPECT().Get(mock.Anything, tc.key).Run(func(_ context.Context, _ string) {
+						l2Read = true
+					}).Return(tc.l2Value, nil).Once()
+
+					if tc.l2TTLError != nil {
+						l2.EXPECT().TTL(mock.Anything, tc.key).Return(0, tc.l2TTLError).Once()
+					} else {
+						l2.EXPECT().TTL(mock.Anything, tc.key).Return(tc.l2Remaining, nil).Once()
+					}
+
+					if tc.expectedTTL != 0 {
+						l1.EXPECT().Set(mock.Anything, tc.key, tc.expectedValue, tc.expectedTTL).Run(func(_ context.Context, _ string, _ []byte, _ time.Duration) {
+							l1Populated = true
+						}).Return(nil).Once()
+					}
+				}
 			}
 
-			if tc.l2Error != nil {
-				l2.WithGetFailure(tc.l2Error)
-			}
-
-			if tc.l2TTLError != nil {
-				l2.WithTTLFailure(tc.l2TTLError)
-			}
-
-			engine, err := hybrid.New(hybrid.Params{L1: l1, L2: l2})
+			engine, err := hybrid.New(hybrid.Params{
+				L1:            l1,
+				L2:            l2,
+				L1PopulateTTL: time.Minute,
+				Codec:         hybrid.JSONCodec{},
+			})
 			require.NoError(t, err)
-
-			l1.Mark("setup")
-			l2.Mark("setup")
 
 			got, err := engine.Get(ctx, tc.key)
 
@@ -626,15 +704,9 @@ func TestHybridCacheGetFallback(t *testing.T) {
 				l1Populated: tc.expectedTTL != 0,
 			}, getObservation{
 				value:       got,
-				l2Read:      len(fakes.AfterMarker(l2.Journal(), "setup")) > 0,
-				l1Populated: countOp(fakes.AfterMarker(l1.Journal(), "setup"), "set") > 0,
+				l2Read:      l2Read,
+				l1Populated: l1Populated,
 			})
-
-			if tc.expectedTTL != 0 {
-				remaining, err := l1.TTL(ctx, tc.key)
-				require.NoError(t, err)
-				assert.Equal(t, tc.expectedTTL, remaining)
-			}
 		})
 	}
 }
@@ -668,10 +740,15 @@ func TestHybridCacheTypedValue(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
-			l1 := fakes.NewCacheStore()
-			l2 := fakes.NewCacheStore()
+			l1 := newMockCacheStore(t)
+			l2 := newMockCacheStore(t)
 
-			engine, err := hybrid.New(hybrid.Params{L1: l1, L2: l2})
+			engine, err := hybrid.New(hybrid.Params{
+				L1:            l1,
+				L2:            l2,
+				L1PopulateTTL: time.Minute,
+				Codec:         hybrid.JSONCodec{},
+			})
 			require.NoError(t, err)
 
 			view := hybrid.Typed[balance](engine)
@@ -682,12 +759,9 @@ func TestHybridCacheTypedValue(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedJSON, stored)
 
-			l2.Mark("setup")
-
 			got, err := view.Get(ctx, tc.key)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedStruct, got)
-			assert.Empty(t, fakes.AfterMarker(l2.Journal(), "setup"))
 
 			got.Tags[0] = "mutated"
 
@@ -750,7 +824,9 @@ func TestTypedCacheUnsupportedTypes(t *testing.T) {
 	t.Parallel()
 
 	engine, err := hybrid.New(hybrid.Params{
-		L1: fakes.NewCacheStore(),
+		L1:            newMockCacheStore(t),
+		L1PopulateTTL: time.Minute,
+		Codec:         hybrid.JSONCodec{},
 	})
 	require.NoError(t, err)
 

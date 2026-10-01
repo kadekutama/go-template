@@ -10,12 +10,8 @@ import (
 	"github.com/kadekutama/go-template/internal/shared/kernel/validate"
 )
 
-// DefaultReceiptTTL bounds Valkey inbox hints (durable inbox lives in
-// PostgreSQL; the hint only suppresses hot redelivery).
-const DefaultReceiptTTL = 7 * 24 * time.Hour
-
 // ReceiptKV is the narrow Valkey seam for inbox hints (DIP): the production
-// *valkey.ValkeyClient implements it and tests use an in-memory fake.
+// *valkey.ValkeyClient implements it and tests use Mockery mocks.
 type ReceiptKV interface {
 	SetNX(ctx context.Context, key string, value []byte, ttl time.Duration) (bool, error)
 	Delete(ctx context.Context, key string) error
@@ -26,8 +22,8 @@ var _ ReceiptKV = (*valkey.ValkeyClient)(nil)
 
 // ValkeyReceiptParams carries constructor dependencies (Parameter Object pattern).
 type ValkeyReceiptParams struct {
-	Client ReceiptKV     `validate:"-"`
-	TTL    time.Duration `validate:"omitempty,gt=0"`
+	Client ReceiptKV     `validate:"required"`
+	TTL    time.Duration `validate:"required,gt=0"`
 }
 
 // ValkeyReceiptStore dedupes across instances via SET NX with TTL.
@@ -38,7 +34,7 @@ type ValkeyReceiptStore struct {
 	ttl    time.Duration
 }
 
-// NewValkeyReceiptStore builds the hint store; Client is required.
+// NewValkeyReceiptStore builds the hint store; Client and positive TTL are required.
 func NewValkeyReceiptStore(params ValkeyReceiptParams) (*ValkeyReceiptStore, error) {
 	if err := validate.Struct("consumer", "receipt params", params); err != nil {
 		return nil, err
@@ -48,12 +44,11 @@ func NewValkeyReceiptStore(params ValkeyReceiptParams) (*ValkeyReceiptStore, err
 		return nil, fmt.Errorf("consumer: valkey client is required")
 	}
 
-	ttl := params.TTL
-	if ttl <= 0 {
-		ttl = DefaultReceiptTTL
+	if params.TTL <= 0 {
+		return nil, fmt.Errorf("consumer: ttl must be positive")
 	}
 
-	return &ValkeyReceiptStore{client: params.Client, ttl: ttl}, nil
+	return &ValkeyReceiptStore{client: params.Client, ttl: params.TTL}, nil
 }
 
 // Claim sets inbox:{consumer}:{eventID} NX; losers are duplicates.

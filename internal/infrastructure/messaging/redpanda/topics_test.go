@@ -13,6 +13,17 @@ import (
 func TestRegistry(t *testing.T) {
 	t.Parallel()
 
+	baseConfig := redpanda.TopicsConfig{
+		LedgerEvents:  "ledger.events.v1",
+		OutboxFacts:   "outbox.facts.v1",
+		WebhookJobs:   "webhook.jobs.v1",
+		AuditStreams:  "audit.streams.v1",
+		Partitions:    12,
+		RetentionHrs:  720,
+		PartitionKeys: "tenant_id:account_id",
+		DLQSuffix:     ".dlq",
+	}
+
 	type testCase struct {
 		name           string
 		cfg            redpanda.TopicsConfig
@@ -22,36 +33,42 @@ func TestRegistry(t *testing.T) {
 
 	testCases := []testCase{
 		{
-			name: "default registry",
-			cfg:  redpanda.TopicsConfig{},
+			name:           "zero config rejected",
+			cfg:            redpanda.TopicsConfig{},
+			expectedResult: nil,
+			expectedError:  errors.New("redpanda: ledger events topic is required"),
+		},
+		{
+			name: "valid registry",
+			cfg:  baseConfig,
 			expectedResult: []redpanda.TopicSpec{
 				{
 					Name:          "ledger.events.v1",
 					Partitions:    12,
 					RetentionHrs:  720,
-					PartitionKeys: redpanda.PartitionKeys,
-					DLQ:           "ledger.events.v1" + redpanda.DLQSuffix,
+					PartitionKeys: "tenant_id:account_id",
+					DLQ:           "ledger.events.v1.dlq",
 				},
 				{
 					Name:          "outbox.facts.v1",
 					Partitions:    12,
 					RetentionHrs:  720,
-					PartitionKeys: redpanda.PartitionKeys,
-					DLQ:           "outbox.facts.v1" + redpanda.DLQSuffix,
+					PartitionKeys: "tenant_id:account_id",
+					DLQ:           "outbox.facts.v1.dlq",
 				},
 				{
 					Name:          "webhook.jobs.v1",
 					Partitions:    12,
 					RetentionHrs:  720,
-					PartitionKeys: redpanda.PartitionKeys,
-					DLQ:           "webhook.jobs.v1" + redpanda.DLQSuffix,
+					PartitionKeys: "tenant_id:account_id",
+					DLQ:           "webhook.jobs.v1.dlq",
 				},
 				{
 					Name:          "audit.streams.v1",
 					Partitions:    12,
 					RetentionHrs:  720,
-					PartitionKeys: redpanda.PartitionKeys,
-					DLQ:           "audit.streams.v1" + redpanda.DLQSuffix,
+					PartitionKeys: "tenant_id:account_id",
+					DLQ:           "audit.streams.v1.dlq",
 				},
 			},
 			expectedError: nil,
@@ -59,7 +76,7 @@ func TestRegistry(t *testing.T) {
 		{
 			name: "custom names and sizing",
 			cfg: func() redpanda.TopicsConfig {
-				c := redpanda.DefaultTopicsConfig()
+				c := baseConfig
 				c.LedgerEvents = "custom.ledger.v1"
 				c.Partitions = 6
 				c.RetentionHrs = 48
@@ -70,29 +87,29 @@ func TestRegistry(t *testing.T) {
 					Name:          "custom.ledger.v1",
 					Partitions:    6,
 					RetentionHrs:  48,
-					PartitionKeys: redpanda.PartitionKeys,
-					DLQ:           "custom.ledger.v1" + redpanda.DLQSuffix,
+					PartitionKeys: "tenant_id:account_id",
+					DLQ:           "custom.ledger.v1.dlq",
 				},
 				{
 					Name:          "outbox.facts.v1",
 					Partitions:    6,
 					RetentionHrs:  48,
-					PartitionKeys: redpanda.PartitionKeys,
-					DLQ:           "outbox.facts.v1" + redpanda.DLQSuffix,
+					PartitionKeys: "tenant_id:account_id",
+					DLQ:           "outbox.facts.v1.dlq",
 				},
 				{
 					Name:          "webhook.jobs.v1",
 					Partitions:    6,
 					RetentionHrs:  48,
-					PartitionKeys: redpanda.PartitionKeys,
-					DLQ:           "webhook.jobs.v1" + redpanda.DLQSuffix,
+					PartitionKeys: "tenant_id:account_id",
+					DLQ:           "webhook.jobs.v1.dlq",
 				},
 				{
 					Name:          "audit.streams.v1",
 					Partitions:    6,
 					RetentionHrs:  48,
-					PartitionKeys: redpanda.PartitionKeys,
-					DLQ:           "audit.streams.v1" + redpanda.DLQSuffix,
+					PartitionKeys: "tenant_id:account_id",
+					DLQ:           "audit.streams.v1.dlq",
 				},
 			},
 			expectedError: nil,
@@ -100,12 +117,141 @@ func TestRegistry(t *testing.T) {
 		{
 			name: "duplicate names rejected",
 			cfg: func() redpanda.TopicsConfig {
-				c := redpanda.DefaultTopicsConfig()
+				c := baseConfig
 				c.OutboxFacts = c.LedgerEvents
 				return c
 			}(),
 			expectedResult: nil,
 			expectedError:  errors.New("redpanda: duplicate topic name \"ledger.events.v1\""),
+		},
+		{
+			name: "missing partition keys rejected",
+			cfg: func() redpanda.TopicsConfig {
+				c := baseConfig
+				c.PartitionKeys = ""
+				return c
+			}(),
+			expectedResult: nil,
+			expectedError:  errors.New("redpanda: partition keys is required"),
+		},
+		{
+			name: "missing dlq suffix rejected",
+			cfg: func() redpanda.TopicsConfig {
+				c := baseConfig
+				c.DLQSuffix = ""
+				return c
+			}(),
+			expectedResult: nil,
+			expectedError:  errors.New("redpanda: dlq suffix is required"),
+		},
+		{
+			name: "padded topic stored trimmed",
+			cfg: func() redpanda.TopicsConfig {
+				c := baseConfig
+				c.LedgerEvents = "  ledger.events.v1  "
+				return c
+			}(),
+			expectedResult: []redpanda.TopicSpec{
+				{
+					Name:          "ledger.events.v1",
+					Partitions:    12,
+					RetentionHrs:  720,
+					PartitionKeys: "tenant_id:account_id",
+					DLQ:           "ledger.events.v1.dlq",
+				},
+				{
+					Name:          "outbox.facts.v1",
+					Partitions:    12,
+					RetentionHrs:  720,
+					PartitionKeys: "tenant_id:account_id",
+					DLQ:           "outbox.facts.v1.dlq",
+				},
+				{
+					Name:          "webhook.jobs.v1",
+					Partitions:    12,
+					RetentionHrs:  720,
+					PartitionKeys: "tenant_id:account_id",
+					DLQ:           "webhook.jobs.v1.dlq",
+				},
+				{
+					Name:          "audit.streams.v1",
+					Partitions:    12,
+					RetentionHrs:  720,
+					PartitionKeys: "tenant_id:account_id",
+					DLQ:           "audit.streams.v1.dlq",
+				},
+			},
+			expectedError: nil,
+		},
+		{
+			name: "padded duplicate rejected",
+			cfg: func() redpanda.TopicsConfig {
+				c := baseConfig
+				c.OutboxFacts = "  ledger.events.v1  "
+				return c
+			}(),
+			expectedResult: nil,
+			expectedError:  errors.New("redpanda: duplicate topic name \"ledger.events.v1\""),
+		},
+		{
+			name: "whitespace topic rejected",
+			cfg: func() redpanda.TopicsConfig {
+				c := baseConfig
+				c.LedgerEvents = "   "
+				return c
+			}(),
+			expectedResult: nil,
+			expectedError:  errors.New("redpanda: ledger events topic is required"),
+		},
+		{
+			name: "zero partitions rejected",
+			cfg: func() redpanda.TopicsConfig {
+				c := baseConfig
+				c.Partitions = 0
+				return c
+			}(),
+			expectedResult: nil,
+			expectedError:  errors.New("redpanda: partitions must be positive"),
+		},
+		{
+			name: "negative partitions rejected",
+			cfg: func() redpanda.TopicsConfig {
+				c := baseConfig
+				c.Partitions = -2
+				return c
+			}(),
+			expectedResult: nil,
+			expectedError:  errors.New("redpanda: partitions must be positive"),
+		},
+		{
+			name: "zero retention rejected",
+			cfg: func() redpanda.TopicsConfig {
+				c := baseConfig
+				c.RetentionHrs = 0
+				return c
+			}(),
+			expectedResult: nil,
+			expectedError:  errors.New("redpanda: retention hours must be positive"),
+		},
+		{
+			name: "whitespace partition keys rejected",
+			cfg: func() redpanda.TopicsConfig {
+				c := baseConfig
+				c.PartitionKeys = "   "
+				return c
+			}(),
+			expectedResult: nil,
+			expectedError:  errors.New("redpanda: partition keys is required"),
+		},
+		{
+			name: "whitespace dlq suffix rejected",
+			cfg: func() redpanda.TopicsConfig {
+				c := baseConfig
+				c.DLQSuffix = "   "
+				return c
+			}(),
+			expectedResult: nil,
+			expectedError:  errors.New("redpanda: dlq suffix is required"),
 		},
 	}
 
@@ -126,6 +272,18 @@ func TestRegistry(t *testing.T) {
 
 func TestIsKnownTopic(t *testing.T) {
 	t.Parallel()
+
+	registry, err := redpanda.NewTopicRegistry(redpanda.TopicsConfig{
+		LedgerEvents:  "ledger.events.v1",
+		OutboxFacts:   "outbox.facts.v1",
+		WebhookJobs:   "webhook.jobs.v1",
+		AuditStreams:  "audit.streams.v1",
+		Partitions:    12,
+		RetentionHrs:  720,
+		PartitionKeys: "tenant_id:account_id",
+		DLQSuffix:     ".dlq",
+	})
+	require.NoError(t, err)
 
 	type testCase struct {
 		name           string
@@ -169,14 +327,15 @@ func TestIsKnownTopic(t *testing.T) {
 			topicName:      "   ",
 			expectedResult: false,
 		},
+		{
+			name:           "padded known topic matches",
+			topicName:      "  ledger.events.v1  ",
+			expectedResult: true,
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expectedResult, redpanda.IsKnownTopic(tc.topicName))
-
-			registry, err := redpanda.NewTopicRegistry(redpanda.TopicsConfig{})
-			require.NoError(t, err)
 			assert.Equal(t, tc.expectedResult, registry.IsKnownTopic(tc.topicName))
 		})
 	}
@@ -184,6 +343,18 @@ func TestIsKnownTopic(t *testing.T) {
 
 func TestAllTopics(t *testing.T) {
 	t.Parallel()
+
+	registry, err := redpanda.NewTopicRegistry(redpanda.TopicsConfig{
+		LedgerEvents:  "ledger.events.v1",
+		OutboxFacts:   "outbox.facts.v1",
+		WebhookJobs:   "webhook.jobs.v1",
+		AuditStreams:  "audit.streams.v1",
+		Partitions:    12,
+		RetentionHrs:  720,
+		PartitionKeys: "tenant_id:account_id",
+		DLQSuffix:     ".dlq",
+	})
+	require.NoError(t, err)
 
 	type testCase struct {
 		name           string
@@ -212,7 +383,7 @@ func TestAllTopics(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			topics := redpanda.AllTopics()
+			topics := registry.AllTopics()
 			require.Len(t, topics, tc.expectedLength)
 			assert.Equal(t, tc.expectedFirst, topics[0])
 
@@ -220,10 +391,35 @@ func TestAllTopics(t *testing.T) {
 			topics[tc.mutateIndex] = tc.mutateValue
 
 			// Ensure subsequent call is uncorrupted
-			second := redpanda.AllTopics()
+			second := registry.AllTopics()
 			assert.Equal(t, tc.expectedFirst, second[0])
 		})
 	}
+}
+
+func TestTopicRegistryGetters(t *testing.T) {
+	t.Parallel()
+
+	cfg := redpanda.TopicsConfig{
+		LedgerEvents:  "ledger.events.v1",
+		OutboxFacts:   "outbox.facts.v1",
+		WebhookJobs:   "webhook.jobs.v1",
+		AuditStreams:  "audit.streams.v1",
+		Partitions:    12,
+		RetentionHrs:  720,
+		PartitionKeys: "tenant_id:account_id",
+		DLQSuffix:     ".dlq",
+	}
+
+	registry, err := redpanda.NewTopicRegistry(cfg)
+	require.NoError(t, err)
+
+	assert.Equal(t, "ledger.events.v1", registry.LedgerEventsTopic())
+	assert.Equal(t, "outbox.facts.v1", registry.OutboxFactsTopic())
+	assert.Equal(t, "webhook.jobs.v1", registry.WebhookJobsTopic())
+	assert.Equal(t, "audit.streams.v1", registry.AuditStreamsTopic())
+	assert.Equal(t, "tenant_id:account_id", registry.PartitionKeys())
+	assert.Equal(t, ".dlq", registry.DLQSuffix())
 }
 
 func TestPartitionKey(t *testing.T) {
@@ -312,6 +508,18 @@ func TestPartitionKey(t *testing.T) {
 func TestDLQFor(t *testing.T) {
 	t.Parallel()
 
+	registry, err := redpanda.NewTopicRegistry(redpanda.TopicsConfig{
+		LedgerEvents:  "ledger.events.v1",
+		OutboxFacts:   "outbox.facts.v1",
+		WebhookJobs:   "webhook.jobs.v1",
+		AuditStreams:  "audit.streams.v1",
+		Partitions:    12,
+		RetentionHrs:  720,
+		PartitionKeys: "tenant_id:account_id",
+		DLQSuffix:     ".dlq",
+	})
+	require.NoError(t, err)
+
 	type testCase struct {
 		name           string
 		topicOrGroup   string
@@ -354,7 +562,7 @@ func TestDLQFor(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actualResult, err := redpanda.DLQFor(tc.topicOrGroup)
+			actualResult, err := registry.DLQFor(tc.topicOrGroup)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())

@@ -27,7 +27,9 @@ func TestNewClient(t *testing.T) {
 		{
 			name: "single seed",
 			params: redpanda.RedpandaParams{
-				Seeds: []string{"redpanda-1:9092"},
+				Seeds:           []string{"redpanda-1:9092"},
+				DialTimeout:     5 * time.Second,
+				MetadataTimeout: 5 * time.Second,
 			},
 			expectedSeeds: []string{"redpanda-1:9092"},
 			expectedTLS:   false,
@@ -37,7 +39,9 @@ func TestNewClient(t *testing.T) {
 		{
 			name: "blank seeds filtered",
 			params: redpanda.RedpandaParams{
-				Seeds: []string{"  ", "redpanda-1:9092", ""},
+				Seeds:           []string{"  ", "redpanda-1:9092", ""},
+				DialTimeout:     5 * time.Second,
+				MetadataTimeout: 5 * time.Second,
 			},
 			expectedSeeds: []string{"redpanda-1:9092"},
 			expectedTLS:   false,
@@ -47,10 +51,12 @@ func TestNewClient(t *testing.T) {
 		{
 			name: "tls and sasl flags enabled",
 			params: redpanda.RedpandaParams{
-				Seeds:    []string{"redpanda-1:9092"},
-				UseTLS:   true,
-				SASLUser: "app",
-				SASLPass: "secret",
+				Seeds:           []string{"redpanda-1:9092"},
+				UseTLS:          true,
+				SASLUser:        "app",
+				SASLPass:        "secret",
+				DialTimeout:     5 * time.Second,
+				MetadataTimeout: 5 * time.Second,
 			},
 			expectedSeeds: []string{"redpanda-1:9092"},
 			expectedTLS:   true,
@@ -60,8 +66,10 @@ func TestNewClient(t *testing.T) {
 		{
 			name: "tls only without sasl",
 			params: redpanda.RedpandaParams{
-				Seeds:  []string{"redpanda-1:9092"},
-				UseTLS: true,
+				Seeds:           []string{"redpanda-1:9092"},
+				UseTLS:          true,
+				DialTimeout:     5 * time.Second,
+				MetadataTimeout: 5 * time.Second,
 			},
 			expectedSeeds: []string{"redpanda-1:9092"},
 			expectedTLS:   true,
@@ -71,7 +79,9 @@ func TestNewClient(t *testing.T) {
 		{
 			name: "no seeds rejected",
 			params: redpanda.RedpandaParams{
-				Seeds: nil,
+				Seeds:           nil,
+				DialTimeout:     5 * time.Second,
+				MetadataTimeout: 5 * time.Second,
 			},
 			expectedSeeds: nil,
 			expectedTLS:   false,
@@ -81,7 +91,9 @@ func TestNewClient(t *testing.T) {
 		{
 			name: "all blank rejected",
 			params: redpanda.RedpandaParams{
-				Seeds: []string{"", "  "},
+				Seeds:           []string{"", "  "},
+				DialTimeout:     5 * time.Second,
+				MetadataTimeout: 5 * time.Second,
 			},
 			expectedSeeds: nil,
 			expectedTLS:   false,
@@ -91,13 +103,38 @@ func TestNewClient(t *testing.T) {
 		{
 			name: "negative dial timeout rejected",
 			params: redpanda.RedpandaParams{
-				Seeds:       []string{"redpanda-1:9092"},
-				DialTimeout: -time.Second,
+				Seeds:           []string{"redpanda-1:9092"},
+				DialTimeout:     -time.Second,
+				MetadataTimeout: 5 * time.Second,
 			},
 			expectedSeeds: nil,
 			expectedTLS:   false,
 			expectedSASL:  false,
 			expectedError: errors.New("redpanda: invalid params (1 violation(s)): DialTimeout: rule \"gt\" on value -1s"),
+		},
+		{
+			name: "missing dial timeout rejected",
+			params: redpanda.RedpandaParams{
+				Seeds:           []string{"redpanda-1:9092"},
+				DialTimeout:     0,
+				MetadataTimeout: 5 * time.Second,
+			},
+			expectedSeeds: nil,
+			expectedTLS:   false,
+			expectedSASL:  false,
+			expectedError: errors.New("redpanda: invalid params (1 violation(s)): DialTimeout: rule \"required\" on value 0s"),
+		},
+		{
+			name: "missing metadata timeout rejected",
+			params: redpanda.RedpandaParams{
+				Seeds:           []string{"redpanda-1:9092"},
+				DialTimeout:     5 * time.Second,
+				MetadataTimeout: 0,
+			},
+			expectedSeeds: nil,
+			expectedTLS:   false,
+			expectedSASL:  false,
+			expectedError: errors.New("redpanda: invalid params (1 violation(s)): MetadataTimeout: rule \"required\" on value 0s"),
 		},
 	}
 

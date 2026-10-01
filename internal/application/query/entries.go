@@ -9,8 +9,7 @@ import (
 	"github.com/kadekutama/go-template/internal/domain/repository"
 )
 
-// entriesPageLimit clamps caller page sizes: at least one row, at most one
-// bounded scan per call.
+// Page limit bounds for entries: at least one row, at most one bounded scan per call.
 const (
 	entriesMinLimit = 1
 	entriesMaxLimit = 500
@@ -42,7 +41,7 @@ func (s *EntriesService) Execute(ctx context.Context, query port.EntriesQuery) (
 	if err := validateEntriesQuery(query); err != nil {
 		return port.EntriesPage{}, err
 	}
-	entries, next, err := s.entries.FindByAccount(ctx, query.TenantID, query.AccountID, query.Cursor, clampEntriesLimit(query.Limit))
+	entries, next, err := s.entries.FindByAccount(ctx, query.TenantID, query.AccountID, query.Cursor, query.Limit)
 	if err != nil {
 		return port.EntriesPage{}, err
 	}
@@ -57,13 +56,8 @@ func validateEntriesQuery(query port.EntriesQuery) error {
 	if strings.TrimSpace(query.AccountID.String()) == "" {
 		return entity.NewError("ENTRIES_ACCOUNT_REQUIRED", "entries require an account id")
 	}
-	return nil
-}
-
-// clampEntriesLimit bounds page sizes, defaulting non-positive limits.
-func clampEntriesLimit(limit int) int {
-	if limit <= 0 {
-		return entriesMaxLimit
+	if query.Limit < entriesMinLimit || query.Limit > entriesMaxLimit {
+		return entity.NewError("INVALID_EXPORT_LIMIT", "export limit must be between 1 and 500")
 	}
-	return min(limit, entriesMaxLimit)
+	return nil
 }

@@ -4,92 +4,103 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/kadekutama/go-template/internal/application/port"
 	"github.com/kadekutama/go-template/internal/application/workflow"
 	"github.com/kadekutama/go-template/internal/domain/entity"
+	mockapplication "github.com/kadekutama/go-template/test/mock/application"
+	mockworkflow "github.com/kadekutama/go-template/test/mock/workflow"
 )
 
-type sagaStoreFake struct {
-	mu      sync.Mutex
-	records map[string]workflow.SagaRecord
+func newMockSagaStore(t *testing.T) *mockworkflow.MockSagaStore {
+	t.Helper()
+	store := mockworkflow.NewMockSagaStore(t)
+	records := sync.Map{}
+
+	store.EXPECT().CreateSaga(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, record workflow.SagaRecord) error {
+		if _, dup := records.LoadOrStore(record.ID, record); dup {
+			return entity.NewError("SAGA_CONFLICT", "saga id already exists")
+		}
+		return nil
+	}).Maybe()
+
+	store.EXPECT().FindSaga(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, _ string, sagaID string) (workflow.SagaRecord, error) {
+		val, ok := records.Load(sagaID)
+		if !ok {
+			return workflow.SagaRecord{}, entity.NewError("SAGA_NOT_FOUND", "saga is unknown")
+		}
+		return val.(workflow.SagaRecord), nil
+	}).Maybe()
+
+	store.EXPECT().UpdateSaga(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, record workflow.SagaRecord) error {
+		records.Store(record.ID, record)
+		return nil
+	}).Maybe()
+
+	return store
 }
 
-func (s *sagaStoreFake) CreateSaga(_ context.Context, record workflow.SagaRecord) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.records == nil {
-		s.records = map[string]workflow.SagaRecord{}
-	}
-	if _, dup := s.records[record.ID]; dup {
-		return entity.NewError("SAGA_CONFLICT", "saga id already exists")
-	}
-	s.records[record.ID] = record
-	return nil
+func newRunner(t *testing.T, store *mockworkflow.MockSagaStore) *workflow.Runner {
+	t.Helper()
+	clock := mockapplication.NewMockClock(t)
+	clock.EXPECT().Now().Return(time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)).Maybe()
+	return workflow.NewRunner(workflow.RunnerParams{Store: store, Clock: clock})
 }
 
-func (s *sagaStoreFake) FindSaga(_ context.Context, _ string, sagaID string) (workflow.SagaRecord, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	record, ok := s.records[sagaID]
-	if !ok {
-		return workflow.SagaRecord{}, entity.NewError("SAGA_NOT_FOUND", "saga is unknown")
-	}
-	return record, nil
-}
-
-func (s *sagaStoreFake) UpdateSaga(_ context.Context, record workflow.SagaRecord) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.records[record.ID] = record
-	return nil
-}
-
-type sagaClock struct{}
-
-func (sagaClock) Now() time.Time { return time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC) }
-
-func newRunner(store *sagaStoreFake) *workflow.Runner {
-	return workflow.NewRunner(workflow.RunnerParams{Store: store, Clock: sagaClock{}})
-}
-
-// keyedEffects models idempotent step effects: each key applies once no
-// matter how often the action runs (the contract sagas rely on for resume).
+// keyedEffects models idempotent step effects.
 type keyedEffects struct {
-	mu      sync.Mutex
-	applied map[string]int
-	order   []string
+	applied sync.Map
+	order   atomic.Pointer[[]string]
 }
 
 func (e *keyedEffects) apply(key string) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if e.applied == nil {
-		e.applied = map[string]int{}
-	}
-	if e.applied[key] > 0 {
+	if _, loaded := e.applied.LoadOrStore(key, 1); loaded {
 		return
 	}
-	e.applied[key] = 1
-	e.order = append(e.order, key)
+	for {
+		old := e.order.Load()
+		var next []string
+		if old != nil {
+			next = make([]string, len(*old)+1)
+			copy(next, *old)
+			next[len(*old)] = key
+		} else {
+			next = []string{key}
+		}
+		if e.order.CompareAndSwap(old, &next) {
+			break
+		}
+	}
 }
 
 func (e *keyedEffects) count(key string) int {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	return e.applied[key]
+	if val, ok := e.applied.Load(key); ok {
+		return val.(int)
+	}
+	return 0
+}
+
+func (e *keyedEffects) orderList() []string {
+	old := e.order.Load()
+	if old == nil {
+		return nil
+	}
+	out := make([]string, len(*old))
+	copy(out, *old)
+	return out
 }
 
 func TestSagaCrashResume(t *testing.T) {
 	t.Parallel()
 
-	store := &sagaStoreFake{}
-	runner := newRunner(store)
+	store := newMockSagaStore(t)
+	runner := newRunner(t, store)
 	effects := &keyedEffects{}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -126,8 +137,8 @@ func TestSagaCrashResume(t *testing.T) {
 func TestSagaCompensationOrder(t *testing.T) {
 	t.Parallel()
 
-	store := &sagaStoreFake{}
-	runner := newRunner(store)
+	store := newMockSagaStore(t)
+	runner := newRunner(t, store)
 	effects := &keyedEffects{}
 
 	steps := []workflow.Step{
@@ -150,14 +161,14 @@ func TestSagaCompensationOrder(t *testing.T) {
 	record, err := runner.Start(context.Background(), "t-1", "transfer", "saga-2", steps)
 	assert.Equal(t, entity.NewError("STEP_BOOM", "step c failed"), err)
 	assert.Equal(t, workflow.SagaCompensated, record.State)
-	assert.Equal(t, []string{"run:a", "run:b", "undo:b", "undo:a"}, effects.order)
+	assert.Equal(t, []string{"run:a", "run:b", "undo:b", "undo:a"}, effects.orderList())
 }
 
 func TestSagaCompensationFailure(t *testing.T) {
 	t.Parallel()
 
-	store := &sagaStoreFake{}
-	runner := newRunner(store)
+	store := newMockSagaStore(t)
+	runner := newRunner(t, store)
 
 	steps := []workflow.Step{
 		{
@@ -179,8 +190,8 @@ func TestSagaCompensationFailure(t *testing.T) {
 func TestSagaDuplicateStart(t *testing.T) {
 	t.Parallel()
 
-	store := &sagaStoreFake{}
-	runner := newRunner(store)
+	store := newMockSagaStore(t)
+	runner := newRunner(t, store)
 	effects := &keyedEffects{}
 
 	steps := []workflow.Step{
@@ -203,8 +214,8 @@ func TestSagaDuplicateStart(t *testing.T) {
 func TestSagaStepTimeout(t *testing.T) {
 	t.Parallel()
 
-	store := &sagaStoreFake{}
-	runner := newRunner(store)
+	store := newMockSagaStore(t)
+	runner := newRunner(t, store)
 
 	steps := []workflow.Step{
 		{
@@ -228,8 +239,8 @@ func TestSagaStepTimeout(t *testing.T) {
 func TestSagaResumeTerminal(t *testing.T) {
 	t.Parallel()
 
-	store := &sagaStoreFake{}
-	runner := newRunner(store)
+	store := newMockSagaStore(t)
+	runner := newRunner(t, store)
 	runs := 0
 
 	steps := []workflow.Step{
@@ -249,8 +260,8 @@ func TestSagaResumeTerminal(t *testing.T) {
 func TestSagaValidation(t *testing.T) {
 	t.Parallel()
 
-	store := &sagaStoreFake{}
-	runner := newRunner(store)
+	store := newMockSagaStore(t)
+	runner := newRunner(t, store)
 
 	t.Run("empty id rejected", func(t *testing.T) {
 		_, err := runner.Start(context.Background(), "t-1", "transfer", "", []workflow.Step{
@@ -264,7 +275,3 @@ func TestSagaValidation(t *testing.T) {
 		assert.Equal(t, entity.NewError("SAGA_STEPS_REQUIRED", "saga requires at least one step"), err)
 	})
 }
-
-var (
-	_ port.Clock = sagaClock{}
-)

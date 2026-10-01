@@ -1,0 +1,6 @@
+p, admin, tenant-acme, ledger, write, allow
+p, viewer, tenant-acme, ledger, read, allow
+p, admin, tenant-beta, ledger, write, allow
+g, alice, admin, tenant-acme
+g, bob, viewer, tenant-acme
+g, carol, admin, tenant-beta

@@ -13,6 +13,7 @@ import (
 
 	natsgo "github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	appport "github.com/kadekutama/go-template/internal/application/port"
@@ -20,10 +21,12 @@ import (
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
 	edgenats "github.com/kadekutama/go-template/internal/infrastructure/messaging/nats"
 	"github.com/kadekutama/go-template/internal/infrastructure/messaging/redpanda/consumer"
-
 	"github.com/kadekutama/go-template/internal/infrastructure/messaging/redpanda/publisher"
 	"github.com/kadekutama/go-template/internal/infrastructure/webhook"
-	fakes "github.com/kadekutama/go-template/test/fakes"
+	"github.com/kadekutama/go-template/test/doubles"
+	mockconsumer "github.com/kadekutama/go-template/test/mock/consumer"
+	mockredpanda "github.com/kadekutama/go-template/test/mock/redpanda"
+	mockwebhook "github.com/kadekutama/go-template/test/mock/webhook"
 	testcontainers "github.com/kadekutama/go-template/test/testcontainers"
 )
 
@@ -46,8 +49,13 @@ func testLedger(t *testing.T) valueobject.LedgerID {
 }
 
 func TestPublishConsumeIdempotent(t *testing.T) {
-	broker := fakes.NewBroker()
-	relay, err := publisher.NewPublisher(publisher.PublisherParams{Broker: broker})
+	broker := mockredpanda.NewMockBroker(t)
+	var recordedPayload []byte
+	broker.EXPECT().Publish(mock.Anything, "outbox.facts.v1", mock.Anything, mock.Anything, mock.Anything).Run(func(_ context.Context, _ string, _ string, _ map[string]string, payload []byte) {
+		recordedPayload = append([]byte(nil), payload...)
+	}).Return(nil).Once()
+
+	relay, err := publisher.NewPublisher(publisher.PublisherParams{Broker: broker, Topic: "outbox.facts.v1"})
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -59,12 +67,25 @@ func TestPublishConsumeIdempotent(t *testing.T) {
 		Payload:     []byte(`{"minor":9}`),
 		OccurredAt:  time.Now().UTC(),
 	}))
-	require.Len(t, broker.Records(), 1)
+	require.NotEmpty(t, recordedPayload)
+
+	receipts := mockconsumer.NewMockReceiptStore(t)
+	claims := &doubles.DedupSet{}
+	receipts.EXPECT().Claim(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, c, id string) (bool, error) {
+		return claims.Claim(c, id), nil
+	}).Maybe()
+	receipts.EXPECT().Release(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, c, id string) error {
+		claims.Release(c, id)
+		return nil
+	}).Maybe()
+
+	dlq := mockconsumer.NewMockDLQSink(t)
 
 	framework, err := consumer.NewFramework(consumer.FrameworkParams{
-		Consumer: "test-group",
-		Receipts: fakes.NewReceiptStore(),
-		DLQ:      fakes.NewMessageDLQ(),
+		Consumer:    "test-group",
+		Receipts:    receipts,
+		DLQ:         dlq,
+		MaxDelivers: 5,
 	})
 	require.NoError(t, err)
 
@@ -78,7 +99,7 @@ func TestPublishConsumeIdempotent(t *testing.T) {
 		ID:       "fact-1",
 		TenantID: testTenant(t),
 		Subject:  "ledger.t1.transfer.completed.v1",
-		Payload:  broker.Records()[0].Payload,
+		Payload:  recordedPayload,
 	}
 
 	require.NoError(t, framework.Handle(ctx, msg, handler))
@@ -87,22 +108,27 @@ func TestPublishConsumeIdempotent(t *testing.T) {
 }
 
 func TestConsumerDLQAfterMaxDelivers(t *testing.T) {
-	dlq := fakes.NewMessageDLQ()
+	dlq := mockconsumer.NewMockDLQSink(t)
+	dlq.EXPECT().Record(mock.Anything, mock.Anything).Return(nil).Once()
+
+	receipts := mockconsumer.NewMockReceiptStore(t)
+	receipts.EXPECT().Claim(mock.Anything, mock.Anything, mock.Anything).Return(false, nil).Maybe()
+	receipts.EXPECT().Release(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+
 	framework, err := consumer.NewFramework(consumer.FrameworkParams{
 		Consumer:    "test-group",
-		Receipts:    fakes.NewReceiptStore(),
+		Receipts:    receipts,
 		DLQ:         dlq,
 		MaxDelivers: 3,
 	})
 	require.NoError(t, err)
 
 	handler := func(_ context.Context, _ appport.Message) error {
-		return errors.New("poison")
+		return assert.AnError
 	}
 
 	msg := appport.Message{ID: "poison-1", TenantID: testTenant(t), Redelivered: 2}
 	require.NoError(t, framework.Handle(context.Background(), msg, handler))
-	assert.Equal(t, 1, dlq.Len())
 }
 
 // mustTestPolicy builds the api-contracts §11 schedule explicitly for tests.
@@ -137,13 +163,17 @@ func TestNATSFanout(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, conn.Flush())
 
-	publisher, err := edgenats.NewPublisher(edgenats.PublisherParams{URL: handle.URL()})
+	publisher, err := edgenats.NewPublisher(edgenats.PublisherParams{
+		URL:            handle.URL(),
+		ConnectTimeout: 5 * time.Second,
+		RequestTimeout: 3 * time.Second,
+	})
 	require.NoError(t, err)
 	defer func() { _ = publisher.Close() }()
 
 	assert.Equal(t, handle.URL(), publisher.URL())
 	assert.False(t, publisher.UsesTLS())
-	assert.Equal(t, edgenats.DefaultConnectTimeout, publisher.ConnectTimeout())
+	assert.Equal(t, 5*time.Second, publisher.ConnectTimeout())
 
 	ctx := context.Background()
 	require.NoError(t, publisher.PublishEvent(ctx, "t1", "account.balance.changed.v1", []byte(`{"minor":3}`)))
@@ -162,7 +192,11 @@ func TestPublisherPublishLive(t *testing.T) {
 	handle, err := testcontainers.StartNATS(t)
 	require.NoError(t, err)
 
-	edgepublisher, err := edgenats.NewPublisher(edgenats.PublisherParams{URL: handle.URL()})
+	edgepublisher, err := edgenats.NewPublisher(edgenats.PublisherParams{
+		URL:            handle.URL(),
+		ConnectTimeout: 5 * time.Second,
+		RequestTimeout: 3 * time.Second,
+	})
 	require.NoError(t, err)
 	defer func() { _ = edgepublisher.Close() }()
 
@@ -197,7 +231,11 @@ func TestPublisherPublishEventValidation(t *testing.T) {
 	handle, err := testcontainers.StartNATS(t)
 	require.NoError(t, err)
 
-	publisher, err := edgenats.NewPublisher(edgenats.PublisherParams{URL: handle.URL()})
+	publisher, err := edgenats.NewPublisher(edgenats.PublisherParams{
+		URL:            handle.URL(),
+		ConnectTimeout: 5 * time.Second,
+		RequestTimeout: 3 * time.Second,
+	})
 	require.NoError(t, err)
 	defer func() { _ = publisher.Close() }()
 
@@ -263,14 +301,27 @@ func TestWebhookIsolation(t *testing.T) {
 		Secret: "s-bad",
 	}))
 
-	sender := &flakySender{failURL: "https://bad.example.com/hook"}
-	dlq := fakes.NewWebhookDLQ()
+	sender := mockconsumer.NewMockHTTPSender(t)
+	var delivered []string
+	sender.EXPECT().Send(mock.Anything, "https://good.example.com/hook", mock.Anything, mock.Anything).Run(func(_ context.Context, u string, _ map[string]string, _ []byte) {
+		delivered = append(delivered, u)
+	}).Return(nil).Once()
+	sender.EXPECT().Send(mock.Anything, "https://bad.example.com/hook", mock.Anything, mock.Anything).Return(assert.AnError).Once()
+
+	dlq := mockwebhook.NewMockDLQSink(t)
+	dlq.EXPECT().Record(mock.Anything, mock.Anything).Return(nil).Maybe()
+
+	receipts := mockconsumer.NewMockReceiptStore(t)
+	receipts.EXPECT().Claim(mock.Anything, mock.Anything, mock.Anything).Return(false, nil).Maybe()
+	receipts.EXPECT().Release(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+
 	dispatcher, err := consumer.NewDispatcher(consumer.DispatcherParams{
-		Endpoints:   registryAdapter{registry: registry},
+		Endpoints:   registry,
 		Sender:      sender,
-		Receipts:    fakes.NewReceiptStore(),
+		Receipts:    receipts,
 		DLQ:         dlq,
 		RetryPolicy: mustTestPolicy(t),
+		Tolerance:   5 * time.Second,
 	})
 	require.NoError(t, err)
 
@@ -280,28 +331,5 @@ func TestWebhookIsolation(t *testing.T) {
 		Payload:   []byte(`{"id":"evt-iso-1"}`),
 	})
 	assert.Error(t, err)
-	assert.Contains(t, sender.delivered, "https://good.example.com/hook")
-}
-
-type registryAdapter struct {
-	registry *webhook.Registry
-}
-
-func (a registryAdapter) Find(ctx context.Context, tenant, event string) []webhook.Endpoint {
-	return a.registry.Find(ctx, tenant, event)
-}
-
-type flakySender struct {
-	failURL   string
-	delivered []string
-}
-
-func (s *flakySender) Send(_ context.Context, url string, _ map[string]string, _ []byte) error {
-	if url == s.failURL {
-		return errors.New("endpoint down")
-	}
-
-	s.delivered = append(s.delivered, url)
-
-	return nil
+	assert.Contains(t, delivered, "https://good.example.com/hook")
 }

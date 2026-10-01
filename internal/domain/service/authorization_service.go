@@ -8,9 +8,6 @@ import (
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
 )
 
-// DefaultAuthExpiryDays is the default authorization hold window.
-const DefaultAuthExpiryDays = 7
-
 // Authorization is the authorize-now/capture-later workflow aggregate: a
 // hold plus capture accounting. It is never a posting.
 type Authorization struct {
@@ -36,7 +33,7 @@ func Authorize(id string, amountMinor int64, holdID string, now time.Time, expir
 		return Authorization{}, entity.NewError("AUTH_HOLD_REQUIRED", "authorization requires a hold reference")
 	}
 	if expiryDays <= 0 {
-		expiryDays = DefaultAuthExpiryDays
+		return Authorization{}, entity.NewError("INVALID_AUTH_EXPIRY", "authorization expiry days must be positive")
 	}
 	return Authorization{
 		ID:               id,

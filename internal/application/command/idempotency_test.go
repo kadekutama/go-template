@@ -6,10 +6,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 
 	"github.com/kadekutama/go-template/internal/application/command"
 	"github.com/kadekutama/go-template/internal/application/port"
 	"github.com/kadekutama/go-template/internal/domain/entity"
+	mockapplication "github.com/kadekutama/go-template/test/mock/application"
 )
 
 func TestFingerprint(t *testing.T) {
@@ -99,25 +101,6 @@ func TestMapParts(t *testing.T) {
 	}
 }
 
-type fakeIdempotencyStore struct {
-	reserveFunc  func(ctx context.Context, rec port.IdempotencyRecord) (port.ReserveOutcome, error)
-	completeFunc func(ctx context.Context, key string, response []byte) error
-}
-
-func (s *fakeIdempotencyStore) Reserve(ctx context.Context, rec port.IdempotencyRecord) (port.ReserveOutcome, error) {
-	if s.reserveFunc != nil {
-		return s.reserveFunc(ctx, rec)
-	}
-	return port.ReserveOutcome{}, nil
-}
-
-func (s *fakeIdempotencyStore) Complete(ctx context.Context, key string, response []byte) error {
-	if s.completeFunc != nil {
-		return s.completeFunc(ctx, key, response)
-	}
-	return nil
-}
-
 func TestRunIdempotent(t *testing.T) {
 	t.Parallel()
 
@@ -129,7 +112,7 @@ func TestRunIdempotent(t *testing.T) {
 
 	type testCase struct {
 		name             string
-		store            port.IdempotencyStore
+		setupStore       func(t *testing.T) port.IdempotencyStore
 		rec              port.IdempotencyRecord
 		execute          func(ctx context.Context) ([]byte, error)
 		expectedResponse []byte
@@ -140,13 +123,11 @@ func TestRunIdempotent(t *testing.T) {
 	testCases := []testCase{
 		{
 			name: "fresh execution completes and returns response",
-			store: &fakeIdempotencyStore{
-				reserveFunc: func(context.Context, port.IdempotencyRecord) (port.ReserveOutcome, error) {
-					return port.ReserveOutcome{Replay: false}, nil
-				},
-				completeFunc: func(context.Context, string, []byte) error {
-					return nil
-				},
+			setupStore: func(t *testing.T) port.IdempotencyStore {
+				m := mockapplication.NewMockIdempotencyStore(t)
+				m.EXPECT().Reserve(mock.Anything, baseRec).Return(port.ReserveOutcome{Replay: false}, nil).Once()
+				m.EXPECT().Complete(mock.Anything, baseRec.Key, []byte(`{"status":"ok"}`)).Return(nil).Once()
+				return m
 			},
 			rec: baseRec,
 			execute: func(context.Context) ([]byte, error) {
@@ -158,10 +139,10 @@ func TestRunIdempotent(t *testing.T) {
 		},
 		{
 			name: "replayed execution returns stored response without executing",
-			store: &fakeIdempotencyStore{
-				reserveFunc: func(context.Context, port.IdempotencyRecord) (port.ReserveOutcome, error) {
-					return port.ReserveOutcome{Replay: true, Response: []byte(`{"replayed":true}`)}, nil
-				},
+			setupStore: func(t *testing.T) port.IdempotencyStore {
+				m := mockapplication.NewMockIdempotencyStore(t)
+				m.EXPECT().Reserve(mock.Anything, baseRec).Return(port.ReserveOutcome{Replay: true, Response: []byte(`{"replayed":true}`)}, nil).Once()
+				return m
 			},
 			rec: baseRec,
 			execute: func(context.Context) ([]byte, error) {
@@ -173,10 +154,10 @@ func TestRunIdempotent(t *testing.T) {
 		},
 		{
 			name: "reserve conflict returns error immediately without executing",
-			store: &fakeIdempotencyStore{
-				reserveFunc: func(context.Context, port.IdempotencyRecord) (port.ReserveOutcome, error) {
-					return port.ReserveOutcome{}, entity.NewError("IDEMPOTENCY_CONFLICT", "fingerprint mismatch")
-				},
+			setupStore: func(t *testing.T) port.IdempotencyStore {
+				m := mockapplication.NewMockIdempotencyStore(t)
+				m.EXPECT().Reserve(mock.Anything, baseRec).Return(port.ReserveOutcome{}, entity.NewError("IDEMPOTENCY_CONFLICT", "fingerprint mismatch")).Once()
+				return m
 			},
 			rec: baseRec,
 			execute: func(context.Context) ([]byte, error) {
@@ -188,13 +169,10 @@ func TestRunIdempotent(t *testing.T) {
 		},
 		{
 			name: "execution error propagates and does not complete store",
-			store: &fakeIdempotencyStore{
-				reserveFunc: func(context.Context, port.IdempotencyRecord) (port.ReserveOutcome, error) {
-					return port.ReserveOutcome{Replay: false}, nil
-				},
-				completeFunc: func(context.Context, string, []byte) error {
-					return errors.New("should not complete on failure")
-				},
+			setupStore: func(t *testing.T) port.IdempotencyStore {
+				m := mockapplication.NewMockIdempotencyStore(t)
+				m.EXPECT().Reserve(mock.Anything, baseRec).Return(port.ReserveOutcome{Replay: false}, nil).Once()
+				return m
 			},
 			rec: baseRec,
 			execute: func(context.Context) ([]byte, error) {
@@ -206,13 +184,11 @@ func TestRunIdempotent(t *testing.T) {
 		},
 		{
 			name: "store complete error propagates",
-			store: &fakeIdempotencyStore{
-				reserveFunc: func(context.Context, port.IdempotencyRecord) (port.ReserveOutcome, error) {
-					return port.ReserveOutcome{Replay: false}, nil
-				},
-				completeFunc: func(context.Context, string, []byte) error {
-					return entity.NewError("STORE_ERROR", "failed to commit idempotency")
-				},
+			setupStore: func(t *testing.T) port.IdempotencyStore {
+				m := mockapplication.NewMockIdempotencyStore(t)
+				m.EXPECT().Reserve(mock.Anything, baseRec).Return(port.ReserveOutcome{Replay: false}, nil).Once()
+				m.EXPECT().Complete(mock.Anything, baseRec.Key, []byte(`{"data":"valid"}`)).Return(entity.NewError("STORE_ERROR", "failed to commit idempotency")).Once()
+				return m
 			},
 			rec: baseRec,
 			execute: func(context.Context) ([]byte, error) {
@@ -226,7 +202,8 @@ func TestRunIdempotent(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			res, replayed, err := command.RunIdempotent(context.Background(), tc.store, tc.rec, tc.execute)
+			store := tc.setupStore(t)
+			res, replayed, err := command.RunIdempotent(context.Background(), store, tc.rec, tc.execute)
 			assert.Equal(t, tc.expectedResponse, res)
 			assert.Equal(t, tc.expectedReplayed, replayed)
 			assert.Equal(t, tc.expectedError, err)

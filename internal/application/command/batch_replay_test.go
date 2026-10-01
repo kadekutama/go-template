@@ -18,11 +18,11 @@ func TestBatchIntakeReplay(t *testing.T) {
 	t.Parallel()
 
 	t.Run("duplicate intake replays without re-executing", func(t *testing.T) {
-		uow := &tfrUOW{}
-		store := &tfrStore{}
-		authz := &tfrAuthz{denied: map[string]bool{}}
-		balances := &tfrBalances{available: map[valueobject.AccountID]int64{tfrSrc: 90000}}
-		svc := newTransferService(uow, store, balances, authz)
+		uow := newMockUOW(t, "cursor-5")
+		store := newMockTransferStore(t)
+		authz := newMockAuthorizer(t)
+		balances := newMockBalances(t, map[valueobject.AccountID]int64{tfrSrc: 90000})
+		svc := newTransferService(t, uow, store, balances, authz)
 
 		req := port.BatchTransferRequest{
 			TenantID: tfrTenant, LedgerID: tfrLedger,
@@ -34,15 +34,15 @@ func TestBatchIntakeReplay(t *testing.T) {
 		second, err := svc.CreateBatchTransfer(context.Background(), req)
 		require.NoError(t, err)
 		assert.Equal(t, first, second)
-		assert.Len(t, store.batches, 1)
+		assert.Equal(t, 1, batchCount(store))
 	})
 
 	t.Run("crashed batch converges on resubmission", func(t *testing.T) {
-		uow := &tfrUOW{}
-		store := &tfrStore{}
-		authz := &tfrAuthz{denied: map[string]bool{}}
-		balances := &tfrBalances{available: map[valueobject.AccountID]int64{tfrSrc: 90000}}
-		svc := newTransferService(uow, store, balances, authz)
+		uow := newMockUOW(t, "cursor-5")
+		store := newMockTransferStore(t)
+		authz := newMockAuthorizer(t)
+		balances := newMockBalances(t, map[valueobject.AccountID]int64{tfrSrc: 90000})
+		svc := newTransferService(t, uow, store, balances, authz)
 
 		// Seed a RECEIVED batch whose items never executed (crash after
 		// intake commit): batch + items + PENDING intents + completed intake
@@ -69,12 +69,7 @@ func TestBatchIntakeReplay(t *testing.T) {
 		fingerprint := command.Fingerprint("batch-1", "t-1", "l-1", "2",
 			"a-src", "a-dst", "USD", "5000",
 			"a-src", "a-dst", "USD", "5000")
-		uow.mu.Lock()
-		if uow.idem == nil {
-			uow.idem = map[string]tfrIdemEntry{}
-		}
-		uow.idem["batch-1"] = tfrIdemEntry{fingerprint: fingerprint, response: encoded, completed: true}
-		uow.mu.Unlock()
+		setUOWIdem(uow, "batch-1", fingerprint, encoded)
 
 		items := []port.TransferRequest{transferTestCommand(), transferTestCommand()}
 		resubmitted, err := svc.CreateBatchTransfer(context.Background(), port.BatchTransferRequest{
@@ -93,11 +88,11 @@ func TestBatchIntakeReplay(t *testing.T) {
 	})
 
 	t.Run("partially executed batch converges on original indexes", func(t *testing.T) {
-		uow := &tfrUOW{}
-		store := &tfrStore{}
-		authz := &tfrAuthz{denied: map[string]bool{}}
-		balances := &tfrBalances{available: map[valueobject.AccountID]int64{tfrSrc: 90000}}
-		svc := newTransferService(uow, store, balances, authz)
+		uow := newMockUOW(t, "cursor-5")
+		store := newMockTransferStore(t)
+		authz := newMockAuthorizer(t)
+		balances := newMockBalances(t, map[valueobject.AccountID]int64{tfrSrc: 90000})
+		svc := newTransferService(t, uow, store, balances, authz)
 
 		// Crash after item 0 completed and item 1 failed, item 2 never ran:
 		// convergence must execute only item 2 under its original index key
@@ -128,12 +123,7 @@ func TestBatchIntakeReplay(t *testing.T) {
 			"a-src", "a-dst", "USD", "5000",
 			"a-src", "a-dst", "USD", "5000",
 			"a-src", "a-dst", "USD", "5000")
-		uow.mu.Lock()
-		if uow.idem == nil {
-			uow.idem = map[string]tfrIdemEntry{}
-		}
-		uow.idem["batch-1"] = tfrIdemEntry{fingerprint: fingerprint, response: encoded, completed: true}
-		uow.mu.Unlock()
+		setUOWIdem(uow, "batch-1", fingerprint, encoded)
 
 		items := []port.TransferRequest{transferTestCommand(), transferTestCommand(), transferTestCommand()}
 		resubmitted, err := svc.CreateBatchTransfer(context.Background(), port.BatchTransferRequest{

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -44,7 +45,10 @@ func openMigrated(t *testing.T) (*postgres.Pools, *sql.DB) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = sqlDB.Close() })
 
-	runner, err := migration.NewRunner(migration.RunnerParams{DB: sqlDB})
+	runner, err := migration.NewRunner(migration.RunnerParams{
+		DB:      sqlDB,
+		Timeout: 30 * time.Second,
+	})
 	require.NoError(t, err)
 	require.NoError(t, runner.Up(ctx))
 
@@ -52,7 +56,12 @@ func openMigrated(t *testing.T) (*postgres.Pools, *sql.DB) {
 	require.NoError(t, err)
 	require.Positive(t, version)
 
-	gormDB, err := postgres.Open(postgres.DefaultConfig(handle.ConnectionString()))
+	gormDB, err := postgres.Open(postgres.Config{
+		DSN:             handle.ConnectionString(),
+		MaxOpen:         25,
+		MaxIdle:         5,
+		ConnMaxLifetime: 30 * time.Minute,
+	})
 	require.NoError(t, err)
 
 	pools, err := postgres.NewPools(postgres.PoolsParams{Primary: gormDB})
@@ -73,7 +82,10 @@ func TestMigrationsUpDown(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = sqlDB.Close() })
 
-	runner, err := migration.NewRunner(migration.RunnerParams{DB: sqlDB})
+	runner, err := migration.NewRunner(migration.RunnerParams{
+		DB:      sqlDB,
+		Timeout: 30 * time.Second,
+	})
 	require.NoError(t, err)
 
 	type testCase struct {
@@ -84,19 +96,19 @@ func TestMigrationsUpDown(t *testing.T) {
 
 	testCases := []testCase{
 		{
-			name:            "initial up builds full schema to version 20260901000005",
+			name:            "initial up builds full schema to version 20261001000010",
 			action:          "UP",
-			expectedVersion: 20260901000005,
+			expectedVersion: 20261001000010,
 		},
 		{
-			name:            "down removes latest migration cleanly to version 20260901000004",
+			name:            "down removes latest migration cleanly to version 20260923000009",
 			action:          "DOWN",
-			expectedVersion: 20260901000004,
+			expectedVersion: 20260923000009,
 		},
 		{
-			name:            "re-up rebuilds latest migration cleanly back to version 20260901000005",
+			name:            "re-up rebuilds latest migration cleanly back to version 20261001000010",
 			action:          "UP",
-			expectedVersion: 20260901000005,
+			expectedVersion: 20261001000010,
 		},
 	}
 
@@ -864,14 +876,30 @@ func TestDurableIdempotencyPostgres(t *testing.T) {
 }
 
 type testSubscriber struct {
-	mu        sync.Mutex
-	published []port.OutboxFact
+	published atomic.Pointer[[]port.OutboxFact]
 }
 
 func (s *testSubscriber) Publish(_ context.Context, facts ...port.OutboxFact) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.published = append(s.published, facts...)
+	for {
+		cur := s.published.Load()
+		var next []port.OutboxFact
+		if cur != nil {
+			next = make([]port.OutboxFact, len(*cur)+len(facts))
+			copy(next, *cur)
+			copy(next[len(*cur):], facts)
+		} else {
+			next = append([]port.OutboxFact(nil), facts...)
+		}
+		if s.published.CompareAndSwap(cur, &next) {
+			return nil
+		}
+	}
+}
+
+func (s *testSubscriber) facts() []port.OutboxFact {
+	if p := s.published.Load(); p != nil {
+		return *p
+	}
 	return nil
 }
 
@@ -884,8 +912,10 @@ func TestOutboxRelayPostgres(t *testing.T) {
 	sub := &testSubscriber{}
 
 	poller, err := outbox.NewPoller(outbox.PollerParams{
-		Publisher: sub,
-		MaxBatch:  50,
+		Publisher:    sub,
+		MaxBatch:     50,
+		BaseBackoff:  100 * time.Millisecond,
+		ClaimTimeout: 30 * time.Second,
 	})
 	require.NoError(t, err)
 
@@ -921,11 +951,10 @@ func TestOutboxRelayPostgres(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 2, delivered)
 
-	sub.mu.Lock()
-	require.Len(t, sub.published, 2)
-	assert.Equal(t, "transfer.created.v1", sub.published[0].EventType)
-	assert.Equal(t, "transfer.completed.v1", sub.published[1].EventType)
-	sub.mu.Unlock()
+	published := sub.facts()
+	require.Len(t, published, 2)
+	assert.Equal(t, "transfer.created.v1", published[0].EventType)
+	assert.Equal(t, "transfer.completed.v1", published[1].EventType)
 
 	var undeliveredCount int64
 	err = sqlDB.QueryRowContext(ctx, "SELECT count(*) FROM outbox_events WHERE delivered_at IS NULL").Scan(&undeliveredCount)

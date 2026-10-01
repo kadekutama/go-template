@@ -28,8 +28,7 @@ func TestRunDrainsOnCancel(t *testing.T) {
 	}
 
 	time.AfterFunc(100*time.Millisecond, cancel)
-	timeout := 5 * time.Second
-	if err := Run(ctx, &timeout, serve, drain); err != nil {
+	if err := Run(ctx, 5*time.Second, serve, drain); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	close(release)
@@ -48,7 +47,7 @@ func TestRun(t *testing.T) {
 	type testCase struct {
 		name          string
 		ctx           func() context.Context
-		timeout       *time.Duration
+		timeout       time.Duration
 		serve         func(context.Context) error
 		drain         func(context.Context) error
 		expectedError error
@@ -58,15 +57,25 @@ func TestRun(t *testing.T) {
 		{
 			name:          "nil serve returns error",
 			ctx:           context.Background,
-			timeout:       nil,
+			timeout:       5 * time.Second,
 			serve:         nil,
 			drain:         nil,
 			expectedError: errors.New("shutdown: serve func must not be nil"),
 		},
 		{
+			name:    "non-positive timeout returns error",
+			ctx:     context.Background,
+			timeout: 0,
+			serve: func(context.Context) error {
+				return nil
+			},
+			drain:         nil,
+			expectedError: errors.New("shutdown: drain timeout must be positive"),
+		},
+		{
 			name:    "serve returns error immediately",
 			ctx:     context.Background,
-			timeout: nil,
+			timeout: 5 * time.Second,
 			serve: func(context.Context) error {
 				return sentinelServeErr
 			},
@@ -82,7 +91,7 @@ func TestRun(t *testing.T) {
 				cancel()
 				return ctx
 			},
-			timeout: nil,
+			timeout: 5 * time.Second,
 			serve: func(ctx context.Context) error {
 				<-ctx.Done()
 				return nil
@@ -97,7 +106,7 @@ func TestRun(t *testing.T) {
 				cancel()
 				return ctx
 			},
-			timeout: nil,
+			timeout: 5 * time.Second,
 			serve: func(ctx context.Context) error {
 				<-ctx.Done()
 				return nil
@@ -114,7 +123,7 @@ func TestRun(t *testing.T) {
 				cancel()
 				return ctx
 			},
-			timeout: &shortTimeout,
+			timeout: shortTimeout,
 			serve: func(ctx context.Context) error {
 				<-ctx.Done()
 				return nil

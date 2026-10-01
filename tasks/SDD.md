@@ -53,9 +53,42 @@ Each task that leaves `pending` has these repository-visible artifacts:
 | Claim | `tasks/claims/<TASK-ID>.md` | Owner, harness, branch/worktree, base commit, and lease |
 | Evidence | `tasks/evidence/<TASK-ID>.md` | Commands, results, artifacts, and requirement-to-test mapping |
 | Handoff | `tasks/handoffs/<TASK-ID>.md` | Current state and exact resume instructions |
+| Review record | `tasks/reviews/<TASK-ID>.md` | Durable review findings, verdict, verified commits, and resolution history when required by the task packet |
 
 Use the templates in those directories. Never put credentials, tokens, personal
 data, or full production payloads in an artifact.
+
+A review record is distinct from verification evidence: test commands and their
+outputs stay in `tasks/evidence/<TASK-ID>.md`; the review record links findings
+and conclusions to the exact base/reviewed commits. Link a required review record
+from the task handoff. The packet's `Review Requirement` determines whether a
+completion record is required (`self`, `independent`, or `none`); legacy packets
+without this field are not retroactively required to create reports. The report
+path must be in the packet's Allowed Change Surface and authorized by the active
+claim. A designated reviewer named by the packet may write only that review
+artifact under this authorization; this does not transfer task ownership or
+permit implementation edits. A `self` report's reviewer identity must match the
+task claim owner. An `independent` report's reviewer must match the packet's
+designated Reviewer and differ from both its Author and the task claim owner.
+After revisions, append a dated resolution note,
+retaining the original findings and recording fixed/open/accepted IDs and
+verification. The report path must be listed under the packet's `**Owns:**`
+entry as a whole path token; a substring or a mention elsewhere in Change
+Surface does not authorize it. The report's Base Commit must equal the claim's
+Base Commit, and its Reviewed Commit must be a SHA on the handoff's
+Base / Head line; the checker enforces both. Independent reviews must name a
+reviewer identity distinct from the claim owner and packet author — for
+example, include the reviewer's harness or model rather than a case-variant
+of the claim owner's name.
+
+A report is **accepted** for task completion only when its current Verdict and
+Final Review Status are both PASS or both PASS WITH MINOR ISSUES, and every
+required field and section passes `--sdd`. A new review round is recorded by
+revising those fields **and** appending a dated resolution note that retains
+the original findings and records what was fixed or explicitly accepted with
+rationale. A resolution note alone, without revising the Verdict fields, never
+unblocks completion; a current REVISION REQUIRED or BLOCKED verdict never
+completes a task.
 
 ## 3. Task Lifecycle
 
@@ -75,6 +108,12 @@ Before production code is written:
 Financial postings, authorization, cryptography, migrations, public contracts,
 and destructive operations require a reviewer different from the spec author.
 Other tasks may use self-review, but must record it explicitly.
+
+Set `Review Requirement` to `self`, `independent`, or `none`. Use `independent`
+for the high-risk classes above; `self` is the template default for ordinary
+tasks. `none` requires a brief rationale in packet Notes. A task requiring self
+or independent review is not complete until its report is accepted and linked
+from its handoff.
 
 ### 3.2 Claim
 
@@ -120,8 +159,28 @@ Completion requires all of the following:
    Record command, commit, environment (including Pixi/CGO toolchain), exit status, and terminal output
    in `tasks/evidence/<TASK-ID>.md`.
 3. The reviewer verifies high-risk changes against the task packet rather than
-   only reviewing the diff.
-4. The handoff contains no remaining required work.
+   only reviewing the diff. When the packet requires self or independent review,
+   record the outcome in `tasks/reviews/<TASK-ID>.md`, using its template and
+   linking it from the handoff. A report with `REVISION REQUIRED` or `BLOCKED`
+   does not satisfy completion; findings must be fixed or explicitly accepted
+   with rationale and recorded in a dated resolution note.
+   When the implementer disagrees with a finding, both sides converse in the
+   same review file under strict section ownership: the implementer appends a
+   dated `### Implementer reply` entry stating the disposition (`fixed` with
+   the verifying commit/test, or `contested` with reason and counter-evidence)
+   and never edits findings, metadata, or adjudication; new implementer
+   packets coordinate the review path for such replies. The reviewer
+   adjudicates each contested finding in `## Resolution Notes` (withdrawn with
+   reason, or held with rebuttal grounded in the packet or normative sources),
+   quotes reply text rather than editing it, and may reject an implementer
+   contest that does not stand. Only the
+   repository owner may overrule a held finding, by explicit recorded decision
+   with rationale. Replies recorded in handoffs before this rule remain valid
+   history. Every finding must reach a terminal state — FIXED,
+   WITHDRAWN, ACCEPTED (with named acceptor), or OPEN — and any OPEN finding
+   above Low blocks completion.
+4. The handoff contains no remaining required work and links the final review
+   record when one is required.
 5. Only then mark the epic task and progress checkbox `completed` and release the
    claim. Gate completion is separate from task completion.
 
@@ -140,6 +199,9 @@ A replacement agent starts without trusting previous chat context:
 5. Record takeover in the claim and handoff; preserve unfinished work unless the
    packet proves it should be replaced.
 6. Continue from the first unverified requirement.
+7. If review is required, read the review record and resolution history before
+   treating findings as closed; verify its reviewed commit matches the candidate
+   being resumed.
 
 If the handoff is missing or stale, reconstruct state from the diff and tests and
 record that fact. Never infer completion from a prior agent's prose.
@@ -178,6 +240,9 @@ control when a capability may be depended on or exposed.
 - **Strict Change Surface isolation:** Avoid two active tasks declaring overlapping
   files in `Allowed Change Surface`. If unavoidable, designate one owner and make
   the other consume a committed contract/stub.
+- **Review artifact authorization:** The review path must be included in the
+  packet's allowed surface. A designated reviewer may write only that report under
+  the active task claim; they do not gain permission to edit implementation files.
 - **Generated files:** Generated files have one source-of-truth owner; consumers
   do not edit them.
 - **Migrations:** Database migration numbers are reserved in the claim before authoring.

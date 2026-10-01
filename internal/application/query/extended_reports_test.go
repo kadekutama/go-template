@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/kadekutama/go-template/internal/application/command"
@@ -14,57 +15,11 @@ import (
 	"github.com/kadekutama/go-template/internal/application/query"
 	"github.com/kadekutama/go-template/internal/domain/entity"
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
+	mockapplication "github.com/kadekutama/go-template/test/mock/application"
+	mockcommand "github.com/kadekutama/go-template/test/mock/command"
 )
 
 var dashAt = time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
-
-type dashPostings struct {
-	pages map[string]port.PostingSearchPage
-}
-
-func (s *dashPostings) Search(_ context.Context, filter port.PostingFilter) (port.PostingSearchPage, error) {
-	return s.pages[filter.Cursor], nil
-}
-
-type dashTransfers struct {
-	records []command.TransferRecord
-}
-
-func (s *dashTransfers) CreateTransfer(_ context.Context, _ command.TransferRecord) error {
-	return nil
-}
-
-func (s *dashTransfers) FindTransfer(_ context.Context, _ valueobject.TenantID, _ string) (command.TransferRecord, error) {
-	return command.TransferRecord{}, nil
-}
-
-func (s *dashTransfers) UpdateTransfer(_ context.Context, _ command.TransferRecord) error {
-	return nil
-}
-
-func (s *dashTransfers) ListTransfers(_ context.Context, _ command.TransferListFilter) ([]command.TransferRecord, string, error) {
-	return s.records, "", nil
-}
-
-func (s *dashTransfers) CreateBatch(_ context.Context, _ command.BatchRecord, _ []command.BatchItem) error {
-	return nil
-}
-
-func (s *dashTransfers) FindBatch(_ context.Context, _ valueobject.TenantID, _ string) (command.BatchRecord, error) {
-	return command.BatchRecord{}, nil
-}
-
-func (s *dashTransfers) UpdateBatchState(_ context.Context, _ valueobject.TenantID, _, _ string) error {
-	return nil
-}
-
-func (s *dashTransfers) UpdateBatchItem(_ context.Context, _ valueobject.TenantID, _ string, _ int, _, _ string) error {
-	return nil
-}
-
-func (s *dashTransfers) ListBatchItems(_ context.Context, _ valueobject.TenantID, _ string) ([]command.BatchItem, error) {
-	return nil, nil
-}
 
 func dashPosting(id string, at time.Time, legs int64) entity.PostingData {
 	entries := []entity.Entry{
@@ -81,17 +36,23 @@ func TestDashboardVolume(t *testing.T) {
 	t.Parallel()
 
 	t.Run("day buckets sum legs", func(t *testing.T) {
-		svc := query.NewDashboardService(query.DashboardServiceParams{
-			Postings: &dashPostings{pages: map[string]port.PostingSearchPage{
-				"": {
-					Postings: []entity.PostingData{
-						dashPosting("1", dashAt, 5000),
-						dashPosting("2", dashAt.Add(24*time.Hour), 3000),
-					},
-					NextCursor: "",
+		postings := mockapplication.NewMockPostingQuery(t)
+		postings.EXPECT().
+			Search(mock.Anything, mock.Anything).
+			Return(port.PostingSearchPage{
+				Postings: []entity.PostingData{
+					dashPosting("1", dashAt, 5000),
+					dashPosting("2", dashAt.Add(24*time.Hour), 3000),
 				},
-			}},
-			Transfers: &dashTransfers{},
+				NextCursor: "",
+			}, nil).
+			Once()
+
+		transfers := mockcommand.NewMockTransferStore(t)
+
+		svc := query.NewDashboardService(query.DashboardServiceParams{
+			Postings:  postings,
+			Transfers: transfers,
 		})
 		buckets, err := svc.AggregateVolume(context.Background(), "t-1", dashAt.Add(-time.Hour), dashAt.Add(48*time.Hour), "day")
 		require.NoError(t, err)
@@ -103,17 +64,23 @@ func TestDashboardVolume(t *testing.T) {
 	})
 
 	t.Run("week buckets group seven days", func(t *testing.T) {
-		svc := query.NewDashboardService(query.DashboardServiceParams{
-			Postings: &dashPostings{pages: map[string]port.PostingSearchPage{
-				"": {
-					Postings: []entity.PostingData{
-						dashPosting("1", dashAt, 5000),
-						dashPosting("2", dashAt.Add(24*time.Hour), 3000),
-					},
-					NextCursor: "",
+		postings := mockapplication.NewMockPostingQuery(t)
+		postings.EXPECT().
+			Search(mock.Anything, mock.Anything).
+			Return(port.PostingSearchPage{
+				Postings: []entity.PostingData{
+					dashPosting("1", dashAt, 5000),
+					dashPosting("2", dashAt.Add(24*time.Hour), 3000),
 				},
-			}},
-			Transfers: &dashTransfers{},
+				NextCursor: "",
+			}, nil).
+			Once()
+
+		transfers := mockcommand.NewMockTransferStore(t)
+
+		svc := query.NewDashboardService(query.DashboardServiceParams{
+			Postings:  postings,
+			Transfers: transfers,
 		})
 		buckets, err := svc.AggregateVolume(context.Background(), "t-1", dashAt.Add(-time.Hour), dashAt.Add(48*time.Hour), "week")
 		require.NoError(t, err)
@@ -123,37 +90,54 @@ func TestDashboardVolume(t *testing.T) {
 	})
 
 	t.Run("bad granularity rejected", func(t *testing.T) {
-		svc := query.NewDashboardService(query.DashboardServiceParams{Postings: &dashPostings{pages: map[string]port.PostingSearchPage{}}, Transfers: &dashTransfers{}})
+		postings := mockapplication.NewMockPostingQuery(t)
+		transfers := mockcommand.NewMockTransferStore(t)
+
+		svc := query.NewDashboardService(query.DashboardServiceParams{Postings: postings, Transfers: transfers})
 		_, err := svc.AggregateVolume(context.Background(), "t-1", dashAt, dashAt, "fortnight")
 		assert.Equal(t, entity.NewError("DASHBOARD_GRANULARITY_INVALID", "granularity must be day or week"), err)
 	})
 
 	t.Run("unbounded scan fails loudly", func(t *testing.T) {
-		pages := map[string]port.PostingSearchPage{}
-		for i := 0; i < 25; i++ {
-			next := ""
-			if i < 24 {
-				next = fmt.Sprintf("c-%d", i+1)
-			}
+		postings := mockapplication.NewMockPostingQuery(t)
+		for i := 0; i < 20; i++ {
 			cursor := ""
 			if i > 0 {
 				cursor = fmt.Sprintf("c-%d", i)
 			}
-			pages[cursor] = port.PostingSearchPage{Postings: nil, NextCursor: next}
+			next := fmt.Sprintf("c-%d", i+1)
+			postings.EXPECT().
+				Search(mock.Anything, port.PostingFilter{
+					TenantID: valueobject.TenantID("t-1"),
+					Cursor:   cursor,
+					Limit:    500,
+				}).
+				Return(port.PostingSearchPage{Postings: nil, NextCursor: next}, nil).
+				Once()
 		}
-		svc := query.NewDashboardService(query.DashboardServiceParams{Postings: &dashPostings{pages: pages}, Transfers: &dashTransfers{}})
+
+		transfers := mockcommand.NewMockTransferStore(t)
+
+		svc := query.NewDashboardService(query.DashboardServiceParams{Postings: postings, Transfers: transfers})
 		_, err := svc.AggregateVolume(context.Background(), "t-1", dashAt.Add(-time.Hour), dashAt.Add(time.Hour), "day")
 		assert.Equal(t, entity.NewError("DASHBOARD_TOO_LARGE", "aggregation exceeds the bounded scan"), err)
 	})
 
 	t.Run("transfer status counts tally", func(t *testing.T) {
-		svc := query.NewDashboardService(query.DashboardServiceParams{
-			Postings: &dashPostings{pages: map[string]port.PostingSearchPage{}},
-			Transfers: &dashTransfers{records: []command.TransferRecord{
+		postings := mockapplication.NewMockPostingQuery(t)
+		transfers := mockcommand.NewMockTransferStore(t)
+		transfers.EXPECT().
+			ListTransfers(mock.Anything, mock.Anything).
+			Return([]command.TransferRecord{
 				{ID: "x-1", Status: command.TransferCompleted},
 				{ID: "x-2", Status: command.TransferCompleted},
 				{ID: "x-3", Status: command.TransferFailed},
-			}},
+			}, "", nil).
+			Once()
+
+		svc := query.NewDashboardService(query.DashboardServiceParams{
+			Postings:  postings,
+			Transfers: transfers,
 		})
 		counts, err := svc.TransferStatusCounts(context.Background(), "t-1")
 		require.NoError(t, err)
@@ -167,14 +151,19 @@ func TestReconReports(t *testing.T) {
 	t.Parallel()
 
 	t.Run("summary tallies by status", func(t *testing.T) {
-		store := &reportReconStore{
-			run: command.ReconRunRecord{ID: "run-1", Status: command.ReconRunCompleted},
-			breaks: []command.BreakRecord{
+		store := mockcommand.NewMockReconStore(t)
+		store.EXPECT().
+			FindRun(mock.Anything, valueobject.TenantID("t-1"), "run-1").
+			Return(command.ReconRunRecord{ID: "run-1", Status: command.ReconRunCompleted}, nil).
+			Once()
+		store.EXPECT().
+			ListBreaksByRun(mock.Anything, valueobject.TenantID("t-1"), "run-1").
+			Return([]command.BreakRecord{
 				{Break: entity.ReconciliationBreak{BreakID: "b-1", RunID: "run-1"}, Status: valueobject.BreakResolved},
 				{Break: entity.ReconciliationBreak{BreakID: "b-2", RunID: "run-1"}, Status: valueobject.BreakOpen},
-				{Break: entity.ReconciliationBreak{BreakID: "b-3", RunID: "run-9"}, Status: valueobject.BreakOpen},
-			},
-		}
+			}, nil).
+			Twice()
+
 		svc := query.NewReconReportService(query.ReconReportServiceParams{Runs: store})
 		summary, err := svc.SummarizeRun(context.Background(), "t-1", "run-1")
 		require.NoError(t, err)
@@ -187,57 +176,6 @@ func TestReconReports(t *testing.T) {
 		require.Len(t, filtered, 1)
 		assert.Equal(t, "b-2", filtered[0].Break.BreakID)
 	})
-}
-
-type reportReconStore struct {
-	run    command.ReconRunRecord
-	breaks []command.BreakRecord
-}
-
-func (s *reportReconStore) CreateRun(_ context.Context, _ command.ReconRunRecord) error {
-	return nil
-}
-
-func (s *reportReconStore) FindRun(_ context.Context, _ valueobject.TenantID, _ string) (command.ReconRunRecord, error) {
-	return s.run, nil
-}
-
-func (s *reportReconStore) UpdateRun(_ context.Context, _ command.ReconRunRecord) error {
-	return nil
-}
-
-func (s *reportReconStore) CreateBreaks(_ context.Context, _ []command.BreakRecord) error {
-	return nil
-}
-
-func (s *reportReconStore) FindBreak(_ context.Context, _ valueobject.TenantID, _ string) (command.BreakRecord, error) {
-	return command.BreakRecord{}, nil
-}
-
-func (s *reportReconStore) UpdateBreak(_ context.Context, _ command.BreakRecord) error {
-	return nil
-}
-
-func (s *reportReconStore) CountOpenBreaks(_ context.Context, _ valueobject.TenantID, _ valueobject.LedgerID) (int, error) {
-	return 0, nil
-}
-
-func (s *reportReconStore) ListRuns(_ context.Context, _ valueobject.TenantID, _ int) ([]command.ReconRunRecord, error) {
-	return nil, nil
-}
-
-func (s *reportReconStore) ListBreaks(_ context.Context, _ valueobject.TenantID, _ string, _ int) ([]command.BreakRecord, error) {
-	return nil, nil
-}
-
-func (s *reportReconStore) ListBreaksByRun(_ context.Context, _ valueobject.TenantID, runID string) ([]command.BreakRecord, error) {
-	var out []command.BreakRecord
-	for _, record := range s.breaks {
-		if record.Break.RunID == runID {
-			out = append(out, record)
-		}
-	}
-	return out, nil
 }
 
 func TestRegulatorySupportedTypes(t *testing.T) {

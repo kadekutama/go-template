@@ -17,14 +17,11 @@ import (
 	"github.com/kadekutama/go-template/internal/shared/kernel/validate"
 )
 
-// DefaultTolerance bounds replay (timestamp vs now).
-const DefaultTolerance = 5 * time.Minute
-
 // SignerParams carries constructor dependencies (Parameter Object pattern).
 // Secrets[0] signs; the rest verify during rotation overlap.
 type SignerParams struct {
 	Secrets   []string      `validate:"min=1"`
-	Tolerance time.Duration `validate:"omitempty,gt=0"`
+	Tolerance time.Duration `validate:"required,gt=0"`
 }
 
 // Validate joins every tag violation into one error (shared format).
@@ -38,7 +35,7 @@ type Signer struct {
 	tolerance time.Duration
 }
 
-// NewSigner builds the signer; at least one non-blank secret is required.
+// NewSigner builds the signer; at least one non-blank secret and a positive tolerance are required.
 func NewSigner(params SignerParams) (*Signer, error) {
 	if err := params.Validate(); err != nil {
 		return nil, err
@@ -55,12 +52,11 @@ func NewSigner(params SignerParams) (*Signer, error) {
 		return nil, fmt.Errorf("webhook: at least one secret is required")
 	}
 
-	tolerance := params.Tolerance
-	if tolerance <= 0 {
-		tolerance = DefaultTolerance
+	if params.Tolerance <= 0 {
+		return nil, fmt.Errorf("webhook: tolerance must be positive")
 	}
 
-	return &Signer{secrets: secrets, tolerance: tolerance}, nil
+	return &Signer{secrets: secrets, tolerance: params.Tolerance}, nil
 }
 
 // Sign returns the v1= signature for timestamp + "." + raw_body using the

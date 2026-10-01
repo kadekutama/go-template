@@ -21,9 +21,6 @@ import (
 	"github.com/kadekutama/go-template/pkg/jsonparser"
 )
 
-// DefaultMaxDelivers bounds redelivery before DLQ routing.
-const DefaultMaxDelivers = 5
-
 // ReceiptStore dedupes on (consumer, event_id). Production backs it with
 // the inbox_receipts table (E07 schema) plus the Valkey hint store; tests
 // use the fakes package double and ValkeyReceiptStore (hint + TTL,
@@ -47,7 +44,7 @@ type FrameworkParams struct {
 	Consumer    string       `validate:"required"`
 	Receipts    ReceiptStore `validate:"-"`
 	DLQ         DLQSink      `validate:"-"`
-	MaxDelivers int          `validate:"omitempty,gt=0"`
+	MaxDelivers int          `validate:"required,gt=0"`
 	Logger      log.Logger   `validate:"-"`
 }
 
@@ -60,9 +57,8 @@ type Framework struct {
 	logger      log.Logger
 }
 
-// NewFramework builds the handler runner. Consumer + Receipts are required;
-// MaxDelivers <= 0 selects DefaultMaxDelivers; DLQ may be nil (then
-// exhausted messages return an error for the caller to route).
+// NewFramework builds the handler runner. Consumer, Receipts, and MaxDelivers are required;
+// DLQ may be nil (then exhausted messages return an error for the caller to route).
 func NewFramework(params FrameworkParams) (*Framework, error) {
 	params.Consumer = strings.TrimSpace(params.Consumer)
 
@@ -74,16 +70,11 @@ func NewFramework(params FrameworkParams) (*Framework, error) {
 		return nil, fmt.Errorf("consumer: receipt store is required")
 	}
 
-	maxDelivers := params.MaxDelivers
-	if maxDelivers <= 0 {
-		maxDelivers = DefaultMaxDelivers
-	}
-
 	return &Framework{
 		consumer:    params.Consumer,
 		receipts:    params.Receipts,
 		dlq:         params.DLQ,
-		maxDelivers: maxDelivers,
+		maxDelivers: params.MaxDelivers,
 		logger:      params.Logger,
 	}, nil
 }

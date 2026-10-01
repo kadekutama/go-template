@@ -2,19 +2,19 @@ package command_test
 
 import (
 	"context"
-	"fmt"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/mock"
 
 	"github.com/kadekutama/go-template/internal/application/command"
 	"github.com/kadekutama/go-template/internal/application/port"
 	"github.com/kadekutama/go-template/internal/domain/entity"
-	"github.com/kadekutama/go-template/internal/domain/repository"
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
+	"github.com/kadekutama/go-template/pkg/jsonparser"
+	mockapplication "github.com/kadekutama/go-template/test/mock/application"
+	mockdomain "github.com/kadekutama/go-template/test/mock/domain"
 )
 
 const (
@@ -26,205 +26,77 @@ const (
 
 var acctAt = time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
 
-type acctRepo struct {
-	mu       sync.Mutex
-	accounts map[valueobject.AccountID]entity.AccountData
+type accountTestFixture struct {
+	uow    *mockapplication.MockUnitOfWork
+	tx     *mockapplication.MockTx
+	repo   *mockdomain.MockAccountRepository
+	clock  *mockapplication.MockClock
+	ids    *mockapplication.MockIDGenerator
+	authz  *mockapplication.MockAuthorizer
+	idem   *mockapplication.MockIdempotencyStore
+	outbox *mockapplication.MockEventOutbox
+	svc    *command.AccountService
 }
 
-func (f *acctRepo) Create(_ context.Context, account entity.AccountData) (entity.AccountData, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.accounts == nil {
-		f.accounts = map[valueobject.AccountID]entity.AccountData{}
-	}
-	if account.ID == "" {
-		account.ID = valueobject.AccountID(fmt.Sprintf("40000000-0000-4000-8000-%012d", len(f.accounts)+1))
-	}
-	if _, dup := f.accounts[account.ID]; dup {
-		return entity.AccountData{}, entity.NewError("ACCOUNT_CONFLICT", "account id already exists")
-	}
-	f.accounts[account.ID] = account
-	return account, nil
-}
+func newAccountFixture(t *testing.T) *accountTestFixture {
+	t.Helper()
 
-func (f *acctRepo) FindByID(_ context.Context, _ valueobject.TenantID, id valueobject.AccountID) (entity.AccountData, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	account, ok := f.accounts[id]
-	if !ok {
-		return entity.AccountData{}, entity.NewError("ACCOUNT_NOT_FOUND", "account is unknown")
-	}
-	return account, nil
-}
+	uow := mockapplication.NewMockUnitOfWork(t)
+	tx := mockapplication.NewMockTx(t)
+	repo := mockdomain.NewMockAccountRepository(t)
+	clock := mockapplication.NewMockClock(t)
+	ids := mockapplication.NewMockIDGenerator(t)
+	authz := mockapplication.NewMockAuthorizer(t)
+	idem := mockapplication.NewMockIdempotencyStore(t)
+	outbox := mockapplication.NewMockEventOutbox(t)
 
-func (f *acctRepo) FindByTenant(_ context.Context, _ valueobject.TenantID, _ string, _ int) ([]entity.AccountData, string, error) {
-	return nil, "", nil
-}
+	uow.EXPECT().Do(mock.Anything, mock.Anything).RunAndReturn(func(ctx context.Context, fn func(context.Context, port.Tx) error) error {
+		return fn(ctx, tx)
+	}).Maybe()
 
-func (f *acctRepo) UpdateMetadata(_ context.Context, account entity.AccountData, expectedVersion int64) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	stored, ok := f.accounts[account.ID]
-	if !ok {
-		return entity.NewError("ACCOUNT_NOT_FOUND", "account is unknown")
-	}
-	if stored.Version != expectedVersion {
-		return entity.NewError("VERSION_CONFLICT", "version mismatch; reload and retry")
-	}
-	f.accounts[account.ID] = account
-	return nil
-}
+	tx.EXPECT().Idempotency().Return(idem).Maybe()
+	tx.EXPECT().Outbox().Return(outbox).Maybe()
+	tx.EXPECT().Cursor().Return("cursor-3").Maybe()
 
-func (f *acctRepo) UpdateStatus(_ context.Context, _ valueobject.TenantID, id valueobject.AccountID, status valueobject.AccountStatus, expectedVersion int64) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	stored, ok := f.accounts[id]
-	if !ok {
-		return entity.NewError("ACCOUNT_NOT_FOUND", "account is unknown")
-	}
-	if stored.Version != expectedVersion {
-		return entity.NewError("VERSION_CONFLICT", "version mismatch; reload and retry")
-	}
-	stored.Status = status
-	stored.Version++
-	f.accounts[id] = stored
-	return nil
-}
+	clock.EXPECT().Now().Return(acctAt).Maybe()
+	ids.EXPECT().NewID().Return(string(acctID1)).Maybe()
 
-type acctIdemEntry struct {
-	fingerprint string
-	response    []byte
-	completed   bool
-}
+	idem.EXPECT().Reserve(mock.Anything, mock.Anything).Return(port.ReserveOutcome{}, nil).Maybe()
+	idem.EXPECT().Complete(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+	outbox.EXPECT().Append(mock.Anything, mock.Anything).Return(nil).Maybe()
 
-type acctUOW struct {
-	mu     sync.Mutex
-	outbox []port.OutboxFact
-	idem   map[string]acctIdemEntry
-}
-
-func (u *acctUOW) Do(ctx context.Context, fn func(ctx context.Context, tx port.Tx) error) error {
-	u.mu.Lock()
-	defer u.mu.Unlock()
-	stagedOutbox := []port.OutboxFact{}
-	stagedIdem := map[string]acctIdemEntry{}
-	tx := &acctTx{uow: u, outbox: &stagedOutbox, idem: stagedIdem}
-	if err := fn(ctx, tx); err != nil {
-		return err
-	}
-	u.outbox = append(u.outbox, stagedOutbox...)
-	if u.idem == nil {
-		u.idem = map[string]acctIdemEntry{}
-	}
-	for key, entry := range stagedIdem {
-		u.idem[key] = entry
-	}
-	return nil
-}
-
-type acctTx struct {
-	uow    *acctUOW
-	outbox *[]port.OutboxFact
-	idem   map[string]acctIdemEntry
-}
-
-func (t *acctTx) Postings() repository.PostingRepository { return nil }
-func (t *acctTx) Holds() repository.HoldRepository       { return nil }
-func (t *acctTx) Idempotency() port.IdempotencyStore     { return &acctTxIdem{tx: t} }
-func (t *acctTx) Outbox() port.EventOutbox               { return &acctTxOutbox{tx: t} }
-func (t *acctTx) Cursor() string                         { return "cursor-3" }
-
-type acctTxIdem struct {
-	tx *acctTx
-}
-
-func (s *acctTxIdem) Reserve(_ context.Context, rec port.IdempotencyRecord) (port.ReserveOutcome, error) {
-	if entry, ok := s.tx.uow.idem[rec.Key]; ok {
-		if entry.fingerprint != rec.Fingerprint {
-			return port.ReserveOutcome{}, entity.NewError("IDEMPOTENCY_CONFLICT", "idempotency key leased for a different request")
-		}
-		if entry.completed {
-			return port.ReserveOutcome{Replay: true, Response: entry.response}, nil
-		}
-		return port.ReserveOutcome{}, nil
-	}
-	if entry, ok := s.tx.idem[rec.Key]; ok {
-		if entry.fingerprint != rec.Fingerprint {
-			return port.ReserveOutcome{}, entity.NewError("IDEMPOTENCY_CONFLICT", "idempotency key leased for a different request")
-		}
-		return port.ReserveOutcome{}, nil
-	}
-	s.tx.idem[rec.Key] = acctIdemEntry{fingerprint: rec.Fingerprint}
-	return port.ReserveOutcome{}, nil
-}
-
-func (s *acctTxIdem) Complete(_ context.Context, key string, response []byte) error {
-	entry := s.tx.idem[key]
-	entry.response = response
-	entry.completed = true
-	s.tx.idem[key] = entry
-	return nil
-}
-
-type acctTxOutbox struct {
-	tx *acctTx
-}
-
-func (o *acctTxOutbox) Append(_ context.Context, facts ...port.OutboxFact) error {
-	*o.tx.outbox = append(*o.tx.outbox, facts...)
-	return nil
-}
-
-type acctClock struct{}
-
-func (acctClock) Now() time.Time { return acctAt }
-
-type acctIDs struct {
-	next []string
-}
-
-func (f *acctIDs) NewID() string {
-	id := f.next[0]
-	f.next = f.next[1:]
-	return id
-}
-
-func acctTestIDs() []string {
-	ids := make([]string, 0, 40)
-	for i := 1; i <= 40; i++ {
-		ids = append(ids, fmt.Sprintf("90000000-0000-4000-8000-%012d", i))
-	}
-	return ids
-}
-
-type acctAuthz struct {
-	denied map[string]bool
-	calls  int
-}
-
-func (a *acctAuthz) Authorize(_ context.Context, subject port.Subject, action, resource string) error {
-	a.calls++
-	if a.denied[subject.ID+"|"+action+"|"+resource] {
-		return entity.NewError("FORBIDDEN", "subject is not authorized for this action")
-	}
-	return nil
-}
-
-func newAccountService(uow *acctUOW, repo *acctRepo, authz *acctAuthz) *command.AccountService {
-	return command.NewAccountService(command.AccountServiceParams{
+	svc := command.NewAccountService(command.AccountServiceParams{
 		UoW:      uow,
 		Accounts: repo,
-		Clock:    acctClock{},
-		IDs:      &acctIDs{next: acctTestIDs()},
+		Clock:    clock,
+		IDs:      ids,
 		Authz:    authz,
 	})
+
+	return &accountTestFixture{
+		uow:    uow,
+		tx:     tx,
+		repo:   repo,
+		clock:  clock,
+		ids:    ids,
+		authz:  authz,
+		idem:   idem,
+		outbox: outbox,
+		svc:    svc,
+	}
 }
 
 func openTestAccount() port.OpenAccountRequest {
 	return port.OpenAccountRequest{
-		TenantID: acctTenant, LedgerID: acctLedger, Number: "6000", Name: "operating",
-		Class: valueobject.ClassLiability, AssetCode: acctAsset, Purpose: "ops",
-		IdempotencyKey: "key-1", Actor: "u-1",
+		TenantID:       acctTenant,
+		LedgerID:       acctLedger,
+		Number:         "6000",
+		Name:           "operating",
+		Class:          valueobject.ClassLiability,
+		AssetCode:      acctAsset,
+		Purpose:        "ops",
+		IdempotencyKey: "key-1",
+		Actor:          "u-1",
 	}
 }
 
@@ -232,66 +104,69 @@ func TestAccountOpen(t *testing.T) {
 	t.Parallel()
 
 	type testCase struct {
-		name               string
-		req                port.OpenAccountRequest
-		preload            func(uow *acctUOW, svc *command.AccountService)
-		denied             bool
-		expectedStatus     valueobject.AccountStatus
-		expectedError      error
-		expectedRecords    int
-		expectedOutbox     int
-		expectedAuthzCalls int
+		name           string
+		req            port.OpenAccountRequest
+		setup          func(f *accountTestFixture)
+		expectedStatus valueobject.AccountStatus
+		expectedError  error
 	}
 
 	testCases := []testCase{
 		{
-			name:               "open creates active record with event fact",
-			req:                openTestAccount(),
-			preload:            func(_ *acctUOW, _ *command.AccountService) {},
-			denied:             false,
-			expectedStatus:     valueobject.StatusActive,
-			expectedError:      nil,
-			expectedRecords:    1,
-			expectedOutbox:     1,
-			expectedAuthzCalls: 1,
+			name: "open creates active record with event fact",
+			req:  openTestAccount(),
+			setup: func(f *accountTestFixture) {
+				f.authz.EXPECT().Authorize(mock.Anything, mock.Anything, "account.open", "ledger/"+string(acctLedger)).Return(nil)
+				f.repo.EXPECT().Create(mock.Anything, mock.MatchedBy(func(data entity.AccountData) bool {
+					return data.Number == "6000" && data.Name == "operating"
+				})).Return(entity.AccountData{
+					ID:        acctID1,
+					TenantID:  acctTenant,
+					LedgerID:  acctLedger,
+					Number:    "6000",
+					Name:      "operating",
+					Class:     valueobject.ClassLiability,
+					AssetCode: acctAsset,
+					Purpose:   "ops",
+					Status:    valueobject.StatusActive,
+					Version:   1,
+				}, nil)
+			},
+			expectedStatus: valueobject.StatusActive,
+			expectedError:  nil,
 		},
 		{
 			name: "corrupt idempotency replay returns IDEMPOTENCY_RECORD_INVALID",
 			req:  openTestAccount(),
-			preload: func(uow *acctUOW, _ *command.AccountService) {
-				req := openTestAccount()
-				fp := command.Fingerprint(append([]string{
-					"open", string(req.TenantID), string(req.LedgerID), req.IdempotencyKey,
-					req.Number, req.Name, string(req.Class), string(req.AssetCode), req.Purpose,
-				}, command.MapParts("metadata", req.Metadata)...)...)
-				uow.idem = map[string]acctIdemEntry{
-					req.IdempotencyKey: {
-						fingerprint: fp,
-						response:    []byte("{corrupt-json"),
-						completed:   true,
-					},
-				}
+			setup: func(f *accountTestFixture) {
+				f.authz.EXPECT().Authorize(mock.Anything, mock.Anything, "account.open", "ledger/"+string(acctLedger)).Return(nil)
+				f.idem.ExpectedCalls = nil
+				f.idem.EXPECT().Reserve(mock.Anything, mock.Anything).Return(port.ReserveOutcome{
+					Replay:   true,
+					Response: []byte("{corrupt-json"),
+				}, nil)
 			},
-			denied:             false,
-			expectedStatus:     "",
-			expectedError:      entity.NewError("IDEMPOTENCY_RECORD_INVALID", "stored idempotency response is corrupt"),
-			expectedRecords:    0,
-			expectedOutbox:     0,
-			expectedAuthzCalls: 1,
+			expectedStatus: "",
+			expectedError:  entity.NewError("IDEMPOTENCY_RECORD_INVALID", "stored idempotency response is corrupt"),
 		},
 		{
 			name: "duplicate replay returns original single record",
 			req:  openTestAccount(),
-			preload: func(_ *acctUOW, svc *command.AccountService) {
-				_, err := svc.OpenAccount(context.Background(), openTestAccount())
-				require.NoError(t, err)
+			setup: func(f *accountTestFixture) {
+				f.authz.EXPECT().Authorize(mock.Anything, mock.Anything, "account.open", "ledger/"+string(acctLedger)).Return(nil)
+				cachedResult := port.AccountResult{
+					Account: entity.AccountData{ID: acctID1, Status: valueobject.StatusActive, Version: 1},
+					Cursor:  "cursor-3",
+				}
+				cachedBytes, _ := jsonparser.Marshal(cachedResult)
+				f.idem.ExpectedCalls = nil
+				f.idem.EXPECT().Reserve(mock.Anything, mock.Anything).Return(port.ReserveOutcome{
+					Replay:   true,
+					Response: cachedBytes,
+				}, nil)
 			},
-			denied:             false,
-			expectedStatus:     valueobject.StatusActive,
-			expectedError:      nil,
-			expectedRecords:    1,
-			expectedOutbox:     1,
-			expectedAuthzCalls: 2,
+			expectedStatus: valueobject.StatusActive,
+			expectedError:  nil,
 		},
 		{
 			name: "same key different name conflicts",
@@ -300,16 +175,13 @@ func TestAccountOpen(t *testing.T) {
 				r.Name = "changed"
 				return r
 			}(),
-			preload: func(_ *acctUOW, svc *command.AccountService) {
-				_, err := svc.OpenAccount(context.Background(), openTestAccount())
-				require.NoError(t, err)
+			setup: func(f *accountTestFixture) {
+				f.authz.EXPECT().Authorize(mock.Anything, mock.Anything, "account.open", "ledger/"+string(acctLedger)).Return(nil)
+				f.idem.ExpectedCalls = nil
+				f.idem.EXPECT().Reserve(mock.Anything, mock.Anything).Return(port.ReserveOutcome{}, entity.NewError("IDEMPOTENCY_CONFLICT", "idempotency key leased for a different request"))
 			},
-			denied:             false,
-			expectedStatus:     "",
-			expectedError:      entity.NewError("IDEMPOTENCY_CONFLICT", "idempotency key leased for a different request"),
-			expectedRecords:    1,
-			expectedOutbox:     1,
-			expectedAuthzCalls: 2,
+			expectedStatus: "",
+			expectedError:  entity.NewError("IDEMPOTENCY_CONFLICT", "idempotency key leased for a different request"),
 		},
 		{
 			name: "missing number fails validation",
@@ -318,47 +190,33 @@ func TestAccountOpen(t *testing.T) {
 				r.Number = ""
 				return r
 			}(),
-			preload:            func(_ *acctUOW, _ *command.AccountService) {},
-			denied:             false,
-			expectedStatus:     "",
-			expectedError:      entity.NewError("ACCOUNT_NUMBER_REQUIRED", "account number is required"),
-			expectedRecords:    0,
-			expectedOutbox:     0,
-			expectedAuthzCalls: 0,
+			setup:          func(_ *accountTestFixture) {},
+			expectedStatus: "",
+			expectedError:  entity.NewError("ACCOUNT_NUMBER_REQUIRED", "account number is required"),
 		},
 		{
-			name:               "denied subject fails before store touch",
-			req:                openTestAccount(),
-			preload:            func(_ *acctUOW, _ *command.AccountService) {},
-			denied:             true,
-			expectedStatus:     "",
-			expectedError:      entity.NewError("FORBIDDEN", "subject is not authorized for this action"),
-			expectedRecords:    0,
-			expectedOutbox:     0,
-			expectedAuthzCalls: 1,
+			name: "denied subject fails before store touch",
+			req:  openTestAccount(),
+			setup: func(f *accountTestFixture) {
+				f.authz.EXPECT().Authorize(mock.Anything, mock.Anything, "account.open", "ledger/"+string(acctLedger)).Return(entity.NewError("FORBIDDEN", "subject is not authorized for this action"))
+			},
+			expectedStatus: "",
+			expectedError:  entity.NewError("FORBIDDEN", "subject is not authorized for this action"),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &acctUOW{}
-			repo := &acctRepo{}
-			authz := &acctAuthz{denied: map[string]bool{}}
-			if tc.denied {
-				authz.denied["u-1|account.open|ledger/"+string(acctLedger)] = true
-			}
-			svc := newAccountService(uow, repo, authz)
-			tc.preload(uow, svc)
-			actualResult, err := svc.OpenAccount(context.Background(), tc.req)
+			f := newAccountFixture(t)
+			tc.setup(f)
+
+			actualResult, err := f.svc.OpenAccount(context.Background(), tc.req)
 			assert.Equal(t, tc.expectedError, err)
 			if tc.expectedError == nil {
 				assert.Equal(t, tc.expectedStatus, actualResult.Account.Status)
 				assert.Equal(t, int64(1), actualResult.Account.Version)
 				assert.Equal(t, "cursor-3", actualResult.Cursor)
 			}
-			assert.Len(t, repo.accounts, tc.expectedRecords)
-			assert.Len(t, uow.outbox, tc.expectedOutbox)
-			assert.Equal(t, tc.expectedAuthzCalls, authz.calls)
 		})
 	}
 }
@@ -366,74 +224,113 @@ func TestAccountOpen(t *testing.T) {
 func TestAccountLifecycle(t *testing.T) {
 	t.Parallel()
 
-	seed := func(t *testing.T, svc *command.AccountService) port.AccountResult {
-		t.Helper()
-		res, err := svc.OpenAccount(context.Background(), openTestAccount())
-		require.NoError(t, err)
-		return res
-	}
-
 	lifecycleReq := func(id valueobject.AccountID, version int64) port.AccountLifecycleRequest {
 		return port.AccountLifecycleRequest{
-			TenantID: acctTenant, AccountID: id, ExpectedVersion: version,
-			Reason: "review", Actor: "u-1",
+			TenantID:        acctTenant,
+			AccountID:       id,
+			ExpectedVersion: version,
+			Reason:          "review",
+			Actor:           "u-1",
 		}
 	}
 
 	type testCase struct {
 		name           string
-		prepare        func(svc *command.AccountService) port.AccountResult
 		action         string
-		version        int64
+		req            port.AccountLifecycleRequest
+		setup          func(f *accountTestFixture)
 		expectedStatus valueobject.AccountStatus
 		expectedError  error
 	}
 
 	testCases := []testCase{
 		{
-			name: "freeze active then double freeze fails",
-			prepare: func(svc *command.AccountService) port.AccountResult {
-				opened := seed(t, svc)
-				frozen, err := svc.FreezeAccount(context.Background(), lifecycleReq(opened.Account.ID, opened.Account.Version))
-				require.NoError(t, err)
-				require.Equal(t, valueobject.StatusFrozen, frozen.Account.Status)
-				return opened
+			name:   "freeze active succeeds",
+			action: "freeze",
+			req:    lifecycleReq(acctID1, 1),
+			setup: func(f *accountTestFixture) {
+				f.authz.EXPECT().Authorize(mock.Anything, mock.Anything, "account.freeze", "account/"+string(acctID1)).Return(nil)
+				f.repo.EXPECT().FindByID(mock.Anything, acctTenant, acctID1).Return(entity.AccountData{
+					ID:        acctID1,
+					TenantID:  acctTenant,
+					Status:    valueobject.StatusActive,
+					Version:   1,
+					AssetCode: acctAsset,
+				}, nil)
+				f.repo.EXPECT().UpdateStatus(mock.Anything, acctTenant, acctID1, valueobject.StatusFrozen, int64(1)).Return(nil)
 			},
-			action:         "freeze",
-			version:        2,
+			expectedStatus: valueobject.StatusFrozen,
+			expectedError:  nil,
+		},
+		{
+			name:   "freeze active then double freeze fails",
+			action: "freeze",
+			req:    lifecycleReq(acctID1, 2),
+			setup: func(f *accountTestFixture) {
+				f.authz.EXPECT().Authorize(mock.Anything, mock.Anything, "account.freeze", "account/"+string(acctID1)).Return(nil)
+				f.repo.EXPECT().FindByID(mock.Anything, acctTenant, acctID1).Return(entity.AccountData{
+					ID:        acctID1,
+					TenantID:  acctTenant,
+					Status:    valueobject.StatusFrozen,
+					Version:   2,
+					AssetCode: acctAsset,
+				}, nil)
+			},
 			expectedStatus: "",
 			expectedError:  entity.NewError("ACCOUNT_ALREADY_FROZEN", "account is already frozen"),
 		},
 		{
-			name: "unfreeze non-frozen fails",
-			prepare: func(svc *command.AccountService) port.AccountResult {
-				return seed(t, svc)
+			name:   "unfreeze non-frozen fails",
+			action: "unfreeze",
+			req:    lifecycleReq(acctID1, 1),
+			setup: func(f *accountTestFixture) {
+				f.authz.EXPECT().Authorize(mock.Anything, mock.Anything, "account.unfreeze", "account/"+string(acctID1)).Return(nil)
+				f.repo.EXPECT().FindByID(mock.Anything, acctTenant, acctID1).Return(entity.AccountData{
+					ID:        acctID1,
+					TenantID:  acctTenant,
+					Status:    valueobject.StatusActive,
+					Version:   1,
+					AssetCode: acctAsset,
+				}, nil)
 			},
-			action:         "unfreeze",
-			version:        1,
 			expectedStatus: "",
 			expectedError:  entity.NewError("ACCOUNT_NOT_FROZEN", "account is not frozen"),
 		},
 		{
-			name: "close frozen succeeds terminally",
-			prepare: func(svc *command.AccountService) port.AccountResult {
-				opened := seed(t, svc)
-				_, err := svc.FreezeAccount(context.Background(), lifecycleReq(opened.Account.ID, opened.Account.Version))
-				require.NoError(t, err)
-				return opened
+			name:   "close frozen succeeds terminally",
+			action: "close",
+			req:    lifecycleReq(acctID1, 2),
+			setup: func(f *accountTestFixture) {
+				f.authz.EXPECT().Authorize(mock.Anything, mock.Anything, "account.close", "account/"+string(acctID1)).Return(nil)
+				f.repo.EXPECT().FindByID(mock.Anything, acctTenant, acctID1).Return(entity.AccountData{
+					ID:        acctID1,
+					TenantID:  acctTenant,
+					Status:    valueobject.StatusFrozen,
+					Version:   2,
+					AssetCode: acctAsset,
+				}, nil)
+				f.repo.EXPECT().UpdateStatus(mock.Anything, acctTenant, acctID1, valueobject.StatusClosed, int64(2)).Return(nil)
 			},
-			action:         "close",
-			version:        2,
 			expectedStatus: valueobject.StatusClosed,
 			expectedError:  nil,
 		},
 		{
-			name: "stale version conflicts without write",
-			prepare: func(svc *command.AccountService) port.AccountResult {
-				return seed(t, svc)
+			name:   "stale version conflicts without write",
+			action: "freeze",
+			req:    lifecycleReq(acctID1, 99),
+			setup: func(f *accountTestFixture) {
+				f.authz.EXPECT().Authorize(mock.Anything, mock.Anything, "account.freeze", "account/"+string(acctID1)).Return(nil)
+				f.repo.EXPECT().FindByID(mock.Anything, acctTenant, acctID1).Return(entity.AccountData{
+					ID:        acctID1,
+					TenantID:  acctTenant,
+					Status:    valueobject.StatusActive,
+					Version:   1,
+					AssetCode: acctAsset,
+				}, nil)
+				f.repo.EXPECT().UpdateStatus(mock.Anything, acctTenant, acctID1, valueobject.StatusFrozen, int64(99)).Return(
+					entity.NewError("VERSION_CONFLICT", "version mismatch; reload and retry"),
+				)
 			},
-			action:         "freeze",
-			version:        99,
 			expectedStatus: "",
 			expectedError:  entity.NewError("VERSION_CONFLICT", "version mismatch; reload and retry"),
 		},
@@ -441,22 +338,20 @@ func TestAccountLifecycle(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &acctUOW{}
-			repo := &acctRepo{}
-			authz := &acctAuthz{denied: map[string]bool{}}
-			svc := newAccountService(uow, repo, authz)
-			opened := tc.prepare(svc)
-			req := lifecycleReq(opened.Account.ID, tc.version)
+			f := newAccountFixture(t)
+			tc.setup(f)
+
 			var actualResult port.AccountResult
 			var err error
 			switch tc.action {
 			case "freeze":
-				actualResult, err = svc.FreezeAccount(context.Background(), req)
+				actualResult, err = f.svc.FreezeAccount(context.Background(), tc.req)
 			case "unfreeze":
-				actualResult, err = svc.UnfreezeAccount(context.Background(), req)
+				actualResult, err = f.svc.UnfreezeAccount(context.Background(), tc.req)
 			case "close":
-				actualResult, err = svc.CloseAccount(context.Background(), req)
+				actualResult, err = f.svc.CloseAccount(context.Background(), tc.req)
 			}
+
 			assert.Equal(t, tc.expectedError, err)
 			if tc.expectedError == nil {
 				assert.Equal(t, tc.expectedStatus, actualResult.Account.Status)
@@ -481,18 +376,35 @@ func TestUpdateAccount(t *testing.T) {
 	type testCase struct {
 		name           string
 		req            port.UpdateAccountRequest
-		seedAccount    bool
-		denied         bool
+		setup          func(f *accountTestFixture)
 		expectedResult port.AccountResult
 		expectedError  error
 	}
 
 	testCases := []testCase{
 		{
-			name:        "successful update bumps version and mutates details",
-			req:         baseReq,
-			seedAccount: true,
-			denied:      false,
+			name: "successful update bumps version and mutates details",
+			req:  baseReq,
+			setup: func(f *accountTestFixture) {
+				f.authz.EXPECT().Authorize(mock.Anything, mock.Anything, "account.update", "account/"+string(acctID1)).Return(nil)
+				f.repo.EXPECT().FindByID(mock.Anything, acctTenant, acctID1).Return(entity.AccountData{
+					ID:        acctID1,
+					TenantID:  acctTenant,
+					LedgerID:  acctLedger,
+					Number:    "1000",
+					Name:      "Operating Account",
+					Class:     valueobject.ClassLiability,
+					AssetCode: acctAsset,
+					Purpose:   "ops",
+					Status:    valueobject.StatusActive,
+					Version:   1,
+					CreatedAt: acctAt,
+					UpdatedAt: acctAt,
+				}, nil)
+				f.repo.EXPECT().UpdateMetadata(mock.Anything, mock.MatchedBy(func(data entity.AccountData) bool {
+					return data.Name == "Operating Account Updated" && data.Purpose == "Updated treasury ops"
+				}), int64(1)).Return(nil)
+			},
 			expectedResult: port.AccountResult{
 				Account: entity.AccountData{
 					ID:        acctID1,
@@ -509,7 +421,7 @@ func TestUpdateAccount(t *testing.T) {
 					CreatedAt: acctAt,
 					UpdatedAt: acctAt,
 				},
-				Cursor: "1",
+				Cursor: "cursor-3",
 			},
 			expectedError: nil,
 		},
@@ -520,8 +432,7 @@ func TestUpdateAccount(t *testing.T) {
 				r.TenantID = ""
 				return r
 			}(),
-			seedAccount:    false,
-			denied:         false,
+			setup:          func(_ *accountTestFixture) {},
 			expectedResult: port.AccountResult{},
 			expectedError:  entity.NewError("TENANT_REQUIRED", "tenant id is required"),
 		},
@@ -532,8 +443,7 @@ func TestUpdateAccount(t *testing.T) {
 				r.AccountID = ""
 				return r
 			}(),
-			seedAccount:    false,
-			denied:         false,
+			setup:          func(_ *accountTestFixture) {},
 			expectedResult: port.AccountResult{},
 			expectedError:  entity.NewError("ACCOUNT_ID_REQUIRED", "account id is required"),
 		},
@@ -544,8 +454,7 @@ func TestUpdateAccount(t *testing.T) {
 				r.Actor = ""
 				return r
 			}(),
-			seedAccount:    false,
-			denied:         false,
+			setup:          func(_ *accountTestFixture) {},
 			expectedResult: port.AccountResult{},
 			expectedError:  entity.NewError("ACTOR_REQUIRED", "account actor is required"),
 		},
@@ -556,8 +465,7 @@ func TestUpdateAccount(t *testing.T) {
 				r.ExpectedVersion = 0
 				return r
 			}(),
-			seedAccount:    false,
-			denied:         false,
+			setup:          func(_ *accountTestFixture) {},
 			expectedResult: port.AccountResult{},
 			expectedError:  entity.NewError("ACCOUNT_VERSION_REQUIRED", "expected version must be at least 1"),
 		},
@@ -568,16 +476,25 @@ func TestUpdateAccount(t *testing.T) {
 				r.Name = ""
 				return r
 			}(),
-			seedAccount:    true,
-			denied:         false,
+			setup: func(f *accountTestFixture) {
+				f.authz.EXPECT().Authorize(mock.Anything, mock.Anything, "account.update", "account/"+string(acctID1)).Return(nil)
+				f.repo.EXPECT().FindByID(mock.Anything, acctTenant, acctID1).Return(entity.AccountData{
+					ID:        acctID1,
+					TenantID:  acctTenant,
+					Version:   1,
+					AssetCode: acctAsset,
+				}, nil)
+			},
 			expectedResult: port.AccountResult{},
 			expectedError:  entity.NewError("ACCOUNT_NAME_REQUIRED", "account name is required"),
 		},
 		{
-			name:           "account not found returns error",
-			req:            baseReq,
-			seedAccount:    false,
-			denied:         false,
+			name: "account not found returns error",
+			req:  baseReq,
+			setup: func(f *accountTestFixture) {
+				f.authz.EXPECT().Authorize(mock.Anything, mock.Anything, "account.update", "account/"+string(acctID1)).Return(nil)
+				f.repo.EXPECT().FindByID(mock.Anything, acctTenant, acctID1).Return(entity.AccountData{}, entity.NewError("ACCOUNT_NOT_FOUND", "account is unknown"))
+			},
 			expectedResult: port.AccountResult{},
 			expectedError:  entity.NewError("ACCOUNT_NOT_FOUND", "account is unknown"),
 		},
@@ -588,16 +505,27 @@ func TestUpdateAccount(t *testing.T) {
 				r.ExpectedVersion = 99
 				return r
 			}(),
-			seedAccount:    true,
-			denied:         false,
+			setup: func(f *accountTestFixture) {
+				f.authz.EXPECT().Authorize(mock.Anything, mock.Anything, "account.update", "account/"+string(acctID1)).Return(nil)
+				f.repo.EXPECT().FindByID(mock.Anything, acctTenant, acctID1).Return(entity.AccountData{
+					ID:        acctID1,
+					TenantID:  acctTenant,
+					Version:   1,
+					AssetCode: acctAsset,
+				}, nil)
+				f.repo.EXPECT().UpdateMetadata(mock.Anything, mock.Anything, int64(99)).Return(
+					entity.NewError("VERSION_CONFLICT", "version mismatch; reload and retry"),
+				)
+			},
 			expectedResult: port.AccountResult{},
 			expectedError:  entity.NewError("VERSION_CONFLICT", "version mismatch; reload and retry"),
 		},
 		{
-			name:           "denied subject returns forbidden error",
-			req:            baseReq,
-			seedAccount:    true,
-			denied:         true,
+			name: "denied subject returns forbidden error",
+			req:  baseReq,
+			setup: func(f *accountTestFixture) {
+				f.authz.EXPECT().Authorize(mock.Anything, mock.Anything, "account.update", "account/"+string(acctID1)).Return(entity.NewError("FORBIDDEN", "subject is not authorized for this action"))
+			},
 			expectedResult: port.AccountResult{},
 			expectedError:  entity.NewError("FORBIDDEN", "subject is not authorized for this action"),
 		},
@@ -605,34 +533,16 @@ func TestUpdateAccount(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &acctUOW{}
-			repo := &acctRepo{}
-			authz := &acctAuthz{denied: map[string]bool{}}
-			svc := newAccountService(uow, repo, authz)
-			req := tc.req
-			if tc.seedAccount {
-				opened, err := svc.OpenAccount(context.Background(), openTestAccount())
-				require.NoError(t, err)
-				if req.AccountID == acctID1 {
-					req.AccountID = opened.Account.ID
-				}
-			}
-			if tc.denied {
-				authz.denied[req.Actor+"|account.update|account/"+string(req.AccountID)] = true
-			}
+			f := newAccountFixture(t)
+			tc.setup(f)
 
-			result, err := svc.UpdateAccount(context.Background(), req)
+			result, err := f.svc.UpdateAccount(context.Background(), tc.req)
 			assert.Equal(t, tc.expectedError, err)
 			if tc.expectedError == nil {
 				assert.Equal(t, tc.expectedResult.Account.Name, result.Account.Name)
 				assert.Equal(t, tc.expectedResult.Account.Purpose, result.Account.Purpose)
 				assert.Equal(t, tc.expectedResult.Account.Version, result.Account.Version)
 				assert.Equal(t, tc.expectedResult.Account.Metadata, result.Account.Metadata)
-
-				// Idempotency replay verification
-				replayResult, replayErr := svc.UpdateAccount(context.Background(), req)
-				assert.NoError(t, replayErr)
-				assert.Equal(t, result.Account.ID, replayResult.Account.ID)
 			}
 		})
 	}

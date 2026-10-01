@@ -2,7 +2,6 @@ package command_test
 
 import (
 	"context"
-	"sync"
 	"testing"
 	"time"
 
@@ -12,51 +11,12 @@ import (
 	"github.com/kadekutama/go-template/internal/application/command"
 	"github.com/kadekutama/go-template/internal/application/port"
 	"github.com/kadekutama/go-template/internal/domain/entity"
-	"github.com/kadekutama/go-template/internal/domain/valueobject"
 )
 
-type periodStoreFake struct {
-	mu      sync.Mutex
-	periods map[string]entity.PeriodData
-}
-
-func (s *periodStoreFake) FindPeriod(_ context.Context, _, _, id string) (entity.PeriodData, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	period, ok := s.periods[id]
-	if !ok {
-		return entity.PeriodData{}, entity.NewError("PERIOD_NOT_FOUND", "period is unknown")
-	}
-	return period, nil
-}
-
-func (s *periodStoreFake) ListPeriods(_ context.Context, _, _ string, limit int) ([]entity.PeriodData, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var out []entity.PeriodData
-	for _, period := range s.periods {
-		out = append(out, period)
-		if limit > 0 && len(out) >= limit {
-			break
-		}
-	}
-	return out, nil
-}
-
-func (s *periodStoreFake) SavePeriod(_ context.Context, period entity.PeriodData) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.periods == nil {
-		s.periods = map[string]entity.PeriodData{}
-	}
-	s.periods[string(period.ID)] = period
-	return nil
-}
-
-func newPeriodService(uow *tfrUOW, periods *periodStoreFake, breaks *reconStoreFake, authz *tfrAuthz) *command.PeriodService {
+func newPeriodService(t *testing.T, uow port.UnitOfWork, periods command.PeriodStore, breaks command.ReconStore, authz port.Authorizer) *command.PeriodService {
 	return command.NewPeriodService(command.PeriodServiceParams{
-		UoW: uow, Periods: periods, Breaks: breaks, Clock: tfrClock{},
-		IDs: &tfrIDs{next: tfrTestIDs(40)}, Authz: authz,
+		UoW: uow, Periods: periods, Breaks: breaks, Clock: newMockClock(t, tfrAt),
+		IDs: newMockIDGenerator(t, tfrTestIDs(40)...), Authz: authz,
 	})
 }
 
@@ -168,14 +128,14 @@ func TestPeriodOpen(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
-			periods := &periodStoreFake{}
-			breaks := &reconStoreFake{}
-			authz := &tfrAuthz{denied: map[string]bool{}}
+			uow := newMockUOW(t)
+			periods := newMockPeriodStore(t)
+			breaks := newMockReconStore(t)
+			authz := newMockAuthorizer(t)
 			if tc.denied {
-				authz.denied[tc.req.Actor+"|period.open|ledger/"+string(tc.req.LedgerID)] = true
+				setAuthzDenied(authz, tc.req.Actor+"|period.open|ledger/"+string(tc.req.LedgerID))
 			}
-			svc := newPeriodService(uow, periods, breaks, authz)
+			svc := newPeriodService(t, uow, periods, breaks, authz)
 
 			err := svc.OpenPeriod(context.Background(), tc.req)
 			assert.Equal(t, tc.expectedError, err)
@@ -195,7 +155,7 @@ func TestPeriodClose(t *testing.T) {
 	type testCase struct {
 		name          string
 		req           port.PeriodRequest
-		preload       func(periods *periodStoreFake)
+		preload       func(periods command.PeriodStore)
 		openBreaks    int
 		denied        bool
 		expectedError error
@@ -205,7 +165,7 @@ func TestPeriodClose(t *testing.T) {
 		{
 			name: "valid close succeeds with outbox fact",
 			req:  baseReq,
-			preload: func(periods *periodStoreFake) {
+			preload: func(periods command.PeriodStore) {
 				_ = periods.SavePeriod(context.Background(), entity.PeriodData{
 					ID: "2026-09", TenantID: "t-1", LedgerID: "l-1", Status: entity.PeriodOpen,
 				})
@@ -217,7 +177,7 @@ func TestPeriodClose(t *testing.T) {
 		{
 			name: "period not found returns error",
 			req:  baseReq,
-			preload: func(_ *periodStoreFake) {
+			preload: func(_ command.PeriodStore) {
 			},
 			openBreaks:    0,
 			denied:        false,
@@ -226,7 +186,7 @@ func TestPeriodClose(t *testing.T) {
 		{
 			name: "already closed period rejected",
 			req:  baseReq,
-			preload: func(periods *periodStoreFake) {
+			preload: func(periods command.PeriodStore) {
 				_ = periods.SavePeriod(context.Background(), entity.PeriodData{
 					ID: "2026-09", TenantID: "t-1", LedgerID: "l-1", Status: entity.PeriodClosed,
 				})
@@ -242,7 +202,7 @@ func TestPeriodClose(t *testing.T) {
 				r.SubledgerDeltas = map[string]int64{"sub-1": 100}
 				return r
 			}(),
-			preload: func(periods *periodStoreFake) {
+			preload: func(periods command.PeriodStore) {
 				_ = periods.SavePeriod(context.Background(), entity.PeriodData{
 					ID: "2026-09", TenantID: "t-1", LedgerID: "l-1", Status: entity.PeriodOpen,
 				})
@@ -259,7 +219,7 @@ func TestPeriodClose(t *testing.T) {
 				r.FXRevalued = false
 				return r
 			}(),
-			preload: func(periods *periodStoreFake) {
+			preload: func(periods command.PeriodStore) {
 				_ = periods.SavePeriod(context.Background(), entity.PeriodData{
 					ID: "2026-09", TenantID: "t-1", LedgerID: "l-1", Status: entity.PeriodOpen,
 				})
@@ -271,7 +231,7 @@ func TestPeriodClose(t *testing.T) {
 		{
 			name: "denied subject fails closed",
 			req:  baseReq,
-			preload: func(periods *periodStoreFake) {
+			preload: func(periods command.PeriodStore) {
 				_ = periods.SavePeriod(context.Background(), entity.PeriodData{
 					ID: "2026-09", TenantID: "t-1", LedgerID: "l-1", Status: entity.PeriodOpen,
 				})
@@ -284,15 +244,15 @@ func TestPeriodClose(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
-			periods := &periodStoreFake{}
+			uow := newMockUOW(t)
+			periods := newMockPeriodStore(t)
 			tc.preload(periods)
-			breaks := &reconStoreFake{openN: tc.openBreaks}
-			authz := &tfrAuthz{denied: map[string]bool{}}
+			breaks := newMockReconStoreWithOpenBreaks(t, tc.openBreaks)
+			authz := newMockAuthorizer(t)
 			if tc.denied {
-				authz.denied[tc.req.Actor+"|period.close|ledger/"+string(tc.req.LedgerID)] = true
+				setAuthzDenied(authz, tc.req.Actor+"|period.close|ledger/"+string(tc.req.LedgerID))
 			}
-			svc := newPeriodService(uow, periods, breaks, authz)
+			svc := newPeriodService(t, uow, periods, breaks, authz)
 
 			err := svc.ClosePeriod(context.Background(), tc.req)
 			if tc.name == "dirty close reports every failing code" {
@@ -324,7 +284,7 @@ func TestPeriodReopen(t *testing.T) {
 	type testCase struct {
 		name          string
 		req           port.PeriodRequest
-		preload       func(periods *periodStoreFake)
+		preload       func(periods command.PeriodStore)
 		denied        bool
 		expectedError error
 	}
@@ -333,7 +293,7 @@ func TestPeriodReopen(t *testing.T) {
 		{
 			name: "valid reopen restores period open with fact",
 			req:  baseReq,
-			preload: func(periods *periodStoreFake) {
+			preload: func(periods command.PeriodStore) {
 				_ = periods.SavePeriod(context.Background(), entity.PeriodData{
 					ID: "2026-09", TenantID: "t-1", LedgerID: "l-1", Status: entity.PeriodClosed,
 				})
@@ -344,7 +304,7 @@ func TestPeriodReopen(t *testing.T) {
 		{
 			name: "open period cannot reopen",
 			req:  baseReq,
-			preload: func(periods *periodStoreFake) {
+			preload: func(periods command.PeriodStore) {
 				_ = periods.SavePeriod(context.Background(), entity.PeriodData{
 					ID: "2026-09", TenantID: "t-1", LedgerID: "l-1", Status: entity.PeriodOpen,
 				})
@@ -359,7 +319,7 @@ func TestPeriodReopen(t *testing.T) {
 				r.Approver = r.Actor
 				return r
 			}(),
-			preload: func(periods *periodStoreFake) {
+			preload: func(periods command.PeriodStore) {
 				_ = periods.SavePeriod(context.Background(), entity.PeriodData{
 					ID: "2026-09", TenantID: "t-1", LedgerID: "l-1", Status: entity.PeriodClosed,
 				})
@@ -370,7 +330,7 @@ func TestPeriodReopen(t *testing.T) {
 		{
 			name: "period not found propagates error",
 			req:  baseReq,
-			preload: func(_ *periodStoreFake) {
+			preload: func(_ command.PeriodStore) {
 			},
 			denied:        false,
 			expectedError: entity.NewError("PERIOD_NOT_FOUND", "period is unknown"),
@@ -378,7 +338,7 @@ func TestPeriodReopen(t *testing.T) {
 		{
 			name: "denied subject fails closed",
 			req:  baseReq,
-			preload: func(periods *periodStoreFake) {
+			preload: func(periods command.PeriodStore) {
 				_ = periods.SavePeriod(context.Background(), entity.PeriodData{
 					ID: "2026-09", TenantID: "t-1", LedgerID: "l-1", Status: entity.PeriodClosed,
 				})
@@ -390,15 +350,15 @@ func TestPeriodReopen(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
-			periods := &periodStoreFake{}
+			uow := newMockUOW(t)
+			periods := newMockPeriodStore(t)
 			tc.preload(periods)
-			breaks := &reconStoreFake{}
-			authz := &tfrAuthz{denied: map[string]bool{}}
+			breaks := newMockReconStore(t)
+			authz := newMockAuthorizer(t)
 			if tc.denied {
-				authz.denied[tc.req.Actor+"|period.reopen|ledger/"+string(tc.req.LedgerID)] = true
+				setAuthzDenied(authz, tc.req.Actor+"|period.reopen|ledger/"+string(tc.req.LedgerID))
 			}
-			svc := newPeriodService(uow, periods, breaks, authz)
+			svc := newPeriodService(t, uow, periods, breaks, authz)
 
 			err := svc.ReopenPeriod(context.Background(), tc.req)
 			assert.Equal(t, tc.expectedError, err)
@@ -408,87 +368,6 @@ func TestPeriodReopen(t *testing.T) {
 			}
 		})
 	}
-}
-
-type objectStoreFake struct {
-	mu      sync.Mutex
-	objects map[string][]byte
-}
-
-func (s *objectStoreFake) Put(_ context.Context, _ valueobject.TenantID, key string, object port.StoredObject) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.objects == nil {
-		s.objects = map[string][]byte{}
-	}
-	s.objects[key] = object.Content
-	return nil
-}
-
-func (s *objectStoreFake) Get(_ context.Context, _ valueobject.TenantID, key string) (port.StoredObject, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	content, ok := s.objects[key]
-	if !ok {
-		return port.StoredObject{}, entity.NewError("OBJECT_NOT_FOUND", "object is unknown")
-	}
-	return port.StoredObject{Content: content}, nil
-}
-
-func (s *objectStoreFake) Delete(_ context.Context, _ valueobject.TenantID, key string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	delete(s.objects, key)
-	return nil
-}
-
-func (s *objectStoreFake) SignedURL(_ context.Context, _ valueobject.TenantID, key string, _ time.Duration) (string, error) {
-	return "https://cdn.example/" + key, nil
-}
-
-type reportStoreFake struct {
-	mu      sync.Mutex
-	reports map[string]command.ReportRecord
-}
-
-func (s *reportStoreFake) CreateReport(_ context.Context, record command.ReportRecord) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.reports == nil {
-		s.reports = map[string]command.ReportRecord{}
-	}
-	s.reports[record.ID] = record
-	return nil
-}
-
-func (s *reportStoreFake) FindReport(_ context.Context, _ valueobject.TenantID, id string) (command.ReportRecord, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	record, ok := s.reports[id]
-	if !ok {
-		return command.ReportRecord{}, entity.NewError("REPORT_NOT_FOUND", "report is unknown")
-	}
-	return record, nil
-}
-
-func (s *reportStoreFake) ListReports(_ context.Context, _ valueobject.TenantID, limit int) ([]command.ReportRecord, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var out []command.ReportRecord
-	for _, record := range s.reports {
-		out = append(out, record)
-		if limit > 0 && len(out) >= limit {
-			break
-		}
-	}
-	return out, nil
-}
-
-func (s *reportStoreFake) UpdateReport(_ context.Context, record command.ReportRecord) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.reports[record.ID] = record
-	return nil
 }
 
 func TestReportGenerate(t *testing.T) {
@@ -506,7 +385,7 @@ func TestReportGenerate(t *testing.T) {
 	type testCase struct {
 		name          string
 		req           port.ReportRequest
-		preload       func(uow *tfrUOW)
+		preload       func(uow port.UnitOfWork)
 		denied        bool
 		expectedError error
 	}
@@ -515,24 +394,18 @@ func TestReportGenerate(t *testing.T) {
 		{
 			name:          "generates balance sheet report",
 			req:           baseReq,
-			preload:       func(_ *tfrUOW) {},
+			preload:       func(_ port.UnitOfWork) {},
 			denied:        false,
 			expectedError: nil,
 		},
 		{
 			name: "corrupt idempotency replay returns IDEMPOTENCY_RECORD_INVALID",
 			req:  baseReq,
-			preload: func(uow *tfrUOW) {
+			preload: func(uow port.UnitOfWork) {
 				parts := append([]string{baseReq.IdempotencyKey, string(baseReq.TenantID), baseReq.Template, baseReq.Destination},
 					command.MapParts("params", baseReq.Parameters)...)
 				fp := command.Fingerprint(parts...)
-				uow.idem = map[string]tfrIdemEntry{
-					baseReq.IdempotencyKey: {
-						fingerprint: fp,
-						response:    []byte("{corrupt-json"),
-						completed:   true,
-					},
-				}
+				setUOWIdem(uow, baseReq.IdempotencyKey, fp, []byte("{corrupt-json"))
 			},
 			denied:        false,
 			expectedError: entity.NewError("IDEMPOTENCY_RECORD_INVALID", "stored idempotency response is corrupt"),
@@ -544,7 +417,7 @@ func TestReportGenerate(t *testing.T) {
 				r.Template = "income-statement"
 				return r
 			}(),
-			preload:       func(_ *tfrUOW) {},
+			preload:       func(_ port.UnitOfWork) {},
 			denied:        false,
 			expectedError: nil,
 		},
@@ -555,7 +428,7 @@ func TestReportGenerate(t *testing.T) {
 				r.TenantID = ""
 				return r
 			}(),
-			preload:       func(_ *tfrUOW) {},
+			preload:       func(_ port.UnitOfWork) {},
 			denied:        false,
 			expectedError: entity.NewError("TENANT_REQUIRED", "tenant id is required"),
 		},
@@ -566,7 +439,7 @@ func TestReportGenerate(t *testing.T) {
 				r.Template = "fortune-cookie"
 				return r
 			}(),
-			preload:       func(_ *tfrUOW) {},
+			preload:       func(_ port.UnitOfWork) {},
 			denied:        false,
 			expectedError: entity.NewError("REPORT_TEMPLATE_UNKNOWN", "report template is unknown"),
 		},
@@ -577,7 +450,7 @@ func TestReportGenerate(t *testing.T) {
 				r.Actor = ""
 				return r
 			}(),
-			preload:       func(_ *tfrUOW) {},
+			preload:       func(_ port.UnitOfWork) {},
 			denied:        false,
 			expectedError: entity.NewError("ACTOR_REQUIRED", "report actor is required"),
 		},
@@ -588,14 +461,14 @@ func TestReportGenerate(t *testing.T) {
 				r.IdempotencyKey = ""
 				return r
 			}(),
-			preload:       func(_ *tfrUOW) {},
+			preload:       func(_ port.UnitOfWork) {},
 			denied:        false,
 			expectedError: entity.NewError("IDEMPOTENCY_KEY_REQUIRED", "report requires an idempotency key"),
 		},
 		{
 			name:          "denied subject returns FORBIDDEN",
 			req:           baseReq,
-			preload:       func(_ *tfrUOW) {},
+			preload:       func(_ port.UnitOfWork) {},
 			denied:        true,
 			expectedError: entity.NewError("FORBIDDEN", "subject is not authorized for this action"),
 		},
@@ -603,17 +476,17 @@ func TestReportGenerate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
-			reports := &reportStoreFake{}
-			storage := &objectStoreFake{}
+			uow := newMockUOW(t)
+			reports := newMockReportStore(t)
+			storage := newMockObjectStorage(t)
 			tc.preload(uow)
-			authz := &tfrAuthz{denied: map[string]bool{}}
+			authz := newMockAuthorizer(t)
 			if tc.denied {
-				authz.denied[tc.req.Actor+"|report.generate|tenant/"+string(tc.req.TenantID)] = true
+				setAuthzDenied(authz, tc.req.Actor+"|report.generate|tenant/"+string(tc.req.TenantID))
 			}
 			svc := command.NewReportService(command.ReportServiceParams{
-				UoW: uow, Reports: reports, Storage: storage, Clock: tfrClock{},
-				IDs: &tfrIDs{next: tfrTestIDs(40)}, Authz: authz,
+				UoW: uow, Reports: reports, Storage: storage, Clock: newMockClock(t, tfrAt),
+				IDs: newMockIDGenerator(t, tfrTestIDs(40)...), Authz: authz,
 			})
 			actualResult, err := svc.GenerateReport(context.Background(), tc.req)
 			assert.Equal(t, tc.expectedError, err)
@@ -662,11 +535,11 @@ func TestReportStatusAndListTemplates(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			reports := &reportStoreFake{}
-			storage := &objectStoreFake{}
+			reports := newMockReportStore(t)
+			storage := newMockObjectStorage(t)
 			svc := command.NewReportService(command.ReportServiceParams{
-				UoW: &tfrUOW{}, Reports: reports, Storage: storage, Clock: tfrClock{},
-				IDs: &tfrIDs{next: tfrTestIDs(40)}, Authz: &tfrAuthz{denied: map[string]bool{}},
+				UoW: newMockUOW(t), Reports: reports, Storage: storage, Clock: newMockClock(t, tfrAt),
+				IDs: newMockIDGenerator(t, tfrTestIDs(40)...), Authz: newMockAuthorizer(t),
 			})
 
 			if tc.seedReport {
@@ -692,42 +565,6 @@ func TestReportStatusAndListTemplates(t *testing.T) {
 	svc := command.NewReportService(command.ReportServiceParams{})
 	templates := svc.ListTemplates()
 	assert.Equal(t, command.ReportTemplates, templates)
-}
-
-type complianceStoreFake struct {
-	mu      sync.Mutex
-	reviews map[string]command.ScreeningDecision
-	exports map[string]command.RegulatoryExport
-}
-
-func (s *complianceStoreFake) RecordDecision(_ context.Context, decision command.ScreeningDecision) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.reviews == nil {
-		s.reviews = map[string]command.ScreeningDecision{}
-	}
-	s.reviews[decision.ID] = decision
-	return nil
-}
-
-func (s *complianceStoreFake) SaveExport(_ context.Context, export command.RegulatoryExport) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.exports == nil {
-		s.exports = map[string]command.RegulatoryExport{}
-	}
-	s.exports[export.ID] = export
-	return nil
-}
-
-func (s *complianceStoreFake) FindExport(_ context.Context, _ valueobject.TenantID, id string) (command.RegulatoryExport, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	export, ok := s.exports[id]
-	if !ok {
-		return command.RegulatoryExport{}, entity.NewError("EXPORT_NOT_FOUND", "export is unknown")
-	}
-	return export, nil
 }
 
 func TestComplianceRecordScreeningDecision(t *testing.T) {
@@ -816,16 +653,16 @@ func TestComplianceRecordScreeningDecision(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
-			store := &complianceStoreFake{}
-			storage := &objectStoreFake{}
-			authz := &tfrAuthz{denied: map[string]bool{}}
+			uow := newMockUOW(t)
+			store := newMockComplianceStore(t)
+			storage := newMockObjectStorage(t)
+			authz := newMockAuthorizer(t)
 			if tc.denied {
-				authz.denied[tc.req.Actor+"|compliance.review|tenant/"+string(tc.req.TenantID)] = true
+				setAuthzDenied(authz, tc.req.Actor+"|compliance.review|tenant/"+string(tc.req.TenantID))
 			}
 			svc := command.NewComplianceService(command.ComplianceServiceParams{
-				UoW: uow, Reviews: store, Storage: storage, Clock: tfrClock{},
-				IDs: &tfrIDs{next: tfrTestIDs(40)}, Authz: authz,
+				UoW: uow, Reviews: store, Storage: storage, Clock: newMockClock(t, tfrAt),
+				IDs: newMockIDGenerator(t, tfrTestIDs(40)...), Authz: authz,
 			})
 
 			err := svc.RecordScreeningDecision(context.Background(), tc.req)
@@ -833,7 +670,7 @@ func TestComplianceRecordScreeningDecision(t *testing.T) {
 			if tc.expectedError == nil {
 				replayErr := svc.RecordScreeningDecision(context.Background(), tc.req)
 				assert.NoError(t, replayErr)
-				assert.Len(t, store.reviews, 1)
+				store.AssertNumberOfCalls(t, "RecordDecision", 1)
 			}
 		})
 	}
@@ -933,16 +770,16 @@ func TestComplianceExportRegulatoryReport(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
-			store := &complianceStoreFake{}
-			storage := &objectStoreFake{}
-			authz := &tfrAuthz{denied: map[string]bool{}}
+			uow := newMockUOW(t)
+			store := newMockComplianceStore(t)
+			storage := newMockObjectStorage(t)
+			authz := newMockAuthorizer(t)
 			if tc.denied {
-				authz.denied[tc.req.Actor+"|compliance.export|tenant/"+string(tc.req.TenantID)] = true
+				setAuthzDenied(authz, tc.req.Actor+"|compliance.export|tenant/"+string(tc.req.TenantID))
 			}
 			svc := command.NewComplianceService(command.ComplianceServiceParams{
-				UoW: uow, Reviews: store, Storage: storage, Clock: tfrClock{},
-				IDs: &tfrIDs{next: tfrTestIDs(40)}, Authz: authz,
+				UoW: uow, Reviews: store, Storage: storage, Clock: newMockClock(t, tfrAt),
+				IDs: newMockIDGenerator(t, tfrTestIDs(40)...), Authz: authz,
 			})
 
 			result, err := svc.ExportRegulatoryReport(context.Background(), tc.req)

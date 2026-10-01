@@ -5,33 +5,30 @@
 package pagination
 
 import (
+	"errors"
 	"strconv"
 )
 
-// Defaults bound handler paging.
+// Bounds for handler paging.
 const (
-	DefaultLimit = 50
-	MaxLimit     = 200
+	MaxLimit = 200
 )
 
-// PageRequest is an offset page: Limit in (0, MaxLimit], Offset >= 0.
+// PageRequest is an offset page: Limit in [1, MaxLimit], Offset >= 0.
 type PageRequest struct {
 	Limit  int
 	Offset int
 }
 
-// Normalize applies defaults and bounds; it never errors.
-func (r PageRequest) Normalize() PageRequest {
-	if r.Limit <= 0 {
-		r.Limit = DefaultLimit
-	}
-	if r.Limit > MaxLimit {
-		r.Limit = MaxLimit
+// Validate ensures Limit and Offset are within valid bounds.
+func (r PageRequest) Validate() error {
+	if r.Limit <= 0 || r.Limit > MaxLimit {
+		return errors.New("pagination: limit must be between 1 and 200")
 	}
 	if r.Offset < 0 {
-		r.Offset = 0
+		return errors.New("pagination: offset must be non-negative")
 	}
-	return r
+	return nil
 }
 
 // PageResult pairs items with the total count for offset paging.
@@ -42,16 +39,28 @@ type PageResult[T any] struct {
 	Offset int
 }
 
-// ParseLimitOffset converts raw query values (e.g. ?limit= &offset=) into a
-// normalized PageRequest; garbage falls back to defaults, never errors.
-func ParseLimitOffset(limitRaw, offsetRaw string) PageRequest {
+// ParseLimitOffset converts raw query values into a validated PageRequest.
+// It returns an error if limit or offset are missing, non-numeric, or out of bounds.
+func ParseLimitOffset(limitRaw, offsetRaw string) (PageRequest, error) {
+	if limitRaw == "" {
+		return PageRequest{}, errors.New("pagination: limit is required")
+	}
 	limit, err := strconv.Atoi(limitRaw)
-	if limitRaw == "" || err != nil {
-		limit = DefaultLimit
+	if err != nil {
+		return PageRequest{}, errors.New("pagination: invalid limit integer")
+	}
+
+	if offsetRaw == "" {
+		return PageRequest{}, errors.New("pagination: offset is required")
 	}
 	offset, err := strconv.Atoi(offsetRaw)
-	if offsetRaw == "" || err != nil || offset < 0 {
-		offset = 0
+	if err != nil {
+		return PageRequest{}, errors.New("pagination: invalid offset integer")
 	}
-	return PageRequest{Limit: limit, Offset: offset}.Normalize()
+
+	req := PageRequest{Limit: limit, Offset: offset}
+	if err := req.Validate(); err != nil {
+		return PageRequest{}, err
+	}
+	return req, nil
 }

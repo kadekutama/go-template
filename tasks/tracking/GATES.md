@@ -61,6 +61,21 @@ closes: E09 identity/security (auth matrix, secret scans) and E10 provider
 fakes, plus the durable Postgres inbox binding (E14 wiring) — the memory/Valkey
 receipt stores prove shape only.
 
+**E09 slice status (2026-09-23, ADR-020):** all seven tasks implemented without
+app-local security state — refresh receipts, API keys, and audit chains in
+PostgreSQL (migrations `20260923000006..09`, RLS, Citus-guarded), OAuth
+handshakes in Valkey via the `store.Store` seam, JWT keys as OpenBao-backed
+RCU snapshots, RBAC on `casbin.SyncedEnforcer`, crypto on OpenBao Transit with
+Argon2id (`t=3/m=64MiB/p=4`) in BYTEA columns. Unit + Testcontainers PG
+integration + `-race` green; `make lint` 0 issues. Remaining before G4
+closes: E10 provider fakes and the E14 durable inbox binding.
+
+**Round-2 revisions (2026-09-27, plan `tasks/plans/E09-round2-revision-plan.md`):**
+zero-panic boot (stderr+exit-1, `FxLogger(logger)`), contract rejections + code
+split, constructor validation, `tenancy.max_onboarding_assets` pin, observability
+alignment, registry normalization, shared `test/doubles` helpers, required Codec.
+Re-verified: lint 0, unit `-race` exit 0 (56 pkgs), full `check-tasks` OK.
+
 ## G5 — API + worker contracts satisfied
 **Status:** pending
 **Promotes capability for:** end-to-end observability and resilience

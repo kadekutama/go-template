@@ -25,6 +25,8 @@ import (
 type Provider struct {
 	tracerProvider *sdktrace.TracerProvider
 	exporting      bool
+	excludedRoutes map[string]struct{}
+	routesList     []string
 }
 
 // Tracer returns a kernel-port tracer backed by the SDK provider.
@@ -37,6 +39,22 @@ func (p *Provider) Tracer(name string) trace.Tracer {
 // log or metric on false in non-prod environments.
 func (p *Provider) Exporting() bool { return p.exporting }
 
+// IsExcludedRoute reports whether the given route path is excluded from tracing.
+func (p *Provider) IsExcludedRoute(route string) bool {
+	if p.excludedRoutes == nil {
+		return false
+	}
+	_, ok := p.excludedRoutes[strings.TrimSpace(route)]
+	return ok
+}
+
+// ExcludedRoutes returns a copy of the configured excluded routes.
+func (p *Provider) ExcludedRoutes() []string {
+	out := make([]string, len(p.routesList))
+	copy(out, p.routesList)
+	return out
+}
+
 // Shutdown flushes buffered spans with the caller's context.
 func (p *Provider) Shutdown(ctx context.Context) error {
 	return p.tracerProvider.Shutdown(ctx)
@@ -47,19 +65,10 @@ func (p *Provider) Shutdown(ctx context.Context) error {
 // upstream OTel guidance (instrumentation libraries read globals). Callers
 // preferring explicit threading use Provider.Tracer instead of otel.Tracer.
 func Bootstrap(cfg Config) (*Provider, error) {
-	if strings.TrimSpace(cfg.ServiceName) == "" {
-		return nil, fmt.Errorf("tracing: ServiceName is required")
-	}
-	if strings.TrimSpace(cfg.ServiceVersion) == "" {
-		return nil, fmt.Errorf("tracing: ServiceVersion is required")
-	}
-	if cfg.SampleRatio < 0 || cfg.SampleRatio > 1 {
-		return nil, fmt.Errorf("tracing: SampleRatio %v out of [0,1]", cfg.SampleRatio)
+	if err := cfg.Validate(); err != nil {
+		return nil, err
 	}
 	ratio := cfg.SampleRatio
-	if ratio == 0 {
-		ratio = DefaultSampleRatio
-	}
 
 	var processor sdktrace.SpanProcessor
 	exporting := false
@@ -70,8 +79,6 @@ func Bootstrap(cfg Config) (*Provider, error) {
 		}
 		processor = sdktrace.NewBatchSpanProcessor(exporter)
 		exporting = true
-	} else if strings.EqualFold(cfg.Env, "production") {
-		return nil, fmt.Errorf("tracing: production requires OTLPEndpoint (refusing silent no-op)")
 	}
 
 	opts := []sdktrace.TracerProviderOption{
@@ -90,7 +97,17 @@ func Bootstrap(cfg Config) (*Provider, error) {
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(trace.Propagator())
 
-	return &Provider{tracerProvider: tp, exporting: exporting}, nil
+	routesMap := make(map[string]struct{}, len(cfg.ExcludedRoutes))
+	for _, r := range cfg.ExcludedRoutes {
+		routesMap[strings.TrimSpace(r)] = struct{}{}
+	}
+
+	return &Provider{
+		tracerProvider: tp,
+		exporting:      exporting,
+		excludedRoutes: routesMap,
+		routesList:     append([]string(nil), cfg.ExcludedRoutes...),
+	}, nil
 }
 
 // newOTLPExporter validates the endpoint fast (clear error, no dial yet —

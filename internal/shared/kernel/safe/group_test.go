@@ -2,7 +2,7 @@ package safe_test
 
 import (
 	"context"
-	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -14,29 +14,21 @@ import (
 func TestGroupWaitsForGoroutines(t *testing.T) {
 	t.Parallel()
 
-	var mu sync.Mutex
-	runs := 0
+	var runs atomic.Int64
 
 	group := safe.NewGroup(nil, nil)
 	group.Go(context.Background(), func(context.Context) {
 		time.Sleep(10 * time.Millisecond)
 
-		mu.Lock()
-		runs++
-		mu.Unlock()
+		runs.Add(1)
 	})
 	group.Go(context.Background(), func(context.Context) {
-		mu.Lock()
-		runs++
-		mu.Unlock()
+		runs.Add(1)
 	})
 
 	group.Wait()
 
-	mu.Lock()
-	defer mu.Unlock()
-
-	assert.Equal(t, 2, runs)
+	assert.Equal(t, int64(2), runs.Load())
 }
 
 func TestGroupContainsPanic(t *testing.T) {

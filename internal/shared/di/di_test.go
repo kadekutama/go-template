@@ -1,10 +1,9 @@
 package di
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -21,22 +20,34 @@ var errTestWorkFailed = errors.New("test work failed")
 
 // testLogBuffer captures logger output for lifecycle assertions.
 type testLogBuffer struct {
-	mu  sync.Mutex
-	buf bytes.Buffer
+	buf atomic.Pointer[[]byte]
 }
 
 func (b *testLogBuffer) Write(p []byte) (int, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	return b.buf.Write(p)
+	for {
+		old := b.buf.Load()
+		var next []byte
+		if old != nil {
+			next = make([]byte, len(*old)+len(p))
+			copy(next, *old)
+			copy(next[len(*old):], p)
+		} else {
+			next = make([]byte, len(p))
+			copy(next, p)
+		}
+		if b.buf.CompareAndSwap(old, &next) {
+			break
+		}
+	}
+	return len(p), nil
 }
 
 func (b *testLogBuffer) lines() string {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	return b.buf.String()
+	old := b.buf.Load()
+	if old == nil {
+		return ""
+	}
+	return string(*old)
 }
 
 // TestGraphValidates proves the composed fx graph has no dependency cycles.
@@ -60,6 +71,8 @@ func TestGraphValidates(t *testing.T) {
 }
 
 func TestFxLifecycle(t *testing.T) {
+	t.Setenv("APP_LOG_LEVEL", "info")
+
 	type testCase struct {
 		name          string
 		startEnv      string
@@ -71,12 +84,28 @@ func TestFxLifecycle(t *testing.T) {
 
 	testCases := []testCase{
 		{
-			name:          "unset environment keeps defaults",
+			name:          "unset environment fails fast",
 			startEnv:      "",
 			stopEnv:       "",
-			expectedStart: 30 * time.Second,
-			expectedStop:  30 * time.Second,
-			expectError:   false,
+			expectedStart: 0,
+			expectedStop:  0,
+			expectError:   true,
+		},
+		{
+			name:          "unset start fails fast",
+			startEnv:      "",
+			stopEnv:       "30s",
+			expectedStart: 0,
+			expectedStop:  0,
+			expectError:   true,
+		},
+		{
+			name:          "unset stop fails fast",
+			startEnv:      "30s",
+			stopEnv:       "",
+			expectedStart: 0,
+			expectedStop:  0,
+			expectError:   true,
 		},
 		{
 			name:          "valid durations apply",
@@ -87,16 +116,20 @@ func TestFxLifecycle(t *testing.T) {
 			expectError:   false,
 		},
 		{
-			name:        "malformed start fails fast",
-			startEnv:    "soon",
-			stopEnv:     "",
-			expectError: true,
+			name:          "malformed start fails fast",
+			startEnv:      "soon",
+			stopEnv:       "30s",
+			expectedStart: 0,
+			expectedStop:  0,
+			expectError:   true,
 		},
 		{
-			name:        "non-positive stop fails fast",
-			startEnv:    "",
-			stopEnv:     "0s",
-			expectError: true,
+			name:          "non-positive stop fails fast",
+			startEnv:      "30s",
+			stopEnv:       "0s",
+			expectedStart: 0,
+			expectedStop:  0,
+			expectError:   true,
 		},
 	}
 
@@ -118,36 +151,53 @@ func TestFxLifecycle(t *testing.T) {
 	}
 
 	t.Run("logger option validates in a graph", func(t *testing.T) {
-		assert.NotNil(t, FxLogger())
-		assert.NoError(t, fx.ValidateApp(FxLogger()))
+		logger, err := ProvideLoggerWithConfig(logging.Config{Level: "info"})
+		require.NoError(t, err)
+		assert.NotNil(t, FxLogger(logger))
+		assert.NoError(t, fx.ValidateApp(FxLogger(logger)))
 	})
 }
 
 func TestProvidersConstructInstances(t *testing.T) {
-	t.Parallel()
-
 	type testCase struct {
 		name     string
-		validate func() bool
+		validate func(t *testing.T) bool
 	}
 
 	testCases := []testCase{
 		{
-			name: "logger provider returns non-nil",
-			validate: func() bool {
-				return ProvideLogger() != nil
+			name: "logger provider with config returns non-nil",
+			validate: func(t *testing.T) bool {
+				t.Helper()
+				logger, err := ProvideLoggerWithConfig(logging.Config{Level: "info"})
+				return err == nil && logger != nil
+			},
+		},
+		{
+			name: "logger config from env resolves",
+			validate: func(t *testing.T) bool {
+				t.Helper()
+				t.Setenv("APP_LOG_LEVEL", "info")
+				cfg, err := ProvideLoggingConfig()
+				if err != nil {
+					return false
+				}
+				logger, err := ProvideLoggerWithConfig(cfg)
+				return err == nil && logger != nil
 			},
 		},
 		{
 			name: "clock provider returns valid clock",
-			validate: func() bool {
+			validate: func(t *testing.T) bool {
+				t.Helper()
 				clk := ProvideClock()
 				return clk != nil && !clk.Now().IsZero()
 			},
 		},
 		{
 			name: "id generator provider returns valid generator",
-			validate: func() bool {
+			validate: func(t *testing.T) bool {
+				t.Helper()
 				gen := ProvideIDGenerator()
 				return gen != nil && gen.NewID() != ""
 			},
@@ -156,9 +206,16 @@ func TestProvidersConstructInstances(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.True(t, tc.validate())
+			assert.True(t, tc.validate(t))
 		})
 	}
+
+	t.Run("logging config errors when unconfigured", func(t *testing.T) {
+		t.Setenv("APP_LOG_LEVEL", "")
+		t.Setenv("APP_OBSERVABILITY__LOG_LEVEL", "")
+		_, err := ProvideLoggingConfig()
+		require.Error(t, err)
+	})
 }
 
 func TestRunAppLifecycle(t *testing.T) {
@@ -204,6 +261,10 @@ func TestRunAppLifecycle(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("APP_FX_START_TIMEOUT", "30s")
+			t.Setenv("APP_FX_STOP_TIMEOUT", "30s")
+			t.Setenv("APP_LOG_LEVEL", "info")
+
 			var output testLogBuffer
 			logger := logging.New(&output, logging.Config{Level: "trace"})
 
@@ -233,6 +294,21 @@ func TestRunAppLifecycle(t *testing.T) {
 
 	t.Run("malformed timeout env fails fast", func(t *testing.T) {
 		t.Setenv("APP_FX_START_TIMEOUT", "soon")
+		t.Setenv("APP_FX_STOP_TIMEOUT", "30s")
+		t.Setenv("APP_LOG_LEVEL", "info")
+
+		var output testLogBuffer
+		logger := logging.New(&output, logging.Config{Level: "trace"})
+
+		code := RunApp(logger, "test-binary", "v0", nil)
+		assert.Equal(t, 1, code)
+		assert.Contains(t, output.lines(), "app timeout configuration invalid")
+	})
+
+	t.Run("unset timeout env fails fast", func(t *testing.T) {
+		t.Setenv("APP_FX_START_TIMEOUT", "")
+		t.Setenv("APP_FX_STOP_TIMEOUT", "")
+		t.Setenv("APP_LOG_LEVEL", "info")
 
 		var output testLogBuffer
 		logger := logging.New(&output, logging.Config{Level: "trace"})

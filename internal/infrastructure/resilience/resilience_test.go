@@ -18,16 +18,16 @@ import (
 	kernel "github.com/kadekutama/go-template/internal/shared/kernel/resilience"
 )
 
-// fakeSleep records waits without wall-clock delays and honors cancellation.
-type fakeSleep struct {
+// sleepRecorder records waits without wall-clock delays and honors cancellation.
+type sleepRecorder struct {
 	waits []time.Duration
 }
 
-func (f *fakeSleep) sleep(ctx context.Context, d time.Duration) error {
+func (s *sleepRecorder) sleep(ctx context.Context, d time.Duration) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	f.waits = append(f.waits, d)
+	s.waits = append(s.waits, d)
 	return nil
 }
 
@@ -94,9 +94,9 @@ func TestBreakerRespectsCancellation(t *testing.T) {
 func TestRetrySucceedsAfterFailures(t *testing.T) {
 	t.Parallel()
 
-	fake := &fakeSleep{}
+	recorder := &sleepRecorder{}
 	calls := 0
-	err := Execute(context.Background(), fake.sleep,
+	err := Execute(context.Background(), recorder.sleep,
 		kernel.RetryPolicy{MaxAttempts: 3, InitialBackoff: time.Millisecond, MaxBackoff: time.Millisecond, Multiplier: 1},
 		false, "key-1", kernel.DefaultClassifier,
 		func(context.Context) error {
@@ -109,17 +109,17 @@ func TestRetrySucceedsAfterFailures(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if calls != 3 || len(fake.waits) != 2 {
-		t.Errorf("want 3 calls / 2 waits, got %d / %d", calls, len(fake.waits))
+	if calls != 3 || len(recorder.waits) != 2 {
+		t.Errorf("want 3 calls / 2 waits, got %d / %d", calls, len(recorder.waits))
 	}
 }
 
 func TestNoBlindRetryWithoutKey(t *testing.T) {
 	t.Parallel()
 
-	fake := &fakeSleep{}
+	recorder := &sleepRecorder{}
 	calls := 0
-	err := Execute(context.Background(), fake.sleep,
+	err := Execute(context.Background(), recorder.sleep,
 		kernel.RetryPolicy{MaxAttempts: 5, InitialBackoff: time.Millisecond, MaxBackoff: time.Millisecond, Multiplier: 1},
 		false, "", kernel.DefaultClassifier,
 		func(context.Context) error {
@@ -132,17 +132,17 @@ func TestNoBlindRetryWithoutKey(t *testing.T) {
 	if calls != 1 {
 		t.Errorf("non-idempotent call without key must run exactly once, ran %d", calls)
 	}
-	if len(fake.waits) != 0 {
-		t.Errorf("no backoff expected, got %v", fake.waits)
+	if len(recorder.waits) != 0 {
+		t.Errorf("no backoff expected, got %v", recorder.waits)
 	}
 }
 
 func TestRetryExhaustion(t *testing.T) {
 	t.Parallel()
 
-	fake := &fakeSleep{}
+	recorder := &sleepRecorder{}
 	calls := 0
-	err := Execute(context.Background(), fake.sleep,
+	err := Execute(context.Background(), recorder.sleep,
 		kernel.RetryPolicy{MaxAttempts: 3, InitialBackoff: time.Millisecond, MaxBackoff: time.Millisecond, Multiplier: 1},
 		false, "key-1", kernel.DefaultClassifier,
 		func(context.Context) error {
@@ -157,11 +157,11 @@ func TestRetryExhaustion(t *testing.T) {
 func TestCancelledContextAborts(t *testing.T) {
 	t.Parallel()
 
-	fake := &fakeSleep{}
+	recorder := &sleepRecorder{}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	called := false
-	if err := Execute(ctx, fake.sleep,
+	if err := Execute(ctx, recorder.sleep,
 		kernel.RetryPolicy{MaxAttempts: 3}, false, "key-1", kernel.DefaultClassifier,
 		func(context.Context) error { called = true; return nil }); err == nil {
 		t.Fatal("expected context error, got nil")
@@ -215,10 +215,10 @@ func TestRealSleep(t *testing.T) {
 func TestRetryDefaultClassifier(t *testing.T) {
 	t.Parallel()
 
-	fake := &fakeSleep{}
+	recorder := &sleepRecorder{}
 	calls := 0
 	// classify = nil should default to kernel.DefaultClassifier
-	err := Execute(context.Background(), fake.sleep,
+	err := Execute(context.Background(), recorder.sleep,
 		kernel.RetryPolicy{MaxAttempts: 2, InitialBackoff: time.Millisecond, MaxBackoff: time.Millisecond, Multiplier: 1},
 		false, "key-1", nil,
 		func(context.Context) error {

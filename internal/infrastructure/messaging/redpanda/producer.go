@@ -21,8 +21,6 @@ const (
 	SASLMechanismPlain       = "plain"
 	SASLMechanismScramSHA256 = "scram-sha-256"
 	SASLMechanismScramSHA512 = "scram-sha-512"
-
-	defaultSASLMechanism = SASLMechanismScramSHA512
 )
 
 // ProducerParams carries producer configuration (Parameter Object pattern).
@@ -36,7 +34,7 @@ type ProducerParams struct {
 	SASLUser         string        `validate:"-"`
 	SASLPass         string        `validate:"-"`
 	SASLMechanism    string        `validate:"-"`
-	DialTimeout      time.Duration `validate:"omitempty,gt=0"`
+	DialTimeout      time.Duration `validate:"required,gt=0"`
 	MaxBufferedBytes int           `validate:"omitempty,gt=0"`
 	Logger           log.Logger    `validate:"-"`
 }
@@ -79,10 +77,14 @@ func NewProducer(params ProducerParams) (*Producer, error) {
 		return nil, fmt.Errorf("redpanda: at least one seed is required")
 	}
 
+	if params.DialTimeout <= 0 {
+		return nil, fmt.Errorf("redpanda: dial timeout must be positive")
+	}
+
 	opts := []kgo.Opt{
 		kgo.SeedBrokers(seeds...),
 		kgo.ClientID(strings.TrimSpace(params.ClientID)),
-		kgo.DialTimeout(defaultOr(params.DialTimeout, DefaultDialTimeout)),
+		kgo.DialTimeout(params.DialTimeout),
 		kgo.ProduceRequestTimeout(30 * time.Second),
 	}
 
@@ -111,12 +113,12 @@ func NewProducer(params ProducerParams) (*Producer, error) {
 	return &Producer{client: client, logger: params.Logger}, nil
 }
 
-// saslMechanism selects the authenticator: an explicit mechanism wins, blank
-// defaults to SCRAM-SHA-512 (the Redpanda default) when credentials are
-// present. Unknown mechanisms fail at construction, never at publish time.
+// saslMechanism selects the authenticator: an explicit mechanism is required
+// when credentials are provided. Unknown or empty mechanisms fail at construction,
+// never at publish time.
 func saslMechanism(mechanism, user, pass string) (sasl.Mechanism, error) {
 	if mechanism == "" {
-		mechanism = defaultSASLMechanism
+		return nil, fmt.Errorf("redpanda: sasl mechanism is required when sasl credentials are provided")
 	}
 
 	switch mechanism {
@@ -174,12 +176,4 @@ func (p *Producer) Close() error {
 	p.client.Close()
 
 	return nil
-}
-
-func defaultOr(value, fallback time.Duration) time.Duration {
-	if value <= 0 {
-		return fallback
-	}
-
-	return value
 }

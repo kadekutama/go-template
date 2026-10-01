@@ -1,20 +1,18 @@
 package command
 
+import "github.com/kadekutama/go-template/internal/domain/entity"
+
 const (
-	// DefaultPageLimit is the fallback limit when none is specified or limit <= 0.
-	DefaultPageLimit = 50
+	// MinPageLimit is the minimum items allowed in a single page.
+	MinPageLimit = 1
 	// MaxPageLimit is the maximum items allowed in a single page.
 	MaxPageLimit = 100
 )
 
-// clampPageLimit bounds list page sizes, defaulting non-positive limits.
-// Shared by every list path so pagination behaves identically.
-func clampPageLimit(limit int) int {
-	if limit <= 0 {
-		return DefaultPageLimit
+// validatePageLimit verifies that the caller explicitly supplied a valid page limit.
+func validatePageLimit(limit int) error {
+	if limit < MinPageLimit || limit > MaxPageLimit {
+		return entity.NewError("INVALID_PAGE_LIMIT", "page limit must be between 1 and 100")
 	}
-	if limit > MaxPageLimit {
-		return MaxPageLimit
-	}
-	return limit
+	return nil
 }

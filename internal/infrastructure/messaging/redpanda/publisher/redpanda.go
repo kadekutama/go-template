@@ -18,8 +18,8 @@ import (
 )
 
 // PublisherParams carries constructor dependencies (Parameter Object pattern).
-// Topic <= "" selects the ADR-014 outbox-facts default; wiring passes the
-// configured registry's OutboxFactsTopic().
+// Topic is required (fail-fast, ADR-021); wiring passes the configured
+// registry's OutboxFactsTopic().
 type PublisherParams struct {
 	Broker redpanda.Broker
 	Topic  string
@@ -45,7 +45,7 @@ func NewPublisher(params PublisherParams) (*Publisher, error) {
 
 	topic := strings.TrimSpace(params.Topic)
 	if topic == "" {
-		topic = redpanda.DefaultTopicsConfig().OutboxFacts
+		return nil, fmt.Errorf("publisher: topic is required")
 	}
 
 	return &Publisher{broker: params.Broker, topic: topic, logger: params.Logger}, nil

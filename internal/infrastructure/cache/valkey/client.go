@@ -22,13 +22,6 @@ import (
 // receipts) keep matching one error while the cache path uses store.ErrMiss.
 var ErrMiss = store.ErrMiss
 
-// Default timeouts and pool sizing for the L2 client.
-const (
-	DefaultPoolSize    = 10
-	DefaultDialTimeout = 5 * time.Second
-	DefaultIOTimeout   = 3 * time.Second
-)
-
 // ValkeyParams carries constructor dependencies (Parameter Object pattern).
 // Field rules are declared with validator tags and enforced by
 // validateParams; nil-dependency rules stay explicit at the call site.
@@ -36,10 +29,10 @@ type ValkeyParams struct {
 	Addr         string        `validate:"required"`
 	Password     string        `validate:"-"`
 	DB           int           `validate:"gte=0,lte=15"`
-	PoolSize     int           `validate:"omitempty,gt=0"`
-	DialTimeout  time.Duration `validate:"omitempty,gt=0"`
-	ReadTimeout  time.Duration `validate:"omitempty,gt=0"`
-	WriteTimeout time.Duration `validate:"omitempty,gt=0"`
+	PoolSize     int           `validate:"required,gt=0"`
+	DialTimeout  time.Duration `validate:"required,gt=0"`
+	ReadTimeout  time.Duration `validate:"required,gt=0"`
+	WriteTimeout time.Duration `validate:"required,gt=0"`
 	UseTLS       bool          `validate:"-"`
 }
 
@@ -56,8 +49,8 @@ var (
 	_ ScriptRunner        = (*ValkeyClient)(nil)
 )
 
-// NewValkeyClient builds the client. Addr is required (blank or whitespace
-// only is rejected); dial is lazy so topology tests construct without I/O.
+// NewValkeyClient builds the client. Addr, PoolSize, DialTimeout, ReadTimeout,
+// and WriteTimeout are required. Dial is lazy so topology tests construct without I/O.
 // Call Ping to verify connectivity.
 func NewValkeyClient(params ValkeyParams) (*ValkeyClient, error) {
 	if err := validate.Struct("valkey", "params", params); err != nil {
@@ -69,34 +62,14 @@ func NewValkeyClient(params ValkeyParams) (*ValkeyClient, error) {
 		return nil, fmt.Errorf("valkey: addr is required")
 	}
 
-	poolSize := params.PoolSize
-	if poolSize <= 0 {
-		poolSize = DefaultPoolSize
-	}
-
-	dialTimeout := params.DialTimeout
-	if dialTimeout <= 0 {
-		dialTimeout = DefaultDialTimeout
-	}
-
-	readTimeout := params.ReadTimeout
-	if readTimeout <= 0 {
-		readTimeout = DefaultIOTimeout
-	}
-
-	writeTimeout := params.WriteTimeout
-	if writeTimeout <= 0 {
-		writeTimeout = DefaultIOTimeout
-	}
-
 	opts := &redis.Options{
 		Addr:         addr,
 		Password:     params.Password,
 		DB:           params.DB,
-		PoolSize:     poolSize,
-		DialTimeout:  dialTimeout,
-		ReadTimeout:  readTimeout,
-		WriteTimeout: writeTimeout,
+		PoolSize:     params.PoolSize,
+		DialTimeout:  params.DialTimeout,
+		ReadTimeout:  params.ReadTimeout,
+		WriteTimeout: params.WriteTimeout,
 	}
 
 	if params.UseTLS {

@@ -8,28 +8,14 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
 	appport "github.com/kadekutama/go-template/internal/application/port"
 	"github.com/kadekutama/go-template/internal/infrastructure/database/postgres/outbox"
+	mockapplication "github.com/kadekutama/go-template/test/mock/application"
 )
-
-// stubPublisher records published facts and fails on demand.
-type stubPublisher struct {
-	published [][]appport.OutboxFact
-	fail      error
-}
-
-func (s *stubPublisher) Publish(_ context.Context, facts ...appport.OutboxFact) error {
-	if s.fail != nil {
-		return s.fail
-	}
-
-	s.published = append(s.published, facts)
-
-	return nil
-}
 
 func TestNewWriterRequiresDB(t *testing.T) {
 	t.Parallel()
@@ -120,28 +106,57 @@ func TestNewPollerRequiresPublisher(t *testing.T) {
 		{
 			name: "nil publisher rejected",
 			params: outbox.PollerParams{
-				Publisher: nil,
-				MaxBatch:  0,
+				Publisher:    nil,
+				MaxBatch:     10,
+				BaseBackoff:  time.Second,
+				ClaimTimeout: time.Minute,
 			},
 			expectedMaxBatch:     0,
 			expectedClaimTimeout: 0,
 			expectedError:        errors.New("outbox: poller needs a publisher"),
 		},
 		{
-			name: "default batch and claim timeout applied",
+			name: "non-positive max batch rejected",
 			params: outbox.PollerParams{
-				Publisher: &stubPublisher{},
-				MaxBatch:  0,
+				Publisher:    mockapplication.NewMockEventPublisher(t),
+				MaxBatch:     0,
+				BaseBackoff:  time.Second,
+				ClaimTimeout: time.Minute,
 			},
-			expectedMaxBatch:     outbox.DefaultMaxBatch,
-			expectedClaimTimeout: outbox.DefaultClaimTimeout,
-			expectedError:        nil,
+			expectedMaxBatch:     0,
+			expectedClaimTimeout: 0,
+			expectedError:        errors.New("outbox: max batch must be positive"),
 		},
 		{
-			name: "explicit batch and claim timeout kept",
+			name: "non-positive base backoff rejected",
 			params: outbox.PollerParams{
-				Publisher:    &stubPublisher{},
+				Publisher:    mockapplication.NewMockEventPublisher(t),
 				MaxBatch:     10,
+				BaseBackoff:  0,
+				ClaimTimeout: time.Minute,
+			},
+			expectedMaxBatch:     0,
+			expectedClaimTimeout: 0,
+			expectedError:        errors.New("outbox: base backoff must be positive"),
+		},
+		{
+			name: "non-positive claim timeout rejected",
+			params: outbox.PollerParams{
+				Publisher:    mockapplication.NewMockEventPublisher(t),
+				MaxBatch:     10,
+				BaseBackoff:  time.Second,
+				ClaimTimeout: 0,
+			},
+			expectedMaxBatch:     0,
+			expectedClaimTimeout: 0,
+			expectedError:        errors.New("outbox: claim timeout must be positive"),
+		},
+		{
+			name: "valid explicit params accepted",
+			params: outbox.PollerParams{
+				Publisher:    mockapplication.NewMockEventPublisher(t),
+				MaxBatch:     10,
+				BaseBackoff:  time.Second,
 				ClaimTimeout: 30 * time.Second,
 			},
 			expectedMaxBatch:     10,
@@ -204,6 +219,8 @@ func TestClaimSQLShape(t *testing.T) {
 func TestBackoffGrowsWithJitterBound(t *testing.T) {
 	t.Parallel()
 
+	baseBackoff := 500 * time.Millisecond
+
 	type testCase struct {
 		name        string
 		failures    int
@@ -214,28 +231,33 @@ func TestBackoffGrowsWithJitterBound(t *testing.T) {
 		{
 			name:        "first retry near base",
 			failures:    0,
-			minExpected: outbox.DefaultBaseBackoff,
+			minExpected: baseBackoff,
 		},
 		{
 			name:        "third retry at least quadruple base",
 			failures:    2,
-			minExpected: outbox.DefaultBaseBackoff * 4,
+			minExpected: baseBackoff * 4,
 		},
 		{
 			name:        "negative clamps to base",
 			failures:    -3,
-			minExpected: outbox.DefaultBaseBackoff,
+			minExpected: baseBackoff,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			poller, err := outbox.NewPoller(outbox.PollerParams{Publisher: &stubPublisher{}})
+			poller, err := outbox.NewPoller(outbox.PollerParams{
+				Publisher:    mockapplication.NewMockEventPublisher(t),
+				MaxBatch:     100,
+				BaseBackoff:  baseBackoff,
+				ClaimTimeout: 60 * time.Second,
+			})
 			require.NoError(t, err)
 
 			wait := poller.Backoff(tc.failures)
 			assert.GreaterOrEqual(t, wait, tc.minExpected)
-			assert.Less(t, wait, tc.minExpected*2+outbox.DefaultBaseBackoff)
+			assert.Less(t, wait, tc.minExpected*2+baseBackoff)
 		})
 	}
 }
@@ -263,7 +285,12 @@ func TestRunOnceRequiresDB(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			poller, err := outbox.NewPoller(outbox.PollerParams{Publisher: &stubPublisher{}})
+			poller, err := outbox.NewPoller(outbox.PollerParams{
+				Publisher:    mockapplication.NewMockEventPublisher(t),
+				MaxBatch:     100,
+				BaseBackoff:  500 * time.Millisecond,
+				ClaimTimeout: 60 * time.Second,
+			})
 			require.NoError(t, err)
 
 			delivered, runErr := poller.RunOnce(tc.ctx, tc.db)
@@ -274,7 +301,7 @@ func TestRunOnceRequiresDB(t *testing.T) {
 	}
 }
 
-func TestStubPublisherContract(t *testing.T) {
+func TestMockPublisherContract(t *testing.T) {
 	t.Parallel()
 
 	type testCase struct {
@@ -311,16 +338,20 @@ func TestStubPublisherContract(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			stub := &stubPublisher{fail: tc.fail}
-			err := stub.Publish(tc.ctx, tc.facts...)
+			pub := mockapplication.NewMockEventPublisher(t)
+			if tc.fail != nil {
+				pub.EXPECT().Publish(tc.ctx, mock.Anything).Return(tc.fail).Once()
+			} else {
+				pub.EXPECT().Publish(tc.ctx, mock.Anything).Return(nil).Once()
+			}
+
+			err := pub.Publish(tc.ctx, tc.facts...)
 			if tc.expectedError != nil {
 				require.Error(t, err)
 				assert.Equal(t, tc.expectedError.Error(), err.Error())
 			} else {
 				require.NoError(t, err)
 			}
-
-			assert.Len(t, stub.published, tc.expectedCalls)
 		})
 	}
 }

@@ -3,7 +3,6 @@ package command_test
 import (
 	"context"
 	"fmt"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,66 +12,8 @@ import (
 	"github.com/kadekutama/go-template/internal/application/port"
 	"github.com/kadekutama/go-template/internal/domain/entity"
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
+	mockcommand "github.com/kadekutama/go-template/test/mock/command"
 )
-
-type payoutStoreFake struct {
-	mu      sync.Mutex
-	payouts map[string]command.PayoutRecord
-	policy  valueobject.PayoutPolicy
-}
-
-func (s *payoutStoreFake) CreatePayout(_ context.Context, record command.PayoutRecord) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.payouts == nil {
-		s.payouts = map[string]command.PayoutRecord{}
-	}
-	s.payouts[record.ID] = record
-	return nil
-}
-
-func (s *payoutStoreFake) FindPayout(_ context.Context, _ valueobject.TenantID, id string) (command.PayoutRecord, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	payout, ok := s.payouts[id]
-	if !ok {
-		return command.PayoutRecord{}, entity.NewError("PAYOUT_NOT_FOUND", "payout is unknown")
-	}
-	return payout, nil
-}
-
-func (s *payoutStoreFake) UpdatePayout(_ context.Context, record command.PayoutRecord) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.payouts[record.ID] = record
-	return nil
-}
-
-func (s *payoutStoreFake) ListPayouts(_ context.Context, _ valueobject.TenantID, limit int) ([]command.PayoutRecord, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var out []command.PayoutRecord
-	for _, payout := range s.payouts {
-		out = append(out, payout)
-		if limit > 0 && len(out) >= limit {
-			break
-		}
-	}
-	return out, nil
-}
-
-func (s *payoutStoreFake) GetPolicy(_ context.Context, _ valueobject.TenantID, _ valueobject.AssetCode) (valueobject.PayoutPolicy, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.policy, nil
-}
-
-func (s *payoutStoreFake) UpdatePolicy(_ context.Context, policy valueobject.PayoutPolicy) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.policy = policy
-	return nil
-}
 
 func eligiblePolicy() valueobject.PayoutPolicy {
 	return valueobject.PayoutPolicy{
@@ -81,14 +22,14 @@ func eligiblePolicy() valueobject.PayoutPolicy {
 	}
 }
 
-func newPayoutService(uow *tfrUOW, store *payoutStoreFake, available int64, authz *tfrAuthz) *command.PayoutService {
+func newPayoutService(t *testing.T, uow port.UnitOfWork, store command.PayoutStore, available int64, authz port.Authorizer) *command.PayoutService {
 	return command.NewPayoutService(command.PayoutServiceParams{
 		UoW:            uow,
 		Payouts:        store,
-		Balances:       &tfrBalances{available: map[valueobject.AccountID]int64{tfrSrc: available}},
+		Balances:       newMockBalances(t, map[valueobject.AccountID]int64{tfrSrc: available}),
 		TransitAccount: "a-transit",
-		Clock:          tfrClock{},
-		IDs:            &tfrIDs{next: tfrTestIDs(40)},
+		Clock:          newMockClock(t, tfrAt),
+		IDs:            newMockIDGenerator(t, tfrTestIDs(40)...),
 		Authz:          authz,
 	})
 }
@@ -115,7 +56,7 @@ func TestPayoutCreate(t *testing.T) {
 		name            string
 		mutate          func(req *port.PayoutRequest)
 		available       int64
-		preload         func(uow *tfrUOW, svc *command.PayoutService)
+		preload         func(uow port.UnitOfWork, svc *command.PayoutService)
 		expectedStatus  string
 		expectedError   error
 		expectedRecords int
@@ -126,7 +67,7 @@ func TestPayoutCreate(t *testing.T) {
 			name:            "eligible payout stages pending with created fact",
 			mutate:          func(_ *port.PayoutRequest) {},
 			available:       9000,
-			preload:         func(_ *tfrUOW, _ *command.PayoutService) {},
+			preload:         func(_ port.UnitOfWork, _ *command.PayoutService) {},
 			expectedStatus:  command.PayoutPending,
 			expectedError:   nil,
 			expectedRecords: 1,
@@ -135,19 +76,13 @@ func TestPayoutCreate(t *testing.T) {
 			name:      "corrupt idempotency replay returns IDEMPOTENCY_RECORD_INVALID",
 			mutate:    func(_ *port.PayoutRequest) {},
 			available: 9000,
-			preload: func(uow *tfrUOW, _ *command.PayoutService) {
+			preload: func(uow port.UnitOfWork, _ *command.PayoutService) {
 				req := payoutTestCommand()
 				fp := command.Fingerprint(
 					req.IdempotencyKey, string(req.TenantID), string(req.AccountID),
 					fmt.Sprintf("%d", req.AmountMinor), string(req.AssetCode), string(req.Method),
 				)
-				uow.idem = map[string]tfrIdemEntry{
-					req.IdempotencyKey: {
-						fingerprint: fp,
-						response:    []byte("{corrupt-json"),
-						completed:   true,
-					},
-				}
+				setUOWIdem(uow, req.IdempotencyKey, fp, []byte("{corrupt-json"))
 			},
 			expectedStatus:  "",
 			expectedError:   entity.NewError("IDEMPOTENCY_RECORD_INVALID", "stored idempotency response is corrupt"),
@@ -157,7 +92,7 @@ func TestPayoutCreate(t *testing.T) {
 			name:      "duplicate replay returns original record",
 			mutate:    func(_ *port.PayoutRequest) {},
 			available: 9000,
-			preload: func(_ *tfrUOW, svc *command.PayoutService) {
+			preload: func(_ port.UnitOfWork, svc *command.PayoutService) {
 				_, err := svc.CreatePayout(context.Background(), payoutTestCommand())
 				require.NoError(t, err)
 			},
@@ -171,7 +106,7 @@ func TestPayoutCreate(t *testing.T) {
 				req.TenantID = ""
 			},
 			available:       9000,
-			preload:         func(_ *tfrUOW, _ *command.PayoutService) {},
+			preload:         func(_ port.UnitOfWork, _ *command.PayoutService) {},
 			expectedStatus:  "",
 			expectedError:   entity.NewError("TENANT_REQUIRED", "tenant id is required"),
 			expectedRecords: 0,
@@ -182,7 +117,7 @@ func TestPayoutCreate(t *testing.T) {
 				req.LedgerID = ""
 			},
 			available:       9000,
-			preload:         func(_ *tfrUOW, _ *command.PayoutService) {},
+			preload:         func(_ port.UnitOfWork, _ *command.PayoutService) {},
 			expectedStatus:  "",
 			expectedError:   entity.NewError("LEDGER_REQUIRED", "ledger id is required"),
 			expectedRecords: 0,
@@ -193,7 +128,7 @@ func TestPayoutCreate(t *testing.T) {
 				req.AccountID = ""
 			},
 			available:       9000,
-			preload:         func(_ *tfrUOW, _ *command.PayoutService) {},
+			preload:         func(_ port.UnitOfWork, _ *command.PayoutService) {},
 			expectedStatus:  "",
 			expectedError:   entity.NewError("PAYOUT_ACCOUNT_REQUIRED", "payout requires an account id"),
 			expectedRecords: 0,
@@ -204,7 +139,7 @@ func TestPayoutCreate(t *testing.T) {
 				req.AmountMinor = 0
 			},
 			available:       9000,
-			preload:         func(_ *tfrUOW, _ *command.PayoutService) {},
+			preload:         func(_ port.UnitOfWork, _ *command.PayoutService) {},
 			expectedStatus:  "",
 			expectedError:   entity.NewError("INVALID_PAYOUT_AMOUNT", "payout amount must be positive"),
 			expectedRecords: 0,
@@ -215,7 +150,7 @@ func TestPayoutCreate(t *testing.T) {
 				req.AssetCode = ""
 			},
 			available:       9000,
-			preload:         func(_ *tfrUOW, _ *command.PayoutService) {},
+			preload:         func(_ port.UnitOfWork, _ *command.PayoutService) {},
 			expectedStatus:  "",
 			expectedError:   entity.NewError("PAYOUT_ASSET_REQUIRED", "payout requires an asset code"),
 			expectedRecords: 0,
@@ -226,7 +161,7 @@ func TestPayoutCreate(t *testing.T) {
 				req.Actor = ""
 			},
 			available:       9000,
-			preload:         func(_ *tfrUOW, _ *command.PayoutService) {},
+			preload:         func(_ port.UnitOfWork, _ *command.PayoutService) {},
 			expectedStatus:  "",
 			expectedError:   entity.NewError("ACTOR_REQUIRED", "payout actor is required"),
 			expectedRecords: 0,
@@ -237,7 +172,7 @@ func TestPayoutCreate(t *testing.T) {
 				req.IdempotencyKey = ""
 			},
 			available:       9000,
-			preload:         func(_ *tfrUOW, _ *command.PayoutService) {},
+			preload:         func(_ port.UnitOfWork, _ *command.PayoutService) {},
 			expectedStatus:  "",
 			expectedError:   entity.NewError("IDEMPOTENCY_KEY_REQUIRED", "payout requires an idempotency key"),
 			expectedRecords: 0,
@@ -248,7 +183,7 @@ func TestPayoutCreate(t *testing.T) {
 				req.AmountMinor = 100
 			},
 			available:       9000,
-			preload:         func(_ *tfrUOW, _ *command.PayoutService) {},
+			preload:         func(_ port.UnitOfWork, _ *command.PayoutService) {},
 			expectedStatus:  "",
 			expectedError:   entity.NewError("PAYOUT_BLOCKED", "payout blocked (BELOW_MINIMUM)"),
 			expectedRecords: 0,
@@ -259,7 +194,7 @@ func TestPayoutCreate(t *testing.T) {
 				req.DestinationVerified = false
 			},
 			available:       9000,
-			preload:         func(_ *tfrUOW, _ *command.PayoutService) {},
+			preload:         func(_ port.UnitOfWork, _ *command.PayoutService) {},
 			expectedStatus:  "",
 			expectedError:   entity.NewError("PAYOUT_BLOCKED", "payout blocked (DESTINATION_UNVERIFIED)"),
 			expectedRecords: 0,
@@ -270,7 +205,7 @@ func TestPayoutCreate(t *testing.T) {
 				req.TenantAgeDays = 1
 			},
 			available:       9000,
-			preload:         func(_ *tfrUOW, _ *command.PayoutService) {},
+			preload:         func(_ port.UnitOfWork, _ *command.PayoutService) {},
 			expectedStatus:  "",
 			expectedError:   entity.NewError("PAYOUT_BLOCKED", "payout blocked (FIRST_PAYOUT_HOLD)"),
 			expectedRecords: 0,
@@ -279,10 +214,10 @@ func TestPayoutCreate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
-			store := &payoutStoreFake{policy: eligiblePolicy()}
-			authz := &tfrAuthz{denied: map[string]bool{}}
-			svc := newPayoutService(uow, store, tc.available, authz)
+			uow := newMockUOW(t)
+			store := newMockPayoutStore(t, eligiblePolicy())
+			authz := newMockAuthorizer(t)
+			svc := newPayoutService(t, uow, store, tc.available, authz)
 			cmd := payoutTestCommand()
 			tc.mutate(&cmd)
 			tc.preload(uow, svc)
@@ -291,7 +226,7 @@ func TestPayoutCreate(t *testing.T) {
 			if tc.expectedError == nil {
 				assert.Equal(t, tc.expectedStatus, actualResult.Status)
 			}
-			assert.Len(t, store.payouts, tc.expectedRecords)
+			store.AssertNumberOfCalls(t, "CreatePayout", tc.expectedRecords)
 		})
 	}
 }
@@ -373,14 +308,14 @@ func TestPayoutCancel(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
-			store := &payoutStoreFake{policy: eligiblePolicy()}
-			authz := &tfrAuthz{denied: map[string]bool{}}
-			svc := newPayoutService(uow, store, 9000, authz)
+			uow := newMockUOW(t)
+			store := newMockPayoutStore(t, eligiblePolicy())
+			authz := newMockAuthorizer(t)
+			svc := newPayoutService(t, uow, store, 9000, authz)
 			id := seedPending(t, svc)
 			query := tc.query(id)
 			if tc.denied {
-				authz.denied["u-1|payout.cancel|payout/"+id] = true
+				setAuthzDenied(authz, "u-1|payout.cancel|payout/"+id)
 			}
 			tc.preload(t, svc, id)
 			actualResult, err := svc.CancelPayout(context.Background(), query)
@@ -392,61 +327,16 @@ func TestPayoutCancel(t *testing.T) {
 	}
 }
 
-type topupStoreFake struct {
-	mu     sync.Mutex
-	topups map[string]command.TopupRecord
-}
-
-func (s *topupStoreFake) CreateTopup(_ context.Context, record command.TopupRecord) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.topups == nil {
-		s.topups = map[string]command.TopupRecord{}
-	}
-	s.topups[record.ID] = record
-	return nil
-}
-
-func (s *topupStoreFake) FindTopup(_ context.Context, _ valueobject.TenantID, id string) (command.TopupRecord, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	record, ok := s.topups[id]
-	if !ok {
-		return command.TopupRecord{}, entity.NewError("TOPUP_NOT_FOUND", "top-up is unknown")
-	}
-	return record, nil
-}
-
-func (s *topupStoreFake) ListTopups(_ context.Context, _ valueobject.TenantID, limit int) ([]command.TopupRecord, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var out []command.TopupRecord
-	for _, record := range s.topups {
-		out = append(out, record)
-		if limit > 0 && len(out) >= limit {
-			break
-		}
-	}
-	return out, nil
-}
-
-func (s *topupStoreFake) UpdateTopup(_ context.Context, record command.TopupRecord) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.topups[record.ID] = record
-	return nil
-}
-
 func TestTopupCreate(t *testing.T) {
 	t.Parallel()
 
-	newSvc := func() (*tfrUOW, *topupStoreFake, *tfrAuthz, *command.TopupService) {
-		uow := &tfrUOW{}
-		store := &topupStoreFake{}
-		authz := &tfrAuthz{denied: map[string]bool{}}
+	newSvc := func(t *testing.T) (port.UnitOfWork, *mockcommand.MockTopupStore, port.Authorizer, *command.TopupService) {
+		uow := newMockUOW(t)
+		store := newMockTopupStore(t)
+		authz := newMockAuthorizer(t)
 		svc := command.NewTopupService(command.TopupServiceParams{
-			UoW: uow, Topups: store, Clock: tfrClock{},
-			IDs: &tfrIDs{next: tfrTestIDs(40)}, Authz: authz,
+			UoW: uow, Topups: store, Clock: newMockClock(t, tfrAt),
+			IDs: newMockIDGenerator(t, tfrTestIDs(40)...), Authz: authz,
 		})
 		return uow, store, authz, svc
 	}
@@ -462,7 +352,7 @@ func TestTopupCreate(t *testing.T) {
 	type testCase struct {
 		name           string
 		req            port.TopupRequest
-		preload        func(t *testing.T, uow *tfrUOW, svc *command.TopupService)
+		preload        func(t *testing.T, uow port.UnitOfWork, svc *command.TopupService)
 		denied         bool
 		expectedStatus string
 		expectedError  error
@@ -473,7 +363,7 @@ func TestTopupCreate(t *testing.T) {
 		{
 			name:           "verified instrument persists pending",
 			req:            topupCommand(),
-			preload:        func(_ *testing.T, _ *tfrUOW, _ *command.TopupService) {},
+			preload:        func(_ *testing.T, _ port.UnitOfWork, _ *command.TopupService) {},
 			denied:         false,
 			expectedStatus: command.TopupPending,
 			expectedError:  nil,
@@ -482,16 +372,10 @@ func TestTopupCreate(t *testing.T) {
 		{
 			name: "corrupt idempotency replay returns IDEMPOTENCY_RECORD_INVALID",
 			req:  topupCommand(),
-			preload: func(t *testing.T, uow *tfrUOW, _ *command.TopupService) {
+			preload: func(t *testing.T, uow port.UnitOfWork, _ *command.TopupService) {
 				req := topupCommand()
 				fp := command.Fingerprint(req.IdempotencyKey, string(req.TenantID), fmt.Sprintf("%d", req.AmountMinor))
-				uow.idem = map[string]tfrIdemEntry{
-					req.IdempotencyKey: {
-						fingerprint: fp,
-						response:    []byte("{corrupt-json"),
-						completed:   true,
-					},
-				}
+				setUOWIdem(uow, req.IdempotencyKey, fp, []byte("{corrupt-json"))
 			},
 			denied:         false,
 			expectedStatus: "",
@@ -501,7 +385,7 @@ func TestTopupCreate(t *testing.T) {
 		{
 			name: "duplicate replay returns original topup",
 			req:  topupCommand(),
-			preload: func(t *testing.T, _ *tfrUOW, svc *command.TopupService) {
+			preload: func(t *testing.T, _ port.UnitOfWork, svc *command.TopupService) {
 				_, err := svc.CreateTopup(context.Background(), topupCommand())
 				require.NoError(t, err)
 			},
@@ -517,7 +401,7 @@ func TestTopupCreate(t *testing.T) {
 				c.InstrumentVerified = false
 				return c
 			}(),
-			preload:        func(_ *testing.T, _ *tfrUOW, _ *command.TopupService) {},
+			preload:        func(_ *testing.T, _ port.UnitOfWork, _ *command.TopupService) {},
 			denied:         false,
 			expectedStatus: "",
 			expectedError:  entity.NewError("ACCOUNT_UNVERIFIED", "top-up requires a verified external bank instrument"),
@@ -530,7 +414,7 @@ func TestTopupCreate(t *testing.T) {
 				c.IdempotencyKey = "key-topup-denied"
 				return c
 			}(),
-			preload:        func(_ *testing.T, _ *tfrUOW, _ *command.TopupService) {},
+			preload:        func(_ *testing.T, _ port.UnitOfWork, _ *command.TopupService) {},
 			denied:         true,
 			expectedStatus: "",
 			expectedError:  entity.NewError("FORBIDDEN", "subject is not authorized for this action"),
@@ -540,9 +424,9 @@ func TestTopupCreate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow, store, authz, svc := newSvc()
+			uow, store, authz, svc := newSvc(t)
 			if tc.denied {
-				authz.denied["u-1|topup.create|ledger/"+string(tfrLedger)] = true
+				setAuthzDenied(authz, "u-1|topup.create|ledger/"+string(tfrLedger))
 			}
 			tc.preload(t, uow, svc)
 			actualResult, err := svc.CreateTopup(context.Background(), tc.req)
@@ -550,7 +434,7 @@ func TestTopupCreate(t *testing.T) {
 			if tc.expectedError == nil {
 				assert.Equal(t, tc.expectedStatus, actualResult.Status)
 			}
-			assert.Len(t, store.topups, tc.expectedStore)
+			store.AssertNumberOfCalls(t, "CreateTopup", tc.expectedStore)
 		})
 	}
 }
@@ -558,13 +442,13 @@ func TestTopupCreate(t *testing.T) {
 func TestTopupCancel(t *testing.T) {
 	t.Parallel()
 
-	newSvc := func() (*topupStoreFake, *tfrAuthz, *command.TopupService) {
-		uow := &tfrUOW{}
-		store := &topupStoreFake{}
-		authz := &tfrAuthz{denied: map[string]bool{}}
+	newSvc := func(t *testing.T) (*mockcommand.MockTopupStore, port.Authorizer, *command.TopupService) {
+		uow := newMockUOW(t)
+		store := newMockTopupStore(t)
+		authz := newMockAuthorizer(t)
 		svc := command.NewTopupService(command.TopupServiceParams{
-			UoW: uow, Topups: store, Clock: tfrClock{},
-			IDs: &tfrIDs{next: tfrTestIDs(40)}, Authz: authz,
+			UoW: uow, Topups: store, Clock: newMockClock(t, tfrAt),
+			IDs: newMockIDGenerator(t, tfrTestIDs(40)...), Authz: authz,
 		})
 		return store, authz, svc
 	}
@@ -646,11 +530,11 @@ func TestTopupCancel(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, authz, svc := newSvc()
+			_, authz, svc := newSvc(t)
 			id := seedPending(t, svc)
 			targetID := tc.topupID(id)
 			if tc.denied {
-				authz.denied["u-1|topup.cancel|ledger/"+targetID] = true
+				setAuthzDenied(authz, "u-1|topup.cancel|ledger/"+targetID)
 			}
 			tc.preload(t, svc, id)
 			actualResult, err := svc.CancelTopup(context.Background(), tfrTenant, targetID, tc.actor)
@@ -671,16 +555,16 @@ func TestWebhookEventNames(t *testing.T) {
 		expectedKeys []string
 	}
 
-	uow := &tfrUOW{}
-	intentStore := &intentStoreFake{intents: map[string]command.IntentRecord{}}
-	refundStore := &refundStoreFake{}
-	payoutStore := &payoutStoreFake{policy: eligiblePolicy()}
-	authz := &tfrAuthz{denied: map[string]bool{}}
-	processor := &fakeProcessor{chargeResult: port.ChargeResult{ProviderID: "pr-1", Status: "SUCCEEDED"}}
+	uow := newMockUOW(t)
+	intentStore := newMockIntentStore(t)
+	refundStore := newMockRefundStore(t)
+	payoutStore := newMockPayoutStore(t, eligiblePolicy())
+	authz := newMockAuthorizer(t)
+	processor := newMockPaymentProcessor(t, mockProcessorParams{ChargeResult: port.ChargeResult{ProviderID: "pr-1", Status: "SUCCEEDED"}})
 
-	intents := newIntentService(uow, intentStore, processor, authz)
-	refunds := newRefundService(uow, refundStore, intentStore, processor, authz)
-	payouts := newPayoutService(uow, payoutStore, 90000, authz)
+	intents := newIntentService(t, uow, intentStore, processor, authz)
+	refunds := newRefundService(t, uow, refundStore, intentStore, processor, authz)
+	payouts := newPayoutService(t, uow, payoutStore, 90000, authz)
 
 	created, err := intents.CreateIntent(context.Background(), intentTestCommand())
 	require.NoError(t, err)
@@ -771,9 +655,9 @@ func TestPayoutGetAndList(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
-			store := &payoutStoreFake{policy: eligiblePolicy()}
-			authz := &tfrAuthz{denied: map[string]bool{}}
+			uow := newMockUOW(t)
+			store := newMockPayoutStore(t, eligiblePolicy())
+			authz := newMockAuthorizer(t)
 
 			if tc.seedPayout {
 				_ = store.CreatePayout(context.Background(), command.PayoutRecord{
@@ -788,7 +672,7 @@ func TestPayoutGetAndList(t *testing.T) {
 				})
 			}
 
-			svc := newPayoutService(uow, store, 90000, authz)
+			svc := newPayoutService(t, uow, store, 90000, authz)
 
 			if tc.queryID != "" {
 				res, err := svc.GetPayout(context.Background(), port.PaymentQuery{TenantID: string(tfrTenant), ID: tc.queryID})
@@ -852,13 +736,13 @@ func TestPayoutSchedule(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
-			store := &payoutStoreFake{policy: basePolicy}
-			authz := &tfrAuthz{denied: map[string]bool{}}
+			uow := newMockUOW(t)
+			store := newMockPayoutStore(t, basePolicy)
+			authz := newMockAuthorizer(t)
 			if tc.denied {
-				authz.denied[tc.actor+"|payout.schedule|tenant/"+string(tfrTenant)] = true
+				setAuthzDenied(authz, tc.actor+"|payout.schedule|tenant/"+string(tfrTenant))
 			}
-			svc := newPayoutService(uow, store, 90000, authz)
+			svc := newPayoutService(t, uow, store, 90000, authz)
 
 			res, err := svc.UpdateSchedule(context.Background(), tfrTenant, tc.policy, tc.actor, tc.key)
 			assert.Equal(t, tc.expectedError, err)
@@ -920,9 +804,9 @@ func TestTopupGetAndList(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &tfrUOW{}
-			store := &topupStoreFake{}
-			authz := &tfrAuthz{denied: map[string]bool{}}
+			uow := newMockUOW(t)
+			store := newMockTopupStore(t)
+			authz := newMockAuthorizer(t)
 
 			if tc.seedTopup {
 				_ = store.CreateTopup(context.Background(), command.TopupRecord{
@@ -939,8 +823,8 @@ func TestTopupGetAndList(t *testing.T) {
 			svc := command.NewTopupService(command.TopupServiceParams{
 				UoW:    uow,
 				Topups: store,
-				Clock:  tfrClock{},
-				IDs:    &tfrIDs{next: tfrTestIDs(40)},
+				Clock:  newMockClock(t, tfrAt),
+				IDs:    newMockIDGenerator(t, tfrTestIDs(40)...),
 				Authz:  authz,
 			})
 
@@ -962,22 +846,22 @@ func TestTopupGetAndList(t *testing.T) {
 func TestPaymentUseCasesComposite(t *testing.T) {
 	t.Parallel()
 
-	uow := &tfrUOW{}
-	intentStore := &intentStoreFake{intents: map[string]command.IntentRecord{}}
-	refundStore := &refundStoreFake{}
-	payoutStore := &payoutStoreFake{policy: eligiblePolicy()}
-	topupStore := &topupStoreFake{}
-	authz := &tfrAuthz{denied: map[string]bool{}}
-	processor := &fakeProcessor{chargeResult: port.ChargeResult{ProviderID: "pr-1", Status: "SUCCEEDED"}}
+	uow := newMockUOW(t)
+	intentStore := newMockIntentStore(t)
+	refundStore := newMockRefundStore(t)
+	payoutStore := newMockPayoutStore(t, eligiblePolicy())
+	topupStore := newMockTopupStore(t)
+	authz := newMockAuthorizer(t)
+	processor := newMockPaymentProcessor(t, mockProcessorParams{ChargeResult: port.ChargeResult{ProviderID: "pr-1", Status: "SUCCEEDED"}})
 
-	intents := newIntentService(uow, intentStore, processor, authz)
-	refunds := newRefundService(uow, refundStore, intentStore, processor, authz)
-	payouts := newPayoutService(uow, payoutStore, 90000, authz)
+	intents := newIntentService(t, uow, intentStore, processor, authz)
+	refunds := newRefundService(t, uow, refundStore, intentStore, processor, authz)
+	payouts := newPayoutService(t, uow, payoutStore, 90000, authz)
 	topups := command.NewTopupService(command.TopupServiceParams{
 		UoW:    uow,
 		Topups: topupStore,
-		Clock:  tfrClock{},
-		IDs:    &tfrIDs{next: tfrTestIDs(40)},
+		Clock:  newMockClock(t, tfrAt),
+		IDs:    newMockIDGenerator(t, tfrTestIDs(40)...),
 		Authz:  authz,
 	})
 

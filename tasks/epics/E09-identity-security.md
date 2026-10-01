@@ -1,6 +1,6 @@
 # Epic E09: Identity + Security Adapters
 
-**Status:** pending
+**Status:** completed
 **Story Points:** 22
 **Phase:** 5.2 (parallel with E08, E10)
 **Dependencies:** E06 (ports), E07.1 (distributed persistence)
@@ -13,7 +13,7 @@
 ## Tasks
 
 ### E09-T01: JWT (RS256) issuance + validation + rotation
-**Status:** pending
+**Status:** completed
 **Background:** 15m access / 7d rotating refresh, JWKS, tenant/user/role claims.
 **Files:**
 - Create: `internal/infrastructure/auth/jwt/{issuer.go,validator.go,jwks.go,keys.go}`
@@ -35,7 +35,7 @@
 ---
 
 ### E09-T02: OAuth2/OIDC providers (Google, GitHub, generic)
-**Status:** pending
+**Status:** completed
 **Background:** Federated login with PKCE per SPEC §7.4.
 **Files:**
 - Create: `internal/infrastructure/auth/oauth2/{providers.go,flow.go,state.go}`
@@ -55,7 +55,7 @@
 ---
 
 ### E09-T03: Casbin RBAC/ABAC enforcement
-**Status:** pending
+**Status:** completed
 **Background:** Tenant/role/resource/action decisions (features §10, journeys §5).
 **Files:**
 - Create: `internal/infrastructure/auth/rbac/{enforcer.go,model.conf,policies.csv,loader.go}`
@@ -76,7 +76,7 @@
 ---
 
 ### E09-T04: API keys (scoped, rotatable, rate-limited)
-**Status:** pending
+**Status:** completed
 **Background:** Server-to-server auth per features §10.
 **Files:**
 - Create: `internal/infrastructure/auth/apikey/{manager.go,hasher.go}`
@@ -98,7 +98,7 @@
 ---
 
 ### E09-T05: OpenBao secrets provider (dynamic DB credentials + KV)
-**Status:** pending
+**Status:** completed
 **Background:** Runtime secret injection and dynamic credential leasing via OpenBao v2.6.2
 per SPEC §7.7 and `docs/architecture/ADR-016-secrets-management-openbao.md`.
 **Files:**
@@ -119,7 +119,7 @@ per SPEC §7.7 and `docs/architecture/ADR-016-secrets-management-openbao.md`.
 ---
 
 ### E09-T06: OpenBao Transit envelope encryption + PII field handling
-**Status:** pending
+**Status:** completed
 **Background:** AES-256-GCM field encryption and PAN tokenization via OpenBao Transit
 Secrets Engine per SPEC §14 and `docs/architecture/ADR-016-secrets-management-openbao.md`.
 **Files:**
@@ -142,7 +142,7 @@ Secrets Engine per SPEC §14 and `docs/architecture/ADR-016-secrets-management-o
 ---
 
 ### E09-T07: Audit logger (append-only, hash-chained, signed)
-**Status:** pending
+**Status:** completed
 **Background:** Tamper-evident trail feeding E04 break/approval evidence and §14.
 **Files:**
 - Create: `internal/infrastructure/audit/{logger.go,chain.go,exporter.go}`
@@ -162,7 +162,11 @@ Secrets Engine per SPEC §14 and `docs/architecture/ADR-016-secrets-management-o
 
 ## Acceptance Criteria
 
-- [ ] E09-T01 … E09-T07 all `completed` (count 22 SP in `tasks/tracking/PROGRESS.md`)
+- [x] E09-T01 … E09-T07 all `completed` (count 22 SP in `tasks/tracking/PROGRESS.md`)
 - [ ] Auth matrix (journeys §5 touchpoints) green
-- [ ] No secret in code/images (grep CI check); PII round-trip + shred proven
-- [ ] SDD gate G4 checks pass — `tasks/tracking/GATES.md#G4`
+- [x] No secret in code/images (grep CI check); PII round-trip proven
+- [ ] Crypto-shred proven on the production adapter (deferred 2026-10-01, CR-004:
+  `TransitKEK.DestroyKey` is a stub pending an OpenBao engine-capability check;
+  shred semantics proven on test doubles only — see packet. Live OpenBao itself
+  (provisioning, live integration, capability check) is future E17 delivery scope.)
+- [ ] SDD gate G4 checks pass — `tasks/tracking/GATES.md#G4` (pending E10 slice + durable bindings)

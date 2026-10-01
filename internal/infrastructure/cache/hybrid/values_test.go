@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kadekutama/go-template/internal/infrastructure/cache/hybrid"
-	"github.com/kadekutama/go-template/test/fakes"
 )
 
 // valuesBalance is a structured value for the kind-check table.
@@ -84,7 +83,11 @@ func TestHybridCacheValueKinds(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			engine, err := hybrid.New(hybrid.Params{L1: fakes.NewCacheStore()})
+			engine, err := hybrid.New(hybrid.Params{
+				L1:            newMockCacheStore(t),
+				L1PopulateTTL: time.Minute,
+				Codec:         hybrid.JSONCodec{},
+			})
 			require.NoError(t, err)
 
 			view := hybrid.Typed[any](engine)
@@ -147,7 +150,11 @@ func TestTypedCacheDelete(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			engine, err := hybrid.New(hybrid.Params{L1: fakes.NewCacheStore()})
+			engine, err := hybrid.New(hybrid.Params{
+				L1:            newMockCacheStore(t),
+				L1PopulateTTL: time.Minute,
+				Codec:         hybrid.JSONCodec{},
+			})
 			require.NoError(t, err)
 
 			view := tc.view(engine)
@@ -180,7 +187,11 @@ func TestTypedCacheCodecFailures(t *testing.T) {
 	t.Parallel()
 
 	t.Run("encode failure surfaces with key context", func(t *testing.T) {
-		engine, err := hybrid.New(hybrid.Params{L1: fakes.NewCacheStore()})
+		engine, err := hybrid.New(hybrid.Params{
+			L1:            newMockCacheStore(t),
+			L1PopulateTTL: time.Minute,
+			Codec:         hybrid.JSONCodec{},
+		})
 		require.NoError(t, err)
 
 		view := hybrid.Typed[unencodable](engine)
@@ -191,8 +202,12 @@ func TestTypedCacheCodecFailures(t *testing.T) {
 	})
 
 	t.Run("decode failure surfaces with key context", func(t *testing.T) {
-		l1 := fakes.NewCacheStore()
-		engine, err := hybrid.New(hybrid.Params{L1: l1})
+		l1 := newMockCacheStore(t)
+		engine, err := hybrid.New(hybrid.Params{
+			L1:            l1,
+			L1PopulateTTL: time.Minute,
+			Codec:         hybrid.JSONCodec{},
+		})
 		require.NoError(t, err)
 
 		// Seed the shared bytes layer with garbage no codec can decode.

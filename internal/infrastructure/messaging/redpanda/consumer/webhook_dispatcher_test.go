@@ -3,38 +3,22 @@ package consumer_test
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	appport "github.com/kadekutama/go-template/internal/application/port"
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
 	"github.com/kadekutama/go-template/internal/infrastructure/messaging/redpanda/consumer"
 	"github.com/kadekutama/go-template/internal/infrastructure/webhook"
-	fakes "github.com/kadekutama/go-template/test/fakes"
+	"github.com/kadekutama/go-template/test/doubles"
+	mockconsumer "github.com/kadekutama/go-template/test/mock/consumer"
+	mockwebhook "github.com/kadekutama/go-template/test/mock/webhook"
 )
-
-type stubLookup struct {
-	endpoints []webhook.Endpoint
-}
-
-func (s *stubLookup) Find(_ context.Context, _, _ string) []webhook.Endpoint {
-	return s.endpoints
-}
-
-type stubSender struct {
-	fail    error
-	calls   int
-	headers []map[string]string
-}
-
-func (s *stubSender) Send(_ context.Context, _ string, headers map[string]string, _ []byte) error {
-	s.calls++
-	s.headers = append(s.headers, headers)
-	return s.fail
-}
 
 func TestNewDispatcher(t *testing.T) {
 	t.Parallel()
@@ -52,11 +36,12 @@ func TestNewDispatcher(t *testing.T) {
 		{
 			name: "valid params",
 			params: consumer.DispatcherParams{
-				Endpoints:   &stubLookup{},
-				Sender:      &stubSender{},
-				Receipts:    fakes.NewReceiptStore(),
-				DLQ:         fakes.NewWebhookDLQ(),
+				Endpoints:   mockconsumer.NewMockEndpointLookup(t),
+				Sender:      mockconsumer.NewMockHTTPSender(t),
+				Receipts:    mockconsumer.NewMockReceiptStore(t),
+				DLQ:         mockwebhook.NewMockDLQSink(t),
 				RetryPolicy: policy,
+				Tolerance:   5 * time.Minute,
 			},
 			expectedResult: true,
 			expectedError:  nil,
@@ -65,10 +50,11 @@ func TestNewDispatcher(t *testing.T) {
 			name: "nil endpoints rejected",
 			params: consumer.DispatcherParams{
 				Endpoints:   nil,
-				Sender:      &stubSender{},
-				Receipts:    fakes.NewReceiptStore(),
-				DLQ:         fakes.NewWebhookDLQ(),
+				Sender:      mockconsumer.NewMockHTTPSender(t),
+				Receipts:    mockconsumer.NewMockReceiptStore(t),
+				DLQ:         mockwebhook.NewMockDLQSink(t),
 				RetryPolicy: policy,
+				Tolerance:   5 * time.Minute,
 			},
 			expectedResult: false,
 			expectedError:  errors.New("dispatcher: endpoint lookup is required"),
@@ -76,11 +62,12 @@ func TestNewDispatcher(t *testing.T) {
 		{
 			name: "nil sender rejected",
 			params: consumer.DispatcherParams{
-				Endpoints:   &stubLookup{},
+				Endpoints:   mockconsumer.NewMockEndpointLookup(t),
 				Sender:      nil,
-				Receipts:    fakes.NewReceiptStore(),
-				DLQ:         fakes.NewWebhookDLQ(),
+				Receipts:    mockconsumer.NewMockReceiptStore(t),
+				DLQ:         mockwebhook.NewMockDLQSink(t),
 				RetryPolicy: policy,
+				Tolerance:   5 * time.Minute,
 			},
 			expectedResult: false,
 			expectedError:  errors.New("dispatcher: sender is required"),
@@ -88,11 +75,12 @@ func TestNewDispatcher(t *testing.T) {
 		{
 			name: "nil receipts rejected",
 			params: consumer.DispatcherParams{
-				Endpoints:   &stubLookup{},
-				Sender:      &stubSender{},
+				Endpoints:   mockconsumer.NewMockEndpointLookup(t),
+				Sender:      mockconsumer.NewMockHTTPSender(t),
 				Receipts:    nil,
-				DLQ:         fakes.NewWebhookDLQ(),
+				DLQ:         mockwebhook.NewMockDLQSink(t),
 				RetryPolicy: policy,
+				Tolerance:   5 * time.Minute,
 			},
 			expectedResult: false,
 			expectedError:  errors.New("dispatcher: receipt store is required"),
@@ -100,11 +88,12 @@ func TestNewDispatcher(t *testing.T) {
 		{
 			name: "nil dlq rejected",
 			params: consumer.DispatcherParams{
-				Endpoints:   &stubLookup{},
-				Sender:      &stubSender{},
-				Receipts:    fakes.NewReceiptStore(),
+				Endpoints:   mockconsumer.NewMockEndpointLookup(t),
+				Sender:      mockconsumer.NewMockHTTPSender(t),
+				Receipts:    mockconsumer.NewMockReceiptStore(t),
 				DLQ:         nil,
 				RetryPolicy: policy,
+				Tolerance:   5 * time.Minute,
 			},
 			expectedResult: false,
 			expectedError:  errors.New("dispatcher: dlq sink is required"),
@@ -112,14 +101,28 @@ func TestNewDispatcher(t *testing.T) {
 		{
 			name: "nil retry policy rejected",
 			params: consumer.DispatcherParams{
-				Endpoints:   &stubLookup{},
-				Sender:      &stubSender{},
-				Receipts:    fakes.NewReceiptStore(),
-				DLQ:         fakes.NewWebhookDLQ(),
+				Endpoints:   mockconsumer.NewMockEndpointLookup(t),
+				Sender:      mockconsumer.NewMockHTTPSender(t),
+				Receipts:    mockconsumer.NewMockReceiptStore(t),
+				DLQ:         mockwebhook.NewMockDLQSink(t),
 				RetryPolicy: nil,
+				Tolerance:   5 * time.Minute,
 			},
 			expectedResult: false,
 			expectedError:  errors.New("dispatcher: retry policy is required"),
+		},
+		{
+			name: "non-positive tolerance rejected",
+			params: consumer.DispatcherParams{
+				Endpoints:   mockconsumer.NewMockEndpointLookup(t),
+				Sender:      mockconsumer.NewMockHTTPSender(t),
+				Receipts:    mockconsumer.NewMockReceiptStore(t),
+				DLQ:         mockwebhook.NewMockDLQSink(t),
+				RetryPolicy: policy,
+				Tolerance:   0,
+			},
+			expectedResult: false,
+			expectedError:  errors.New("dispatcher: tolerance must be positive"),
 		},
 	}
 
@@ -149,6 +152,20 @@ func TestDispatcherDispatchValidation(t *testing.T) {
 		expectedError error
 	}
 
+	newValidDispatcher := func() *consumer.Dispatcher {
+		pol, _ := webhook.NewRetryPolicy([]time.Duration{time.Minute})
+		d, err := consumer.NewDispatcher(consumer.DispatcherParams{
+			Endpoints:   mockconsumer.NewMockEndpointLookup(t),
+			Sender:      mockconsumer.NewMockHTTPSender(t),
+			Receipts:    mockconsumer.NewMockReceiptStore(t),
+			DLQ:         mockwebhook.NewMockDLQSink(t),
+			RetryPolicy: pol,
+			Tolerance:   5 * time.Minute,
+		})
+		require.NoError(t, err)
+		return d
+	}
+
 	testCases := []testCase{
 		{
 			name: "nil dispatcher rejected",
@@ -167,19 +184,9 @@ func TestDispatcherDispatchValidation(t *testing.T) {
 			expectedError: errors.New("dispatcher: not initialized"),
 		},
 		{
-			name: "blank tenant rejected",
-			dispatcher: func() *consumer.Dispatcher {
-				pol, _ := webhook.NewRetryPolicy([]time.Duration{time.Minute})
-				d, _ := consumer.NewDispatcher(consumer.DispatcherParams{
-					Endpoints:   &stubLookup{},
-					Sender:      &stubSender{},
-					Receipts:    fakes.NewReceiptStore(),
-					DLQ:         fakes.NewWebhookDLQ(),
-					RetryPolicy: pol,
-				})
-				return d
-			},
-			ctx: context.Background(),
+			name:       "blank tenant rejected",
+			dispatcher: newValidDispatcher,
+			ctx:        context.Background(),
 			message: appport.WebhookMessage{
 				TenantID:  valueobject.TenantID(""),
 				EventType: "transfer.completed.v1",
@@ -188,19 +195,9 @@ func TestDispatcherDispatchValidation(t *testing.T) {
 			expectedError: errors.New("dispatcher: tenant is required"),
 		},
 		{
-			name: "blank event rejected",
-			dispatcher: func() *consumer.Dispatcher {
-				pol, _ := webhook.NewRetryPolicy([]time.Duration{time.Minute})
-				d, _ := consumer.NewDispatcher(consumer.DispatcherParams{
-					Endpoints:   &stubLookup{},
-					Sender:      &stubSender{},
-					Receipts:    fakes.NewReceiptStore(),
-					DLQ:         fakes.NewWebhookDLQ(),
-					RetryPolicy: pol,
-				})
-				return d
-			},
-			ctx: context.Background(),
+			name:       "blank event rejected",
+			dispatcher: newValidDispatcher,
+			ctx:        context.Background(),
 			message: appport.WebhookMessage{
 				TenantID: func() valueobject.TenantID {
 					t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000050")
@@ -212,19 +209,9 @@ func TestDispatcherDispatchValidation(t *testing.T) {
 			expectedError: errors.New("dispatcher: event type is required"),
 		},
 		{
-			name: "whitespace event rejected",
-			dispatcher: func() *consumer.Dispatcher {
-				pol, _ := webhook.NewRetryPolicy([]time.Duration{time.Minute})
-				d, _ := consumer.NewDispatcher(consumer.DispatcherParams{
-					Endpoints:   &stubLookup{},
-					Sender:      &stubSender{},
-					Receipts:    fakes.NewReceiptStore(),
-					DLQ:         fakes.NewWebhookDLQ(),
-					RetryPolicy: pol,
-				})
-				return d
-			},
-			ctx: context.Background(),
+			name:       "whitespace event rejected",
+			dispatcher: newValidDispatcher,
+			ctx:        context.Background(),
 			message: appport.WebhookMessage{
 				TenantID: func() valueobject.TenantID {
 					t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000050")
@@ -236,19 +223,9 @@ func TestDispatcherDispatchValidation(t *testing.T) {
 			expectedError: errors.New("dispatcher: event type is required"),
 		},
 		{
-			name: "nil payload rejected",
-			dispatcher: func() *consumer.Dispatcher {
-				pol, _ := webhook.NewRetryPolicy([]time.Duration{time.Minute})
-				d, _ := consumer.NewDispatcher(consumer.DispatcherParams{
-					Endpoints:   &stubLookup{},
-					Sender:      &stubSender{},
-					Receipts:    fakes.NewReceiptStore(),
-					DLQ:         fakes.NewWebhookDLQ(),
-					RetryPolicy: pol,
-				})
-				return d
-			},
-			ctx: context.Background(),
+			name:       "nil payload rejected",
+			dispatcher: newValidDispatcher,
+			ctx:        context.Background(),
 			message: appport.WebhookMessage{
 				TenantID: func() valueobject.TenantID {
 					t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000050")
@@ -260,18 +237,8 @@ func TestDispatcherDispatchValidation(t *testing.T) {
 			expectedError: errors.New("dispatcher: payload is required"),
 		},
 		{
-			name: "canceled context rejected",
-			dispatcher: func() *consumer.Dispatcher {
-				pol, _ := webhook.NewRetryPolicy([]time.Duration{time.Minute})
-				d, _ := consumer.NewDispatcher(consumer.DispatcherParams{
-					Endpoints:   &stubLookup{},
-					Sender:      &stubSender{},
-					Receipts:    fakes.NewReceiptStore(),
-					DLQ:         fakes.NewWebhookDLQ(),
-					RetryPolicy: pol,
-				})
-				return d
-			},
+			name:       "canceled context rejected",
+			dispatcher: newValidDispatcher,
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
@@ -411,14 +378,46 @@ func TestDispatcherDispatchScenarios(t *testing.T) {
 			})
 			require.NoError(t, err)
 
-			sender := &stubSender{fail: tc.senderFail}
-			dlq := fakes.NewWebhookDLQ()
+			lookup := mockconsumer.NewMockEndpointLookup(t)
+			lookup.EXPECT().Find(mock.Anything, mock.Anything, mock.Anything).Return(tc.endpoints).Maybe()
+
+			sender := mockconsumer.NewMockHTTPSender(t)
+			var calls atomic.Int32
+			headerCh := make(chan map[string]string, 100)
+			sender.EXPECT().Send(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				RunAndReturn(func(_ context.Context, _ string, headers map[string]string, _ []byte) error {
+					calls.Add(1)
+					headerCh <- headers
+					return tc.senderFail
+				}).Maybe()
+
+			receipts := mockconsumer.NewMockReceiptStore(t)
+			seen := &doubles.DedupSet{}
+			receipts.EXPECT().Claim(mock.Anything, mock.Anything, mock.Anything).
+				RunAndReturn(func(_ context.Context, consumerID, eventID string) (bool, error) {
+					return seen.Claim(consumerID, eventID), nil
+				}).Maybe()
+			receipts.EXPECT().Release(mock.Anything, mock.Anything, mock.Anything).
+				RunAndReturn(func(_ context.Context, consumerID, eventID string) error {
+					seen.Release(consumerID, eventID)
+					return nil
+				}).Maybe()
+
+			dlq := mockwebhook.NewMockDLQSink(t)
+			recordedDLQ := &doubles.MessageLog[webhook.DLQMessage]{}
+			dlq.EXPECT().Record(mock.Anything, mock.Anything).
+				RunAndReturn(func(_ context.Context, msg webhook.DLQMessage) error {
+					recordedDLQ.Add(msg)
+					return nil
+				}).Maybe()
+
 			dispatcher, err := consumer.NewDispatcher(consumer.DispatcherParams{
-				Endpoints:   &stubLookup{endpoints: tc.endpoints},
+				Endpoints:   lookup,
 				Sender:      sender,
-				Receipts:    fakes.NewReceiptStore(),
+				Receipts:    receipts,
 				DLQ:         dlq,
 				RetryPolicy: policy,
+				Tolerance:   5 * time.Minute,
 			})
 			require.NoError(t, err)
 
@@ -440,11 +439,18 @@ func TestDispatcherDispatchScenarios(t *testing.T) {
 				assert.NoError(t, lastErr)
 			}
 
-			assert.Equal(t, tc.expectedCalls, sender.calls)
-			assert.Equal(t, tc.expectedDLQ, dlq.Len())
+			dlqLen := len(recordedDLQ.All())
 
+			assert.Equal(t, tc.expectedCalls, int(calls.Load()))
+			assert.Equal(t, tc.expectedDLQ, dlqLen)
+
+			close(headerCh)
+			var recordedHeaders []map[string]string
+			for h := range headerCh {
+				recordedHeaders = append(recordedHeaders, h)
+			}
 			if tc.verifyHeaders != nil {
-				tc.verifyHeaders(t, sender.headers)
+				tc.verifyHeaders(t, recordedHeaders)
 			}
 		})
 	}
@@ -484,16 +490,39 @@ func TestDispatcherRetryScheduleAndDLQ(t *testing.T) {
 			policy, err := webhook.NewRetryPolicy(tc.retrySteps)
 			require.NoError(t, err)
 
-			lookup := &stubLookup{endpoints: []webhook.Endpoint{endpoint}}
-			sender := &stubSender{fail: errors.New("down")}
-			dlq := fakes.NewWebhookDLQ()
+			lookup := mockconsumer.NewMockEndpointLookup(t)
+			lookup.EXPECT().Find(mock.Anything, mock.Anything, mock.Anything).Return([]webhook.Endpoint{endpoint}).Maybe()
+
+			sender := mockconsumer.NewMockHTTPSender(t)
+			sender.EXPECT().Send(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(errors.New("down")).Maybe()
+
+			receipts := mockconsumer.NewMockReceiptStore(t)
+			seen := &doubles.DedupSet{}
+			receipts.EXPECT().Claim(mock.Anything, mock.Anything, mock.Anything).
+				RunAndReturn(func(_ context.Context, consumerID, eventID string) (bool, error) {
+					return seen.Claim(consumerID, eventID), nil
+				}).Maybe()
+			receipts.EXPECT().Release(mock.Anything, mock.Anything, mock.Anything).
+				RunAndReturn(func(_ context.Context, consumerID, eventID string) error {
+					seen.Release(consumerID, eventID)
+					return nil
+				}).Maybe()
+
+			dlq := mockwebhook.NewMockDLQSink(t)
+			recordedDLQ := &doubles.MessageLog[webhook.DLQMessage]{}
+			dlq.EXPECT().Record(mock.Anything, mock.Anything).
+				RunAndReturn(func(_ context.Context, msg webhook.DLQMessage) error {
+					recordedDLQ.Add(msg)
+					return nil
+				}).Maybe()
 
 			dispatcher, err := consumer.NewDispatcher(consumer.DispatcherParams{
 				Endpoints:   lookup,
 				Sender:      sender,
-				Receipts:    fakes.NewReceiptStore(),
+				Receipts:    receipts,
 				DLQ:         dlq,
 				RetryPolicy: policy,
+				Tolerance:   5 * time.Minute,
 			})
 			require.NoError(t, err)
 
@@ -514,8 +543,9 @@ func TestDispatcherRetryScheduleAndDLQ(t *testing.T) {
 			}
 
 			require.NoError(t, dispatcher.Dispatch(context.Background(), msg))
-			require.Equal(t, 1, dlq.Len())
-			assert.Equal(t, tc.expectedAttempts, dlq.List()[0].Attempts)
+			dlqMsgs := recordedDLQ.All()
+			require.Equal(t, 1, len(dlqMsgs))
+			assert.Equal(t, tc.expectedAttempts, dlqMsgs[0].Attempts)
 		})
 	}
 }

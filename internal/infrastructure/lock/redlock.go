@@ -41,9 +41,6 @@ var (
 	ErrTTLPositive        = errors.New("lock: ttl must be positive")
 )
 
-// DefaultTTL bounds one lease when callers pass ttl <= 0.
-const DefaultTTL = 30 * time.Second
-
 // maxKeySegment bounds lease key segments against abuse.
 const maxKeySegment = 128
 
@@ -96,9 +93,8 @@ func (r *Redlock) Acquire(ctx context.Context, tenant valueobject.TenantID, key 
 		return nil, err
 	}
 
-	effective := ttl
-	if effective <= 0 {
-		effective = DefaultTTL
+	if ttl <= 0 {
+		return nil, ErrTTLPositive
 	}
 
 	if err := ctx.Err(); err != nil {
@@ -110,7 +106,7 @@ func (r *Redlock) Acquire(ctx context.Context, tenant valueobject.TenantID, key 
 		return nil, err
 	}
 
-	won, err := r.client.SetNX(ctx, leaseKey, []byte(token), effective)
+	won, err := r.client.SetNX(ctx, leaseKey, []byte(token), ttl)
 	if err != nil {
 		return nil, err
 	}

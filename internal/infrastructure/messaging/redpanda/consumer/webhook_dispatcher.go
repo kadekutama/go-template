@@ -41,6 +41,7 @@ type DispatcherParams struct {
 	DLQ         webhook.DLQSink
 	Logger      log.Logger
 	RetryPolicy *webhook.RetryPolicy
+	Tolerance   time.Duration
 }
 
 // Dispatcher implements port.WebhookDispatcher with per-event idempotency,
@@ -61,11 +62,9 @@ type Dispatcher struct {
 	dlq       webhook.DLQSink
 	logger    log.Logger
 	retry     *webhook.RetryPolicy
+	tolerance time.Duration
 	breakers  *breakerSet
-	// attempts is write+read per dispatch (next attempt, then record), so a
-	// plain Mutex beats RWMutex; no read-dominant path exists on this map.
-	mu       sync.Mutex
-	attempts map[string]int
+	attempts  sync.Map // string -> int
 }
 
 // Compile-time port conformance.
@@ -93,6 +92,10 @@ func NewDispatcher(params DispatcherParams) (*Dispatcher, error) {
 		return nil, fmt.Errorf("dispatcher: retry policy is required")
 	}
 
+	if params.Tolerance <= 0 {
+		return nil, fmt.Errorf("dispatcher: tolerance must be positive")
+	}
+
 	return &Dispatcher{
 		endpoints: params.Endpoints,
 		sender:    params.Sender,
@@ -100,8 +103,8 @@ func NewDispatcher(params DispatcherParams) (*Dispatcher, error) {
 		dlq:       params.DLQ,
 		logger:    params.Logger,
 		retry:     params.RetryPolicy,
+		tolerance: params.Tolerance,
 		breakers:  newBreakerSet(),
-		attempts:  make(map[string]int),
 	}, nil
 }
 
@@ -224,9 +227,7 @@ func (d *Dispatcher) deliverOne(ctx context.Context, endpoint webhook.Endpoint, 
 // decision (errors.As still finds RetryableError) and needs operator
 // reconciliation, because the next delivery would otherwise ack as duplicate.
 func (d *Dispatcher) recordFailure(ctx context.Context, job delivery, sendErr error) error {
-	d.mu.Lock()
-	d.attempts[job.base] = job.attempt
-	d.mu.Unlock()
+	d.attempts.Store(job.base, job.attempt)
 
 	outcome := d.failureOutcome(ctx, job, sendErr)
 
@@ -269,21 +270,21 @@ func (d *Dispatcher) failureOutcome(ctx context.Context, job delivery, sendErr e
 }
 
 func (d *Dispatcher) nextAttempt(base string) int {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	if val, ok := d.attempts.Load(base); ok {
+		if attempt, ok := val.(int); ok {
+			return attempt + 1
+		}
+	}
 
-	return d.attempts[base] + 1
+	return 1
 }
 
 func (d *Dispatcher) clearAttempt(base string) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	delete(d.attempts, base)
+	d.attempts.Delete(base)
 }
 
 func (d *Dispatcher) sendOne(ctx context.Context, endpoint webhook.Endpoint, eventID string, payload []byte) error {
-	signer, err := webhook.NewSigner(webhook.SignerParams{Secrets: []string{endpoint.Secret}})
+	signer, err := webhook.NewSigner(webhook.SignerParams{Secrets: []string{endpoint.Secret}, Tolerance: d.tolerance})
 	if err != nil {
 		return err
 	}
@@ -309,15 +310,12 @@ func (d *Dispatcher) sendOne(ctx context.Context, endpoint webhook.Endpoint, eve
 // breakerSet opens poison endpoints after DLQ routing (see recordFailure)
 // so one dead receiver never blocks the group. Success clears the flag.
 // Operator reset for a recovered endpoint is E11 webhook-mgmt follow-up.
-// RWMutex: open() is the hot read path (every endpoint of every dispatch);
-// forceOpen/succeed are rare writes (DLQ routing, success).
 type breakerSet struct {
-	mu     sync.RWMutex
-	opened map[string]bool
+	opened sync.Map // string -> bool
 }
 
 func newBreakerSet() *breakerSet {
-	return &breakerSet{opened: make(map[string]bool)}
+	return &breakerSet{}
 }
 
 func (b *breakerSet) open(id string) bool {
@@ -325,10 +323,14 @@ func (b *breakerSet) open(id string) bool {
 		return false
 	}
 
-	b.mu.RLock()
-	defer b.mu.RUnlock()
+	val, ok := b.opened.Load(id)
+	if !ok {
+		return false
+	}
 
-	return b.opened[id]
+	opened, ok := val.(bool)
+
+	return ok && opened
 }
 
 // forceOpen parks an endpoint after DLQ routing until operator reset.
@@ -337,10 +339,7 @@ func (b *breakerSet) forceOpen(id string) {
 		return
 	}
 
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	b.opened[id] = true
+	b.opened.Store(id, true)
 }
 
 func (b *breakerSet) succeed(id string) {
@@ -348,10 +347,7 @@ func (b *breakerSet) succeed(id string) {
 		return
 	}
 
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	b.opened[id] = false
+	b.opened.Delete(id)
 }
 
 // eventIdentity is the stable delivery identity: SHA-256 over the exact

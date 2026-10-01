@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -15,20 +15,8 @@ import (
 	"github.com/kadekutama/go-template/internal/domain/aggregate"
 	"github.com/kadekutama/go-template/internal/domain/entity"
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
+	mockapplication "github.com/kadekutama/go-template/test/mock/application"
 )
-
-// stubIDs is a deterministic valueobject.IDGenerator for reversal entry IDs.
-type stubIDs struct {
-	mu sync.Mutex
-	n  int
-}
-
-func (s *stubIDs) NewID() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.n++
-	return fmt.Sprintf("11111111-1111-4111-8111-%012x", s.n)
-}
 
 func postingAccounts() map[valueobject.AccountID]entity.AccountData {
 	mk := func(id valueobject.AccountID, number string, class valueobject.AccountClass, status valueobject.AccountStatus) entity.AccountData {
@@ -263,13 +251,20 @@ func TestReversePosting(t *testing.T) {
 	assert.NoError(t, err)
 
 	at := time.Date(2026, 9, 14, 8, 0, 0, 0, time.UTC)
+	idGen := mockapplication.NewMockIDGenerator(t)
+	var idCounter atomic.Int64
+	idGen.EXPECT().NewID().RunAndReturn(func() string {
+		val := idCounter.Add(1)
+		return fmt.Sprintf("11111111-1111-4111-8111-%012x", val)
+	}).Maybe()
+
 	baseReverseParams := aggregate.ReverseParams{
 		NewID:   testPosting2,
 		Reason:  "entry error",
 		Actor:   testUser1,
 		EventID: testEvent2,
 		At:      at,
-		IDGen:   &stubIDs{},
+		IDGen:   idGen,
 	}
 
 	type testCase struct {

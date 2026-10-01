@@ -28,6 +28,7 @@ func TestTenancySliceOnboarding(t *testing.T) {
 		Region:         "us-east-1",
 		Settings:       entity.TenantSettings{DefaultCurrency: "USD", Timezone: "UTC"},
 		Assets:         []valueobject.AssetCode{"USD"},
+		MaxAssets:      8,
 		ExistingNames:  nil,
 		AllowedRegions: []string{"us-east-1"},
 		RequestedBy:    "u-1",
@@ -120,6 +121,16 @@ func TestTenancySliceOnboarding(t *testing.T) {
 			}(),
 			expectedResult: service.OnboardingPlan{},
 			expectedError:  entity.NewError("TENANT_NAME_REQUIRED", "tenant name is required"),
+		},
+		{
+			name: "zero max assets rejected",
+			req: func() service.OnboardingRequest {
+				r := baseReq
+				r.MaxAssets = 0
+				return r
+			}(),
+			expectedResult: service.OnboardingPlan{},
+			expectedError:  entity.NewError("ONBOARDING_ASSETS_INVALID", "max assets must be positive"),
 		},
 	}
 

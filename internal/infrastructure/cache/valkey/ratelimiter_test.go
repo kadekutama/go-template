@@ -7,10 +7,12 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	appport "github.com/kadekutama/go-template/internal/application/port"
 	"github.com/kadekutama/go-template/internal/infrastructure/cache/valkey"
+	mockvalkey "github.com/kadekutama/go-template/test/mock/valkey"
 )
 
 func TestNewRateLimiter(t *testing.T) {
@@ -27,7 +29,7 @@ func TestNewRateLimiter(t *testing.T) {
 		{
 			name: "client required",
 			params: func() valkey.LimiterParams {
-				client, err := valkey.NewValkeyClient(valkey.ValkeyParams{Addr: "127.0.0.1:6379"})
+				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
@@ -61,20 +63,6 @@ func TestNewRateLimiter(t *testing.T) {
 	}
 }
 
-// fakeRunner returns canned Lua results for Allow-decision tests.
-type fakeRunner struct {
-	result []any
-	err    error
-}
-
-func (f *fakeRunner) Eval(_ context.Context, _ string, _ []string, _ ...any) (any, error) {
-	if f.err != nil {
-		return nil, f.err
-	}
-
-	return f.result, nil
-}
-
 func TestRateLimiterAllowDecisions(t *testing.T) {
 	t.Parallel()
 
@@ -84,7 +72,7 @@ func TestRateLimiterAllowDecisions(t *testing.T) {
 		key            string
 		budget         int64
 		window         time.Duration
-		runner         *fakeRunner
+		runner         func(t *testing.T) valkey.ScriptRunner
 		expectedResult appport.RateLimitDecision
 		expectedError  error
 		expectAllowed  int
@@ -98,8 +86,10 @@ func TestRateLimiterAllowDecisions(t *testing.T) {
 			key:    "ratelimit:t1:u1",
 			budget: 10,
 			window: time.Minute,
-			runner: &fakeRunner{
-				result: []any{int64(1), int64(9), int64(60000)},
+			runner: func(t *testing.T) valkey.ScriptRunner {
+				m := mockvalkey.NewMockScriptRunner(t)
+				m.EXPECT().Eval(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]any{int64(1), int64(9), int64(60000)}, nil).Once()
+				return m
 			},
 			expectedResult: appport.RateLimitDecision{
 				Allowed:    true,
@@ -116,8 +106,10 @@ func TestRateLimiterAllowDecisions(t *testing.T) {
 			key:    "ratelimit:t1:u2",
 			budget: 10,
 			window: time.Minute,
-			runner: &fakeRunner{
-				result: []any{int64(0), int64(0), int64(15000)},
+			runner: func(t *testing.T) valkey.ScriptRunner {
+				m := mockvalkey.NewMockScriptRunner(t)
+				m.EXPECT().Eval(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]any{int64(0), int64(0), int64(15000)}, nil).Once()
+				return m
 			},
 			expectedResult: appport.RateLimitDecision{
 				Allowed:    false,
@@ -134,8 +126,10 @@ func TestRateLimiterAllowDecisions(t *testing.T) {
 			key:    "ratelimit:t1:u3",
 			budget: 10,
 			window: time.Minute,
-			runner: &fakeRunner{
-				err: errors.New("valkey down"),
+			runner: func(t *testing.T) valkey.ScriptRunner {
+				m := mockvalkey.NewMockScriptRunner(t)
+				m.EXPECT().Eval(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil, errors.New("valkey down")).Once()
+				return m
 			},
 			expectedResult: appport.RateLimitDecision{},
 			expectedError:  errors.New("valkey down"),
@@ -148,8 +142,10 @@ func TestRateLimiterAllowDecisions(t *testing.T) {
 			key:    "ratelimit:t1:u4",
 			budget: 10,
 			window: time.Minute,
-			runner: &fakeRunner{
-				result: []any{int64(1)},
+			runner: func(t *testing.T) valkey.ScriptRunner {
+				m := mockvalkey.NewMockScriptRunner(t)
+				m.EXPECT().Eval(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]any{int64(1)}, nil).Once()
+				return m
 			},
 			expectedResult: appport.RateLimitDecision{},
 			expectedError:  errors.New("ratelimit: unexpected script result []interface {}"),
@@ -162,7 +158,7 @@ func TestRateLimiterAllowDecisions(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			allowed, denied := 0, 0
 			limiter, err := valkey.NewRateLimiter(valkey.LimiterParams{
-				Client:  tc.runner,
+				Client:  tc.runner(t),
 				OnAllow: func(_ context.Context, _ string) { allowed++ },
 				OnDeny:  func(_ context.Context, _ string) { denied++ },
 			})
@@ -186,7 +182,7 @@ func TestRateLimiterAllowDecisions(t *testing.T) {
 func TestRateLimiterAllowValidation(t *testing.T) {
 	t.Parallel()
 
-	validClient, err := valkey.NewValkeyClient(valkey.ValkeyParams{Addr: "127.0.0.1:6379"})
+	validClient, err := valkey.NewValkeyClient(validTestParams())
 	require.NoError(t, err)
 	validLimiter, err := valkey.NewRateLimiter(valkey.LimiterParams{Client: validClient})
 	require.NoError(t, err)

@@ -2,6 +2,8 @@ package command
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/kadekutama/go-template/internal/application/port"
@@ -33,44 +35,79 @@ type TenantStore interface {
 
 // TenantServiceParams carries dependencies for TenantService.
 type TenantServiceParams struct {
-	UoW           port.UnitOfWork
-	Tenants       TenantStore
-	Clock         port.Clock
-	IDs           port.IDGenerator
-	Authz         port.Authorizer
-	Regions       []string
-	DefaultAssets []valueobject.AssetCode
+	UoW              port.UnitOfWork
+	Tenants          TenantStore
+	Clock            port.Clock
+	IDs              port.IDGenerator
+	Authz            port.Authorizer
+	Regions          []string
+	DefaultAssets    []valueobject.AssetCode
+	MaxAssets        int
+	PlatformTenantID valueobject.TenantID
 }
 
 // TenantService backs tenant provisioning over the onboarding service.
 // Regions and default assets are operator-supplied authority (config); the
 // domain never reads global state.
 type TenantService struct {
-	uow           port.UnitOfWork
-	tenants       TenantStore
-	clock         port.Clock
-	ids           port.IDGenerator
-	authz         port.Authorizer
-	regions       []string
-	defaultAssets []valueobject.AssetCode
+	uow              port.UnitOfWork
+	tenants          TenantStore
+	clock            port.Clock
+	ids              port.IDGenerator
+	authz            port.Authorizer
+	regions          []string
+	defaultAssets    []valueobject.AssetCode
+	maxAssets        int
+	platformTenantID valueobject.TenantID
 }
 
 var _ port.TenantCommandUseCases = (*TenantService)(nil)
 
 // NewTenantService constructs a TenantService with the supplied dependencies.
-func NewTenantService(params TenantServiceParams) *TenantService {
-	return &TenantService{
-		uow:           params.UoW,
-		tenants:       params.Tenants,
-		clock:         params.Clock,
-		ids:           params.IDs,
-		authz:         params.Authz,
-		regions:       params.Regions,
-		defaultAssets: params.DefaultAssets,
+func NewTenantService(params TenantServiceParams) (*TenantService, error) {
+	if params.UoW == nil {
+		return nil, errors.New("tenant: uow is required")
 	}
-}
+	if params.Tenants == nil {
+		return nil, errors.New("tenant: tenant store is required")
+	}
+	if params.Clock == nil {
+		return nil, errors.New("tenant: clock is required")
+	}
+	if params.IDs == nil {
+		return nil, errors.New("tenant: id generator is required")
+	}
+	if params.Authz == nil {
+		return nil, errors.New("tenant: authorizer is required")
+	}
+	if len(params.Regions) == 0 {
+		return nil, errors.New("tenant: regions are required")
+	}
+	if len(params.DefaultAssets) == 0 {
+		return nil, errors.New("tenant: default assets are required")
+	}
+	if params.MaxAssets <= 0 {
+		return nil, errors.New("tenant: max assets must be positive")
+	}
+	if strings.TrimSpace(string(params.PlatformTenantID)) == "" {
+		return nil, errors.New("tenant: platform tenant id is required")
+	}
+	if _, err := valueobject.ParseTenantID(string(params.PlatformTenantID)); err != nil {
+		return nil, fmt.Errorf("tenant: invalid platform tenant id: %w", err)
+	}
 
-const platformTenantID = valueobject.TenantID("00000000-0000-0000-0000-000000000000")
+	return &TenantService{
+		uow:              params.UoW,
+		tenants:          params.Tenants,
+		clock:            params.Clock,
+		ids:              params.IDs,
+		authz:            params.Authz,
+		regions:          params.Regions,
+		defaultAssets:    params.DefaultAssets,
+		maxAssets:        params.MaxAssets,
+		platformTenantID: params.PlatformTenantID,
+	}, nil
+}
 
 // ProvisionTenant creates a tenant with its default chart atomically. Strong write.
 func (s *TenantService) ProvisionTenant(ctx context.Context, req port.ProvisionTenantRequest) (port.TenantResult, error) {
@@ -86,7 +123,7 @@ func (s *TenantService) ProvisionTenant(ctx context.Context, req port.ProvisionT
 	rec := port.IdempotencyRecord{
 		Key:         req.IdempotencyKey,
 		Fingerprint: Fingerprint(req.IdempotencyKey, req.Name, req.Region, string(settingsJSON)),
-		TenantID:    platformTenantID,
+		TenantID:    s.platformTenantID,
 	}
 	return s.runTenantCommand(ctx, port.Subject{ID: req.Actor}, "tenant.provision", "platform/tenants", rec,
 		func(ctx context.Context, tx port.Tx) (entity.TenantData, *port.OutboxFact, error) {
@@ -106,6 +143,7 @@ func (s *TenantService) ProvisionTenant(ctx context.Context, req port.ProvisionT
 				Region:          req.Region,
 				Settings:        req.Settings,
 				Assets:          s.defaultAssets,
+				MaxAssets:       s.maxAssets,
 				ExistingNames:   existing,
 				ExistingAliases: takenAliases,
 				AllowedRegions:  s.regions,

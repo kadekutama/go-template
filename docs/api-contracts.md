@@ -149,6 +149,13 @@ Card declines always return HTTP 402 with `type: card_error`.
 | `PAYOUT_BLOCKED` | 409 | Payout is ineligible under a balance, reserve, first-payout, or destination policy |
 | `ACCOUNT_UNVERIFIED` | 403 | Bank account not microdeposit-verified |
 | `INVALID_DESCRIPTOR` | 400 | Statement descriptor violates network rules |
+| `INVALID_PAGE_LIMIT` | 400 | UI page limit outside 1–100 (explicit limit required; rejected, not clamped) |
+| `INVALID_EXPORT_LIMIT` | 400 | Journal export limit outside 1–500 (explicit limit required; rejected, not clamped) |
+| `INVALID_AUTH_EXPIRY` | 400 | Authorization expiry window is non-positive; configure `AuthExpiryDays > 0` |
+| `INVALID_REFUND_WINDOW` | 400 | Refund window is non-positive; configure `WindowDays > 0` |
+| `ONBOARDING_ASSETS_INVALID` | 400 | Onboarding asset cap is non-positive; configure `MaxAssets > 0` |
+| `ONBOARDING_ASSETS_REQUIRED` | 400 | Onboarding request carries no assets |
+| `ONBOARDING_ASSETS_EXCEEDED` | 400 | Onboarding request exceeds the configured `MaxAssets` cap |
 
 ---
 
@@ -179,8 +186,11 @@ Response:
 GET /v1/accounts?page=2&page_size=20
 ```
 
-**Limits:** `limit`/`page_size` default 20, maximum 100. Requests above the
-maximum are clamped, not rejected (the effective limit echoes in `meta.page`).
+**Limits:** `limit`/`page_size` have no defaults — callers supply an explicit value
+per call. UI-bounded ranges accept 1–100 (`INVALID_PAGE_LIMIT` otherwise);
+journal export ranges accept 1–500 (`INVALID_EXPORT_LIMIT` otherwise).
+Out-of-range requests are **rejected, not clamped** (zero silent defaults per
+ADR-021); the effective limit echoes in `meta.page`.
 Deep pagination past 10,000 rows must use cursor pagination; offset requests
 beyond that return `VALIDATION_FAILED`.
 

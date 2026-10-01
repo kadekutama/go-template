@@ -9,19 +9,22 @@ import (
 	"github.com/kadekutama/go-template/internal/shared/kernel/log"
 )
 
-// ConfigForEndpoints builds a Config from deployment values, applying safe
-// defaults for non-positive timeouts/TTLs and blank prefixes. The owning
-// binary maps its validated application config through this helper instead
-// of hand-rolling endpoint plumbing.
-func ConfigForEndpoints(endpoints []string, dialTimeout time.Duration, electionTTLSeconds int) Config {
+// ConfigForEndpoints builds a Config from deployment values and validates it.
+// The owning binary maps its validated application config through this helper
+// instead of hand-rolling endpoint plumbing.
+func ConfigForEndpoints(endpoints []string, dialTimeout time.Duration, electionTTLSeconds int, leaderKeyPrefix string) (Config, error) {
 	cfg := Config{
 		Endpoints:          endpoints,
 		DialTimeout:        dialTimeout,
 		ElectionTTLSeconds: electionTTLSeconds,
-		LeaderKeyPrefix:    DefaultLeaderKeyPrefix,
+		LeaderKeyPrefix:    leaderKeyPrefix,
 	}
 
-	return cfg.withDefaults()
+	if err := cfg.Validate(); err != nil {
+		return Config{}, err
+	}
+
+	return cfg, nil
 }
 
 // newClientForFX adapts Params-object construction to fx resolution and
@@ -49,12 +52,14 @@ func newWatcherForFX(client *Client, logger log.Logger) (Watcher, error) {
 
 // newElectionForFX adapts Config-bound construction to fx resolution.
 func newElectionForFX(client *Client, cfg Config) (LeaderElector, error) {
-	resolved := cfg.withDefaults()
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
 
 	return NewElection(ElectionParams{
 		Client:     client,
-		KeyPrefix:  resolved.LeaderKeyPrefix,
-		TTLSeconds: resolved.ElectionTTLSeconds,
+		KeyPrefix:  cfg.LeaderKeyPrefix,
+		TTLSeconds: cfg.ElectionTTLSeconds,
 	})
 }
 
@@ -63,11 +68,10 @@ func newElectionForFX(client *Client, cfg Config) (LeaderElector, error) {
 // The module is opt-in per binary (it is intentionally not part of the
 // shared infrastructure module): only the worker/consumer binaries that
 // campaign or watch include it, mapping their validated application config
-// through ConfigForEndpoints. E14 owns that wiring.
+// through CoordinationConfig.Coordination(). E14 owns that wiring.
 func Module() fx.Option {
 	return fx.Module("etcd",
 		fx.Provide(
-			DefaultConfig,
 			newClientForFX,
 			newWatcherForFX,
 			newElectionForFX,

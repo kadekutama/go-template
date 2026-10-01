@@ -36,7 +36,12 @@ func Execute(
 	classify kernel.Classifier,
 	fn func(ctx context.Context) error,
 ) error {
-	policy = policy.Normalize()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := policy.Validate(); err != nil {
+		return err
+	}
 	if classify == nil {
 		classify = kernel.DefaultClassifier
 	}
@@ -56,7 +61,11 @@ func Execute(
 		if !kernel.ShouldRetry(classify(lastErr), idempotent, idempotencyKey) {
 			break
 		}
-		if err := sleep(ctx, policy.BackoffFor(attempt)); err != nil {
+		backoff, err := policy.BackoffFor(attempt)
+		if err != nil {
+			return err
+		}
+		if err := sleep(ctx, backoff); err != nil {
 			return err
 		}
 	}

@@ -146,17 +146,28 @@ func TestValidateRefund(t *testing.T) {
 			expectedError:  entity.NewError("REFUND_WINDOW_EXPIRED", "refund window has expired"),
 		},
 		{
-			name: "default window allows 89 days",
+			name: "zero window days rejected",
 			req: func() service.RefundRequest {
 				r := baseReq
 				r.WindowDays = 0
-				r.OriginalAt = r.Now.Add(-89 * 24 * time.Hour)
 				return r
 			}(),
 			originalExists: true,
 			accounts:       accounts,
-			expectedResult: okLines,
-			expectedError:  nil,
+			expectedResult: service.RefundLines{},
+			expectedError:  entity.NewError("INVALID_REFUND_WINDOW", "refund window days must be positive"),
+		},
+		{
+			name: "negative window days rejected",
+			req: func() service.RefundRequest {
+				r := baseReq
+				r.WindowDays = -5
+				return r
+			}(),
+			originalExists: true,
+			accounts:       accounts,
+			expectedResult: service.RefundLines{},
+			expectedError:  entity.NewError("INVALID_REFUND_WINDOW", "refund window days must be positive"),
 		},
 		{
 			name:           "missing original payment",

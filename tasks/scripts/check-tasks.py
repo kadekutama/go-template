@@ -11,7 +11,7 @@ epic file). Exits non-zero with a list on failure.
 Design-content flags (docs-vs-docs, safe to run anytime):
   --graph     report task-DAG validation (cycles are rejected even without flag)
   --ready     list pending tasks whose task-level dependencies are completed
-  --sdd       validate active/completed task packets, claims, evidence, handoffs
+  --sdd       validate active/completed packets, claims, evidence, handoffs, required reviews
   --specs     every money-flow §8 rule has a spec task
   --events    every api-contracts §10 webhook maps to a domain-events §3 type
   --handlers  every api-contracts §7 endpoint group has E06/E11 handler tasks
@@ -40,6 +40,7 @@ SPECS = TASKS / "specs"
 CLAIMS = TASKS / "claims"
 EVIDENCE = TASKS / "evidence"
 HANDOFFS = TASKS / "handoffs"
+REVIEWS = TASKS / "reviews"
 FLAGS = set(sys.argv[1:])
 
 errors: list[str] = []
@@ -250,6 +251,206 @@ def print_ready_tasks(all_tasks: dict[str, dict]) -> None:
         print(f"  {tid} [{readiness}] {title}")
 
 
+REVIEW_MODES = {"self", "independent", "none"}
+REVIEW_VERDICTS = {
+    "PASS", "PASS WITH MINOR ISSUES", "REVISION REQUIRED", "BLOCKED",
+}
+REVIEW_RISKS = {"Low", "Moderate", "High", "Critical"}
+REVIEW_SECTIONS = (
+    "Summary", "Findings", "Verification Performed", "Test Coverage Gaps", "SDD / Docs Gaps",
+    "Non-blocking Observations", "Final Review Status", "Not Verified",
+    "Resolution Notes",
+)
+
+
+def packet_review_requirement(packet_text: str) -> str | None:
+    """Return a declared review mode, None for a legacy packet, or invalid value."""
+    match = re.search(r"^\*\*Review Requirement:\*\*\s*(.*?)\s*$", packet_text, re.M)
+    if not match:
+        return None
+    mode = match.group(1).strip().lower()
+    return mode if mode in REVIEW_MODES else f"invalid:{mode}"
+
+
+def _review_field(text: str, field: str) -> str | None:
+    match = re.search(
+        r"^\*\*" + re.escape(field) + r":\*\*\s*(.*?)\s*$", text, re.M
+    )
+    return match.group(1).strip() if match else None
+
+
+def packet_review_issues(packet_text: str) -> tuple[str | None, list[str]]:
+    """Validate versioned packet review metadata while accepting legacy packets."""
+    version = _review_field(packet_text, "SDD Packet Version")
+    mode = packet_review_requirement(packet_text)
+    issues: list[str] = []
+    if version and version != "2":
+        issues.append(f"unsupported SDD Packet Version '{version}'")
+    if version == "2" and mode is None:
+        issues.append("version 2 packet has no Review Requirement")
+    if mode and mode.startswith("invalid:"):
+        issues.append(f"invalid Review Requirement '{mode[8:]}'")
+    if mode == "none":
+        rationale = _review_field(packet_text, "Notes")
+        if not rationale or rationale.casefold() in {"none", "n/a", "not applicable"}:
+            issues.append("Review Requirement 'none' needs a rationale in Notes")
+    return mode, issues
+
+
+def _owns_stanza_authorizes(packet_text: str, report_path: str) -> bool:
+    """Check the report path is listed as a whole token under Owns."""
+    surface = re.search(
+        r"^## Change Surface\s*\n(.*?)(?=^## |\Z)",
+        packet_text,
+        re.M | re.S,
+    )
+    if not surface:
+        return False
+    body = surface.group(1)
+    start = body.find("**Owns:**")
+    if start < 0:
+        return False
+    end = len(body)
+    for marker in ("**Coordinates:**", "**Must Not Touch:**"):
+        idx = body.find(marker, start)
+        if idx >= 0:
+            end = min(end, idx)
+    stanza = body[start:end]
+    escaped = re.escape(report_path)
+    return re.search(
+        r"(?:^|[\s`,;*()])" + escaped + r"(?=$|[\s`,;*.)])",
+        stanza,
+        re.M,
+    ) is not None
+
+
+def review_record_issues(
+    task_id: str,
+    mode: str | None,
+    packet_text: str,
+    claim_text: str,
+    handoff_text: str,
+    report_text: str | None,
+) -> list[str]:
+    """Validate a required completed-task review report and its handoff link."""
+    if mode not in ("self", "independent"):
+        return []
+    if report_text is None:
+        return [f"{task_id} requires review but has no tasks/reviews/{task_id}.md"]
+
+    issues: list[str] = []
+    expected_epic = task_id.split("-T", maxsplit=1)[0]
+    expected_fields = {
+        "Task": task_id,
+        "Epic": expected_epic,
+    }
+    for field, expected in expected_fields.items():
+        if _review_field(report_text, field) != expected:
+            issues.append(
+                f"{task_id} review report has missing/mismatched {field} metadata"
+            )
+    report_mode = _review_field(report_text, "Review Requirement")
+    if report_mode is None or report_mode.strip().lower() != mode:
+        issues.append(
+            f"{task_id} review report has missing/mismatched Review Requirement metadata"
+        )
+
+    for field in ("Reviewer", "Base Commit", "Reviewed Commit", "Review Date"):
+        if not _review_field(report_text, field):
+            issues.append(f"{task_id} review report missing {field} metadata")
+
+    sha_pattern = re.compile(r"^[0-9a-fA-F]{40}$")
+    for field in ("Base Commit", "Reviewed Commit"):
+        value = _review_field(report_text, field)
+        if value and not sha_pattern.fullmatch(value):
+            issues.append(f"{task_id} review report has invalid {field} SHA")
+
+    review_date = _review_field(report_text, "Review Date")
+    if review_date and not re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})",
+        review_date,
+    ):
+        issues.append(f"{task_id} review report has invalid RFC3339 Review Date")
+
+    verdict = _review_field(report_text, "Verdict")
+    if verdict not in REVIEW_VERDICTS:
+        issues.append(f"{task_id} review report has unsupported Verdict")
+    final_section = re.search(
+        r"^## Final Review Status\s*\n(.*?)(?=^## |\Z)",
+        report_text,
+        re.M | re.S,
+    )
+    final_body = final_section.group(1) if final_section else ""
+    final_statuses = []
+    for line in final_body.splitlines():
+        candidate = re.sub(r"^\s*[-*]+\s*", "", line).replace("**", "").strip()
+        for status in sorted(REVIEW_VERDICTS, key=len, reverse=True):
+            if candidate == status or candidate.startswith(
+                (status + " —", status + " -", status + ":")
+            ):
+                final_statuses.append(status)
+                break
+    if verdict in REVIEW_VERDICTS and final_statuses != [verdict]:
+        issues.append(f"{task_id} Final Review Status must contain only its Verdict")
+    if verdict in {"REVISION REQUIRED", "BLOCKED"}:
+        issues.append(f"{task_id} review Verdict '{verdict}' does not permit completion")
+        if final_statuses and final_statuses[-1] in {"PASS", "PASS WITH MINOR ISSUES"}:
+            issues.append(
+                f"{task_id} Final Review Status PASS does not override a non-permitting Verdict;"
+                " fix the report and record a dated resolution note before completion"
+            )
+    risk = _review_field(report_text, "Risk Score")
+    if risk not in REVIEW_RISKS:
+        issues.append(f"{task_id} review report has unsupported Risk Score")
+
+    for section in REVIEW_SECTIONS:
+        if not re.search(r"^## " + re.escape(section) + r"\s*$", report_text, re.M):
+            issues.append(f"{task_id} review report missing '## {section}'")
+
+    report_path = f"tasks/reviews/{task_id}.md"
+    if not _owns_stanza_authorizes(packet_text, report_path):
+        issues.append(f"{task_id} packet Change Surface does not authorize {report_path}")
+    if report_path not in handoff_text:
+        issues.append(f"{task_id} handoff does not link {report_path}")
+
+    report_base = _review_field(report_text, "Base Commit")
+    reviewed = _review_field(report_text, "Reviewed Commit")
+    claim_base = _review_field(claim_text, "Base Commit")
+    if claim_base and sha_pattern.fullmatch(claim_base):
+        if report_base != claim_base:
+            issues.append(f"{task_id} review Base Commit does not match claim Base Commit")
+    if reviewed and sha_pattern.fullmatch(reviewed):
+        head_line = re.search(
+            r"^\*\*Base / Head:\*\*.*$", handoff_text, re.M
+        )
+        head_shas = set(re.findall(r"[0-9a-fA-F]{40}", head_line.group(0))) if head_line else set()
+        if reviewed not in head_shas:
+            issues.append(f"{task_id} Reviewed Commit not in handoff Base / Head line")
+
+    author = _review_field(packet_text, "Author")
+    packet_reviewer = _review_field(packet_text, "Reviewer")
+    claim_owner = _review_field(claim_text, "Owner")
+    reviewer = _review_field(report_text, "Reviewer")
+    if mode == "self":
+        if not claim_owner or claim_owner.lower() in {"unassigned", "none"}:
+            issues.append(f"{task_id} self-review requires an assigned claim owner")
+        elif reviewer and claim_owner.casefold() != reviewer.casefold():
+            issues.append(f"{task_id} self-reviewer must match the task claim owner")
+    if mode == "independent":
+        if not author or author.lower() in {"unassigned", "none"}:
+            issues.append(f"{task_id} independent review requires an assigned packet author")
+        elif reviewer and author.casefold() == reviewer.casefold():
+            issues.append(f"{task_id} independent reviewer must differ from packet author")
+        if not packet_reviewer or packet_reviewer.lower() in {"unassigned", "none"}:
+            issues.append(f"{task_id} independent review requires a designated packet reviewer")
+        elif reviewer and packet_reviewer.casefold() != reviewer.casefold():
+            issues.append(f"{task_id} independent report reviewer does not match packet Reviewer")
+        if claim_owner and reviewer and claim_owner.casefold() == reviewer.casefold():
+            issues.append(f"{task_id} independent reviewer must differ from task claim owner")
+
+    return issues
+
+
 def check_sdd(all_tasks: dict[str, dict]) -> None:
     """Validate repository-visible state needed for cross-harness takeover."""
     templates = [
@@ -257,6 +458,7 @@ def check_sdd(all_tasks: dict[str, dict]) -> None:
         CLAIMS / "_TEMPLATE.md",
         EVIDENCE / "_TEMPLATE.md",
         HANDOFFS / "_TEMPLATE.md",
+        REVIEWS / "_TEMPLATE.md",
     ]
     for template in templates:
         if not template.exists():
@@ -268,6 +470,7 @@ def check_sdd(all_tasks: dict[str, dict]) -> None:
         "Invariants and Failure Semantics", "Change Surface",
         "Verification Plan", "Acceptance Mapping", "Open Questions", "Approval",
     ]
+    review_modes: dict[str, str | None] = {}
     for packet in sorted(SPECS.glob("E*-T*.md")) if SPECS.exists() else []:
         text = packet.read_text()
         tid = packet.stem
@@ -287,6 +490,10 @@ def check_sdd(all_tasks: dict[str, dict]) -> None:
             errors.append(f"--sdd: {tid} packet has no stable requirement ID")
         if not re.search(re.escape(tid) + r"-S\d{2}\b", text):
             errors.append(f"--sdd: {tid} packet has no stable scenario ID")
+        review_mode, packet_review_errors = packet_review_issues(text)
+        review_modes[tid] = review_mode
+        for issue in packet_review_errors:
+            errors.append(f"--sdd: {tid} {issue}")
         if spec_status and spec_status.group(1) == "ready":
             if not re.search(r"^\*\*Decision:\*\*\s*approved\s*$", text, re.M):
                 errors.append(f"--sdd: ready packet {tid} is not approved")
@@ -352,8 +559,19 @@ def check_sdd(all_tasks: dict[str, dict]) -> None:
         if status == "completed":
             if not evidence.exists():
                 errors.append(f"--sdd: completed task {tid} has no evidence")
+            review_mode = review_modes.get(tid)
+            if review_mode in ("self", "independent"):
+                report_path = REVIEWS / f"{tid}.md"
+                report_text = report_path.read_text() if report_path.exists() else None
+                handoff_text = handoff.read_text() if handoff.exists() else ""
+                packet_text = packet.read_text() if packet.exists() else ""
+                claim_text = claim.read_text() if claim.exists() else ""
+                for issue in review_record_issues(
+                    tid, review_mode, packet_text, claim_text, handoff_text, report_text
+                ):
+                    errors.append(f"--sdd: {issue}")
 
-    print("--sdd: task packets and takeover artifacts checked")
+    print("--sdd: packets, claims, evidence, handoffs, and required reviews checked")
 
 
 def check_format() -> None:

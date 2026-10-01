@@ -15,24 +15,17 @@ import (
 // Sentinel validation errors so constructor/argument failures are
 // assertable with errors.Is/Equal without string matching.
 var (
-	ErrLockerRequired = errors.New("lock: locker is required")
-	ErrFnRequired     = errors.New("lock: fn is required")
+	ErrLockerRequired          = errors.New("lock: locker is required")
+	ErrFnRequired              = errors.New("lock: fn is required")
+	ErrRefreshIntervalPositive = errors.New("lock: refresh interval must be positive")
 )
 
-// DefaultRefreshRatio derives the auto-renewal tick from the lease TTL.
-const DefaultRefreshRatio = 3
-
-// minRefreshInterval floors the renewal tick so short-lived leases in tests
-// and local runs do not spin a tight timer.
-const minRefreshInterval = time.Second
-
 // GuardParams carries WithLock dependencies (Parameter Object pattern).
-// RefreshInterval <= 0 derives leaseTTL/DefaultRefreshRatio (floored at one
-// second); tests set it explicitly to observe auto-renewal cheaply.
+// RefreshInterval must be explicitly configured and positive.
 type GuardParams struct {
 	Locker          appport.DistributedLock                                            `validate:"-"`
 	Logger          log.Logger                                                         `validate:"-"`
-	RefreshInterval time.Duration                                                      `validate:"omitempty,gt=0"`
+	RefreshInterval time.Duration                                                      `validate:"required,gt=0"`
 	OnContended     func(ctx context.Context, tenant valueobject.TenantID, key string) `validate:"-"`
 	OnReleased      func(ctx context.Context, tenant valueobject.TenantID, key string) `validate:"-"`
 }
@@ -60,17 +53,20 @@ func WithLock(ctx context.Context, params GuardParams, tenant valueobject.Tenant
 		return ErrFnRequired
 	}
 
+	if ttl <= 0 {
+		return ErrTTLPositive
+	}
+
+	if params.RefreshInterval <= 0 {
+		return ErrRefreshIntervalPositive
+	}
+
 	lease, err := params.Locker.Acquire(ctx, tenant, key, ttl)
 	if err != nil {
 		return acquireError(ctx, params, err, tenant, key)
 	}
 
 	defer releaseLease(params, lease, tenant, key)
-
-	effectiveTTL := ttl
-	if effectiveTTL <= 0 {
-		effectiveTTL = DefaultTTL
-	}
 
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -86,7 +82,7 @@ func WithLock(ctx context.Context, params GuardParams, tenant valueobject.Tenant
 	// of crashing the process, and Wait guarantees the lease release below
 	// cannot race an in-flight Refresh.
 	group.Go(runCtx, func(context.Context) {
-		if renewErr := renew(runCtx, lease, effectiveTTL, refreshInterval(params.RefreshInterval, effectiveTTL)); renewErr != nil {
+		if renewErr := renew(runCtx, lease, ttl, params.RefreshInterval); renewErr != nil {
 			renewed <- renewErr
 			cancel()
 		}
@@ -165,19 +161,4 @@ func renew(ctx context.Context, lease appport.Lock, ttl, interval time.Duration)
 			}
 		}
 	}
-}
-
-// refreshInterval derives the renewal tick: explicit value wins, otherwise
-// leaseTTL/DefaultRefreshRatio floored at minRefreshInterval.
-func refreshInterval(explicit, leaseTTL time.Duration) time.Duration {
-	if explicit > 0 {
-		return explicit
-	}
-
-	derived := leaseTTL / DefaultRefreshRatio
-	if derived < minRefreshInterval {
-		return minRefreshInterval
-	}
-
-	return derived
 }

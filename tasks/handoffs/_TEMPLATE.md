@@ -27,6 +27,13 @@ Current outcome in plain language and the first unverified requirement ID.
 
 - Commands already run and link to `tasks/evidence/TASK-ID.md`.
 
+## Code Review
+
+- Required report: `tasks/reviews/TASK-ID.md` — verdict and reviewed commit, or
+  “not required” with the packet's rationale. Implementer replies live in the
+  report's `## Resolution Notes` under `### Implementer reply` entries; record
+  only the report link and verdict here, never duplicate reply text.
+
 ## Remaining Work
 
 - Ordered, concrete steps tied to requirement/scenario IDs.
@@ -38,4 +45,3 @@ Current outcome in plain language and the first unverified requirement ID.
 ## Resume Instructions
 
 Exact first command and expected baseline result. Do not rely on chat history.
-

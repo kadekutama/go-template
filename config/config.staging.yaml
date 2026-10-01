@@ -18,16 +18,53 @@ database:
 cache:
   host: valkey.staging.svc
   port: 6379
+  l1_maximum_size: 10000
+  ttls:
+    balance_sec: 60
+    balance_cursor_sec: 300
+    config_sec: 300
+    config_long_sec: 1800
+    fx_sec: 3600
+    idempotency_hint_sec: 86400
+    rate_limit_sec: 60
+    l1_populate_sec: 60
+redpanda:
+  brokers:
+    - redpanda.staging.svc:9092
+  topic_ledger_events: ledger.events.v1
+  topic_outbox_facts: outbox.facts.v1
+  topic_webhook_jobs: webhook.jobs.v1
+  topic_audit_streams: audit.streams.v1
+  partitions: 12
+  retention_hours: 720
+  partition_keys: "tenant_id:account_id"
+  dlq_suffix: ".dlq"
+webhook:
+  retry_steps_sec: [60, 300, 900, 3600, 21600, 86400, 172800]
+  tolerance_sec: 300
 auth:
   issuer: https://auth.staging.example.com
   access_ttl_min: 15
   refresh_ttl_days: 7
+  api_key:
+    time: 3
+    memory_kib: 65536
+    threads: 4
+    key_len: 32
+    salt_len: 16
+http_client:
+  timeout_sec: 10
+  max_idle_conns: 100
+  max_idle_conns_per_host: 10
+  idle_conn_timeout_sec: 90
 nats:
   url: nats://nats.staging.svc:4222
 observability:
   log_level: info
   otlp_endpoint: https://tempo.staging.svc:4317
   sample_ratio: 0.1
+  # Routes never traced (health probes). Required; blank entries rejected.
+  excluded_routes: ["/healthz", "/readyz", "/livez"]
 feature_flags:
   unleash_url: https://unleash.staging.svc:4242
 secrets:
@@ -39,3 +76,7 @@ coordination:
   etcd_election_ttl_sec: 5
   leader_key_prefix: "/finance/worker-leader"
 
+
+tenancy:
+  # Maximum assets per onboarding call (E05-T01-R03). Explicit; no default.
+  max_onboarding_assets: 8

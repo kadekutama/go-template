@@ -2,6 +2,7 @@ package redpanda_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/fx"
@@ -19,7 +20,10 @@ func TestModule(t *testing.T) {
 	err := fx.ValidateApp(
 		redpanda.Module(),
 		fx.Provide(func() redpanda.ProducerParams {
-			return redpanda.ProducerParams{Seeds: []string{"127.0.0.1:9092"}}
+			return redpanda.ProducerParams{
+				Seeds:       []string{"127.0.0.1:9092"},
+				DialTimeout: 5 * time.Second,
+			}
 		}),
 	)
 	require.NoError(t, err)

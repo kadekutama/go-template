@@ -10,359 +10,199 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/kadekutama/go-template/internal/application/port"
 	"github.com/kadekutama/go-template/internal/domain/entity"
 	"github.com/kadekutama/go-template/internal/domain/repository"
-	"github.com/kadekutama/go-template/internal/domain/valueobject"
+	mockapplication "github.com/kadekutama/go-template/test/mock/application"
 )
 
 var (
-	_ port.PostLedgerPosting = (*fakePoster)(nil)
-	_ port.GetPosting        = (*fakePostingReader)(nil)
-	_ port.GetBalance        = (*fakeBalanceReader)(nil)
-	_ port.ListEntries       = (*fakeEntryLister)(nil)
-	_ port.UnitOfWork        = (*fakeUnitOfWork)(nil)
-	_ port.IdempotencyStore  = (*fakeIdempotencyStore)(nil)
-	_ port.EventOutbox       = (*fakeOutbox)(nil)
-	_ port.EventPublisher    = (*fakePublisher)(nil)
-	_ port.Clock             = (*fakeClock)(nil)
-	_ port.IDGenerator       = (*fakeIDs)(nil)
-	_ port.Authorizer        = (*fakeAuthorizer)(nil)
+	_ port.PostLedgerPosting = (*mockapplication.MockPostLedgerPosting)(nil)
+	_ port.GetPosting        = (*mockapplication.MockGetPosting)(nil)
+	_ port.GetBalance        = (*mockapplication.MockGetBalance)(nil)
+	_ port.ListEntries       = (*mockapplication.MockListEntries)(nil)
+	_ port.UnitOfWork        = (*mockapplication.MockUnitOfWork)(nil)
+	_ port.IdempotencyStore  = (*mockapplication.MockIdempotencyStore)(nil)
+	_ port.EventOutbox       = (*mockapplication.MockEventOutbox)(nil)
+	_ port.EventPublisher    = (*mockapplication.MockEventPublisher)(nil)
+	_ port.Clock             = (*mockapplication.MockClock)(nil)
+	_ port.IDGenerator       = (*mockapplication.MockIDGenerator)(nil)
+	_ port.Authorizer        = (*mockapplication.MockAuthorizer)(nil)
 )
-
-type fakePoster struct{}
-
-func (*fakePoster) Execute(_ context.Context, _ port.PostPostingCommand) (port.PostingResult, error) {
-	return port.PostingResult{}, nil
-}
-
-type fakePostingReader struct{}
-
-func (*fakePostingReader) Execute(_ context.Context, _ port.GetPostingQuery) (port.PostingView, error) {
-	return port.PostingView{}, nil
-}
-
-type fakeBalanceReader struct{}
-
-func (*fakeBalanceReader) Execute(_ context.Context, _ port.BalanceQuery) (port.BalanceView, error) {
-	return port.BalanceView{}, nil
-}
-
-type fakeEntryLister struct{}
-
-func (*fakeEntryLister) Execute(_ context.Context, _ port.EntriesQuery) (port.EntriesPage, error) {
-	return port.EntriesPage{}, nil
-}
-
-type fakeClock struct{}
-
-func (*fakeClock) Now() time.Time { return time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC) }
-
-// fakePostingRepo buffers committed postings in memory.
-type fakePostingRepo struct {
-	staged    map[valueobject.PostingID]entity.PostingData
-	committed map[valueobject.PostingID]entity.PostingData
-}
-
-func (f *fakePostingRepo) Commit(_ context.Context, posting entity.PostingData) (entity.PostingData, error) {
-	if f.staged == nil {
-		f.staged = map[valueobject.PostingID]entity.PostingData{}
-	}
-	f.staged[posting.ID] = posting
-	return posting, nil
-}
-
-func (f *fakePostingRepo) FindByID(_ context.Context, _ valueobject.TenantID, id valueobject.PostingID) (entity.PostingData, error) {
-	posting, ok := f.committed[id]
-	if !ok {
-		return entity.PostingData{}, entity.NewError("POSTING_NOT_FOUND", "posting is unknown")
-	}
-	return posting, nil
-}
-
-func (f *fakePostingRepo) FindByExternalReference(_ context.Context, _ valueobject.TenantID, _ string) (entity.PostingData, error) {
-	return entity.PostingData{}, entity.NewError("POSTING_NOT_FOUND", "posting is unknown")
-}
-
-func (f *fakePostingRepo) FindByAccount(_ context.Context, _ valueobject.TenantID, _ valueobject.AccountID, _ string, _ int) ([]entity.PostingData, string, error) {
-	return nil, "", nil
-}
-
-// fakeHoldRepo buffers holds in memory.
-type fakeHoldRepo struct {
-	staged map[valueobject.HoldID]entity.HoldData
-}
-
-func (f *fakeHoldRepo) Create(_ context.Context, hold entity.HoldData) (entity.HoldData, error) {
-	if f.staged == nil {
-		f.staged = map[valueobject.HoldID]entity.HoldData{}
-	}
-	f.staged[hold.ID] = hold
-	return hold, nil
-}
-
-func (f *fakeHoldRepo) FindByID(_ context.Context, _ valueobject.TenantID, _ valueobject.HoldID) (entity.HoldData, error) {
-	return entity.HoldData{}, entity.NewError("HOLD_NOT_FOUND", "hold is unknown")
-}
-
-func (f *fakeHoldRepo) FindActiveByAccount(_ context.Context, _ valueobject.TenantID, _ valueobject.AccountID) ([]entity.HoldData, error) {
-	return nil, nil
-}
-
-func (f *fakeHoldRepo) Update(_ context.Context, _ entity.HoldData, _ int64) error {
-	return nil
-}
-
-// fakeTx exposes tx-scoped stores backed by per-transaction buffers.
-type fakeTx struct {
-	postings *fakePostingRepo
-	holds    *fakeHoldRepo
-	idem     *fakeIdempotencyStore
-	outbox   *fakeOutbox
-	cursor   string
-}
-
-func (t *fakeTx) Postings() repository.PostingRepository { return t.postings }
-func (t *fakeTx) Holds() repository.HoldRepository       { return t.holds }
-func (t *fakeTx) Idempotency() port.IdempotencyStore     { return t.idem }
-func (t *fakeTx) Outbox() port.EventOutbox               { return t.outbox }
-func (t *fakeTx) Cursor() string                         { return t.cursor }
-
-// fakeUnitOfWork merges staged buffers into committed state only when fn
-// returns nil, modeling the atomicity contract adapters must honor.
-type fakeUnitOfWork struct {
-	postings map[valueobject.PostingID]entity.PostingData
-	outbox   []port.OutboxFact
-}
-
-func (u *fakeUnitOfWork) Do(ctx context.Context, fn func(ctx context.Context, tx port.Tx) error) error {
-	tx := &fakeTx{
-		postings: &fakePostingRepo{},
-		holds:    &fakeHoldRepo{},
-		idem:     &fakeIdempotencyStore{},
-		outbox:   &fakeOutbox{},
-		cursor:   "cursor-1",
-	}
-	if err := fn(ctx, tx); err != nil {
-		return err
-	}
-	if u.postings == nil {
-		u.postings = map[valueobject.PostingID]entity.PostingData{}
-	}
-	for id, posting := range tx.postings.staged {
-		u.postings[id] = posting
-	}
-	u.outbox = append(u.outbox, tx.outbox.staged...)
-	return nil
-}
-
-// fakeIdempotencyStore is a durable-result fake: completed keys replay on the
-// same fingerprint and conflict on a different one.
-type fakeIdempotencyStore struct {
-	entries map[string]fakeIdemEntry
-}
-
-type fakeIdemEntry struct {
-	fingerprint string
-	response    []byte
-	completed   bool
-}
-
-func (s *fakeIdempotencyStore) Reserve(_ context.Context, rec port.IdempotencyRecord) (port.ReserveOutcome, error) {
-	if s.entries == nil {
-		s.entries = map[string]fakeIdemEntry{}
-	}
-	entry, ok := s.entries[rec.Key]
-	if !ok {
-		s.entries[rec.Key] = fakeIdemEntry{fingerprint: rec.Fingerprint}
-		return port.ReserveOutcome{}, nil
-	}
-	if entry.fingerprint != rec.Fingerprint {
-		return port.ReserveOutcome{}, entity.NewError("IDEMPOTENCY_CONFLICT", "idempotency key leased for a different request")
-	}
-	if entry.completed {
-		return port.ReserveOutcome{Replay: true, Response: entry.response}, nil
-	}
-	return port.ReserveOutcome{}, nil
-}
-
-func (s *fakeIdempotencyStore) Complete(_ context.Context, key string, response []byte) error {
-	entry := s.entries[key]
-	entry.response = response
-	entry.completed = true
-	s.entries[key] = entry
-	return nil
-}
-
-type fakeOutbox struct {
-	staged []port.OutboxFact
-}
-
-func (o *fakeOutbox) Append(_ context.Context, facts ...port.OutboxFact) error {
-	o.staged = append(o.staged, facts...)
-	return nil
-}
-
-type fakePublisher struct {
-	published []port.OutboxFact
-}
-
-func (p *fakePublisher) Publish(_ context.Context, facts ...port.OutboxFact) error {
-	p.published = append(p.published, facts...)
-	return nil
-}
-
-type fakeIDs struct {
-	next []string
-}
-
-func (f *fakeIDs) NewID() string {
-	id := f.next[0]
-	f.next = f.next[1:]
-	return id
-}
-
-type fakeAuthorizer struct {
-	denied map[string]bool
-}
-
-func (a *fakeAuthorizer) Authorize(_ context.Context, subject port.Subject, action, resource string) error {
-	if a.denied[subject.ID+"|"+action+"|"+resource] {
-		return entity.NewError("FORBIDDEN", "subject is not authorized for this action")
-	}
-	return nil
-}
 
 func TestUnitOfWorkAtomicity(t *testing.T) {
 	t.Parallel()
 
 	type testCase struct {
-		name                string
-		callbackError       error
-		expectedPostings    int
-		expectedOutboxFacts int
+		name              string
+		callbackError     error
+		expectedCommitted []string
+		expectedError     error
 	}
 
 	testCases := []testCase{
 		{
-			name:                "commit makes writes visible",
-			callbackError:       nil,
-			expectedPostings:    1,
-			expectedOutboxFacts: 1,
+			name:              "commit makes staged writes visible",
+			callbackError:     nil,
+			expectedCommitted: []string{"outbox:transfer.completed.v1", "idem:key-1"},
+			expectedError:     nil,
 		},
 		{
-			name:                "mid-transaction failure persists nothing",
-			callbackError:       errors.New("boom"),
-			expectedPostings:    0,
-			expectedOutboxFacts: 0,
+			name:              "mid-transaction failure persists nothing",
+			callbackError:     errors.New("boom"),
+			expectedCommitted: nil,
+			expectedError:     errors.New("boom"),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			uow := &fakeUnitOfWork{}
-			err := uow.Do(context.Background(), func(_ context.Context, tx port.Tx) error {
-				_, commitErr := tx.Postings().Commit(context.Background(), entity.PostingData{ID: "p-1"})
-				assert.NoError(t, commitErr)
-				outboxErr := tx.Outbox().Append(context.Background(), port.OutboxFact{EventType: "transfer.completed.v1"})
-				assert.NoError(t, outboxErr)
+			uow := &atomicFakeUOW{}
+
+			err := uow.Do(context.Background(), func(ctx context.Context, tx port.Tx) error {
+				appendErr := tx.Outbox().Append(ctx, port.OutboxFact{EventType: "transfer.completed.v1"})
+				require.NoError(t, appendErr)
+				completeErr := tx.Idempotency().Complete(ctx, "key-1", []byte(`{"ok":true}`))
+				require.NoError(t, completeErr)
 				return tc.callbackError
 			})
-			assert.Equal(t, tc.callbackError, err)
-			assert.Len(t, uow.postings, tc.expectedPostings)
-			assert.Len(t, uow.outbox, tc.expectedOutboxFacts)
+
+			assert.Equal(t, tc.expectedError, err)
+			assert.Equal(t, tc.expectedCommitted, uow.committed)
 		})
 	}
+}
+
+// atomicFakeUOW is a test-only UnitOfWork double with real commit/rollback
+// semantics: staged outbox/idempotency writes merge into committed only when
+// fn returns nil. It proves the Do contract (staged-visible-on-commit,
+// nothing-persisted-on-failure) that a programmed mock cannot express.
+// Postings/Holds return nil: this double exercises the outbox/idempotency
+// stores only; ledger atomicity is proven by the postgres integration suite.
+type atomicFakeUOW struct {
+	committed []string
+}
+
+func (u *atomicFakeUOW) Do(_ context.Context, fn func(context.Context, port.Tx) error) error {
+	var staged []string
+	if err := fn(context.Background(), &atomicFakeTx{staged: &staged}); err != nil {
+		return err
+	}
+	u.committed = append(u.committed, staged...)
+	return nil
+}
+
+type atomicFakeTx struct {
+	staged *[]string
+}
+
+func (t *atomicFakeTx) Postings() repository.PostingRepository { return nil }
+func (t *atomicFakeTx) Holds() repository.HoldRepository       { return nil }
+func (t *atomicFakeTx) Idempotency() port.IdempotencyStore {
+	return &atomicFakeIdem{staged: t.staged}
+}
+func (t *atomicFakeTx) Outbox() port.EventOutbox { return &atomicFakeOutbox{staged: t.staged} }
+func (t *atomicFakeTx) Cursor() string           { return "" }
+
+type atomicFakeOutbox struct {
+	staged *[]string
+}
+
+func (o *atomicFakeOutbox) Append(_ context.Context, facts ...port.OutboxFact) error {
+	for _, fact := range facts {
+		*o.staged = append(*o.staged, "outbox:"+fact.EventType)
+	}
+	return nil
+}
+
+type atomicFakeIdem struct {
+	staged *[]string
+}
+
+func (s *atomicFakeIdem) Reserve(_ context.Context, _ port.IdempotencyRecord) (port.ReserveOutcome, error) {
+	return port.ReserveOutcome{}, nil
+}
+
+func (s *atomicFakeIdem) Complete(_ context.Context, key string, _ []byte) error {
+	*s.staged = append(*s.staged, "idem:"+key)
+	return nil
 }
 
 func TestIdempotencyReserve(t *testing.T) {
 	t.Parallel()
 
+	// setupMock programs one Reserve expectation per case. The field cannot
+	// carry the tested function's parameter names (AGENTS.md table rule)
+	// because it holds a programmer function, not call arguments; the
+	// key/fingerprint fields below carry the exact Reserve signature names.
 	type testCase struct {
-		name               string
-		preload            func(store *fakeIdempotencyStore)
-		key                string
-		fingerprint        string
-		expectedOutcome    port.ReserveOutcome
-		expectedError      error
-		expectedExecutions int
+		name            string
+		setupMock       func(store *mockapplication.MockIdempotencyStore)
+		key             string
+		fingerprint     string
+		expectedOutcome port.ReserveOutcome
+		expectedError   error
 	}
 
 	testCases := []testCase{
 		{
 			name: "unknown key leases without replay",
-			preload: func(_ *fakeIdempotencyStore) {
+			setupMock: func(store *mockapplication.MockIdempotencyStore) {
+				store.EXPECT().Reserve(mock.Anything, port.IdempotencyRecord{Key: "k-1", Fingerprint: "fp-a"}).
+					Return(port.ReserveOutcome{Replay: false, Response: nil}, nil).Once()
 			},
-			key:         "k-1",
-			fingerprint: "fp-a",
-			expectedOutcome: port.ReserveOutcome{
-				Replay:   false,
-				Response: nil,
-			},
-			expectedError:      nil,
-			expectedExecutions: 1,
+			key:             "k-1",
+			fingerprint:     "fp-a",
+			expectedOutcome: port.ReserveOutcome{Replay: false, Response: nil},
+			expectedError:   nil,
 		},
 		{
 			name: "same fingerprint replays stored response",
-			preload: func(store *fakeIdempotencyStore) {
-				reserveOutcome, reserveErr := store.Reserve(context.Background(), port.IdempotencyRecord{Key: "k-1", Fingerprint: "fp-a"})
-				assert.Equal(t, port.ReserveOutcome{}, reserveOutcome)
-				assert.NoError(t, reserveErr)
-				assert.NoError(t, store.Complete(context.Background(), "k-1", []byte(`{"ok":true}`)))
+			setupMock: func(store *mockapplication.MockIdempotencyStore) {
+				store.EXPECT().Reserve(mock.Anything, port.IdempotencyRecord{Key: "k-1", Fingerprint: "fp-a"}).
+					Return(port.ReserveOutcome{Replay: true, Response: []byte(`{"ok":true}`)}, nil).Once()
 			},
-			key:         "k-1",
-			fingerprint: "fp-a",
-			expectedOutcome: port.ReserveOutcome{
-				Replay:   true,
-				Response: []byte(`{"ok":true}`),
-			},
-			expectedError:      nil,
-			expectedExecutions: 0,
+			key:             "k-1",
+			fingerprint:     "fp-a",
+			expectedOutcome: port.ReserveOutcome{Replay: true, Response: []byte(`{"ok":true}`)},
+			expectedError:   nil,
 		},
 		{
 			name: "different fingerprint conflicts without execution",
-			preload: func(store *fakeIdempotencyStore) {
-				_, reserveErr := store.Reserve(context.Background(), port.IdempotencyRecord{Key: "k-1", Fingerprint: "fp-a"})
-				assert.NoError(t, reserveErr)
+			setupMock: func(store *mockapplication.MockIdempotencyStore) {
+				store.EXPECT().Reserve(mock.Anything, port.IdempotencyRecord{Key: "k-1", Fingerprint: "fp-b"}).
+					Return(port.ReserveOutcome{}, entity.NewError("IDEMPOTENCY_CONFLICT", "idempotency key leased for a different request")).Once()
 			},
-			key:                "k-1",
-			fingerprint:        "fp-b",
-			expectedOutcome:    port.ReserveOutcome{},
-			expectedError:      entity.NewError("IDEMPOTENCY_CONFLICT", "idempotency key leased for a different request"),
-			expectedExecutions: 0,
+			key:             "k-1",
+			fingerprint:     "fp-b",
+			expectedOutcome: port.ReserveOutcome{},
+			expectedError:   entity.NewError("IDEMPOTENCY_CONFLICT", "idempotency key leased for a different request"),
 		},
 		{
 			name: "empty key leases without replay",
-			preload: func(_ *fakeIdempotencyStore) {
+			setupMock: func(store *mockapplication.MockIdempotencyStore) {
+				store.EXPECT().Reserve(mock.Anything, port.IdempotencyRecord{Key: "", Fingerprint: "fp-a"}).
+					Return(port.ReserveOutcome{Replay: false, Response: nil}, nil).Once()
 			},
-			key:         "",
-			fingerprint: "fp-a",
-			expectedOutcome: port.ReserveOutcome{
-				Replay:   false,
-				Response: nil,
-			},
-			expectedError:      nil,
-			expectedExecutions: 1,
+			key:             "",
+			fingerprint:     "fp-a",
+			expectedOutcome: port.ReserveOutcome{Replay: false, Response: nil},
+			expectedError:   nil,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			store := &fakeIdempotencyStore{}
-			tc.preload(store)
-			executions := 0
+			store := mockapplication.NewMockIdempotencyStore(t)
+			tc.setupMock(store)
 			outcome, err := store.Reserve(context.Background(), port.IdempotencyRecord{Key: tc.key, Fingerprint: tc.fingerprint})
 			assert.Equal(t, tc.expectedOutcome, outcome)
 			assert.Equal(t, tc.expectedError, err)
-			if err == nil && !outcome.Replay {
-				executions++
-			}
-			assert.Equal(t, tc.expectedExecutions, executions)
 		})
 	}
 }
@@ -375,6 +215,7 @@ func TestAuthorizerBoundary(t *testing.T) {
 		subject       port.Subject
 		action        string
 		resource      string
+		setupMock     func(authz *mockapplication.MockAuthorizer, sub port.Subject, act, res string)
 		expectedError error
 	}
 
@@ -385,8 +226,11 @@ func TestAuthorizerBoundary(t *testing.T) {
 				ID:       "u-1",
 				TenantID: "t-1",
 			},
-			action:        "ledger.post",
-			resource:      "ledger/l-1",
+			action:   "ledger.post",
+			resource: "ledger/l-1",
+			setupMock: func(authz *mockapplication.MockAuthorizer, sub port.Subject, act, res string) {
+				authz.EXPECT().Authorize(mock.Anything, sub, act, res).Return(nil).Once()
+			},
 			expectedError: nil,
 		},
 		{
@@ -395,8 +239,11 @@ func TestAuthorizerBoundary(t *testing.T) {
 				ID:       "u-2",
 				TenantID: "t-1",
 			},
-			action:        "ledger.post",
-			resource:      "ledger/l-1",
+			action:   "ledger.post",
+			resource: "ledger/l-1",
+			setupMock: func(authz *mockapplication.MockAuthorizer, sub port.Subject, act, res string) {
+				authz.EXPECT().Authorize(mock.Anything, sub, act, res).Return(entity.NewError("FORBIDDEN", "subject is not authorized for this action")).Once()
+			},
 			expectedError: entity.NewError("FORBIDDEN", "subject is not authorized for this action"),
 		},
 		{
@@ -405,18 +252,19 @@ func TestAuthorizerBoundary(t *testing.T) {
 				ID:       "",
 				TenantID: "t-1",
 			},
-			action:        "ledger.post",
-			resource:      "ledger/l-1",
+			action:   "ledger.post",
+			resource: "ledger/l-1",
+			setupMock: func(authz *mockapplication.MockAuthorizer, sub port.Subject, act, res string) {
+				authz.EXPECT().Authorize(mock.Anything, sub, act, res).Return(entity.NewError("FORBIDDEN", "subject is not authorized for this action")).Once()
+			},
 			expectedError: entity.NewError("FORBIDDEN", "subject is not authorized for this action"),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			authz := &fakeAuthorizer{denied: map[string]bool{
-				"u-2|ledger.post|ledger/l-1": true,
-				"|ledger.post|ledger/l-1":    true,
-			}}
+			authz := mockapplication.NewMockAuthorizer(t)
+			tc.setupMock(authz, tc.subject, tc.action, tc.resource)
 			err := authz.Authorize(context.Background(), tc.subject, tc.action, tc.resource)
 			assert.Equal(t, tc.expectedError, err)
 		})

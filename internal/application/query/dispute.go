@@ -5,6 +5,7 @@ import (
 
 	"github.com/kadekutama/go-template/internal/application/command"
 	"github.com/kadekutama/go-template/internal/application/port"
+	"github.com/kadekutama/go-template/internal/domain/entity"
 )
 
 // DisputeQueryServiceParams encapsulates dependencies for DisputeQueryService.
@@ -37,13 +38,10 @@ func (s *DisputeQueryService) GetDispute(ctx context.Context, query port.Dispute
 
 // ListDisputes pages disputes by filter. Point-in-time page.
 func (s *DisputeQueryService) ListDisputes(ctx context.Context, filter port.DisputeListFilter) (port.DisputePage, error) {
-	limit := filter.Limit
-	if limit <= 0 {
-		limit = 50
-	} else if limit > 100 {
-		limit = 100
+	if filter.Limit <= 0 || filter.Limit > 100 {
+		return port.DisputePage{}, entity.NewError("INVALID_PAGE_LIMIT", "limit must be between 1 and 100")
 	}
-	disputes, next, err := s.disputes.ListDisputes(ctx, filter.Status, filter.From, filter.To, filter.Cursor, limit)
+	disputes, next, err := s.disputes.ListDisputes(ctx, filter.Status, filter.From, filter.To, filter.Cursor, filter.Limit)
 	if err != nil {
 		return port.DisputePage{}, err
 	}

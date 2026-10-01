@@ -16,12 +16,6 @@ type Broker interface {
 	Publish(ctx context.Context, topic, key string, headers map[string]string, payload []byte) error
 }
 
-// Default dial and metadata timeouts for the durable client.
-const (
-	DefaultDialTimeout     = 10 * time.Second
-	DefaultMetadataTimeout = 10 * time.Second
-)
-
 // RedpandaParams carries client configuration (Parameter Object pattern).
 // Seeds are host:port pairs. TLS + SASL/SCRAM are required in prod;
 // local/dev may run plaintext against the compose fragment (E17 operates).
@@ -31,8 +25,8 @@ type RedpandaParams struct {
 	UseTLS           bool          `validate:"-"`
 	SASLUser         string        `validate:"-"`
 	SASLPass         string        `validate:"-"`
-	DialTimeout      time.Duration `validate:"omitempty,gt=0"`
-	MetadataTimeout  time.Duration `validate:"omitempty,gt=0"`
+	DialTimeout      time.Duration `validate:"required,gt=0"`
+	MetadataTimeout  time.Duration `validate:"required,gt=0"`
 	MaxBufferedBytes int           `validate:"omitempty,gt=0"`
 }
 
@@ -51,7 +45,7 @@ type Client struct {
 }
 
 // NewClient validates endpoints without dialing. At least one non-blank
-// seed is required; timeouts fall back to defaults.
+// seed is required; timeouts must be positive and explicit.
 func NewClient(params RedpandaParams) (*Client, error) {
 	if err := validate.Struct("redpanda", "params", params); err != nil {
 		return nil, err
@@ -68,14 +62,12 @@ func NewClient(params RedpandaParams) (*Client, error) {
 		return nil, fmt.Errorf("redpanda: at least one seed is required")
 	}
 
-	dialTimeout := params.DialTimeout
-	if dialTimeout <= 0 {
-		dialTimeout = DefaultDialTimeout
+	if params.DialTimeout <= 0 {
+		return nil, fmt.Errorf("redpanda: dial timeout must be positive")
 	}
 
-	metadataTimeout := params.MetadataTimeout
-	if metadataTimeout <= 0 {
-		metadataTimeout = DefaultMetadataTimeout
+	if params.MetadataTimeout <= 0 {
+		return nil, fmt.Errorf("redpanda: metadata timeout must be positive")
 	}
 
 	return &Client{
@@ -84,8 +76,8 @@ func NewClient(params RedpandaParams) (*Client, error) {
 		useTLS:           params.UseTLS,
 		saslUser:         params.SASLUser,
 		saslPass:         params.SASLPass,
-		dialTimeout:      dialTimeout,
-		metadataTimeout:  metadataTimeout,
+		dialTimeout:      params.DialTimeout,
+		metadataTimeout:  params.MetadataTimeout,
 		maxBufferedBytes: params.MaxBufferedBytes,
 	}, nil
 }

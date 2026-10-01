@@ -55,13 +55,12 @@ type RegistryParams struct {
 // configuration is low-churn and the DB repository does not exist yet; the
 // doc comment is the explicit deferral marker.
 type Registry struct {
-	mu        sync.RWMutex
-	endpoints map[string]Endpoint
+	endpoints sync.Map // string -> Endpoint
 }
 
 // NewRegistry builds the store.
 func NewRegistry(_ RegistryParams) *Registry {
-	return &Registry{endpoints: make(map[string]Endpoint)}
+	return &Registry{}
 }
 
 // Upsert creates or replaces an endpoint: input is normalized, then every
@@ -77,11 +76,8 @@ func (r *Registry) Upsert(_ context.Context, endpoint Endpoint) error {
 		return err
 	}
 
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	endpoint.Active = true
-	r.endpoints[endpoint.ID] = endpoint
+	r.endpoints.Store(endpoint.ID, endpoint)
 
 	return nil
 }
@@ -92,10 +88,7 @@ func (r *Registry) Remove(_ context.Context, id string) error {
 		return fmt.Errorf("webhook: registry is not initialized")
 	}
 
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	delete(r.endpoints, strings.TrimSpace(id))
+	r.endpoints.Delete(strings.TrimSpace(id))
 
 	return nil
 }
@@ -114,17 +107,15 @@ func (r *Registry) Find(_ context.Context, tenant, event string) []Endpoint {
 		return nil
 	}
 
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
 	var out []Endpoint
-	for _, endpoint := range r.endpoints {
-		if !endpoint.Active {
-			continue
+	r.endpoints.Range(func(_, val any) bool {
+		endpoint, ok := val.(Endpoint)
+		if !ok || !endpoint.Active {
+			return true
 		}
 
 		if strings.TrimSpace(endpoint.Tenant) != trimmedTenant {
-			continue
+			return true
 		}
 
 		for _, candidate := range endpoint.Events {
@@ -133,7 +124,9 @@ func (r *Registry) Find(_ context.Context, tenant, event string) []Endpoint {
 				break
 			}
 		}
-	}
+
+		return true
+	})
 
 	return out
 }

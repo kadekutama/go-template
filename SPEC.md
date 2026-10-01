@@ -83,7 +83,7 @@ audit date; keep the `go` directive and CI toolchain aligned with it.
 | **Messaging (Log)** | Redpanda | v26.2 | Kafka API, Raft-native, durable financial event log (ADR-014) |
 | **Messaging (Edge)**| NATS Core | v2.14.6 | In-memory real-time WebSocket push & microsecond RPC (ADR-014) |
 | **Auth JWT** | golang-jwt | v5.3.1 | RS256 asymmetric |
-| **OAuth2** | golang.org/x/oauth2 | v0.23.0 | Google, GitHub, OIDC |
+| **OAuth2** | golang.org/x/oauth2 | v0.36.0 | Transport is stdlib-only (no SDK types at the port per E09-T02-R04); SDK retained as blank import only |
 | **RBAC** | Casbin | v2.8.0 | ABAC/RBAC hybrid |
 | **Feature Flags** | OpenFeature + Unleash | v1.17.2 / v6.5.1 | go-sdk + official SDK; etcd dynamic overrides |
 | **Secrets / Crypto** | OpenBao | v2.6.2 | Dynamic DB credentials & Transit encryption; supersedes Bitwarden (ADR-016) |

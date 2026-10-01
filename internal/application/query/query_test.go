@@ -7,11 +7,14 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 
 	"github.com/kadekutama/go-template/internal/application/port"
 	"github.com/kadekutama/go-template/internal/application/query"
 	"github.com/kadekutama/go-template/internal/domain/entity"
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
+	mockapplication "github.com/kadekutama/go-template/test/mock/application"
+	mockdomain "github.com/kadekutama/go-template/test/mock/domain"
 )
 
 const (
@@ -24,193 +27,10 @@ const (
 
 var qAt = time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
 
-type stubPostings struct {
-	posting entity.PostingData
-	err     error
-}
-
-func (s *stubPostings) Commit(_ context.Context, posting entity.PostingData) (entity.PostingData, error) {
-	return posting, nil
-}
-
-func (s *stubPostings) FindByID(_ context.Context, _ valueobject.TenantID, _ valueobject.PostingID) (entity.PostingData, error) {
-	return s.posting, s.err
-}
-
-func (s *stubPostings) FindByExternalReference(_ context.Context, _ valueobject.TenantID, _ string) (entity.PostingData, error) {
-	return entity.PostingData{}, s.err
-}
-
-func (s *stubPostings) FindByAccount(_ context.Context, _ valueobject.TenantID, _ valueobject.AccountID, _ string, _ int) ([]entity.PostingData, string, error) {
-	return nil, "", s.err
-}
-
-type entriesPage struct {
+type balanceEntriesPage struct {
 	entries []entity.Entry
 	next    string
 }
-
-type stubEntries struct {
-	pages          map[string]entriesPage
-	receivedLimits []int
-	err            error
-}
-
-func (s *stubEntries) FindByPosting(_ context.Context, _ valueobject.TenantID, _ valueobject.PostingID) ([]entity.Entry, error) {
-	return nil, s.err
-}
-
-func (s *stubEntries) FindByAccount(_ context.Context, _ valueobject.TenantID, _ valueobject.AccountID, cursor string, limit int) ([]entity.Entry, string, error) {
-	s.receivedLimits = append(s.receivedLimits, limit)
-	if s.err != nil {
-		return nil, "", s.err
-	}
-	page := s.pages[cursor]
-	return page.entries, page.next, nil
-}
-
-type stubAccounts struct {
-	account  entity.AccountData
-	accounts []entity.AccountData
-	next     string
-	err      error
-}
-
-func (s *stubAccounts) Create(_ context.Context, _ entity.AccountData) (entity.AccountData, error) {
-	return entity.AccountData{}, nil
-}
-
-func (s *stubAccounts) FindByID(_ context.Context, _ valueobject.TenantID, _ valueobject.AccountID) (entity.AccountData, error) {
-	return s.account, s.err
-}
-
-func (s *stubAccounts) FindByTenant(_ context.Context, _ valueobject.TenantID, _ string, _ int) ([]entity.AccountData, string, error) {
-	if s.err != nil {
-		return nil, "", s.err
-	}
-	return s.accounts, s.next, nil
-}
-
-func (s *stubAccounts) UpdateMetadata(_ context.Context, _ entity.AccountData, _ int64) error {
-	return nil
-}
-
-func (s *stubAccounts) UpdateStatus(_ context.Context, _ valueobject.TenantID, _ valueobject.AccountID, _ valueobject.AccountStatus, _ int64) error {
-	return nil
-}
-
-type stubTenants struct {
-	tenant  entity.TenantData
-	tenants []entity.TenantData
-	names   []string
-	err     error
-}
-
-func (s *stubTenants) Create(_ context.Context, _ entity.TenantData) (entity.TenantData, error) {
-	return entity.TenantData{}, nil
-}
-func (s *stubTenants) FindByID(_ context.Context, _ valueobject.TenantID) (entity.TenantData, error) {
-	return s.tenant, s.err
-}
-func (s *stubTenants) ListNames(_ context.Context) ([]string, error) {
-	return s.names, s.err
-}
-
-func (s *stubTenants) ListAliases(_ context.Context) ([]string, error) {
-	return nil, s.err
-}
-func (s *stubTenants) UpdateSettings(_ context.Context, _ entity.TenantData, _ int64) error {
-	return nil
-}
-func (s *stubTenants) ListTenants(_ context.Context) ([]entity.TenantData, error) {
-	if s.err != nil {
-		return nil, s.err
-	}
-	return s.tenants, nil
-}
-
-type stubTransfers struct {
-	transfer   port.TransferRecord
-	transfers  []port.TransferRecord
-	batch      port.BatchRecord
-	batchItems []port.BatchItem
-	next       string
-	err        error
-}
-
-func (s *stubTransfers) CreateTransfer(_ context.Context, _ port.TransferRecord) error { return nil }
-func (s *stubTransfers) FindTransfer(_ context.Context, _ valueobject.TenantID, _ string) (port.TransferRecord, error) {
-	return s.transfer, s.err
-}
-func (s *stubTransfers) UpdateTransfer(_ context.Context, _ port.TransferRecord) error { return nil }
-func (s *stubTransfers) ListTransfers(_ context.Context, _ port.TransferListFilter) ([]port.TransferRecord, string, error) {
-	if s.err != nil {
-		return nil, "", s.err
-	}
-	return s.transfers, s.next, nil
-}
-func (s *stubTransfers) CreateBatch(_ context.Context, _ port.BatchRecord, _ []port.BatchItem) error {
-	return nil
-}
-func (s *stubTransfers) FindBatch(_ context.Context, _ valueobject.TenantID, _ string) (port.BatchRecord, error) {
-	return s.batch, s.err
-}
-func (s *stubTransfers) UpdateBatchState(_ context.Context, _ valueobject.TenantID, _, _ string) error {
-	return nil
-}
-func (s *stubTransfers) UpdateBatchItem(_ context.Context, _ valueobject.TenantID, _ string, _ int, _, _ string) error {
-	return nil
-}
-func (s *stubTransfers) ListBatchItems(_ context.Context, _ valueobject.TenantID, _ string) ([]port.BatchItem, error) {
-	if s.err != nil {
-		return nil, s.err
-	}
-	return s.batchItems, nil
-}
-
-type stubDisputes struct {
-	dispute  entity.Dispute
-	disputes []entity.Dispute
-	next     string
-	err      error
-}
-
-func (s *stubDisputes) CreateDispute(_ context.Context, _ entity.Dispute) error { return nil }
-func (s *stubDisputes) FindDispute(_ context.Context, _ string) (entity.Dispute, error) {
-	return s.dispute, s.err
-}
-func (s *stubDisputes) UpdateDispute(_ context.Context, _ entity.Dispute) error { return nil }
-func (s *stubDisputes) ListDisputes(_ context.Context, _ string, _, _ time.Time, _ string, _ int) ([]entity.Dispute, string, error) {
-	if s.err != nil {
-		return nil, "", s.err
-	}
-	return s.disputes, s.next, nil
-}
-
-type stubHolds struct {
-	holds []entity.HoldData
-	err   error
-}
-
-func (s *stubHolds) Create(_ context.Context, _ entity.HoldData) (entity.HoldData, error) {
-	return entity.HoldData{}, nil
-}
-
-func (s *stubHolds) FindByID(_ context.Context, _ valueobject.TenantID, _ valueobject.HoldID) (entity.HoldData, error) {
-	return entity.HoldData{}, s.err
-}
-
-func (s *stubHolds) FindActiveByAccount(_ context.Context, _ valueobject.TenantID, _ valueobject.AccountID) ([]entity.HoldData, error) {
-	return s.holds, s.err
-}
-
-func (s *stubHolds) Update(_ context.Context, _ entity.HoldData, _ int64) error {
-	return s.err
-}
-
-type stubClock struct{}
-
-func (stubClock) Now() time.Time { return qAt }
 
 func qEntry(id, posting string, side valueobject.Direction, amount int64, asset valueobject.AssetCode) entity.Entry {
 	return entity.Entry{
@@ -271,7 +91,13 @@ func TestPostingQueryExecute(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			svc := query.NewPostingQueryService(query.PostingQueryServiceParams{Postings: &stubPostings{posting: tc.posting, err: tc.err}})
+			postings := mockdomain.NewMockPostingRepository(t)
+			postings.EXPECT().
+				FindByID(mock.Anything, qTenant, valueobject.PostingID("p-1")).
+				Return(tc.posting, tc.err).
+				Once()
+
+			svc := query.NewPostingQueryService(query.PostingQueryServiceParams{Postings: postings})
 			actualResult, err := svc.Execute(context.Background(), port.GetPostingQuery{TenantID: qTenant, PostingID: "p-1"})
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -286,7 +112,7 @@ func TestBalanceExecute(t *testing.T) {
 		name           string
 		account        entity.AccountData
 		accountErr     error
-		pages          map[string]entriesPage
+		pages          map[string]balanceEntriesPage
 		holds          []entity.HoldData
 		query          port.BalanceQuery
 		expectedResult port.BalanceView
@@ -297,7 +123,7 @@ func TestBalanceExecute(t *testing.T) {
 		{
 			name:    "liability available nets credits minus debits minus holds",
 			account: qAccountData(valueobject.ClassLiability),
-			pages: map[string]entriesPage{
+			pages: map[string]balanceEntriesPage{
 				"": {
 					entries: []entity.Entry{
 						qEntry("e-1", "p-1", valueobject.DirectionCredit, 10000, qCurrency),
@@ -321,7 +147,7 @@ func TestBalanceExecute(t *testing.T) {
 		{
 			name:    "asset available nets debits minus credits",
 			account: qAccountData(valueobject.ClassAsset),
-			pages: map[string]entriesPage{
+			pages: map[string]balanceEntriesPage{
 				"": {
 					entries: []entity.Entry{
 						qEntry("e-1", "p-1", valueobject.DirectionDebit, 10000, qCurrency),
@@ -342,7 +168,7 @@ func TestBalanceExecute(t *testing.T) {
 		{
 			name:    "multipage scan follows cursors",
 			account: qAccountData(valueobject.ClassLiability),
-			pages: map[string]entriesPage{
+			pages: map[string]balanceEntriesPage{
 				"": {
 					entries: []entity.Entry{
 						qEntry("e-1", "p-1", valueobject.DirectionCredit, 10000, qCurrency),
@@ -368,7 +194,7 @@ func TestBalanceExecute(t *testing.T) {
 		{
 			name:    "released holds do not reduce available",
 			account: qAccountData(valueobject.ClassLiability),
-			pages: map[string]entriesPage{
+			pages: map[string]balanceEntriesPage{
 				"": {
 					entries: []entity.Entry{
 						qEntry("e-1", "p-1", valueobject.DirectionCredit, 10000, qCurrency),
@@ -404,17 +230,16 @@ func TestBalanceExecute(t *testing.T) {
 			account: qAccountData(valueobject.ClassAsset),
 			pages:   nil,
 			holds:   nil,
-			query: func() port.BalanceQuery {
-				q := port.BalanceQuery{TenantID: qTenant, LedgerID: qLedger, AccountID: qAccount}
-				return q
-			}(),
+			query: port.BalanceQuery{
+				TenantID: qTenant, LedgerID: qLedger, AccountID: qAccount,
+			},
 			expectedResult: port.BalanceView{},
 			expectedError:  entity.NewError("BALANCE_ASSET_REQUIRED", "balance requires an asset code"),
 		},
 		{
 			name:    "minInt64 entry negation returns BALANCE_OVERFLOW",
 			account: qAccountData(valueobject.ClassAsset),
-			pages: map[string]entriesPage{
+			pages: map[string]balanceEntriesPage{
 				"": {
 					entries: []entity.Entry{
 						qEntry("e-min", "p-min", valueobject.DirectionCredit, math.MinInt64, qCurrency),
@@ -432,7 +257,7 @@ func TestBalanceExecute(t *testing.T) {
 		{
 			name:    "entry scan addition overflow returns BALANCE_OVERFLOW",
 			account: qAccountData(valueobject.ClassAsset),
-			pages: map[string]entriesPage{
+			pages: map[string]balanceEntriesPage{
 				"": {
 					entries: []entity.Entry{
 						qEntry("e-max1", "p-max1", valueobject.DirectionDebit, math.MaxInt64-5, qCurrency),
@@ -451,7 +276,7 @@ func TestBalanceExecute(t *testing.T) {
 		{
 			name:    "expired holds are excluded from hold summation",
 			account: qAccountData(valueobject.ClassLiability),
-			pages: map[string]entriesPage{
+			pages: map[string]balanceEntriesPage{
 				"": {
 					entries: []entity.Entry{
 						qEntry("e-1", "p-1", valueobject.DirectionCredit, 10000, qCurrency),
@@ -495,7 +320,7 @@ func TestBalanceExecute(t *testing.T) {
 		{
 			name:    "hold sum addition overflow returns BALANCE_OVERFLOW",
 			account: qAccountData(valueobject.ClassLiability),
-			pages: map[string]entriesPage{
+			pages: map[string]balanceEntriesPage{
 				"": {
 					entries: []entity.Entry{
 						qEntry("e-1", "p-1", valueobject.DirectionCredit, 10000, qCurrency),
@@ -532,7 +357,7 @@ func TestBalanceExecute(t *testing.T) {
 		{
 			name:    "available balance subtraction overflow returns BALANCE_OVERFLOW",
 			account: qAccountData(valueobject.ClassAsset),
-			pages: map[string]entriesPage{
+			pages: map[string]balanceEntriesPage{
 				"": {
 					entries: []entity.Entry{
 						qEntry("e-under1", "p-under1", valueobject.DirectionCredit, math.MaxInt64, qCurrency),
@@ -562,11 +387,33 @@ func TestBalanceExecute(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			accounts := mockdomain.NewMockAccountRepository(t)
+			entries := mockdomain.NewMockEntryReader(t)
+			holds := mockdomain.NewMockHoldRepository(t)
+			clock := mockapplication.NewMockClock(t)
+
+			clock.EXPECT().Now().Return(qAt).Maybe()
+			accounts.EXPECT().
+				FindByID(mock.Anything, tc.query.TenantID, tc.query.AccountID).
+				Return(tc.account, tc.accountErr).
+				Maybe()
+			holds.EXPECT().
+				FindActiveByAccount(mock.Anything, tc.query.TenantID, tc.query.AccountID).
+				Return(tc.holds, nil).
+				Maybe()
+
+			for cursor, page := range tc.pages {
+				entries.EXPECT().
+					FindByAccount(mock.Anything, tc.query.TenantID, tc.query.AccountID, cursor, 500).
+					Return(page.entries, page.next, nil).
+					Maybe()
+			}
+
 			svc := query.NewBalanceService(query.BalanceServiceParams{
-				Accounts: &stubAccounts{account: tc.account, err: tc.accountErr},
-				Entries:  &stubEntries{pages: tc.pages},
-				Holds:    &stubHolds{holds: tc.holds},
-				Clock:    stubClock{},
+				Accounts: accounts,
+				Entries:  entries,
+				Holds:    holds,
+				Clock:    clock,
 			})
 			actualResult, err := svc.Execute(context.Background(), tc.query)
 			assert.Equal(t, tc.expectedResult, actualResult)
@@ -580,88 +427,103 @@ func TestEntriesExecute(t *testing.T) {
 
 	type testCase struct {
 		name           string
-		pages          map[string]entriesPage
 		query          port.EntriesQuery
+		programmed     []entity.Entry
+		programmedNext string
 		expectedResult port.EntriesPage
 		expectedError  error
-		expectedLimits []int
 	}
 
 	testCases := []testCase{
 		{
 			name: "execute returns page with next cursor",
-			pages: map[string]entriesPage{
-				"": {
-					entries: []entity.Entry{
-						{ID: "e-1", AccountID: "a-1", AmountMinor: 100},
-					},
-					next: "cursor-next",
-				},
-			},
 			query: port.EntriesQuery{
 				TenantID: qTenant, LedgerID: qLedger, AccountID: "a-1",
 				Limit: 10,
 			},
+			programmed: []entity.Entry{
+				{ID: "e-1", AccountID: "a-1", AmountMinor: 100},
+			},
+			programmedNext: "cursor-next",
 			expectedResult: port.EntriesPage{
 				Entries: []entity.Entry{
 					{ID: "e-1", AccountID: "a-1", AmountMinor: 100},
 				},
 				NextCursor: "cursor-next",
 			},
-			expectedError:  nil,
-			expectedLimits: []int{10},
+			expectedError: nil,
 		},
 		{
-			name: "clamp limits non-positive to 500 and maximum to 500",
-			pages: map[string]entriesPage{
-				"": {
-					entries: []entity.Entry{
-						{ID: "e-1", AccountID: "a-1", AmountMinor: 100},
-					},
-				},
-			},
+			name: "non-positive limit returns validation error",
 			query: port.EntriesQuery{
 				TenantID: qTenant, LedgerID: qLedger, AccountID: "a-1",
 				Limit: -5,
 			},
-			expectedResult: port.EntriesPage{
-				Entries: []entity.Entry{
-					{ID: "e-1", AccountID: "a-1", AmountMinor: 100},
-				},
-			},
-			expectedError:  nil,
-			expectedLimits: []int{500},
+			programmed:     nil,
+			programmedNext: "",
+			expectedResult: port.EntriesPage{},
+			expectedError:  entity.NewError("INVALID_EXPORT_LIMIT", "export limit must be between 1 and 500"),
 		},
 		{
-			name:  "missing tenant returns validation error",
-			pages: nil,
+			name: "zero limit returns validation error",
+			query: port.EntriesQuery{
+				TenantID: qTenant, LedgerID: qLedger, AccountID: "a-1",
+				Limit: 0,
+			},
+			programmed:     nil,
+			programmedNext: "",
+			expectedResult: port.EntriesPage{},
+			expectedError:  entity.NewError("INVALID_EXPORT_LIMIT", "export limit must be between 1 and 500"),
+		},
+		{
+			name: "excessive limit returns validation error",
+			query: port.EntriesQuery{
+				TenantID: qTenant, LedgerID: qLedger, AccountID: "a-1",
+				Limit: 501,
+			},
+			programmed:     nil,
+			programmedNext: "",
+			expectedResult: port.EntriesPage{},
+			expectedError:  entity.NewError("INVALID_EXPORT_LIMIT", "export limit must be between 1 and 500"),
+		},
+		{
+			name: "missing tenant returns validation error",
 			query: port.EntriesQuery{
 				TenantID: "", LedgerID: qLedger, AccountID: "a-1",
+				Limit: 10,
 			},
+			programmed:     nil,
+			programmedNext: "",
 			expectedResult: port.EntriesPage{},
 			expectedError:  entity.NewError("TENANT_REQUIRED", "tenant id is required"),
-			expectedLimits: nil,
 		},
 		{
-			name:  "missing account returns validation error",
-			pages: nil,
+			name: "missing account returns validation error",
 			query: port.EntriesQuery{
 				TenantID: qTenant, LedgerID: qLedger,
+				Limit: 10,
 			},
+			programmed:     nil,
+			programmedNext: "",
 			expectedResult: port.EntriesPage{},
 			expectedError:  entity.NewError("ENTRIES_ACCOUNT_REQUIRED", "entries require an account id"),
-			expectedLimits: nil,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			entries := &stubEntries{pages: tc.pages}
+			entries := mockdomain.NewMockEntryReader(t)
+			if tc.expectedError == nil {
+				entries.EXPECT().
+					FindByAccount(mock.Anything, tc.query.TenantID, tc.query.AccountID, tc.query.Cursor, tc.query.Limit).
+					Return(tc.programmed, tc.programmedNext, nil).
+					Once()
+			}
+
 			svc := query.NewEntriesService(query.EntriesServiceParams{Entries: entries})
 			actualResult, err := svc.Execute(context.Background(), tc.query)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
-			assert.Equal(t, tc.expectedLimits, entries.receivedLimits)
 		})
 	}
 }

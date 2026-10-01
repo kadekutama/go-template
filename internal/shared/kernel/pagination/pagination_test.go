@@ -119,46 +119,46 @@ func TestDecodeCursor(t *testing.T) {
 	}
 }
 
-func TestPageRequestNormalize(t *testing.T) {
+func TestPageRequestValidate(t *testing.T) {
 	t.Parallel()
 
 	type testCase struct {
-		name           string
-		r              PageRequest
-		expectedResult PageRequest
+		name          string
+		r             PageRequest
+		expectedError error
 	}
 
 	testCases := []testCase{
 		{
-			name: "excessive limit and negative offset clamped",
-			r:    PageRequest{Limit: 9999, Offset: -5},
-			expectedResult: PageRequest{
-				Limit:  MaxLimit,
-				Offset: 0,
-			},
+			name:          "excessive limit rejected",
+			r:             PageRequest{Limit: 9999, Offset: 0},
+			expectedError: errors.New("pagination: limit must be between 1 and 200"),
 		},
 		{
-			name: "empty request defaulted",
-			r:    PageRequest{},
-			expectedResult: PageRequest{
-				Limit:  DefaultLimit,
-				Offset: 0,
-			},
+			name:          "zero limit rejected",
+			r:             PageRequest{Limit: 0, Offset: 0},
+			expectedError: errors.New("pagination: limit must be between 1 and 200"),
 		},
 		{
-			name: "valid request preserved",
-			r:    PageRequest{Limit: 25, Offset: 50},
-			expectedResult: PageRequest{
-				Limit:  25,
-				Offset: 50,
-			},
+			name:          "negative offset rejected",
+			r:             PageRequest{Limit: 50, Offset: -5},
+			expectedError: errors.New("pagination: offset must be non-negative"),
+		},
+		{
+			name:          "valid request accepted",
+			r:             PageRequest{Limit: 25, Offset: 50},
+			expectedError: nil,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actualResult := tc.r.Normalize()
-			assert.Equal(t, tc.expectedResult, actualResult)
+			err := tc.r.Validate()
+			if tc.expectedError != nil {
+				assert.EqualError(t, err, tc.expectedError.Error())
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }
@@ -171,42 +171,56 @@ func TestParseLimitOffset(t *testing.T) {
 		limitStr       string
 		offsetStr      string
 		expectedResult PageRequest
+		expectedError  error
 	}
 
 	testCases := []testCase{
 		{
-			name:      "non-numeric strings fall back to defaults",
-			limitStr:  "abc",
-			offsetStr: "-3",
-			expectedResult: PageRequest{
-				Limit:  DefaultLimit,
-				Offset: 0,
-			},
+			name:           "non-numeric limit rejected",
+			limitStr:       "abc",
+			offsetStr:      "0",
+			expectedResult: PageRequest{},
+			expectedError:  errors.New("pagination: invalid limit integer"),
 		},
 		{
-			name:      "valid numeric values parsed",
-			limitStr:  "25",
-			offsetStr: "50",
-			expectedResult: PageRequest{
-				Limit:  25,
-				Offset: 50,
-			},
+			name:           "empty limit rejected",
+			limitStr:       "",
+			offsetStr:      "0",
+			expectedResult: PageRequest{},
+			expectedError:  errors.New("pagination: limit is required"),
 		},
 		{
-			name:      "empty strings fall back to defaults",
-			limitStr:  "",
-			offsetStr: "",
-			expectedResult: PageRequest{
-				Limit:  DefaultLimit,
-				Offset: 0,
-			},
+			name:           "empty offset rejected",
+			limitStr:       "25",
+			offsetStr:      "",
+			expectedResult: PageRequest{},
+			expectedError:  errors.New("pagination: offset is required"),
+		},
+		{
+			name:           "negative offset rejected",
+			limitStr:       "25",
+			offsetStr:      "-3",
+			expectedResult: PageRequest{},
+			expectedError:  errors.New("pagination: offset must be non-negative"),
+		},
+		{
+			name:           "valid numeric values parsed",
+			limitStr:       "25",
+			offsetStr:      "50",
+			expectedResult: PageRequest{Limit: 25, Offset: 50},
+			expectedError:  nil,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actualResult := ParseLimitOffset(tc.limitStr, tc.offsetStr)
-			assert.Equal(t, tc.expectedResult, actualResult)
+			actualResult, err := ParseLimitOffset(tc.limitStr, tc.offsetStr)
+			if tc.expectedError != nil {
+				assert.EqualError(t, err, tc.expectedError.Error())
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedResult, actualResult)
+			}
 		})
 	}
 }

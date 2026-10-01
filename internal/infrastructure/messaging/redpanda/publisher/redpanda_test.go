@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	appport "github.com/kadekutama/go-template/internal/application/port"
@@ -15,7 +16,8 @@ import (
 	"github.com/kadekutama/go-template/internal/infrastructure/messaging/redpanda"
 	"github.com/kadekutama/go-template/internal/infrastructure/messaging/redpanda/publisher"
 	"github.com/kadekutama/go-template/internal/shared/kernel/log"
-	fakes "github.com/kadekutama/go-template/test/fakes"
+	"github.com/kadekutama/go-template/test/doubles"
+	mockredpanda "github.com/kadekutama/go-template/test/mock/redpanda"
 )
 
 func TestNewPublisher(t *testing.T) {
@@ -32,15 +34,26 @@ func TestNewPublisher(t *testing.T) {
 		{
 			name: "broker accepted",
 			params: publisher.PublisherParams{
-				Broker: fakes.NewBroker(),
+				Broker: mockredpanda.NewMockBroker(t),
+				Topic:  "outbox.facts.v1",
 			},
 			expectedResult: true,
 			expectedError:  nil,
 		},
 		{
+			name: "empty topic rejected",
+			params: publisher.PublisherParams{
+				Broker: mockredpanda.NewMockBroker(t),
+				Topic:  "",
+			},
+			expectedResult: false,
+			expectedError:  errors.New("publisher: topic is required"),
+		},
+		{
 			name: "nil broker rejected",
 			params: publisher.PublisherParams{
 				Broker: nil,
+				Topic:  "outbox.facts.v1",
 			},
 			expectedResult: false,
 			expectedError:  errors.New("publisher: broker is required"),
@@ -67,7 +80,7 @@ func TestPublisherPublish(t *testing.T) {
 
 	type testCase struct {
 		name              string
-		publisher         func(broker *fakes.Broker) *publisher.Publisher
+		publisher         func(broker redpanda.Broker) *publisher.Publisher
 		armBrokerFail     error
 		ctx               context.Context
 		facts             []appport.OutboxFact
@@ -79,7 +92,7 @@ func TestPublisherPublish(t *testing.T) {
 	testCases := []testCase{
 		{
 			name: "nil publisher rejected",
-			publisher: func(_ *fakes.Broker) *publisher.Publisher {
+			publisher: func(_ redpanda.Broker) *publisher.Publisher {
 				return nil
 			},
 			armBrokerFail: nil,
@@ -106,8 +119,8 @@ func TestPublisherPublish(t *testing.T) {
 		},
 		{
 			name: "relays valid fact",
-			publisher: func(b *fakes.Broker) *publisher.Publisher {
-				p, _ := publisher.NewPublisher(publisher.PublisherParams{Broker: b})
+			publisher: func(b redpanda.Broker) *publisher.Publisher {
+				p, _ := publisher.NewPublisher(publisher.PublisherParams{Broker: b, Topic: "outbox.facts.v1"})
 				return p
 			},
 			armBrokerFail: nil,
@@ -134,8 +147,8 @@ func TestPublisherPublish(t *testing.T) {
 		},
 		{
 			name: "missing tenant rejected",
-			publisher: func(b *fakes.Broker) *publisher.Publisher {
-				p, _ := publisher.NewPublisher(publisher.PublisherParams{Broker: b})
+			publisher: func(b redpanda.Broker) *publisher.Publisher {
+				p, _ := publisher.NewPublisher(publisher.PublisherParams{Broker: b, Topic: "outbox.facts.v1"})
 				return p
 			},
 			armBrokerFail: nil,
@@ -159,8 +172,8 @@ func TestPublisherPublish(t *testing.T) {
 		},
 		{
 			name: "missing event type rejected",
-			publisher: func(b *fakes.Broker) *publisher.Publisher {
-				p, _ := publisher.NewPublisher(publisher.PublisherParams{Broker: b})
+			publisher: func(b redpanda.Broker) *publisher.Publisher {
+				p, _ := publisher.NewPublisher(publisher.PublisherParams{Broker: b, Topic: "outbox.facts.v1"})
 				return p
 			},
 			armBrokerFail: nil,
@@ -187,8 +200,8 @@ func TestPublisherPublish(t *testing.T) {
 		},
 		{
 			name: "missing aggregate rejected",
-			publisher: func(b *fakes.Broker) *publisher.Publisher {
-				p, _ := publisher.NewPublisher(publisher.PublisherParams{Broker: b})
+			publisher: func(b redpanda.Broker) *publisher.Publisher {
+				p, _ := publisher.NewPublisher(publisher.PublisherParams{Broker: b, Topic: "outbox.facts.v1"})
 				return p
 			},
 			armBrokerFail: nil,
@@ -215,8 +228,8 @@ func TestPublisherPublish(t *testing.T) {
 		},
 		{
 			name: "nil payload rejected",
-			publisher: func(b *fakes.Broker) *publisher.Publisher {
-				p, _ := publisher.NewPublisher(publisher.PublisherParams{Broker: b})
+			publisher: func(b redpanda.Broker) *publisher.Publisher {
+				p, _ := publisher.NewPublisher(publisher.PublisherParams{Broker: b, Topic: "outbox.facts.v1"})
 				return p
 			},
 			armBrokerFail: nil,
@@ -243,8 +256,8 @@ func TestPublisherPublish(t *testing.T) {
 		},
 		{
 			name: "broker failure surfaces",
-			publisher: func(b *fakes.Broker) *publisher.Publisher {
-				p, _ := publisher.NewPublisher(publisher.PublisherParams{Broker: b})
+			publisher: func(b redpanda.Broker) *publisher.Publisher {
+				p, _ := publisher.NewPublisher(publisher.PublisherParams{Broker: b, Topic: "outbox.facts.v1"})
 				return p
 			},
 			armBrokerFail: errors.New("broker down"),
@@ -271,8 +284,8 @@ func TestPublisherPublish(t *testing.T) {
 		},
 		{
 			name: "zero occurred at defaults to current time",
-			publisher: func(b *fakes.Broker) *publisher.Publisher {
-				p, _ := publisher.NewPublisher(publisher.PublisherParams{Broker: b})
+			publisher: func(b redpanda.Broker) *publisher.Publisher {
+				p, _ := publisher.NewPublisher(publisher.PublisherParams{Broker: b, Topic: "outbox.facts.v1"})
 				return p
 			},
 			armBrokerFail: nil,
@@ -301,10 +314,17 @@ func TestPublisherPublish(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			broker := fakes.NewBroker()
-			if tc.armBrokerFail != nil {
-				broker.SetFail(tc.armBrokerFail)
-			}
+			broker := mockredpanda.NewMockBroker(t)
+			var records []doubles.PublishRecord
+			broker.EXPECT().Publish(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				RunAndReturn(func(_ context.Context, topic, key string, headers map[string]string, payload []byte) error {
+					if tc.armBrokerFail != nil {
+						return tc.armBrokerFail
+					}
+					records = append(records, doubles.SnapshotPublish(topic, key, headers, payload))
+					return nil
+				}).Maybe()
+
 			p := tc.publisher(broker)
 			err := p.Publish(tc.ctx, tc.facts...)
 			if tc.expectedError != nil {
@@ -312,7 +332,6 @@ func TestPublisherPublish(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			records := broker.Records()
 			assert.Len(t, records, tc.expectedRecords)
 			if tc.expectedRecords > 0 {
 				assert.Equal(t, tc.expectedEventType, records[0].Headers["event_type"])
@@ -354,8 +373,15 @@ func TestPublisherPropagatesCorrelation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			broker := fakes.NewBroker()
-			instance, err := publisher.NewPublisher(publisher.PublisherParams{Broker: broker})
+			broker := mockredpanda.NewMockBroker(t)
+			var records []doubles.PublishRecord
+			broker.EXPECT().Publish(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				RunAndReturn(func(_ context.Context, topic, key string, headers map[string]string, payload []byte) error {
+					records = append(records, doubles.SnapshotPublish(topic, key, headers, payload))
+					return nil
+				}).Maybe()
+
+			instance, err := publisher.NewPublisher(publisher.PublisherParams{Broker: broker, Topic: "outbox.facts.v1"})
 			require.NoError(t, err)
 
 			ctx := log.WithTraceID(log.WithRequestID(context.Background(), tc.requestID), tc.traceID)
@@ -377,7 +403,6 @@ func TestPublisherPropagatesCorrelation(t *testing.T) {
 			err = instance.Publish(ctx, fact)
 			require.NoError(t, err)
 
-			records := broker.Records()
 			require.Len(t, records, 1)
 			assert.Equal(t, tc.expectedTraceID, records[0].Headers["trace_id"])
 			assert.Equal(t, tc.expectedRequestID, records[0].Headers["request_id"])
@@ -399,9 +424,9 @@ func TestPublisherConfiguredTopic(t *testing.T) {
 
 	testCases := []testCase{
 		{
-			name:          "unset topic uses default",
-			topic:         "",
-			expectedTopic: redpanda.DefaultTopicsConfig().OutboxFacts,
+			name:          "configured topic v1",
+			topic:         "tenant.outbox.facts.v1",
+			expectedTopic: "tenant.outbox.facts.v1",
 		},
 		{
 			name:          "configured topic wins",
@@ -412,7 +437,14 @@ func TestPublisherConfiguredTopic(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			broker := fakes.NewBroker()
+			broker := mockredpanda.NewMockBroker(t)
+			var records []doubles.PublishRecord
+			broker.EXPECT().Publish(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				RunAndReturn(func(_ context.Context, topic, key string, headers map[string]string, payload []byte) error {
+					records = append(records, doubles.SnapshotPublish(topic, key, headers, payload))
+					return nil
+				}).Maybe()
+
 			instance, err := publisher.NewPublisher(publisher.PublisherParams{
 				Broker: broker,
 				Topic:  tc.topic,
@@ -435,8 +467,8 @@ func TestPublisherConfiguredTopic(t *testing.T) {
 			}
 
 			require.NoError(t, instance.Publish(context.Background(), fact))
-			require.Len(t, broker.Records(), 1)
-			assert.Equal(t, tc.expectedTopic, broker.Records()[0].Topic)
+			require.Len(t, records, 1)
+			assert.Equal(t, tc.expectedTopic, records[0].Topic)
 		})
 	}
 }
@@ -468,8 +500,8 @@ func TestPublisherEmptyBatch(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			broker := fakes.NewBroker()
-			instance, err := publisher.NewPublisher(publisher.PublisherParams{Broker: broker})
+			broker := mockredpanda.NewMockBroker(t)
+			instance, err := publisher.NewPublisher(publisher.PublisherParams{Broker: broker, Topic: "outbox.facts.v1"})
 			require.NoError(t, err)
 
 			err = instance.Publish(context.Background(), tc.facts...)
@@ -478,7 +510,6 @@ func TestPublisherEmptyBatch(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			assert.Len(t, broker.Records(), tc.expectedRecords)
 		})
 	}
 }

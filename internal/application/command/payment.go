@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -77,36 +78,44 @@ type IntentStore interface {
 // retry-safe); durable state transitions commit with outbox facts inside.
 // IntentServiceParams carries dependencies for IntentService.
 type IntentServiceParams struct {
-	UoW       port.UnitOfWork
-	Intents   IntentStore
-	Processor port.PaymentProcessor
-	Clock     port.Clock
-	IDs       port.IDGenerator
-	Authz     port.Authorizer
+	UoW            port.UnitOfWork
+	Intents        IntentStore
+	Processor      port.PaymentProcessor
+	Clock          port.Clock
+	IDs            port.IDGenerator
+	Authz          port.Authorizer
+	AuthExpiryDays int
 }
 
 // IntentService backs payment-intent charging over the payment-processor
 // port. Provider calls happen OUTSIDE UnitOfWork callbacks (callbacks stay
 // retry-safe); durable state transitions commit with outbox facts inside.
 type IntentService struct {
-	uow       port.UnitOfWork
-	intents   IntentStore
-	processor port.PaymentProcessor
-	clock     port.Clock
-	ids       port.IDGenerator
-	authz     port.Authorizer
+	uow            port.UnitOfWork
+	intents        IntentStore
+	processor      port.PaymentProcessor
+	clock          port.Clock
+	ids            port.IDGenerator
+	authz          port.Authorizer
+	authExpiryDays int
 }
 
 // NewIntentService constructs an IntentService with the supplied dependencies.
-func NewIntentService(params IntentServiceParams) *IntentService {
-	return &IntentService{
-		uow:       params.UoW,
-		intents:   params.Intents,
-		processor: params.Processor,
-		clock:     params.Clock,
-		ids:       params.IDs,
-		authz:     params.Authz,
+// AuthExpiryDays must be positive: a zero value would fail every authorization
+// at runtime instead of at wiring time.
+func NewIntentService(params IntentServiceParams) (*IntentService, error) {
+	if params.AuthExpiryDays <= 0 {
+		return nil, errors.New("payment: auth expiry days must be positive")
 	}
+	return &IntentService{
+		uow:            params.UoW,
+		intents:        params.Intents,
+		processor:      params.Processor,
+		clock:          params.Clock,
+		ids:            params.IDs,
+		authz:          params.Authz,
+		authExpiryDays: params.AuthExpiryDays,
+	}, nil
 }
 
 // CreateIntent creates a PENDING intent with an authorized amount. Strong write.
@@ -118,7 +127,7 @@ func (s *IntentService) CreateIntent(ctx context.Context, req port.PaymentIntent
 	if err := RequireAuthz(ctx, s.authz, subject, "payment.create", "ledger/"+string(req.LedgerID)); err != nil {
 		return port.PaymentIntentResult{}, err
 	}
-	if _, err := service.Authorize("intent", req.AmountMinor, "intent", s.clock.Now().UTC(), service.DefaultAuthExpiryDays, false); err != nil {
+	if _, err := service.Authorize("intent", req.AmountMinor, "intent", s.clock.Now().UTC(), s.authExpiryDays, false); err != nil {
 		return port.PaymentIntentResult{}, err
 	}
 	intentID := s.ids.NewID()
@@ -281,7 +290,10 @@ func (s *IntentService) GetIntent(ctx context.Context, query port.PaymentQuery) 
 
 // ListIntents returns one tenant's intents, newest first (bounded). Strong read.
 func (s *IntentService) ListIntents(ctx context.Context, tenant valueobject.TenantID, limit int) ([]port.PaymentIntentResult, error) {
-	records, err := s.intents.ListIntents(ctx, tenant, clampPageLimit(limit))
+	if err := validatePageLimit(limit); err != nil {
+		return nil, err
+	}
+	records, err := s.intents.ListIntents(ctx, tenant, limit)
 	if err != nil {
 		return nil, err
 	}

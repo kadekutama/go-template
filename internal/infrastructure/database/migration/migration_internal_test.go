@@ -3,8 +3,8 @@ package migration
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,18 +14,45 @@ import (
 
 // recordingLogger captures lines per severity for bridge assertions.
 type recordingLogger struct {
-	mu    sync.Mutex
-	lines map[string][]string
+	lines sync.Map // string -> *atomic.Pointer[[]string]
 }
 
 func newRecordingLogger() *recordingLogger {
-	return &recordingLogger{lines: make(map[string][]string)}
+	return &recordingLogger{}
 }
 
 func (l *recordingLogger) record(level, msg string) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.lines[level] = append(l.lines[level], msg)
+	val, _ := l.lines.LoadOrStore(level, &atomic.Pointer[[]string]{})
+	ptr := val.(*atomic.Pointer[[]string])
+	for {
+		old := ptr.Load()
+		var next []string
+		if old != nil {
+			next = make([]string, len(*old)+1)
+			copy(next, *old)
+			next[len(*old)] = msg
+		} else {
+			next = []string{msg}
+		}
+		if ptr.CompareAndSwap(old, &next) {
+			break
+		}
+	}
+}
+
+func (l *recordingLogger) getLines(level string) []string {
+	val, ok := l.lines.Load(level)
+	if !ok {
+		return nil
+	}
+	ptr := val.(*atomic.Pointer[[]string])
+	old := ptr.Load()
+	if old == nil {
+		return nil
+	}
+	out := make([]string, len(*old))
+	copy(out, *old)
+	return out
 }
 
 func (l *recordingLogger) Trace(context.Context, string, ...any) {}
@@ -102,44 +129,9 @@ func TestGooseLoggerBridge(t *testing.T) {
 				bridge.Printf(tc.format, tc.args...)
 			}
 
-			recorder.mu.Lock()
-			defer recorder.mu.Unlock()
-			require.Len(t, recorder.lines[tc.expectedLevel], 1)
-			assert.Equal(t, tc.expectedLine, recorder.lines[tc.expectedLevel][0])
-		})
-	}
-}
-
-func TestResolveTimeout(t *testing.T) {
-	t.Parallel()
-
-	type testCase struct {
-		name            string
-		timeout         time.Duration
-		expectedTimeout time.Duration
-	}
-
-	testCases := []testCase{
-		{
-			name:            "zero selects default",
-			timeout:         0,
-			expectedTimeout: BootstrapDefaultTimeout,
-		},
-		{
-			name:            "negative selects default",
-			timeout:         -time.Second,
-			expectedTimeout: BootstrapDefaultTimeout,
-		},
-		{
-			name:            "explicit timeout kept",
-			timeout:         5 * time.Second,
-			expectedTimeout: 5 * time.Second,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expectedTimeout, resolveTimeout(tc.timeout))
+			lines := recorder.getLines(tc.expectedLevel)
+			require.Len(t, lines, 1)
+			assert.Equal(t, tc.expectedLine, lines[0])
 		})
 	}
 }

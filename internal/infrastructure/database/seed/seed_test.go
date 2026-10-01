@@ -6,69 +6,64 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/kadekutama/go-template/internal/infrastructure/database/seed"
 	"github.com/kadekutama/go-template/test/fixtures"
+	mockseed "github.com/kadekutama/go-template/test/mock/seed"
 )
 
-// memoryStores is an idempotency-proving fake: Apply skips existing IDs.
-type memoryStores struct {
+type mapState struct {
 	ledgers  map[string]seed.LedgerSeed
 	accounts map[string]seed.AccountSeed
 	postings map[string]seed.PostingSeed
 }
 
-func newMemoryStores() *memoryStores {
-	return &memoryStores{
+func newMockStores(t *testing.T) (seed.Stores, *mapState) {
+	t.Helper()
+
+	state := &mapState{
 		ledgers:  make(map[string]seed.LedgerSeed),
 		accounts: make(map[string]seed.AccountSeed),
 		postings: make(map[string]seed.PostingSeed),
 	}
-}
 
-type ledgerAdapter struct{ stores *memoryStores }
+	ml := mockseed.NewMockLedgerStore(t)
+	ml.EXPECT().Exists(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, id string) (bool, error) {
+		_, ok := state.ledgers[id]
+		return ok, nil
+	}).Maybe()
+	ml.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, s seed.LedgerSeed) error {
+		state.ledgers[s.ID] = s
+		return nil
+	}).Maybe()
 
-func (a ledgerAdapter) Exists(_ context.Context, id string) (bool, error) {
-	_, ok := a.stores.ledgers[id]
-	return ok, nil
-}
+	ma := mockseed.NewMockAccountStore(t)
+	ma.EXPECT().Exists(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, id string) (bool, error) {
+		_, ok := state.accounts[id]
+		return ok, nil
+	}).Maybe()
+	ma.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, s seed.AccountSeed) error {
+		state.accounts[s.ID] = s
+		return nil
+	}).Maybe()
 
-func (a ledgerAdapter) Create(_ context.Context, ledger seed.LedgerSeed) error {
-	a.stores.ledgers[ledger.ID] = ledger
-	return nil
-}
+	mp := mockseed.NewMockPostingStore(t)
+	mp.EXPECT().Exists(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, id string) (bool, error) {
+		_, ok := state.postings[id]
+		return ok, nil
+	}).Maybe()
+	mp.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, s seed.PostingSeed) error {
+		state.postings[s.ID] = s
+		return nil
+	}).Maybe()
 
-type accountAdapter struct{ stores *memoryStores }
-
-func (a accountAdapter) Exists(_ context.Context, id string) (bool, error) {
-	_, ok := a.stores.accounts[id]
-	return ok, nil
-}
-
-func (a accountAdapter) Create(_ context.Context, account seed.AccountSeed) error {
-	a.stores.accounts[account.ID] = account
-	return nil
-}
-
-type postingAdapter struct{ stores *memoryStores }
-
-func (a postingAdapter) Exists(_ context.Context, id string) (bool, error) {
-	_, ok := a.stores.postings[id]
-	return ok, nil
-}
-
-func (a postingAdapter) Create(_ context.Context, posting seed.PostingSeed) error {
-	a.stores.postings[posting.ID] = posting
-	return nil
-}
-
-func testStores(mem *memoryStores) seed.Stores {
 	return seed.Stores{
-		Ledgers:  ledgerAdapter{stores: mem},
-		Accounts: accountAdapter{stores: mem},
-		Postings: postingAdapter{stores: mem},
-	}
+		Ledgers:  ml,
+		Accounts: ma,
+		Postings: mp,
+	}, state
 }
 
 func TestDevPlanShape(t *testing.T) {
@@ -154,8 +149,7 @@ func TestApplyIdempotent(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 			plan := seed.DevPlan()
-			mem := newMemoryStores()
-			stores := testStores(mem)
+			stores, mem := newMockStores(t)
 
 			for i := 0; i < tc.runs; i++ {
 				require.NoError(t, seed.Apply(ctx, plan, stores))
@@ -191,7 +185,7 @@ func TestApplyRequiresStores(t *testing.T) {
 			ctx:  context.Background(),
 			plan: seed.DevPlan(),
 			stores: seed.Stores{
-				Ledgers: ledgerAdapter{stores: newMemoryStores()},
+				Ledgers: mockseed.NewMockLedgerStore(t),
 			},
 			expectedError: errors.New("seed: ledger, account, and posting stores are required"),
 		},

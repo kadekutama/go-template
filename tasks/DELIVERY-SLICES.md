@@ -42,7 +42,9 @@ Valkey/NATS/provider credentials. This interface is local/test-only until S2.
 **Focus:** E05 tenancy/isolation, E07.1 Citus sharding and Patroni/CNPG HA, E06-T12,
 E07-T10/T02, core E08 Otter L1 + Valkey L2 cache policy and Redpanda/NATS messaging,
 E09 OpenBao secrets/Transit encryption/authentication/authorization/API keys,
-E10-T01 feature flags, and E11-T15.
+then E09.1 scheduler v2, secured read-only admin UI, distributed provider egress
+limits, and local single-flight; E10 integrations (including E10-T01) follow the
+E09.1 task DAG, then E11-T15.
 
 **Exit:** RLS and application authorization fail closed across tenants; Citus
 distributed tables partition cleanly by `tenant_id`; secrets and dynamic DB

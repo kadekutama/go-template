@@ -34,6 +34,7 @@ tasks/
 │   ├── E07.1-distributed-persistence.md # Citus 14.0 sharding, Patroni/CNPG HA, multi-node replication failover
 │   ├── E08-cache-messaging.md     # Otter L1, Valkey Cluster L2, Redpanda, NATS Core, webhook dispatcher
 │   ├── E09-identity-security.md   # JWT, OAuth2, Casbin, API keys, OpenBao secrets/Transit, crypto, audit
+│   ├── E09.1-scheduler-egress-resilience.md # gocron v2, secure read-only UI, egress limiter, single-flight (hard prerequisite to E10)
 │   ├── E10-integrations.md        # Unleash, FX provider, payment processor, statements, SMTP
 │   ├── E11-rest-api.md            # Echo server, middleware, all §7 endpoints, OpenAPI
 │   ├── E12-grpc-api.md            # Proto, server, interceptors, gateway

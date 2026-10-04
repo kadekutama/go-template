@@ -1,9 +1,9 @@
 # Epic E14: Workers (Cron Binary + Consumer Binary)
 
 **Status:** pending
-**Story Points:** 16
+**Story Points:** 17
 **Phase:** 6 (parallel with E11, E12, E13)
-**Dependencies:** E07.1, E08, E09, E10
+**Dependencies:** E07.1, E08, E09, E09.1, E10
 **SDD Gate:** G5
 **Design refs:** `SPEC.md §8.4–§8.5`, `docs/fintech-ledger-features.md §9`,
 `docs/user-journeys.md §2.3`, `docs/domain-events.md §5, §7`
@@ -22,18 +22,23 @@ with Valkey Redlock as fallback. The lock/election is coordination-only; every j
 has a durable run key and is safe to retry after lease loss.
 **Files:**
 - Create: `cmd/cron/main.go`, `internal/interface/cron/{scheduler.go,jobs.go,registry.go}`
+- Modify: `internal/infrastructure/config/config.go`, `config/config*.yaml`, `config/schemas/config.json` (default-off `cron_admin` settings and TLS/listener configuration)
 **Steps:**
-1. gocron v1.5.0 scheduler; etcd distributed leader election (`concurrency.NewElection`) with Valkey Redlock (30s TTL, auto-renew, release on done/fail) as fallback optimization.
+1. gocron v2.22.0 scheduler (pinned/contract-tested by E09.1-T01); etcd distributed leader election (`concurrency.NewElection`) with Valkey Redlock (30s TTL, auto-renew, release on done/fail) as fallback optimization.
 2. Each occurrence has a durable unique run key and idempotent step keys; a
    fencing/lease check prevents a stale leader from committing protected effects.
 3. Job records (run key, last/next run, status, duration, error) persisted.
 4. Panic wrapper per SPEC §9.7 (FAILED + unlock + alert); health endpoints.
+5. Compose the optional gocron-ui server through E09.1-T02 on its dedicated HTTPS internal listener; keep it disabled by default, deny all UI mutations, and start/shut it down with the cron process lifecycle.
+6. Map the default-off `cron_admin` config into E09.1-T02; load TLS credentials through E09-T05 and reject unsafe non-loopback settings before creating the listener.
 **Acceptance Criteria:**
 - [ ] Two replicas/retries → one durable effect per run key (Testcontainers test).
 - [ ] Crashed holder's work picked up after TTL (test).
-**Story Points:** 4
-**Depends On:** E08-T02, E06-T07, E07.1-T04
-**Related Docs:** `SPEC.md §8.4`, `SPEC.md §2` (gocron v1.5.0), `docs/architecture/ADR-017-distributed-coordination-etcd.md`, `docs/fintech-ledger-features.md §9`
+- [ ] UI disabled by default; when enabled, admin listener uses E09.1-T02 auth/route wrapper and shuts down with the cron process (test).
+- [ ] Every config profile validates with `cron_admin.enabled: false` by default; enabling without required TLS/auth settings fails closed.
+**Story Points:** 5
+**Depends On:** E08-T02, E06-T07, E07.1-T04, E09.1-T01, E09.1-T02
+**Related Docs:** `SPEC.md §8.4`, `SPEC.md §2` (gocron v2.22.0 after E09.1-T01), `docs/architecture/ADR-017-distributed-coordination-etcd.md`, `docs/fintech-ledger-features.md §9`
 **SDD Gate:** G5
 
 ---
@@ -96,12 +101,12 @@ has a durable run key and is safe to retry after lease loss.
 **Acceptance Criteria:**
 - [ ] `go test ./test/integration/workers/... -race -count=3` green.
 **Story Points:** 3
-**Depends On:** E14-T02, E14-T03
+**Depends On:** E14-T01, E14-T02, E14-T03
 **Related Docs:** `SPEC.md §10.3`
 **SDD Gate:** G5
 
 ## Acceptance Criteria
 
-- [ ] E14-T01 … E14-T04 all `completed` (count 16 SP in `tasks/tracking/PROGRESS.md`)
+- [ ] E14-T01 … E14-T04 all `completed` (count 17 SP in `tasks/tracking/PROGRESS.md`)
 - [ ] All 8 jobs are at-least-once invocable and idempotent under contention; all 4 consumer groups drain with DLQ coverage
 - [ ] SDD gate G5 checks pass — `tasks/tracking/GATES.md#G5`

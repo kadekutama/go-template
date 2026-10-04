@@ -28,10 +28,10 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | E15 | Observability + resilience | 18 | 0/18 | pending | G6 |
 | E16 | Verification (contract, perf, chaos) | 14 | 0/14 | pending | G7 |
 | E17 | Delivery (CI/CD, images, K8s) | 16 | 0/16 | pending | G7 |
-| E18 | Docs + DX | 27 | 11/27 | in_progress | G8 |
+| E18 | Docs + DX | 28 | 11/28 | in_progress | G8 |
 | E19 | Hardening + release | 13 | 0/13 | pending | G8 |
 
-**Total:** 288/496 SP completed.
+**Total:** 288/497 SP completed.
 
 ## Task checklists (tick as epic files flip to completed)
 
@@ -234,6 +234,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 - [x] E18-T11 review feedback loop + owner override
 - [x] E18-T12 AGENTS.md review-response duty
 - [x] E18-T13 shared review file + section ownership
+- [ ] E18-T14 require approval for all implementer shell commands
 
 ### E19 — Hardening + release
 - [ ] E19-T01 security sign-off

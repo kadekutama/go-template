@@ -4,7 +4,7 @@
 `docs/ledger-core.md`, `docs/development/go-conventions.md`,
 `SPEC.md`, `docs/fintech-ledger-features.md`, `docs/api-contracts.md`,
 `docs/money-flow.md`, `docs/data-flow.md`, `docs/user-journeys.md`, `docs/domain-events.md`
-**Total:** 22 epics, 496 story points, 8 promotion gates.
+**Total:** 22 epics, 497 story points, 8 promotion gates.
 
 ## One-liners
 
@@ -30,7 +30,7 @@
 | E15 | Observability + resilience: OTel pipeline, metrics/alerts/dashboards, Loki, panic recovery, rate limits, HTTP/3 | 18 | 7 | E11–E14 | G6 |
 | E16 | Verification: cross-protocol contracts, k6 suites, litmus, coverage gates | 14 | 8 | E11–E15 | G7 |
 | E17 | Delivery: full CI/CD, multi-arch images, compose variants, K8s/Kustomize/ArgoCD | 16 | 9 | E16 | G7 |
-| E18 | Docs + DX: ADRs (incl. proposed/pending), layer docs, API docs, runbooks, SDKs, sandbox, durable review records | 27 | 10 | E01–E17, E07.1 | G8 |
+| E18 | Docs + DX: ADRs (incl. proposed/pending), layer docs, API docs, runbooks, SDKs, sandbox, durable review records | 28 | 10 | E01–E17, E07.1 | G8 |
 | E19 | Hardening + release: headers/TLS/mTLS, vuln-zero, SBOM/licenses, PGO/bench, backup-DR drills, NFR sign-off | 13 | 11 | E16–E18 | G8 |
 
 ## Dependency DAG (reporting view)

@@ -1,7 +1,7 @@
 # Epic E18: Docs + Developer Experience
 
 **Status:** in_progress
-**Story Points:** 27
+**Story Points:** 28
 **Phase:** 10
 **Dependencies:** E01–E17 (documents what exists; each epic already wrote its ADRs inline)
 **SDD Gate:** G8
@@ -384,8 +384,48 @@ instead of forcing handoff placement.
 **Related Docs:** `tasks/SDD.md`, `.opencode/agents/reviewer.md`
 **SDD Gate:** G1
 
+---
+
+### E18-T14: Require approval for all implementer shell commands
+**Status:** in_progress
+**Background:** Review of the reusable implementer profile found that prefix-based
+shell allow rules could match commands with output redirection, bypassing the
+intended shell approval gate. Remove those exceptions so inspection and mutation
+commands alike require owner approval. A second review round found the broad
+`read * → allow` silently overrides the platform's built-in `.env` read
+protection; restore secret-file read gating in the same profile.
+**Files:**
+- Modify: `.opencode/agents/implementer.md`, `tasks/epics/E18-docs-dx.md`,
+  `tasks/EPICS.md`, `tasks/tracking/PROGRESS.md`
+- Create: `tasks/specs/E18-T14.md`, `tasks/claims/E18-T14.md`,
+  `tasks/evidence/E18-T14.md`, `tasks/handoffs/E18-T14.md`,
+  `tasks/reviews/E18-T14.md`
+**Steps:**
+1. Remove every shell `allow` exception from the implementer frontmatter while
+   retaining the catch-all `shell: ask` rule and unrelated permissions.
+2. Append `.env`-specific read rules (`*.env` ask, `*.env.*` ask,
+   `*.env.example` allow) after the broad read allow.
+3. Align the Git-safety text with the stricter shell policy; retain all existing
+   main-branch, commit, push, and destructive-command safeguards.
+4. Update E18 indexes, progress totals, and this packet's evidence/handoff/review.
+5. Run the packet checks and required repository verification; self-review and
+   release only if all required gates pass.
+**Acceptance Criteria:**
+- [ ] The implementer permission list contains no shell `allow` rule; every shell
+  command matches `shell: ask`.
+- [ ] Git-safety wording no longer claims read-only shell allow-lists exist.
+- [ ] `.env`/`.env.*` reads ask for approval; `.env.example` and ordinary reads
+  stay allowed (last-match resolution verified by probe).
+- [ ] Existing edit/subagent permissions and Git safeguards are unchanged.
+- [ ] Full SDD structural validation and task gate G1 pass.
+- [ ] Required formatting, lint, race-suite, and task evidence are recorded.
+**Story Points:** 1
+**Depends On:** E18-T13
+**Related Docs:** `tasks/SDD.md`, `.opencode/agents/reviewer.md`
+**SDD Gate:** G1
+
 ## Acceptance Criteria
 
-- [ ] E18-T01 … E18-T13 all `completed` (count 27 SP in `tasks/tracking/PROGRESS.md`)
+- [ ] E18-T01 … E18-T14 all `completed` (count 28 SP in `tasks/tracking/PROGRESS.md`)
 - [ ] Zero pending ADRs; docs link-check clean; onboarding timed ≤10 min
 - [ ] SDD gate G8 checks pass — `tasks/tracking/GATES.md#G8`

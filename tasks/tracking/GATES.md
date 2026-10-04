@@ -51,6 +51,7 @@ the capability is not stable or externally exposed until its gate passes.
 - [ ] NATS groups drain; DLQ + delivery replay proven; event replay never re-runs ledger commands.
 - [ ] Auth matrix (journeys §5) green; no secret in code/images.
 - [ ] Provider fakes allow zero-vendor-credential test runs.
+- [ ] E09.1-T05 proves gocron v2 lifecycle, read-only UI auth, Valkey egress admission, retry-permit composition, and local single-flight.
 
 **E08 slice status (2026-09-19):** cache invalidation/cursor labeling, Redlock
 coordination, dual-broker topology, outbox-relay publisher, idempotent consumer
@@ -68,7 +69,14 @@ handshakes in Valkey via the `store.Store` seam, JWT keys as OpenBao-backed
 RCU snapshots, RBAC on `casbin.SyncedEnforcer`, crypto on OpenBao Transit with
 Argon2id (`t=3/m=64MiB/p=4`) in BYTEA columns. Unit + Testcontainers PG
 integration + `-race` green; `make lint` 0 issues. Remaining before G4
-closes: E10 provider fakes and the E14 durable inbox binding.
+closes: E09.1 scheduler/egress slice, E10 provider fakes, and the E14 durable
+inbox binding.
+
+**Planned E09.1 G4 slice:** before E10 provider integration, prove gocron v2
+lifecycle, the default-off read-only authenticated UI, Valkey-backed egress
+admission, and local single-flight (`E09.1-T01`…`T05`). E10 then proves every
+provider attempt consumes its configured egress quota and eligible FX cache
+misses use single-flight.
 
 **Round-2 revisions (2026-09-27, plan `tasks/plans/E09-round2-revision-plan.md`):**
 zero-panic boot (stderr+exit-1, `FxLogger(logger)`), contract rejections + code

@@ -4,7 +4,7 @@
 `docs/ledger-core.md`, `docs/development/go-conventions.md`,
 `SPEC.md`, `docs/fintech-ledger-features.md`, `docs/api-contracts.md`,
 `docs/money-flow.md`, `docs/data-flow.md`, `docs/user-journeys.md`, `docs/domain-events.md`
-**Total:** 21 epics, 475 story points, 8 promotion gates.
+**Total:** 22 epics, 494 story points, 8 promotion gates.
 
 ## One-liners
 
@@ -21,11 +21,12 @@
 | E07.1 | Distributed persistence: Citus multi-tenant sharding, Patroni HA, CloudNativePG, etcd coordination | 24 | 5.1 | E07 | G4 |
 | E08 | Cache + messaging adapters: Otter L1, hybrid cache, Redpanda + NATS Core, webhook dispatcher, rate limiter | 24 | 5.2 | E06, E07.1 | G4 |
 | E09 | Identity + security adapters: JWT, OAuth2, Casbin, API keys, OpenBao secrets & transit, audit log, PII | 22 | 5.2 | E06, E07.1 | G4 |
-| E10 | Platform integrations: Unleash, FX provider, payment-processor sandbox, statement parsers, SMTP | 17 | 5.2 | E06, E07.1 | G4 |
+| E09.1 | Scheduler + egress resilience: gocron v2, secure read-only UI, egress limiter, single-flight | 18 | 5.2 | E05, E06, E07.1, E08, E09 | G4 |
+| E10 | Platform integrations: Unleash, FX provider, payment-processor sandbox, statement parsers, SMTP | 17 | 5.2 | E06, E07.1, E09.1 | G4 |
 | E11 | REST API: core server, ledger pilot, public middleware, §7 groups, OpenAPI | 43 | 6 | task-level E06–E10, E07.1 dependencies | G5 |
 | E12 | gRPC API: proto, server, interceptors, gateway, parity with REST | 16 | 6 | E07.1, E08–E10 | G5 |
 | E13 | GraphQL API: schema, resolvers, DataLoader, subscriptions, aggregations, parity | 18 | 6 | E07.1, E08–E10 | G5 |
-| E14 | Workers: cron binary + 8 jobs, consumer binary + 4 groups + DLQ | 16 | 6 | E07.1, E08–E10 | G5 |
+| E14 | Workers: cron binary + 8 jobs, consumer binary + 4 groups + DLQ | 17 | 6 | E07.1, E08, E09, E09.1, E10 | G5 |
 | E15 | Observability + resilience: OTel pipeline, metrics/alerts/dashboards, Loki, panic recovery, rate limits, HTTP/3 | 18 | 7 | E11–E14 | G6 |
 | E16 | Verification: cross-protocol contracts, k6 suites, litmus, coverage gates | 14 | 8 | E11–E15 | G7 |
 | E17 | Delivery: full CI/CD, multi-arch images, compose variants, K8s/Kustomize/ArgoCD | 16 | 9 | E16 | G7 |
@@ -48,8 +49,8 @@ Phase 3:   E03, E04, E05 → (each needs E02)
 Phase 4:   E06 → (needs E02–E05)
 Phase 5:   E07 (completed)
 Phase 5.1: E07.1 → (needs E07)
-Phase 5.2: E08, E09, E10 → (each needs E06, E07.1)
-Phase 6:   E11, E12, E13, E14 → (each needs E07.1, E08–E10)
+Phase 5.2: E08, E09 → E09.1 → E10 (E08/E09 need E06, E07.1; E09.1 needs E05, E06, E07.1, E08, E09; E10 additionally requires E09.1 at the task level)
+Phase 6:   E11, E12, E13, E14 → (each needs E07.1, E08–E10; E14-T01 additionally waits for E09.1-T01/T02 to use the gocron v2 and secured UI contracts)
 Phase 7:   E15 → (needs E11–E14)
 Phase 8:   E16 → (needs E11–E15)
 Phase 9:   E17 → (needs E16)

@@ -1,6 +1,6 @@
 # Progress Dashboard (single source of truth for progress)
 
-**Last updated:** 2026-09-28
+**Last updated:** 2026-10-04
 **How to update:** flip task `**Status:**` in the epic file, then tick the box here.
 Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 
@@ -19,18 +19,19 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | E07.1 | Distributed persistence (Citus, Patroni, CloudNativePG, etcd) | 24 | 24/24 | completed | G4 |
 | E08 | Cache + messaging adapters | 24 | 24/24 | completed | G4 |
 | E09 | Identity + security adapters | 22 | 22/22 | completed | G4 |
+| E09.1 | Scheduler + egress resilience (gocron v2, secure read-only UI, egress limiter, single-flight) | 18 | 0/18 | pending | G4 |
 | E10 | Platform integrations | 17 | 0/17 | pending | G4 |
 | E11 | REST API | 43 | 0/43 | pending | G5 |
 | E12 | gRPC API | 16 | 0/16 | pending | G5 |
 | E13 | GraphQL API | 18 | 0/18 | pending | G5 |
-| E14 | Workers (cron + consumer) | 16 | 0/16 | pending | G5 |
+| E14 | Workers (cron + consumer) | 17 | 0/17 | pending | G5 |
 | E15 | Observability + resilience | 18 | 0/18 | pending | G6 |
 | E16 | Verification (contract, perf, chaos) | 14 | 0/14 | pending | G7 |
 | E17 | Delivery (CI/CD, images, K8s) | 16 | 0/16 | pending | G7 |
 | E18 | Docs + DX | 27 | 11/27 | in_progress | G8 |
 | E19 | Hardening + release | 13 | 0/13 | pending | G8 |
 
-**Total:** 288/475 SP completed.
+**Total:** 288/494 SP completed.
 
 ## Task checklists (tick as epic files flip to completed)
 
@@ -146,6 +147,13 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 - [x] E09-T05 OpenBao
 - [x] E09-T06 envelope crypto + PII
 - [x] E09-T07 audit logger
+
+### E09.1 — Scheduler + egress resilience
+- [ ] E09.1-T01 gocron v2 upgrade + E14 realignment
+- [ ] E09.1-T02 gocron-ui secure internal ops surface
+- [ ] E09.1-T03 distributed egress limiter over Valkey
+- [ ] E09.1-T04 local single-flight for cacheable reads
+- [ ] E09.1-T05 G4 integration + verification slice
 
 ### E10 — Integrations
 - [ ] E10-T01 feature flags

@@ -52,6 +52,7 @@ the capability is not stable or externally exposed until its gate passes.
 - [ ] Auth matrix (journeys §5) green; no secret in code/images.
 - [ ] Provider fakes allow zero-vendor-credential test runs.
 - [ ] E09.1-T05 proves gocron v2 lifecycle, read-only UI auth, Valkey egress admission, retry-permit composition, and local single-flight.
+- [ ] E09.1-T06 proves Casbin v2.8.0-to-v3 authorization parity; model, loader, migration, and stored policy data remain unchanged.
 
 **E08 slice status (2026-09-19):** cache invalidation/cursor labeling, Redlock
 coordination, dual-broker topology, outbox-relay publisher, idempotent consumer
@@ -74,9 +75,9 @@ inbox binding.
 
 **Planned E09.1 G4 slice:** before E10 provider integration, prove gocron v2
 lifecycle, the default-off read-only authenticated UI, Valkey-backed egress
-admission, and local single-flight (`E09.1-T01`…`T05`). E10 then proves every
-provider attempt consumes its configured egress quota and eligible FX cache
-misses use single-flight.
+admission, local single-flight, and Casbin v2-to-v3 authorization parity
+(`E09.1-T01`…`T06`). E10 then proves every provider attempt consumes its
+configured egress quota and eligible FX cache misses use single-flight.
 
 **Round-2 revisions (2026-09-27, plan `tasks/plans/E09-round2-revision-plan.md`):**
 zero-panic boot (stderr+exit-1, `FxLogger(logger)`), contract rejections + code

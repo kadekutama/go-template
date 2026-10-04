@@ -4,7 +4,7 @@
 `docs/ledger-core.md`, `docs/development/go-conventions.md`,
 `SPEC.md`, `docs/fintech-ledger-features.md`, `docs/api-contracts.md`,
 `docs/money-flow.md`, `docs/data-flow.md`, `docs/user-journeys.md`, `docs/domain-events.md`
-**Total:** 22 epics, 494 story points, 8 promotion gates.
+**Total:** 22 epics, 496 story points, 8 promotion gates.
 
 ## One-liners
 
@@ -21,7 +21,7 @@
 | E07.1 | Distributed persistence: Citus multi-tenant sharding, Patroni HA, CloudNativePG, etcd coordination | 24 | 5.1 | E07 | G4 |
 | E08 | Cache + messaging adapters: Otter L1, hybrid cache, Redpanda + NATS Core, webhook dispatcher, rate limiter | 24 | 5.2 | E06, E07.1 | G4 |
 | E09 | Identity + security adapters: JWT, OAuth2, Casbin, API keys, OpenBao secrets & transit, audit log, PII | 22 | 5.2 | E06, E07.1 | G4 |
-| E09.1 | Scheduler + egress resilience: gocron v2, secure read-only UI, egress limiter, single-flight | 18 | 5.2 | E05, E06, E07.1, E08, E09 | G4 |
+| E09.1 | Scheduler + egress resilience: gocron v2, secure read-only UI, egress limiter, single-flight, casbin v3 | 20 | 5.2 | E05, E06, E07.1, E08, E09 | G4 |
 | E10 | Platform integrations: Unleash, FX provider, payment-processor sandbox, statement parsers, SMTP | 17 | 5.2 | E06, E07.1, E09.1 | G4 |
 | E11 | REST API: core server, ledger pilot, public middleware, §7 groups, OpenAPI | 43 | 6 | task-level E06–E10, E07.1 dependencies | G5 |
 | E12 | gRPC API: proto, server, interceptors, gateway, parity with REST | 16 | 6 | E07.1, E08–E10 | G5 |

@@ -33,7 +33,7 @@ require (
 	github.com/stretchr/testify v1.12.1
 	github.com/testcontainers/testcontainers-go v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/redpanda v0.44.0
-	github.com/twmb/franz-go v1.22.0
+	github.com/twmb/franz-go v1.22.1
 	github.com/twmb/franz-go/pkg/kadm v1.11.0
 	go.etcd.io/etcd/api/v3 v3.7.2
 	go.etcd.io/etcd/client/v3 v3.7.1

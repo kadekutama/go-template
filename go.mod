@@ -18,7 +18,7 @@ require (
 	github.com/knadh/koanf/parsers/yaml v1.1.1
 	github.com/knadh/koanf/providers/env v1.1.0
 	github.com/knadh/koanf/providers/file v1.2.1
-	github.com/knadh/koanf/v2 v2.3.6
+	github.com/knadh/koanf/v2 v2.3.8
 	github.com/labstack/echo/v5 v5.3.1
 	github.com/maypok86/otter/v2 v2.3.0
 	github.com/moby/moby/api v1.56.0

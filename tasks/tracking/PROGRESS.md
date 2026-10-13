@@ -19,7 +19,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | E07.1 | Distributed persistence (Citus, Patroni, CloudNativePG, etcd) | 24 | 24/24 | completed | G4 |
 | E08 | Cache + messaging adapters | 24 | 24/24 | completed | G4 |
 | E09 | Identity + security adapters | 22 | 22/22 | completed | G4 |
-| E09.1 | Scheduler + egress resilience (gocron v2, secure read-only UI, egress limiter, single-flight, casbin v3) | 20 | 15/20 | in_progress | G4 |
+| E09.1 | Scheduler + egress resilience (gocron v2, secure read-only UI, egress limiter, single-flight, casbin v3) | 20 | 20/20 | completed | G4 |
 | E10 | Platform integrations | 17 | 0/17 | pending | G4 |
 | E11 | REST API | 43 | 0/43 | pending | G5 |
 | E12 | gRPC API | 16 | 0/16 | pending | G5 |
@@ -31,7 +31,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | E18 | Docs + DX | 32 | 11/32 | in_progress | G8 |
 | E19 | Hardening + release | 13 | 0/13 | pending | G8 |
 
-**Total:** 303/501 SP completed.
+**Total:** 308/501 SP completed.
 
 ## Task checklists (tick as epic files flip to completed)
 
@@ -150,7 +150,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 
 ### E09.1 — Scheduler + egress resilience
 - [x] E09.1-T01 gocron v2 upgrade + E14 realignment
-- [ ] E09.1-T02 gocron-ui secure internal ops surface
+- [x] E09.1-T02 gocron-ui secure internal ops surface
 - [x] E09.1-T03 distributed egress limiter over Valkey
 - [x] E09.1-T04 local single-flight for cacheable reads
 - [x] E09.1-T05 G4 integration + verification slice

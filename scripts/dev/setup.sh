@@ -177,7 +177,7 @@ install_modules() {
 # Go developer tools: "binary_name:package_path"
 GO_TOOLS=(
   "goimports:golang.org/x/tools/cmd/goimports@latest"
-  "golangci-lint:github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2"
+  "golangci-lint:github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest"
   "govulncheck:golang.org/x/vuln/cmd/govulncheck@latest"
   "gosec:github.com/securego/gosec/v2/cmd/gosec@latest"
   "go-licenses:github.com/google/go-licenses@latest"
@@ -185,7 +185,7 @@ GO_TOOLS=(
   "buf:github.com/bufbuild/buf/cmd/buf@latest"
   "oapi-codegen:github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest"
   "air:github.com/air-verse/air@latest"
-  "goose:github.com/pressly/goose/v3/cmd/goose@v3.28.0"
+  "goose:github.com/pressly/goose/v3/cmd/goose@latest"
 )
 
 get_gobin() {

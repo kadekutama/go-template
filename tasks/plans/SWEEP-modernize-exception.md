@@ -117,7 +117,41 @@ comment recording the upgrade); `scripts/dev/setup.sh` pin
 in identical paths); `gofmt -s` + `goimports -w` over `test/mock/`
 (v3 template import order needs one goimports pass).
 
+### 2026-10-13 floating-version policy (owner-ordered)
+
+Owner: latest everywhere except Go itself ("Just do what I ask," overriding
+the pinned+Renovate recommendation recorded 2026-10-13). Applied:
+- `.github/workflows/ci.yml`: `actions/checkout@v7.0.1` → `@v7`,
+  `actions/setup-go@v7.0.0` → `@v7`, golangci-lint `@v2.14.0` → `@latest`
+  (v2 module path retained); `go-version: "1.27.2"` unchanged (Go stays
+  pinned per order); goimports/gopls already `@latest`.
+- `scripts/dev/setup.sh` GO_TOOLS: golangci-lint and goose → `@latest`
+  (goose stays on the `v3` module path); all other entries already
+  `@latest`.
+- Upgrade capability: `install_go_tools()` unconditionally reinstalls
+  every entry, so `./scripts/dev/setup.sh --tools-only` upgrades all
+  tools to latest on rerun — no new flag needed.
+- Verified: `bash -n` clean; ci.yml parses (job/step structure intact);
+  recorded trade-off (reproducibility now rests on CI run timestamps,
+  not pins) accepted by owner direction.
+
 ### 2026-10-13 repair round (owner-approved, T02 Reopen Round 4)
+
+### 2026-10-13 CI lint failure — golangci-lint v2.13.2 vs go1.27.2 (fixed)
+
+PR #37 CI Lint failed. Reproduced locally with CI's exact pins
+(v2.13.2 + gopls/goimports@latest): **only** golangci failed, with 3
+`typecheck` errors — v2.13.2's bundled type-checker cannot decode
+go1.27.2 stdlib export data (`version 5 > maximum supported 4`), e.g.
+`could not import sync/atomic` cascading from `test/doubles/doubles.go`.
+Not a code defect: same tree passes pixi's v2.14.0 with 0 issues, and
+CI's gopls@latest emits zero diagnostics. Fix: bumped the pin
+v2.13.2 → v2.14.0 (latest v2) in BOTH `scripts/dev/setup.sh` and
+`.github/workflows/ci.yml` (they had drifted apart in practice — local
+pixi already carried 2.14.0, which is why local runs were green while CI
+was red). Re-verified end-to-end with CI's exact tools: gofmt clean,
+goimports@latest clean, gopls@latest zero diagnostics, golangci v2.14.0
+0 issues, shellcheck clean.
 
 Another harness wiped tracked-file work via `git checkout` (go.mod/go.sum
 casbin v3 + gobreaker v2 + env v2 pins, deps.go anchors, enforcer.go and

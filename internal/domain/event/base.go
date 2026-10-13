@@ -3,13 +3,12 @@
 package event
 
 import (
-	"errors"
 	"maps"
 	"time"
 )
 
-// EventMetadata carries tenant scoping and correlation context for a domain event.
-type EventMetadata struct {
+// Metadata carries tenant scoping and correlation context for a domain event.
+type Metadata struct {
 	// TenantID scopes the event to its tenant and is always required.
 	TenantID string `json:"tenant_id"`
 	// LedgerID scopes accounting facts inside the tenant.
@@ -47,7 +46,7 @@ type DomainEvent interface {
 	// Payload returns the event-specific immutable data.
 	Payload() any
 	// Metadata returns a copy of the correlation metadata.
-	Metadata() EventMetadata
+	Metadata() Metadata
 }
 
 // BaseEvent is the immutable envelope implementation. All state is unexported
@@ -61,7 +60,7 @@ type BaseEvent struct {
 	aggregateVersion int64
 	sequence         int64
 	payload          any
-	metadata         EventMetadata
+	metadata         Metadata
 }
 
 // Compile-time proof that BaseEvent satisfies DomainEvent.
@@ -72,32 +71,41 @@ var _ DomainEvent = BaseEvent{}
 // layer via the kernel IDGenerator/Clock); the domain never generates them.
 // The custom metadata map is defensively copied. It returns an error on
 // invalid input and never panics.
-func NewBaseEvent(eventID, aggregateID, aggregateType, eventType string, occurredAt time.Time, aggregateVersion, sequence int64, payload any, meta EventMetadata) (BaseEvent, error) {
+func NewBaseEvent(eventID, aggregateID, aggregateType, eventType string, occurredAt time.Time, aggregateVersion, sequence int64, payload any, meta Metadata) (BaseEvent, error) {
 	if eventID == "" {
-		return BaseEvent{}, errors.New("event: event_id is required")
+		return BaseEvent{}, ErrEventEventIDIsRequired
 	}
+
 	if aggregateID == "" {
-		return BaseEvent{}, errors.New("event: aggregate_id is required")
+		return BaseEvent{}, ErrEventAggregateIDIsRequired
 	}
+
 	if aggregateType == "" {
-		return BaseEvent{}, errors.New("event: aggregate_type is required")
+		return BaseEvent{}, ErrEventAggregateTypeIsRequired
 	}
+
 	if eventType == "" {
-		return BaseEvent{}, errors.New("event: event_type is required")
+		return BaseEvent{}, ErrEventEventTypeIsRequired
 	}
+
 	if meta.TenantID == "" {
-		return BaseEvent{}, errors.New("event: metadata tenant_id is required")
+		return BaseEvent{}, ErrEventMetadataTenantIDIsRequired
 	}
+
 	if occurredAt.IsZero() {
-		return BaseEvent{}, errors.New("event: occurred_at is required")
+		return BaseEvent{}, ErrEventOccurredAtIsRequired
 	}
+
 	if aggregateVersion < 0 {
-		return BaseEvent{}, errors.New("event: aggregate_version must not be negative")
+		return BaseEvent{}, ErrEventAggregateVersionMustNotBeNegative
 	}
+
 	if sequence < 0 {
-		return BaseEvent{}, errors.New("event: sequence must not be negative")
+		return BaseEvent{}, ErrEventSequenceMustNotBeNegative
 	}
+
 	meta.Custom = maps.Clone(meta.Custom)
+
 	return BaseEvent{
 		eventID:          eventID,
 		aggregateID:      aggregateID,
@@ -137,8 +145,9 @@ func (e BaseEvent) Payload() any { return e.payload }
 
 // Metadata returns a copy of the event metadata; the Custom map is freshly
 // copied so callers cannot mutate the envelope.
-func (e BaseEvent) Metadata() EventMetadata {
+func (e BaseEvent) Metadata() Metadata {
 	out := e.metadata
 	out.Custom = maps.Clone(e.metadata.Custom)
+
 	return out
 }

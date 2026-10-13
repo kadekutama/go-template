@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"sync/atomic"
 	"testing"
 
@@ -32,11 +31,14 @@ func TestSeedGraphValidates(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			var runner *seedRunner
 
 			err := fx.ValidateApp(seedGraphOptions(&runner)...)
 			if tc.expectedError {
 				require.Error(t, err)
+
 				return
 			}
 
@@ -61,6 +63,7 @@ func TestSeedAppRequiresDSN(t *testing.T) {
 
 	work := func(context.Context) error {
 		t.Error("work must not run when the pool cannot be built")
+
 		return nil
 	}
 
@@ -77,6 +80,7 @@ type testLogBuffer struct {
 func (b *testLogBuffer) Write(p []byte) (int, error) {
 	for {
 		old := b.buf.Load()
+
 		var next []byte
 		if old != nil {
 			next = make([]byte, len(*old)+len(p))
@@ -86,10 +90,12 @@ func (b *testLogBuffer) Write(p []byte) (int, error) {
 			next = make([]byte, len(p))
 			copy(next, p)
 		}
+
 		if b.buf.CompareAndSwap(old, &next) {
 			break
 		}
 	}
+
 	return len(p), nil
 }
 
@@ -98,13 +104,14 @@ func (b *testLogBuffer) lines() string {
 	if old == nil {
 		return ""
 	}
+
 	return string(*old)
 }
 
 // testLogger builds a buffer-backed kernel logger for hermetic assertions.
 func testLogger(output *testLogBuffer) (log.Logger, error) {
 	if output == nil {
-		return nil, errors.New("test logger requires a buffer")
+		return nil, ErrTestLoggerRequiresABuffer
 	}
 
 	return logging.New(output, logging.Config{Level: "trace"}), nil

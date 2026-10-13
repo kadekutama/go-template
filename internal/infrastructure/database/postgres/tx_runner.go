@@ -13,11 +13,11 @@ import (
 // WithinTx runs fn inside a database transaction on db with context cancellation check.
 func WithinTx(ctx context.Context, db *gorm.DB, fn func(tx *gorm.DB) error) error {
 	if db == nil {
-		return fmt.Errorf("postgres: db is required")
+		return ErrPostgresDbIsRequired
 	}
 
 	if fn == nil {
-		return fmt.Errorf("postgres: transaction callback is required")
+		return ErrPostgresTransactionCallbackIsRequired
 	}
 
 	if err := ctx.Err(); err != nil {
@@ -31,15 +31,15 @@ func WithinTx(ctx context.Context, db *gorm.DB, fn func(tx *gorm.DB) error) erro
 // It applies tenant isolation before invoking fn.
 func WithinTenantTx(ctx context.Context, db *gorm.DB, tenant valueobject.TenantID, fn func(tx *gorm.DB) error) error {
 	if db == nil {
-		return fmt.Errorf("postgres: db is required")
+		return ErrPostgresDbIsRequired
 	}
 
 	if fn == nil {
-		return fmt.Errorf("postgres: transaction callback is required")
+		return ErrPostgresTransactionCallbackIsRequired
 	}
 
 	if tenant.String() == "" {
-		return fmt.Errorf("postgres: tenant is required")
+		return ErrPostgresTenantIsRequired
 	}
 
 	if err := ctx.Err(); err != nil {

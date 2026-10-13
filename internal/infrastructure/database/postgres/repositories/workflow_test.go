@@ -2,7 +2,6 @@ package repositories
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,14 +25,17 @@ func TestWorkflowStoreRequiresDB(t *testing.T) {
 				DB: nil,
 			},
 			expectedResult: nil,
-			expectedError:  errors.New("postgres: workflow store needs DB"),
+			expectedError:  ErrPostgresWorkflowStoreNeedsDB,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			store, err := NewWorkflowStore(tc.params)
 			assert.Equal(t, tc.expectedResult, store)
+
 			if tc.expectedError != nil {
 				require.Error(t, err)
 				assert.Equal(t, tc.expectedError.Error(), err.Error())
@@ -59,65 +61,74 @@ func TestWorkflowStoreTenantClosed(t *testing.T) {
 			operation: func() error {
 				store := &WorkflowStore{db: nil}
 				_, err := store.Create(context.Background(), WorkflowRecord{ID: "wfl-01"})
+
 				return err
 			},
-			expectedError: errors.New("postgres: tenant is required"),
+			expectedError: ErrPostgresTenantIsRequired,
 		},
 		{
 			name: "find without tenant",
 			operation: func() error {
 				store := &WorkflowStore{db: nil}
 				_, err := store.FindByID(context.Background(), "", "wfl-01")
+
 				return err
 			},
-			expectedError: errors.New("postgres: tenant is required"),
+			expectedError: ErrPostgresTenantIsRequired,
 		},
 		{
 			name: "status update without tenant",
 			operation: func() error {
 				store := &WorkflowStore{db: nil}
+
 				return store.UpdateStatus(context.Background(), "", "wfl-01", "DONE", 1)
 			},
-			expectedError: errors.New("postgres: tenant is required"),
+			expectedError: ErrPostgresTenantIsRequired,
 		},
 		{
 			name: "recon source without tenant",
 			operation: func() error {
 				store := &WorkflowStore{db: nil}
 				_, err := store.StoreReconSource(context.Background(), ReconSourceRecord{ID: "src-01", PayloadHash: "h"})
+
 				return err
 			},
-			expectedError: errors.New("postgres: tenant is required"),
+			expectedError: ErrPostgresTenantIsRequired,
 		},
 		{
 			name: "recon source without hash",
 			operation: func() error {
 				store := &WorkflowStore{db: nil}
 				_, err := store.StoreReconSource(context.Background(), ReconSourceRecord{ID: "src-01", TenantID: "tnt-01"})
+
 				return err
 			},
-			expectedError: errors.New("postgres: payload hash is required"),
+			expectedError: ErrPostgresPayloadHashIsRequired,
 		},
 		{
 			name: "inbox receipt without tenant",
 			operation: func() error {
 				store := &WorkflowStore{db: nil}
+
 				return store.InboxReceipt(context.Background(), "", "key-01", "transfer.completed.v1")
 			},
-			expectedError: errors.New("postgres: tenant is required"),
+			expectedError: ErrPostgresTenantIsRequired,
 		},
 		{
 			name: "inbox receipt without key",
 			operation: func() error {
 				store := &WorkflowStore{db: nil}
+
 				return store.InboxReceipt(context.Background(), "tnt-01", "", "transfer.completed.v1")
 			},
-			expectedError: errors.New("postgres: inbox key is required"),
+			expectedError: ErrPostgresInboxKeyIsRequired,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.operation()
 			require.Error(t, err)
 			assert.Equal(t, tc.expectedError.Error(), err.Error())
@@ -163,6 +174,7 @@ func TestWorkflowRecordMapping(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Equal(t, tc.expected, workflowToRecord(workflowToModel(tc.record)))
 		})
 	}

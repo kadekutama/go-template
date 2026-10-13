@@ -33,6 +33,7 @@ func ActiveProfile() Profile {
 	if os.Getenv("TESTCONTAINERS_PROFILE") == "ci" {
 		return ProfileCI
 	}
+
 	return ProfileLocal
 }
 
@@ -41,6 +42,7 @@ func StartupTimeout() time.Duration {
 	if ActiveProfile() == ProfileCI {
 		return CITimeout
 	}
+
 	return DefaultTimeout
 }
 
@@ -53,10 +55,9 @@ func SkipIfNoDocker(t *testing.T) {
 		t.Skip("skipping container test: TESTCONTAINERS_SKIP=1")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), startupTimeoutSecs*time.Second)
 	defer cancel()
 
-	//nolint:gosec // test helper probes the local Docker daemon only.
 	cmd := exec.CommandContext(ctx, "docker", "info")
 	if err := cmd.Run(); err != nil {
 		t.Skipf("skipping container test: no reachable Docker daemon: %v", err)

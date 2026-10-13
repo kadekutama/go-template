@@ -72,8 +72,9 @@ test-all: ## Full suite: unit + integration + contract.
 	./scripts/test/unit.sh && ./scripts/test/integration.sh && ./scripts/test/contract.sh
 
 .PHONY: gopls-check
-gopls-check: ## Run gopls diagnostics across all Go source files.
-	@find . -name "*.go" -not -path "./vendor/*" | xargs $(GOPLS) check
+gopls-check: ## Run gopls diagnostics, including Hint-level modernization suggestions. Fails on any diagnostic.
+	@out="$$(find . -name '*.go' -not -path './vendor/*' | xargs $(GOPLS) check -severity=hint 2>&1)"; \
+	if [ -n "$$out" ]; then printf '%s\n' "$$out" >&2; echo "gopls-check failed: resolve every diagnostic above (no analyzer filtering)" >&2; exit 1; fi
 
 .PHONY: fmt
 fmt: ## Format all Go code (gofmt -s + goimports with local module grouping).

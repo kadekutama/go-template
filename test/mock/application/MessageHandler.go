@@ -49,7 +49,7 @@ type MockMessageHandler_Execute_Call struct {
 // Execute is a helper method to define mock.On call
 //   - ctx context.Context
 //   - msg port.Message
-func (_e *MockMessageHandler_Expecter) Execute(ctx interface{}, msg interface{}) *MockMessageHandler_Execute_Call {
+func (_e *MockMessageHandler_Expecter) Execute(ctx any, msg any) *MockMessageHandler_Execute_Call {
 	return &MockMessageHandler_Execute_Call{Call: _e.mock.On("Execute", ctx, msg)}
 }
 

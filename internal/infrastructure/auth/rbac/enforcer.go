@@ -5,8 +5,8 @@ import (
 	_ "embed"
 	"fmt"
 
-	"github.com/casbin/casbin/v2"
-	"github.com/casbin/casbin/v2/model"
+	"github.com/casbin/casbin/v3"
+	"github.com/casbin/casbin/v3/model"
 
 	appport "github.com/kadekutama/go-template/internal/application/port"
 	"github.com/kadekutama/go-template/internal/shared/kernel/validate"
@@ -48,8 +48,8 @@ type Attributes struct {
 	Resolver    string
 }
 
-// RBACParams carries constructor dependencies (Parameter Object pattern).
-type RBACParams struct {
+// Params carries constructor dependencies (Parameter Object pattern).
+type Params struct {
 	ModelText            string
 	Loader               PolicyLoader
 	Policies             []PolicyRule
@@ -76,7 +76,7 @@ var _ appport.Authorizer = (*Enforcer)(nil)
 // ThresholdAmountMinor must be positive: a zero threshold would silently
 // disable the approver-distinct-from-resolver rule (CR-005), so
 // misconfiguration fails here instead of running unguarded.
-func NewEnforcer(params RBACParams) (*Enforcer, error) {
+func NewEnforcer(params Params) (*Enforcer, error) {
 	if params.ThresholdAmountMinor <= 0 {
 		return nil, fmt.Errorf("%w: threshold amount must be positive", ErrPolicyInvalid)
 	}
@@ -97,9 +97,11 @@ func NewEnforcer(params RBACParams) (*Enforcer, error) {
 	}
 
 	policies := params.Policies
+
 	grouping := params.Grouping
 	if len(policies) == 0 && len(grouping) == 0 && params.Loader != nil {
 		var loadErr error
+
 		policies, grouping, loadErr = params.Loader.Load()
 		if loadErr != nil {
 			return nil, fmt.Errorf("%w: loader: %s", ErrPolicyInvalid, loadErr.Error())
@@ -198,40 +200,6 @@ func (e *Enforcer) AuthorizeWithAttrs(ctx context.Context, subject appport.Subje
 	return nil
 }
 
-// evaluate runs Casbin plus the threshold ABAC rule. Enforce is internally
-// synchronized by SyncedEnforcer; no wrapper lock is taken.
-func (e *Enforcer) evaluate(subject appport.Subject, action, resource string, attrs Attributes) (bool, string) {
-	if subject.ID == "" || subject.TenantID == "" || action == "" || resource == "" {
-		return false, "missing fields"
-	}
-
-	if attrs.AmountMinor > e.threshold && e.threshold > 0 {
-		if attrs.Approver == "" || attrs.Approver == attrs.Resolver {
-			return false, "approver must differ from resolver above threshold"
-		}
-	}
-
-	allowed, err := e.enforcer.Enforce(subject.ID, string(subject.TenantID), resource, action)
-	if err != nil {
-		return false, "enforce error"
-	}
-
-	if !allowed {
-		return false, "policy deny"
-	}
-
-	return true, "policy allow"
-}
-
-// emit calls the audit hook.
-func (e *Enforcer) emit(decision Decision) {
-	if e == nil || e.audit == nil {
-		return
-	}
-
-	e.audit(decision)
-}
-
 // Reload replaces all policies without restart through the synchronized API.
 // A reader racing Reload observes a partially replaced policy and fails
 // closed (default deny) rather than tearing. The incoming set is validated
@@ -285,4 +253,38 @@ func (e *Enforcer) ReloadFrom(loader PolicyLoader) error {
 	}
 
 	return e.Reload(policies, grouping)
+}
+
+// evaluate runs Casbin plus the threshold ABAC rule. Enforce is internally
+// synchronized by SyncedEnforcer; no wrapper lock is taken.
+func (e *Enforcer) evaluate(subject appport.Subject, action, resource string, attrs Attributes) (bool, string) {
+	if subject.ID == "" || subject.TenantID == "" || action == "" || resource == "" {
+		return false, "missing fields"
+	}
+
+	if attrs.AmountMinor > e.threshold && e.threshold > 0 {
+		if attrs.Approver == "" || attrs.Approver == attrs.Resolver {
+			return false, "approver must differ from resolver above threshold"
+		}
+	}
+
+	allowed, err := e.enforcer.Enforce(subject.ID, string(subject.TenantID), resource, action)
+	if err != nil {
+		return false, "enforce error"
+	}
+
+	if !allowed {
+		return false, "policy deny"
+	}
+
+	return true, "policy allow"
+}
+
+// emit calls the audit hook.
+func (e *Enforcer) emit(decision Decision) {
+	if e == nil || e.audit == nil {
+		return
+	}
+
+	e.audit(decision)
 }

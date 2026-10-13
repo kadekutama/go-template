@@ -30,7 +30,7 @@ type MockWatchHandler_Execute_Call struct {
 // Execute is a helper method to define mock.On call
 //   - key []byte
 //   - value []byte
-func (_e *MockWatchHandler_Expecter) Execute(key interface{}, value interface{}) *MockWatchHandler_Execute_Call {
+func (_e *MockWatchHandler_Expecter) Execute(key any, value any) *MockWatchHandler_Execute_Call {
 	return &MockWatchHandler_Execute_Call{Call: _e.mock.On("Execute", key, value)}
 }
 

@@ -23,27 +23,30 @@ func ParsePayoutMethod(s string) (PayoutMethod, error) {
 	case PayoutACH, PayoutRTP, PayoutFedNow, PayoutWire, PayoutCheck:
 		return PayoutMethod(s), nil
 	default:
-		return "", fmt.Errorf("payout: invalid method %q", s)
+		return "", fmt.Errorf("payout: invalid method %q: %w", s, ErrPayoutInvalidMethod)
 	}
 }
 
 // payoutLags is the money-flow §5 expected settlement lag registry: RTP/FedNow
 // minutes, ACH 1–2 business days (48h ceiling model), Wire same-day (12h
 // model), Check 5 days. New rails extend the table, not a switch.
-var payoutLags = map[PayoutMethod]time.Duration{
-	PayoutRTP:    15 * time.Minute,
-	PayoutFedNow: 15 * time.Minute,
-	PayoutACH:    48 * time.Hour,
-	PayoutWire:   12 * time.Hour,
-	PayoutCheck:  120 * time.Hour,
+func payoutLags() map[PayoutMethod]time.Duration {
+	return map[PayoutMethod]time.Duration{
+		PayoutRTP:    payoutRTP15 * time.Minute,
+		PayoutFedNow: payoutFedNow15 * time.Minute,
+		PayoutACH:    payoutACH48 * time.Hour,
+		PayoutWire:   payoutWire12 * time.Hour,
+		PayoutCheck:  payoutCheck120 * time.Hour,
+	}
 }
 
 // ExpectedSettlementLag returns the money-flow §5 expected settlement lag per
 // rail.
 func ExpectedSettlementLag(m PayoutMethod) (time.Duration, error) {
-	lag, ok := payoutLags[m]
+	lag, ok := payoutLags()[m]
 	if !ok {
-		return 0, fmt.Errorf("payout: invalid method %q", string(m))
+		return 0, fmt.Errorf("payout: invalid method %q: %w", string(m), ErrPayoutInvalidMethod2)
 	}
+
 	return lag, nil
 }

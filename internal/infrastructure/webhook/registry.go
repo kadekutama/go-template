@@ -2,7 +2,6 @@ package webhook
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 
@@ -67,7 +66,7 @@ func NewRegistry(_ RegistryParams) *Registry {
 // required/format rule is checked before the write.
 func (r *Registry) Upsert(_ context.Context, endpoint Endpoint) error {
 	if r == nil {
-		return fmt.Errorf("webhook: registry is not initialized")
+		return ErrWebhookRegistryIsNotInitialized
 	}
 
 	endpoint = endpoint.Normalized()
@@ -85,7 +84,7 @@ func (r *Registry) Upsert(_ context.Context, endpoint Endpoint) error {
 // Remove deactivates one endpoint. Missing IDs succeed.
 func (r *Registry) Remove(_ context.Context, id string) error {
 	if r == nil {
-		return fmt.Errorf("webhook: registry is not initialized")
+		return ErrWebhookRegistryIsNotInitialized
 	}
 
 	r.endpoints.Delete(strings.TrimSpace(id))
@@ -108,6 +107,7 @@ func (r *Registry) Find(_ context.Context, tenant, event string) []Endpoint {
 	}
 
 	var out []Endpoint
+
 	r.endpoints.Range(func(_, val any) bool {
 		endpoint, ok := val.(Endpoint)
 		if !ok || !endpoint.Active {
@@ -121,6 +121,7 @@ func (r *Registry) Find(_ context.Context, tenant, event string) []Endpoint {
 		for _, candidate := range endpoint.Events {
 			if strings.TrimSpace(candidate) == trimmedEvent {
 				out = append(out, endpoint)
+
 				break
 			}
 		}

@@ -2,7 +2,6 @@ package di
 
 import (
 	"context"
-	"errors"
 	"sync/atomic"
 	"syscall"
 	"testing"
@@ -16,7 +15,7 @@ import (
 )
 
 // errTestWorkFailed marks the failing-work scenario.
-var errTestWorkFailed = errors.New("test work failed")
+var errTestWorkFailed = ErrTestWorkFailed
 
 // testLogBuffer captures logger output for lifecycle assertions.
 type testLogBuffer struct {
@@ -26,6 +25,7 @@ type testLogBuffer struct {
 func (b *testLogBuffer) Write(p []byte) (int, error) {
 	for {
 		old := b.buf.Load()
+
 		var next []byte
 		if old != nil {
 			next = make([]byte, len(*old)+len(p))
@@ -35,10 +35,12 @@ func (b *testLogBuffer) Write(p []byte) (int, error) {
 			next = make([]byte, len(p))
 			copy(next, p)
 		}
+
 		if b.buf.CompareAndSwap(old, &next) {
 			break
 		}
 	}
+
 	return len(p), nil
 }
 
@@ -47,6 +49,7 @@ func (b *testLogBuffer) lines() string {
 	if old == nil {
 		return ""
 	}
+
 	return string(*old)
 }
 
@@ -141,6 +144,7 @@ func TestFxLifecycle(t *testing.T) {
 			start, stop, err := FxTimeouts()
 			if tc.expectError {
 				require.Error(t, err)
+
 				return
 			}
 
@@ -169,7 +173,9 @@ func TestProvidersConstructInstances(t *testing.T) {
 			name: "logger provider with config returns non-nil",
 			validate: func(t *testing.T) bool {
 				t.Helper()
+
 				logger, err := ProvideLoggerWithConfig(logging.Config{Level: "info"})
+
 				return err == nil && logger != nil
 			},
 		},
@@ -178,11 +184,14 @@ func TestProvidersConstructInstances(t *testing.T) {
 			validate: func(t *testing.T) bool {
 				t.Helper()
 				t.Setenv("APP_LOG_LEVEL", "info")
+
 				cfg, err := ProvideLoggingConfig()
 				if err != nil {
 					return false
 				}
+
 				logger, err := ProvideLoggerWithConfig(cfg)
+
 				return err == nil && logger != nil
 			},
 		},
@@ -190,7 +199,9 @@ func TestProvidersConstructInstances(t *testing.T) {
 			name: "clock provider returns valid clock",
 			validate: func(t *testing.T) bool {
 				t.Helper()
+
 				clk := ProvideClock()
+
 				return clk != nil && !clk.Now().IsZero()
 			},
 		},
@@ -198,7 +209,9 @@ func TestProvidersConstructInstances(t *testing.T) {
 			name: "id generator provider returns valid generator",
 			validate: func(t *testing.T) bool {
 				t.Helper()
+
 				gen := ProvideIDGenerator()
+
 				return gen != nil && gen.NewID() != ""
 			},
 		},
@@ -213,6 +226,7 @@ func TestProvidersConstructInstances(t *testing.T) {
 	t.Run("logging config errors when unconfigured", func(t *testing.T) {
 		t.Setenv("APP_LOG_LEVEL", "")
 		t.Setenv("APP_OBSERVABILITY__LOG_LEVEL", "")
+
 		_, err := ProvideLoggingConfig()
 		require.Error(t, err)
 	})
@@ -266,11 +280,13 @@ func TestRunAppLifecycle(t *testing.T) {
 			t.Setenv("APP_LOG_LEVEL", "info")
 
 			var output testLogBuffer
+
 			logger := logging.New(&output, logging.Config{Level: "trace"})
 
 			if tc.sendSignal {
 				go func() {
 					time.Sleep(300 * time.Millisecond)
+
 					_ = syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
 				}()
 			}
@@ -298,6 +314,7 @@ func TestRunAppLifecycle(t *testing.T) {
 		t.Setenv("APP_LOG_LEVEL", "info")
 
 		var output testLogBuffer
+
 		logger := logging.New(&output, logging.Config{Level: "trace"})
 
 		code := RunApp(logger, "test-binary", "v0", nil)
@@ -311,6 +328,7 @@ func TestRunAppLifecycle(t *testing.T) {
 		t.Setenv("APP_LOG_LEVEL", "info")
 
 		var output testLogBuffer
+
 		logger := logging.New(&output, logging.Config{Level: "trace"})
 
 		code := RunApp(logger, "test-binary", "v0", nil)

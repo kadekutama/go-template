@@ -45,7 +45,7 @@ var (
 const maxKeySegment = 128
 
 // ValkeyStore is the narrow Valkey seam for coordination (DIP): the
-// production *valkey.ValkeyClient implements it and tests use an in-memory
+// production *valkey.Client implements it and tests use an in-memory
 // fake, so acquire/release/refresh paths are unit-testable without Docker.
 type ValkeyStore interface {
 	Get(ctx context.Context, key string) ([]byte, error)
@@ -55,7 +55,7 @@ type ValkeyStore interface {
 }
 
 // Compile-time seam conformance for the production client.
-var _ ValkeyStore = (*valkey.ValkeyClient)(nil)
+var _ ValkeyStore = (*valkey.Client)(nil)
 
 // RedlockParams carries constructor dependencies (Parameter Object pattern).
 type RedlockParams struct {

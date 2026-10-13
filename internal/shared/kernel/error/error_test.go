@@ -61,6 +61,8 @@ func TestNew(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err, newErr := New(tc.code, tc.message, tc.opts...)
 			if tc.expectedError {
 				assert.Error(t, newErr)
@@ -125,6 +127,8 @@ func TestRegisterValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			if tc.expectedPanic {
 				assert.Panics(t, func() {
 					Register(tc.codes)
@@ -177,6 +181,8 @@ func TestHTTPStatusFor(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := HTTPStatusFor(tc.code)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -225,6 +231,8 @@ func TestTranslatorTranslate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := translator.Translate(tc.ctx, tc.err)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -260,6 +268,7 @@ func TestAppErrorFormatting(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Equal(t, tc.expectedError, tc.err.Error())
 			assert.Equal(t, tc.expectedUnwrap, tc.err.Unwrap())
 		})
@@ -287,6 +296,7 @@ func TestMustNewPanicsOnUnregistered(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Panics(t, func() {
 				_ = MustNew(tc.code, tc.message)
 			})
@@ -295,6 +305,8 @@ func TestMustNewPanicsOnUnregistered(t *testing.T) {
 }
 
 func TestRegisterValidCustomCode(t *testing.T) {
+	t.Parallel()
+
 	id := testCodeCounter.Add(1)
 	customCode := Code(fmt.Sprintf("CUSTOM_CODE_%d", id))
 	Register(map[Code]int{customCode: http.StatusGatewayTimeout})
@@ -310,6 +322,7 @@ func TestNilTranslatorSafety(t *testing.T) {
 	t.Parallel()
 
 	appErr := MustNew(CodeValidationFailed, "fallback message")
+
 	var nilTranslator *Translator
 	assert.Equal(t, "fallback message", nilTranslator.Translate(context.Background(), appErr))
 }

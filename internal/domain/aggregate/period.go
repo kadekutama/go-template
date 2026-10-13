@@ -58,18 +58,22 @@ func OpenPeriod(p OpenPeriodParams) (Period, error) {
 	if err := data.Validate(); err != nil {
 		return Period{}, err
 	}
+
 	agg := Period{data: data}
+
 	evt, err := event.NewPeriodOpened(p.EventID, p.ID.String(), p.OccurredAt, 1, 0,
 		event.PeriodOpenedPayload{
 			PeriodID: p.ID.String(), TenantID: p.TenantID.String(), LedgerID: p.LedgerID.String(),
 			Start: data.Start, End: data.End, Timezone: p.Timezone,
 		},
-		event.EventMetadata{TenantID: p.TenantID.String(), LedgerID: p.LedgerID.String(),
+		event.Metadata{TenantID: p.TenantID.String(), LedgerID: p.LedgerID.String(),
 			CausationID: p.EventID, CorrelationID: p.EventID, UserID: p.Actor.String()})
 	if err != nil {
 		return Period{}, err
 	}
+
 	agg.events = append(agg.events, evt)
+
 	return agg, nil
 }
 
@@ -80,28 +84,27 @@ func (a *Period) Record() entity.PeriodData { return a.data }
 func (a *Period) UncommittedEvents() []event.DomainEvent {
 	out := make([]event.DomainEvent, len(a.events))
 	copy(out, a.events)
+
 	return out
 }
 
 // ClearEvents drains the uncommitted buffer after persistence.
 func (a *Period) ClearEvents() { a.events = nil }
 
-func (a *Period) meta(actor valueobject.UserID, eventID string) event.EventMetadata {
-	return event.EventMetadata{TenantID: a.data.TenantID.String(), LedgerID: a.data.LedgerID.String(),
-		CausationID: eventID, CorrelationID: eventID, UserID: actor.String()}
-}
-
 // Close moves OPEN→CLOSED when no unresolved workflows or breaks remain.
 func (a *Period) Close(p ClosePeriodParams) error {
 	if a.data.Status == entity.PeriodClosed {
 		return entity.NewError("PERIOD_CLOSED", "period is already closed")
 	}
+
 	if p.UnresolvedWorkflows > 0 || p.UnresolvedBreaks > 0 {
 		return entity.Errorf("PERIOD_CLOSE_BLOCKED", "period close blocked: %d unresolved workflows, %d unresolved breaks",
 			p.UnresolvedWorkflows, p.UnresolvedBreaks)
 	}
+
 	a.data.Status = entity.PeriodClosed
 	a.data.Version++
+
 	evt, err := event.NewPeriodClosed(p.EventID, a.data.ID.String(), p.OccurredAt,
 		a.data.Version, int64(len(a.events)),
 		event.PeriodClosedPayload{PeriodID: a.data.ID.String(), TenantID: a.data.TenantID.String(),
@@ -110,7 +113,9 @@ func (a *Period) Close(p ClosePeriodParams) error {
 	if err != nil {
 		return err
 	}
+
 	a.events = append(a.events, evt)
+
 	return nil
 }
 
@@ -119,11 +124,14 @@ func (a *Period) Reopen(p ReopenPeriodParams) error {
 	if a.data.Status == entity.PeriodOpen {
 		return entity.NewError("PERIOD_OPEN", "period is already open")
 	}
+
 	if p.ApprovedBy.String() == "" || p.Reason == "" {
 		return entity.NewError("PERIOD_REOPEN_APPROVAL", "reopen requires an approver and a reason")
 	}
+
 	a.data.Status = entity.PeriodOpen
 	a.data.Version++
+
 	evt, err := event.NewPeriodReopened(p.EventID, a.data.ID.String(), p.OccurredAt,
 		a.data.Version, int64(len(a.events)),
 		event.PeriodReopenedPayload{PeriodID: a.data.ID.String(), TenantID: a.data.TenantID.String(),
@@ -132,6 +140,12 @@ func (a *Period) Reopen(p ReopenPeriodParams) error {
 	if err != nil {
 		return err
 	}
+
 	a.events = append(a.events, evt)
+
 	return nil
+}
+func (a *Period) meta(actor valueobject.UserID, eventID string) event.Metadata {
+	return event.Metadata{TenantID: a.data.TenantID.String(), LedgerID: a.data.LedgerID.String(),
+		CausationID: eventID, CorrelationID: eventID, UserID: actor.String()}
 }

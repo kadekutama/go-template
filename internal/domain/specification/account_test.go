@@ -52,6 +52,7 @@ func TestAccountActiveMatrix(t *testing.T) {
 			account: func() entity.AccountData {
 				a := base
 				a.Status = valueobject.StatusFrozen
+
 				return a
 			}(),
 			expectedPassed:        false,
@@ -63,6 +64,7 @@ func TestAccountActiveMatrix(t *testing.T) {
 			account: func() entity.AccountData {
 				a := base
 				a.Status = valueobject.StatusClosed
+
 				return a
 			}(),
 			expectedPassed:        false,
@@ -74,6 +76,7 @@ func TestAccountActiveMatrix(t *testing.T) {
 			account: func() entity.AccountData {
 				a := base
 				a.Status = "WEIRD"
+
 				return a
 			}(),
 			expectedPassed:        false,
@@ -90,8 +93,11 @@ func TestAccountActiveMatrix(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			res := specification.AccountActive().Evaluate(tc.ctx, tc.account)
 			assert.Equal(t, tc.expectedPassed, res.Passed())
+
 			if tc.expectedViolationCode != "" {
 				assert.NotEmpty(t, res.Violations)
 				assert.Equal(t, tc.expectedViolationCode, res.Violations[0].Code)
@@ -143,8 +149,11 @@ func TestSameTenant(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			res := specification.SameTenant().Evaluate(tc.ctx, tc.pair)
 			assert.Equal(t, tc.expectedPassed, res.Passed())
+
 			if tc.expectedViolationCode != "" {
 				assert.NotEmpty(t, res.Violations)
 				assert.Equal(t, tc.expectedViolationCode, res.Violations[0].Code)

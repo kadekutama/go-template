@@ -52,7 +52,7 @@ type MockTransferStore_CreateBatch_Call struct {
 //   - ctx context.Context
 //   - batch port.BatchRecord
 //   - items []port.BatchItem
-func (_e *MockTransferStore_Expecter) CreateBatch(ctx interface{}, batch interface{}, items interface{}) *MockTransferStore_CreateBatch_Call {
+func (_e *MockTransferStore_Expecter) CreateBatch(ctx any, batch any, items any) *MockTransferStore_CreateBatch_Call {
 	return &MockTransferStore_CreateBatch_Call{Call: _e.mock.On("CreateBatch", ctx, batch, items)}
 }
 
@@ -99,7 +99,7 @@ type MockTransferStore_CreateTransfer_Call struct {
 // CreateTransfer is a helper method to define mock.On call
 //   - ctx context.Context
 //   - record port.TransferRecord
-func (_e *MockTransferStore_Expecter) CreateTransfer(ctx interface{}, record interface{}) *MockTransferStore_CreateTransfer_Call {
+func (_e *MockTransferStore_Expecter) CreateTransfer(ctx any, record any) *MockTransferStore_CreateTransfer_Call {
 	return &MockTransferStore_CreateTransfer_Call{Call: _e.mock.On("CreateTransfer", ctx, record)}
 }
 
@@ -157,7 +157,7 @@ type MockTransferStore_FindBatch_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - id string
-func (_e *MockTransferStore_Expecter) FindBatch(ctx interface{}, tenant interface{}, id interface{}) *MockTransferStore_FindBatch_Call {
+func (_e *MockTransferStore_Expecter) FindBatch(ctx any, tenant any, id any) *MockTransferStore_FindBatch_Call {
 	return &MockTransferStore_FindBatch_Call{Call: _e.mock.On("FindBatch", ctx, tenant, id)}
 }
 
@@ -215,7 +215,7 @@ type MockTransferStore_FindTransfer_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - id string
-func (_e *MockTransferStore_Expecter) FindTransfer(ctx interface{}, tenant interface{}, id interface{}) *MockTransferStore_FindTransfer_Call {
+func (_e *MockTransferStore_Expecter) FindTransfer(ctx any, tenant any, id any) *MockTransferStore_FindTransfer_Call {
 	return &MockTransferStore_FindTransfer_Call{Call: _e.mock.On("FindTransfer", ctx, tenant, id)}
 }
 
@@ -275,7 +275,7 @@ type MockTransferStore_ListBatchItems_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - batchID string
-func (_e *MockTransferStore_Expecter) ListBatchItems(ctx interface{}, tenant interface{}, batchID interface{}) *MockTransferStore_ListBatchItems_Call {
+func (_e *MockTransferStore_Expecter) ListBatchItems(ctx any, tenant any, batchID any) *MockTransferStore_ListBatchItems_Call {
 	return &MockTransferStore_ListBatchItems_Call{Call: _e.mock.On("ListBatchItems", ctx, tenant, batchID)}
 }
 
@@ -341,7 +341,7 @@ type MockTransferStore_ListTransfers_Call struct {
 // ListTransfers is a helper method to define mock.On call
 //   - ctx context.Context
 //   - filter port.TransferListFilter
-func (_e *MockTransferStore_Expecter) ListTransfers(ctx interface{}, filter interface{}) *MockTransferStore_ListTransfers_Call {
+func (_e *MockTransferStore_Expecter) ListTransfers(ctx any, filter any) *MockTransferStore_ListTransfers_Call {
 	return &MockTransferStore_ListTransfers_Call{Call: _e.mock.On("ListTransfers", ctx, filter)}
 }
 
@@ -392,7 +392,7 @@ type MockTransferStore_UpdateBatchItem_Call struct {
 //   - index int
 //   - status string
 //   - errorCode string
-func (_e *MockTransferStore_Expecter) UpdateBatchItem(ctx interface{}, tenant interface{}, batchID interface{}, index interface{}, status interface{}, errorCode interface{}) *MockTransferStore_UpdateBatchItem_Call {
+func (_e *MockTransferStore_Expecter) UpdateBatchItem(ctx any, tenant any, batchID any, index any, status any, errorCode any) *MockTransferStore_UpdateBatchItem_Call {
 	return &MockTransferStore_UpdateBatchItem_Call{Call: _e.mock.On("UpdateBatchItem", ctx, tenant, batchID, index, status, errorCode)}
 }
 
@@ -441,7 +441,7 @@ type MockTransferStore_UpdateBatchState_Call struct {
 //   - tenant valueobject.TenantID
 //   - id string
 //   - state string
-func (_e *MockTransferStore_Expecter) UpdateBatchState(ctx interface{}, tenant interface{}, id interface{}, state interface{}) *MockTransferStore_UpdateBatchState_Call {
+func (_e *MockTransferStore_Expecter) UpdateBatchState(ctx any, tenant any, id any, state any) *MockTransferStore_UpdateBatchState_Call {
 	return &MockTransferStore_UpdateBatchState_Call{Call: _e.mock.On("UpdateBatchState", ctx, tenant, id, state)}
 }
 
@@ -488,7 +488,7 @@ type MockTransferStore_UpdateTransfer_Call struct {
 // UpdateTransfer is a helper method to define mock.On call
 //   - ctx context.Context
 //   - record port.TransferRecord
-func (_e *MockTransferStore_Expecter) UpdateTransfer(ctx interface{}, record interface{}) *MockTransferStore_UpdateTransfer_Call {
+func (_e *MockTransferStore_Expecter) UpdateTransfer(ctx any, record any) *MockTransferStore_UpdateTransfer_Call {
 	return &MockTransferStore_UpdateTransfer_Call{Call: _e.mock.On("UpdateTransfer", ctx, record)}
 }
 

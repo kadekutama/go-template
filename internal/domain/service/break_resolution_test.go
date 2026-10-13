@@ -53,6 +53,7 @@ func TestValidateResolution(t *testing.T) {
 				r.AssetCode = "USD"
 				r.AdjustmentPostingID = "p-adj-1"
 				r.Approver = r.Actor
+
 				return r
 			}(),
 			current:        valueobject.BreakInReview,
@@ -68,6 +69,7 @@ func TestValidateResolution(t *testing.T) {
 				r.AssetCode = "USD"
 				r.AdjustmentPostingID = "p-adj-1"
 				r.Approver = ""
+
 				return r
 			}(),
 			current:        valueobject.BreakInReview,
@@ -83,6 +85,7 @@ func TestValidateResolution(t *testing.T) {
 				r.AssetCode = "USD"
 				r.AdjustmentPostingID = "p-adj-1"
 				r.Approver = "   "
+
 				return r
 			}(),
 			current:        valueobject.BreakInReview,
@@ -98,6 +101,7 @@ func TestValidateResolution(t *testing.T) {
 				r.AssetCode = "USD"
 				r.AdjustmentPostingID = "p-adj-1"
 				r.Approver = r.Actor
+
 				return r
 			}(),
 			current:        valueobject.BreakInReview,
@@ -112,6 +116,7 @@ func TestValidateResolution(t *testing.T) {
 				r.AmountMinor = 500
 				r.AssetCode = "USD"
 				r.AdjustmentPostingID = "   "
+
 				return r
 			}(),
 			current:        valueobject.BreakInReview,
@@ -123,6 +128,7 @@ func TestValidateResolution(t *testing.T) {
 			req: func() service.ResolutionRequest {
 				r := baseReq
 				r.Action = valueobject.ResolutionAction("DELETE")
+
 				return r
 			}(),
 			current:        valueobject.BreakInReview,
@@ -134,6 +140,7 @@ func TestValidateResolution(t *testing.T) {
 			req: func() service.ResolutionRequest {
 				r := baseReq
 				r.BreakID = "   "
+
 				return r
 			}(),
 			current:        valueobject.BreakInReview,
@@ -148,6 +155,7 @@ func TestValidateResolution(t *testing.T) {
 				r.AmountMinor = 500
 				r.AssetCode = "USD"
 				r.AdjustmentPostingID = "p-adj-1"
+
 				return r
 			}(),
 			current:        valueobject.BreakInReview,
@@ -159,6 +167,7 @@ func TestValidateResolution(t *testing.T) {
 			req: func() service.ResolutionRequest {
 				r := baseReq
 				r.EvidenceRef = ""
+
 				return r
 			}(),
 			current:        valueobject.BreakOpen,
@@ -170,6 +179,7 @@ func TestValidateResolution(t *testing.T) {
 			req: func() service.ResolutionRequest {
 				r := baseReq
 				r.ExpiresAt = now.Add(-time.Hour)
+
 				return r
 			}(),
 			current:        valueobject.BreakOpen,
@@ -187,6 +197,8 @@ func TestValidateResolution(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := service.ValidateResolution(tc.req, tc.current, tc.thresholdMinor)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -286,6 +298,8 @@ func TestTransitionBreak(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.TransitionBreak(tc.current, tc.action)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -334,6 +348,8 @@ func TestIsAcknowledgementExpired(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := service.IsAcknowledgementExpired(tc.expiresAt, tc.now)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -391,6 +407,8 @@ func TestReopenIfExpired(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.ReopenIfExpired(tc.current, tc.expiresAt, tc.now)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -498,6 +516,8 @@ func TestBuildAdjustmentLines(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.BuildAdjustmentLines(tc.breakID, tc.originalPostingID, tc.debitAccount, tc.creditAccount, tc.amountMinor, tc.assetCode)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)

@@ -23,7 +23,12 @@ import (
 //
 // Unset, malformed, or non-positive values fail fast: silently booting
 // with the wrong budget would hide misconfigurations until an outage.
-func FxTimeouts() (start, stop time.Duration, err error) {
+func FxTimeouts() (time.Duration, time.Duration, error) {
+	var (
+		start, stop time.Duration
+		err         error
+	)
+
 	start, err = fxTimeoutEnv("APP_FX_START_TIMEOUT")
 	if err != nil {
 		return 0, 0, err
@@ -41,7 +46,7 @@ func FxTimeouts() (start, stop time.Duration, err error) {
 func fxTimeoutEnv(key string) (time.Duration, error) {
 	raw := strings.TrimSpace(os.Getenv(key))
 	if raw == "" {
-		return 0, fmt.Errorf("di: %s is required", key)
+		return 0, fmt.Errorf("di: %s is required: %w", key, ErrDiIsRequired)
 	}
 
 	parsed, err := time.ParseDuration(raw)
@@ -50,7 +55,7 @@ func fxTimeoutEnv(key string) (time.Duration, error) {
 	}
 
 	if parsed <= 0 {
-		return 0, fmt.Errorf("di: invalid %s %q: must be positive", key, raw)
+		return 0, fmt.Errorf("di: invalid %s %q: must be positive: %w", key, raw, ErrDiInvalidMustBePositive)
 	}
 
 	return parsed, nil
@@ -94,6 +99,7 @@ func RunApp(logger log.Logger, binary, version string, work func(context.Context
 	startTimeout, stopTimeout, err := FxTimeouts()
 	if err != nil {
 		logger.Error(ctx, "app timeout configuration invalid", append(fields, log.Err(err))...)
+
 		return 1
 	}
 
@@ -101,6 +107,7 @@ func RunApp(logger log.Logger, binary, version string, work func(context.Context
 
 	if err := app.Start(ctx); err != nil {
 		logger.Error(ctx, "app failed to start", append(fields, log.Err(err))...)
+
 		return 1
 	}
 
@@ -111,6 +118,7 @@ func RunApp(logger log.Logger, binary, version string, work func(context.Context
 	if work != nil {
 		if err := work(ctx); err != nil {
 			logger.Error(ctx, "app work failed", append(fields, log.Err(err))...)
+
 			failed = true
 		}
 
@@ -118,6 +126,7 @@ func RunApp(logger log.Logger, binary, version string, work func(context.Context
 
 		if stopErr := app.Stop(ctx); stopErr != nil {
 			logger.Error(ctx, "app shutdown failed", append(fields, log.Err(stopErr))...)
+
 			failed = true
 		}
 	} else {
@@ -133,6 +142,7 @@ func RunApp(logger log.Logger, binary, version string, work func(context.Context
 
 		if err := shutdown.Run(ctx, stopTimeout, serve, drain); err != nil {
 			logger.Error(ctx, "app shutdown failed", append(fields, log.Err(err))...)
+
 			failed = true
 		}
 	}

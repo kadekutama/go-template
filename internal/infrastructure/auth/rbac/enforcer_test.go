@@ -17,7 +17,7 @@ import (
 func testEnforcer(t *testing.T, hook func(rbac.Decision)) *rbac.Enforcer {
 	t.Helper()
 
-	enforcer, err := rbac.NewEnforcer(rbac.RBACParams{
+	enforcer, err := rbac.NewEnforcer(rbac.Params{
 		Policies: []rbac.PolicyRule{
 			{Sub: "admin", Dom: "tenant-acme", Obj: "ledger", Act: "write", Effect: "allow"},
 			{Sub: "viewer", Dom: "tenant-acme", Obj: "ledger", Act: "read", Effect: "allow"},
@@ -121,6 +121,7 @@ func TestEnforcerAuthorize(t *testing.T) {
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			}(),
 			subject: appport.Subject{
@@ -136,7 +137,10 @@ func TestEnforcerAuthorize(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			var decisions []rbac.Decision
+
 			enforcer := testEnforcer(t, func(d rbac.Decision) {
 				decisions = append(decisions, d)
 			})
@@ -144,6 +148,7 @@ func TestEnforcerAuthorize(t *testing.T) {
 			err := enforcer.AuthorizeWithAttrs(tc.ctx, tc.subject, tc.action, tc.resource, tc.attrs)
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
+
 				return
 			}
 
@@ -188,6 +193,7 @@ func TestEnforcerReload(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			enforcer := testEnforcer(t, nil)
 			require.NoError(t, enforcer.Reload(tc.policies, tc.grouping))
 
@@ -198,6 +204,7 @@ func TestEnforcerReload(t *testing.T) {
 
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
+
 				return
 			}
 
@@ -222,12 +229,14 @@ func TestEnforcerReloadFrom(t *testing.T) {
 			name:     "successful reload from loader",
 			enforcer: testEnforcer(t, nil),
 			loader: func(t *testing.T) rbac.PolicyLoader {
+				t.Helper()
 				m := mockrbac.NewMockPolicyLoader(t)
 				m.EXPECT().Load().Return([]rbac.PolicyRule{
 					{Sub: "viewer", Dom: "tenant-acme", Obj: "ledger", Act: "write", Effect: "allow"},
 				}, []rbac.GroupingRule{
 					{User: "bob", Role: "viewer", Dom: "tenant-acme"},
 				}, nil).Once()
+
 				return m
 			},
 			action:        "write",
@@ -244,6 +253,8 @@ func TestEnforcerReloadFrom(t *testing.T) {
 			name:     "nil enforcer returns ErrNotInit",
 			enforcer: nil,
 			loader: func(t *testing.T) rbac.PolicyLoader {
+				t.Helper()
+
 				return mockrbac.NewMockPolicyLoader(t)
 			},
 			action:        "read",
@@ -253,8 +264,10 @@ func TestEnforcerReloadFrom(t *testing.T) {
 			name:     "loader returns error",
 			enforcer: testEnforcer(t, nil),
 			loader: func(t *testing.T) rbac.PolicyLoader {
+				t.Helper()
 				m := mockrbac.NewMockPolicyLoader(t)
 				m.EXPECT().Load().Return(nil, nil, rbac.ErrPolicyInvalid).Once()
+
 				return m
 			},
 			action:        "read",
@@ -264,17 +277,22 @@ func TestEnforcerReloadFrom(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			var l rbac.PolicyLoader
 			if tc.loader != nil {
 				l = tc.loader(t)
 			}
+
 			err := tc.enforcer.ReloadFrom(l)
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
+
 				return
 			}
 
 			assert.NoError(t, err)
+
 			authErr := tc.enforcer.Authorize(context.Background(), appport.Subject{
 				ID:       "bob",
 				TenantID: valueobject.TenantID("tenant-acme"),
@@ -289,44 +307,52 @@ func TestNewEnforcerWithLoader(t *testing.T) {
 
 	type testCase struct {
 		name          string
-		params        func(t *testing.T) rbac.RBACParams
+		params        func(t *testing.T) rbac.Params
 		expectedError error
 	}
 
 	testCases := []testCase{
 		{
 			name: "loader supplies initial policies",
-			params: func(t *testing.T) rbac.RBACParams {
+			params: func(t *testing.T) rbac.Params {
+				t.Helper()
 				m := mockrbac.NewMockPolicyLoader(t)
 				m.EXPECT().Load().Return([]rbac.PolicyRule{
 					{Sub: "admin", Dom: "tenant-acme", Obj: "ledger", Act: "delete", Effect: "allow"},
 				}, []rbac.GroupingRule{
 					{User: "alice", Role: "admin", Dom: "tenant-acme"},
 				}, nil).Once()
-				return rbac.RBACParams{Loader: m, ThresholdAmountMinor: 100000}
+
+				return rbac.Params{Loader: m, ThresholdAmountMinor: 100000}
 			},
 			expectedError: nil,
 		},
 		{
 			name: "loader error fails construction",
-			params: func(t *testing.T) rbac.RBACParams {
+			params: func(t *testing.T) rbac.Params {
+				t.Helper()
 				m := mockrbac.NewMockPolicyLoader(t)
 				m.EXPECT().Load().Return(nil, nil, rbac.ErrPolicyInvalid).Once()
-				return rbac.RBACParams{Loader: m, ThresholdAmountMinor: 100000}
+
+				return rbac.Params{Loader: m, ThresholdAmountMinor: 100000}
 			},
 			expectedError: rbac.ErrPolicyInvalid,
 		},
 		{
 			name: "zero threshold rejected",
-			params: func(t *testing.T) rbac.RBACParams {
-				return rbac.RBACParams{ThresholdAmountMinor: 0}
+			params: func(t *testing.T) rbac.Params {
+				t.Helper()
+
+				return rbac.Params{ThresholdAmountMinor: 0}
 			},
 			expectedError: rbac.ErrPolicyInvalid,
 		},
 		{
 			name: "negative threshold rejected",
-			params: func(t *testing.T) rbac.RBACParams {
-				return rbac.RBACParams{ThresholdAmountMinor: -1}
+			params: func(t *testing.T) rbac.Params {
+				t.Helper()
+
+				return rbac.Params{ThresholdAmountMinor: -1}
 			},
 			expectedError: rbac.ErrPolicyInvalid,
 		},
@@ -334,9 +360,12 @@ func TestNewEnforcerWithLoader(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			enf, err := rbac.NewEnforcer(tc.params(t))
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
+
 				return
 			}
 
@@ -354,7 +383,7 @@ func TestNewEnforcerWithLoader(t *testing.T) {
 func TestEnforcerConcurrentReload(t *testing.T) {
 	t.Parallel()
 
-	enforcer, err := rbac.NewEnforcer(rbac.RBACParams{
+	enforcer, err := rbac.NewEnforcer(rbac.Params{
 		Policies: []rbac.PolicyRule{
 			{Sub: "admin", Dom: "tenant-acme", Obj: "ledger", Act: "write", Effect: "allow"},
 		},
@@ -377,12 +406,11 @@ func TestEnforcerConcurrentReload(t *testing.T) {
 	}
 
 	var wg sync.WaitGroup
+
 	stop := make(chan struct{})
 
-	for i := 0; i < 4; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 4 {
+		wg.Go(func() {
 			for {
 				select {
 				case <-stop:
@@ -391,10 +419,10 @@ func TestEnforcerConcurrentReload(t *testing.T) {
 					_ = enforcer.Authorize(context.Background(), alice, "write", "ledger")
 				}
 			}
-		}()
+		})
 	}
 
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		if i%2 == 0 {
 			assert.NoError(t, enforcer.Reload(allow, grouping))
 		} else {

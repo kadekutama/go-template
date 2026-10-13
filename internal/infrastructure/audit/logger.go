@@ -25,8 +25,8 @@ type WORMExporter interface {
 	ArchiveCheckpoint(ctx context.Context, root SignedRoot) error
 }
 
-// AuditParams carries constructor dependencies (Parameter Object pattern).
-type AuditParams struct {
+// Params carries constructor dependencies (Parameter Object pattern).
+type Params struct {
 	DB         *gorm.DB
 	SigningKey []byte `validate:"required,min=32"`
 	Clock      appport.Clock
@@ -79,12 +79,12 @@ type Logger struct {
 var _ appport.AuditLogger = (*Logger)(nil)
 
 // NewLogger builds the audit adapter; DB, SigningKey, and Clock are required.
-func NewLogger(params AuditParams) (*Logger, error) {
+func NewLogger(params Params) (*Logger, error) {
 	if params.DB == nil {
 		return nil, fmt.Errorf("%w: DB is required", ErrConfigRequired)
 	}
 
-	if len(params.SigningKey) < 32 {
+	if len(params.SigningKey) < minSigningKeyLen {
 		return nil, ErrConfigRequired
 	}
 
@@ -99,11 +99,6 @@ func NewLogger(params AuditParams) (*Logger, error) {
 		loki:       params.Loki,
 		worm:       params.WORM,
 	}, nil
-}
-
-// now returns the current UTC time through the injected clock.
-func (l *Logger) now() time.Time {
-	return l.clock.Now().UTC()
 }
 
 // Record appends one audit fact with chain + signature. The Loki export runs
@@ -165,6 +160,80 @@ func (l *Logger) RecordTx(ctx context.Context, tx *gorm.DB, entry appport.AuditE
 	return err
 }
 
+// Entries returns a copy of one tenant chain for verification/export.
+func (l *Logger) Entries(ctx context.Context, tenant string) ([]StoredEntry, error) {
+	if l == nil || l.db == nil {
+		return nil, ErrNotInitialized
+	}
+
+	tenantID, err := valueobject.ParseTenantID(tenant)
+	if err != nil {
+		return nil, fmt.Errorf("%w: tenant: %s", ErrConfigRequired, err.Error())
+	}
+
+	var rows []auditRowModel
+
+	if err := postgres.WithinTenantTx(ctx, l.db, tenantID, func(tx *gorm.DB) error {
+		return tx.Where("tenant_id = ?", tenant).Order("seq ASC").Find(&rows).Error
+	}); err != nil {
+		return nil, err
+	}
+
+	out := make([]StoredEntry, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, toStored(row))
+	}
+
+	return out, nil
+}
+
+// Verify verifies the cryptographic hash chain and signatures for tenant.
+func (l *Logger) Verify(ctx context.Context, tenant string) error {
+	if l == nil || l.db == nil || len(l.signingKey) == 0 {
+		return ErrNotInitialized
+	}
+
+	entries, err := l.Entries(ctx, tenant)
+	if err != nil {
+		return err
+	}
+
+	if len(entries) == 0 {
+		return nil
+	}
+
+	expectedPrev := "genesis:" + tenant
+
+	for i, entry := range entries {
+		expectedSeq := int64(i + 1)
+		if entry.Seq != expectedSeq {
+			return fmt.Errorf("%w: seq mismatch at index %d (got %d, want %d)", ErrChainBroken, i, entry.Seq, expectedSeq)
+		}
+
+		if entry.PrevHash != expectedPrev {
+			return fmt.Errorf("%w: broken prev hash at seq %d", ErrChainBroken, entry.Seq)
+		}
+
+		recomputed := hashEntry(tenant, entry.Actor, entry.Action, entry.Resource, entry.BeforeHash, entry.AfterHash, entry.OccurredAt, entry.PrevHash, entry.Seq)
+		if entry.EntryHash != recomputed {
+			return fmt.Errorf("%w: hash mismatch at seq %d", ErrChainBroken, entry.Seq)
+		}
+
+		if !verifySignature(l.signingKey, entry.EntryHash, entry.Signature) {
+			return fmt.Errorf("%w: invalid signature at seq %d", ErrChainBroken, entry.Seq)
+		}
+
+		expectedPrev = entry.EntryHash
+	}
+
+	return nil
+}
+
+// now returns the current UTC time through the injected clock.
+func (l *Logger) now() time.Time {
+	return l.clock.Now().UTC()
+}
+
 // prepare validates one entry without touching storage: nil guards, context,
 // secret screen, tenant shape, and timestamp default. Both Record and
 // RecordTx validate before any SQL so bad input never opens a transaction.
@@ -207,6 +276,7 @@ func (l *Logger) append(ctx context.Context, db *gorm.DB, tenant string, entry a
 	}
 
 	var head auditHeadModel
+
 	lookup := db.Clauses(clause.Locking{Strength: "UPDATE"}).Where("tenant_id = ?", tenant).First(&head)
 
 	if lookup.Error != nil {
@@ -266,74 +336,6 @@ func (l *Logger) append(ctx context.Context, db *gorm.DB, tenant string, entry a
 	}
 
 	return toStored(row), nil
-}
-
-// Entries returns a copy of one tenant chain for verification/export.
-func (l *Logger) Entries(ctx context.Context, tenant string) ([]StoredEntry, error) {
-	if l == nil || l.db == nil {
-		return nil, ErrNotInitialized
-	}
-
-	tenantID, err := valueobject.ParseTenantID(tenant)
-	if err != nil {
-		return nil, fmt.Errorf("%w: tenant: %s", ErrConfigRequired, err.Error())
-	}
-
-	var rows []auditRowModel
-
-	if err := postgres.WithinTenantTx(ctx, l.db, tenantID, func(tx *gorm.DB) error {
-		return tx.Where("tenant_id = ?", tenant).Order("seq ASC").Find(&rows).Error
-	}); err != nil {
-		return nil, err
-	}
-
-	out := make([]StoredEntry, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, toStored(row))
-	}
-
-	return out, nil
-}
-
-// Verify verifies the cryptographic hash chain and signatures for tenant.
-func (l *Logger) Verify(ctx context.Context, tenant string) error {
-	if l == nil || l.db == nil || len(l.signingKey) == 0 {
-		return ErrNotInitialized
-	}
-
-	entries, err := l.Entries(ctx, tenant)
-	if err != nil {
-		return err
-	}
-
-	if len(entries) == 0 {
-		return nil
-	}
-
-	expectedPrev := "genesis:" + tenant
-	for i, entry := range entries {
-		expectedSeq := int64(i + 1)
-		if entry.Seq != expectedSeq {
-			return fmt.Errorf("%w: seq mismatch at index %d (got %d, want %d)", ErrChainBroken, i, entry.Seq, expectedSeq)
-		}
-
-		if entry.PrevHash != expectedPrev {
-			return fmt.Errorf("%w: broken prev hash at seq %d", ErrChainBroken, entry.Seq)
-		}
-
-		recomputed := hashEntry(tenant, entry.Actor, entry.Action, entry.Resource, entry.BeforeHash, entry.AfterHash, entry.OccurredAt, entry.PrevHash, entry.Seq)
-		if entry.EntryHash != recomputed {
-			return fmt.Errorf("%w: hash mismatch at seq %d", ErrChainBroken, entry.Seq)
-		}
-
-		if !verifySignature(l.signingKey, entry.EntryHash, entry.Signature) {
-			return fmt.Errorf("%w: invalid signature at seq %d", ErrChainBroken, entry.Seq)
-		}
-
-		expectedPrev = entry.EntryHash
-	}
-
-	return nil
 }
 
 // toStored maps one database row onto the exported chain view.

@@ -2,7 +2,6 @@ package service_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -33,6 +32,7 @@ func TestToAppError(t *testing.T) {
 			name: "app error passes through untouched",
 			err: func() error {
 				appErr, _ := apperror.New(apperror.CodeNotFound, "not found")
+
 				return appErr
 			}(),
 			expectedCode: apperror.CodeNotFound,
@@ -52,7 +52,7 @@ func TestToAppError(t *testing.T) {
 		},
 		{
 			name:         "unknown generic error becomes internal error",
-			err:          errors.New("db connection failure"),
+			err:          service.ErrDbConnectionFailure,
 			expectedCode: apperror.CodeInternalError,
 			expectedNil:  false,
 		},
@@ -60,11 +60,15 @@ func TestToAppError(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actual := service.ToAppError(tc.err)
 			if tc.expectedNil {
 				assert.Nil(t, actual)
+
 				return
 			}
+
 			require.NotNil(t, actual)
 			assert.Equal(t, tc.expectedCode, actual.Code)
 		})
@@ -111,13 +115,15 @@ func TestLocalize(t *testing.T) {
 			name:            "generic error translates to localized internal server error",
 			ctx:             apperror.WithLocale(context.Background(), "en"),
 			translator:      translator,
-			err:             errors.New("custom error message"),
+			err:             service.ErrCustomErrorMessage,
 			expectedMessage: "internal server error",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actual := service.Localize(tc.ctx, tc.translator, tc.err)
 			assert.Equal(t, tc.expectedMessage, actual)
 		})

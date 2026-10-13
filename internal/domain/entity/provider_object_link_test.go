@@ -50,6 +50,8 @@ func TestProviderObjectLinkValidate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.link.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -79,6 +81,8 @@ func TestProviderObjectLinkDeliveryKey(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := tc.link.DeliveryKey()
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})

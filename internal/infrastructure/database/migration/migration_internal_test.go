@@ -21,40 +21,6 @@ func newRecordingLogger() *recordingLogger {
 	return &recordingLogger{}
 }
 
-func (l *recordingLogger) record(level, msg string) {
-	val, _ := l.lines.LoadOrStore(level, &atomic.Pointer[[]string]{})
-	ptr := val.(*atomic.Pointer[[]string])
-	for {
-		old := ptr.Load()
-		var next []string
-		if old != nil {
-			next = make([]string, len(*old)+1)
-			copy(next, *old)
-			next[len(*old)] = msg
-		} else {
-			next = []string{msg}
-		}
-		if ptr.CompareAndSwap(old, &next) {
-			break
-		}
-	}
-}
-
-func (l *recordingLogger) getLines(level string) []string {
-	val, ok := l.lines.Load(level)
-	if !ok {
-		return nil
-	}
-	ptr := val.(*atomic.Pointer[[]string])
-	old := ptr.Load()
-	if old == nil {
-		return nil
-	}
-	out := make([]string, len(*old))
-	copy(out, *old)
-	return out
-}
-
 func (l *recordingLogger) Trace(context.Context, string, ...any) {}
 func (l *recordingLogger) Debug(context.Context, string, ...any) {}
 func (l *recordingLogger) Info(_ context.Context, msg string, _ ...any) {
@@ -68,6 +34,47 @@ func (l *recordingLogger) Panic(_ context.Context, msg string, _ ...any) { panic
 func (l *recordingLogger) Fatal(context.Context, string, ...any)         {}
 func (l *recordingLogger) With(...any) log.Logger {
 	return l
+}
+
+func (l *recordingLogger) record(level, msg string) {
+	val, _ := l.lines.LoadOrStore(level, &atomic.Pointer[[]string]{})
+
+	ptr := val.(*atomic.Pointer[[]string])
+	for {
+		old := ptr.Load()
+
+		var next []string
+		if old != nil {
+			next = make([]string, len(*old)+1)
+			copy(next, *old)
+			next[len(*old)] = msg
+		} else {
+			next = []string{msg}
+		}
+
+		if ptr.CompareAndSwap(old, &next) {
+			break
+		}
+	}
+}
+
+func (l *recordingLogger) getLines(level string) []string {
+	val, ok := l.lines.Load(level)
+	if !ok {
+		return nil
+	}
+
+	ptr := val.(*atomic.Pointer[[]string])
+
+	old := ptr.Load()
+	if old == nil {
+		return nil
+	}
+
+	out := make([]string, len(*old))
+	copy(out, *old)
+
+	return out
 }
 
 func TestGooseLoggerBridge(t *testing.T) {
@@ -111,6 +118,8 @@ func TestGooseLoggerBridge(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			if tc.expectedLevel == "" {
 				resolved := gooseLog(nil)
 				assert.NotNil(t, resolved)

@@ -51,7 +51,7 @@ type MockRefundStore_CreateRefund_Call struct {
 // CreateRefund is a helper method to define mock.On call
 //   - ctx context.Context
 //   - record command.RefundRecord
-func (_e *MockRefundStore_Expecter) CreateRefund(ctx interface{}, record interface{}) *MockRefundStore_CreateRefund_Call {
+func (_e *MockRefundStore_Expecter) CreateRefund(ctx any, record any) *MockRefundStore_CreateRefund_Call {
 	return &MockRefundStore_CreateRefund_Call{Call: _e.mock.On("CreateRefund", ctx, record)}
 }
 
@@ -109,7 +109,7 @@ type MockRefundStore_FindRefund_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - id string
-func (_e *MockRefundStore_Expecter) FindRefund(ctx interface{}, tenant interface{}, id interface{}) *MockRefundStore_FindRefund_Call {
+func (_e *MockRefundStore_Expecter) FindRefund(ctx any, tenant any, id any) *MockRefundStore_FindRefund_Call {
 	return &MockRefundStore_FindRefund_Call{Call: _e.mock.On("FindRefund", ctx, tenant, id)}
 }
 
@@ -169,7 +169,7 @@ type MockRefundStore_ListRefunds_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - limit int
-func (_e *MockRefundStore_Expecter) ListRefunds(ctx interface{}, tenant interface{}, limit interface{}) *MockRefundStore_ListRefunds_Call {
+func (_e *MockRefundStore_Expecter) ListRefunds(ctx any, tenant any, limit any) *MockRefundStore_ListRefunds_Call {
 	return &MockRefundStore_ListRefunds_Call{Call: _e.mock.On("ListRefunds", ctx, tenant, limit)}
 }
 
@@ -227,7 +227,7 @@ type MockRefundStore_SumPriorRefunds_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - originalTxn string
-func (_e *MockRefundStore_Expecter) SumPriorRefunds(ctx interface{}, tenant interface{}, originalTxn interface{}) *MockRefundStore_SumPriorRefunds_Call {
+func (_e *MockRefundStore_Expecter) SumPriorRefunds(ctx any, tenant any, originalTxn any) *MockRefundStore_SumPriorRefunds_Call {
 	return &MockRefundStore_SumPriorRefunds_Call{Call: _e.mock.On("SumPriorRefunds", ctx, tenant, originalTxn)}
 }
 

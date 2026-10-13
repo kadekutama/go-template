@@ -49,7 +49,7 @@ type MockLokiExporter_ExportAudit_Call struct {
 // ExportAudit is a helper method to define mock.On call
 //   - ctx context.Context
 //   - entry audit.StoredEntry
-func (_e *MockLokiExporter_Expecter) ExportAudit(ctx interface{}, entry interface{}) *MockLokiExporter_ExportAudit_Call {
+func (_e *MockLokiExporter_Expecter) ExportAudit(ctx any, entry any) *MockLokiExporter_ExportAudit_Call {
 	return &MockLokiExporter_ExportAudit_Call{Call: _e.mock.On("ExportAudit", ctx, entry)}
 }
 

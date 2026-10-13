@@ -3,7 +3,6 @@ package crypto_test
 import (
 	"context"
 	"encoding/base64"
-	"errors"
 	"net/http"
 	"testing"
 
@@ -89,10 +88,13 @@ func TestNewTransitKEKValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			kek, err := crypto.NewTransitKEK(tc.params)
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
 				assert.Nil(t, kek)
+
 				return
 			}
 
@@ -131,6 +133,7 @@ func TestTransitKEKWrapDEK(t *testing.T) {
 					KeyName: "payment-key",
 					HTTP:    client,
 				})
+
 				return kek
 			},
 			dek:            []byte("32-byte-secret-data-encryption-k"),
@@ -161,6 +164,7 @@ func TestTransitKEKWrapDEK(t *testing.T) {
 					KeyName: "payment-key",
 					HTTP:    client,
 				})
+
 				return kek
 			},
 			dek:           []byte("dek"),
@@ -172,7 +176,7 @@ func TestTransitKEKWrapDEK(t *testing.T) {
 			kekBuilder: func() *crypto.TransitKEK {
 				client := mockTransitHTTPClient(func(tr *httpmock.MockTransport) {
 					tr.RegisterResponder("POST", mockTransitBase+"/v1/transit/encrypt/payment-key",
-						httpmock.NewErrorResponder(errors.New("dial tcp: connection refused")))
+						httpmock.NewErrorResponder(crypto.ErrDialTCPConnectionRefused))
 				})
 				kek, _ := crypto.NewTransitKEK(crypto.TransitParams{
 					Address: mockTransitBase,
@@ -180,10 +184,12 @@ func TestTransitKEKWrapDEK(t *testing.T) {
 					KeyName: "payment-key",
 					HTTP:    client,
 				})
+
 				return kek
 			},
 			dek: []byte("dek"),
 			assertErrorCheck: func(t *testing.T, err error) {
+				t.Helper()
 				assert.Contains(t, err.Error(), "connection refused")
 			},
 		},
@@ -201,10 +207,12 @@ func TestTransitKEKWrapDEK(t *testing.T) {
 					KeyName: "payment-key",
 					HTTP:    client,
 				})
+
 				return kek
 			},
 			dek: []byte("dek"),
 			assertErrorCheck: func(t *testing.T, err error) {
+				t.Helper()
 				assert.Contains(t, err.Error(), "crypto: transit wrap decode")
 			},
 		},
@@ -213,6 +221,7 @@ func TestTransitKEKWrapDEK(t *testing.T) {
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			}(),
 			kekBuilder: func() *crypto.TransitKEK {
@@ -226,10 +235,12 @@ func TestTransitKEKWrapDEK(t *testing.T) {
 					KeyName: "payment-key",
 					HTTP:    client,
 				})
+
 				return kek
 			},
 			dek: []byte("dek"),
 			assertErrorCheck: func(t *testing.T, err error) {
+				t.Helper()
 				assert.Error(t, err)
 			},
 		},
@@ -237,15 +248,21 @@ func TestTransitKEKWrapDEK(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			kek := tc.kekBuilder()
+
 			wrapped, keyID, err := kek.WrapDEK(tc.ctx, tc.dek)
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
+
 				return
 			}
+
 			if tc.assertErrorCheck != nil {
 				require.Error(t, err)
 				tc.assertErrorCheck(t, err)
+
 				return
 			}
 
@@ -286,6 +303,7 @@ func TestTransitKEKUnwrapDEK(t *testing.T) {
 					KeyName: "payment-key",
 					HTTP:    client,
 				})
+
 				return kek
 			},
 			keyID:         "payment-key",
@@ -317,6 +335,7 @@ func TestTransitKEKUnwrapDEK(t *testing.T) {
 					KeyName: "payment-key",
 					HTTP:    client,
 				})
+
 				return kek
 			},
 			keyID:         "payment-key",
@@ -329,7 +348,7 @@ func TestTransitKEKUnwrapDEK(t *testing.T) {
 			kekBuilder: func() *crypto.TransitKEK {
 				client := mockTransitHTTPClient(func(tr *httpmock.MockTransport) {
 					tr.RegisterResponder("POST", mockTransitBase+"/v1/transit/decrypt/payment-key",
-						httpmock.NewErrorResponder(errors.New("tls: handshake failure")))
+						httpmock.NewErrorResponder(crypto.ErrTLSHandshakeFailure))
 				})
 				kek, _ := crypto.NewTransitKEK(crypto.TransitParams{
 					Address: mockTransitBase,
@@ -337,11 +356,13 @@ func TestTransitKEKUnwrapDEK(t *testing.T) {
 					KeyName: "payment-key",
 					HTTP:    client,
 				})
+
 				return kek
 			},
 			keyID:   "payment-key",
 			wrapped: []byte("vault:v1:cipher"),
 			assertErrorCheck: func(t *testing.T, err error) {
+				t.Helper()
 				assert.Contains(t, err.Error(), "handshake failure")
 			},
 		},
@@ -359,6 +380,7 @@ func TestTransitKEKUnwrapDEK(t *testing.T) {
 					KeyName: "payment-key",
 					HTTP:    client,
 				})
+
 				return kek
 			},
 			keyID:         "payment-key",
@@ -379,11 +401,13 @@ func TestTransitKEKUnwrapDEK(t *testing.T) {
 					KeyName: "payment-key",
 					HTTP:    client,
 				})
+
 				return kek
 			},
 			keyID:   "payment-key",
 			wrapped: []byte("vault:v1:cipher"),
 			assertErrorCheck: func(t *testing.T, err error) {
+				t.Helper()
 				assert.Contains(t, err.Error(), "crypto: transit unwrap decode")
 			},
 		},
@@ -391,15 +415,21 @@ func TestTransitKEKUnwrapDEK(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			kek := tc.kekBuilder()
+
 			dek, err := kek.UnwrapDEK(tc.ctx, tc.keyID, tc.wrapped)
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
+
 				return
 			}
+
 			if tc.assertErrorCheck != nil {
 				require.Error(t, err)
 				tc.assertErrorCheck(t, err)
+
 				return
 			}
 
@@ -432,6 +462,7 @@ func TestTransitKEKDestroyKey(t *testing.T) {
 					KeyName: "payment-key",
 					HTTP:    client,
 				})
+
 				return kek
 			},
 			keyID:         "payment-key",
@@ -451,6 +482,7 @@ func TestTransitKEKDestroyKey(t *testing.T) {
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			}(),
 			kekBuilder: func() *crypto.TransitKEK {
@@ -461,6 +493,7 @@ func TestTransitKEKDestroyKey(t *testing.T) {
 					KeyName: "payment-key",
 					HTTP:    client,
 				})
+
 				return kek
 			},
 			keyID:         "payment-key",
@@ -470,6 +503,8 @@ func TestTransitKEKDestroyKey(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			kek := tc.kekBuilder()
 			err := kek.DestroyKey(tc.ctx, tc.keyID)
 			assert.ErrorIs(t, err, tc.expectedError)
@@ -505,6 +540,7 @@ func TestTransitKEKRewrapDEK(t *testing.T) {
 					KeyName: "payment-key",
 					HTTP:    client,
 				})
+
 				return kek
 			},
 			keyID:          "payment-key",
@@ -526,6 +562,7 @@ func TestTransitKEKRewrapDEK(t *testing.T) {
 					KeyName: "payment-key",
 					HTTP:    client,
 				})
+
 				return kek
 			},
 			keyID:          "other-key",
@@ -558,6 +595,7 @@ func TestTransitKEKRewrapDEK(t *testing.T) {
 					KeyName: "payment-key",
 					HTTP:    client,
 				})
+
 				return kek
 			},
 			keyID:          "payment-key",
@@ -579,18 +617,20 @@ func TestTransitKEKRewrapDEK(t *testing.T) {
 					KeyName: "payment-key",
 					HTTP:    client,
 				})
+
 				return kek
 			},
 			keyID:          "payment-key",
 			wrapped:        []byte("vault:v1:cipher"),
 			expectedCipher: nil,
-			expectedError:  errors.New("crypto: transit rewrap decode"),
+			expectedError:  crypto.ErrCryptoTransitRewrapDecode,
 		},
 		{
 			name: "canceled context",
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			}(),
 			kekBuilder: func() *crypto.TransitKEK {
@@ -600,6 +640,7 @@ func TestTransitKEKRewrapDEK(t *testing.T) {
 					KeyName: "payment-key",
 					HTTP:    mockTransitHTTPClient(nil),
 				})
+
 				return kek
 			},
 			keyID:          "payment-key",
@@ -611,13 +652,18 @@ func TestTransitKEKRewrapDEK(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			kek := tc.kekBuilder()
+
 			ciphertext, err := kek.RewrapDEK(tc.ctx, tc.keyID, tc.wrapped)
 			if tc.expectedError != nil {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tc.expectedError.Error())
+
 				return
 			}
+
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedCipher, ciphertext)
 		})

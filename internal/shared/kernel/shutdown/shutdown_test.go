@@ -2,7 +2,6 @@ package shutdown
 
 import (
 	"context"
-	"errors"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -15,23 +14,29 @@ func TestRunDrainsOnCancel(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	release := make(chan struct{})
+
 	var drained atomic.Bool
 
 	serve := func(ctx context.Context) error {
 		<-ctx.Done()
 		<-release // hold until the test frees us; proves Run chose the drain path
+
 		return nil
 	}
 	drain := func(context.Context) error {
 		drained.Store(true)
+
 		return nil
 	}
 
 	time.AfterFunc(100*time.Millisecond, cancel)
+
 	if err := Run(ctx, 5*time.Second, serve, drain); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
+
 	close(release)
+
 	if !drained.Load() {
 		t.Error("drain did not run after cancel")
 	}
@@ -40,8 +45,8 @@ func TestRunDrainsOnCancel(t *testing.T) {
 func TestRun(t *testing.T) {
 	t.Parallel()
 
-	sentinelServeErr := errors.New("serve boom")
-	sentinelDrainErr := errors.New("drain failure")
+	sentinelServeErr := ErrServeBoom
+	sentinelDrainErr := ErrDrainFailure
 	shortTimeout := 20 * time.Millisecond
 
 	type testCase struct {
@@ -60,7 +65,7 @@ func TestRun(t *testing.T) {
 			timeout:       5 * time.Second,
 			serve:         nil,
 			drain:         nil,
-			expectedError: errors.New("shutdown: serve func must not be nil"),
+			expectedError: ErrShutdownServeFuncMustNotBeNil,
 		},
 		{
 			name:    "non-positive timeout returns error",
@@ -70,7 +75,7 @@ func TestRun(t *testing.T) {
 				return nil
 			},
 			drain:         nil,
-			expectedError: errors.New("shutdown: drain timeout must be positive"),
+			expectedError: ErrShutdownDrainTimeoutMustBePositive,
 		},
 		{
 			name:    "serve returns error immediately",
@@ -89,11 +94,13 @@ func TestRun(t *testing.T) {
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			},
 			timeout: 5 * time.Second,
 			serve: func(ctx context.Context) error {
 				<-ctx.Done()
+
 				return nil
 			},
 			drain:         nil,
@@ -104,11 +111,13 @@ func TestRun(t *testing.T) {
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			},
 			timeout: 5 * time.Second,
 			serve: func(ctx context.Context) error {
 				<-ctx.Done()
+
 				return nil
 			},
 			drain: func(context.Context) error {
@@ -121,15 +130,18 @@ func TestRun(t *testing.T) {
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			},
 			timeout: shortTimeout,
 			serve: func(ctx context.Context) error {
 				<-ctx.Done()
+
 				return nil
 			},
 			drain: func(ctx context.Context) error {
 				<-ctx.Done()
+
 				return ctx.Err()
 			},
 			expectedError: context.DeadlineExceeded,
@@ -138,6 +150,8 @@ func TestRun(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := Run(tc.ctx(), tc.timeout, tc.serve, tc.drain)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())

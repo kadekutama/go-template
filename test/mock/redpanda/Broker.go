@@ -50,7 +50,7 @@ type MockBroker_Publish_Call struct {
 //   - key string
 //   - headers map[string]string
 //   - payload []byte
-func (_e *MockBroker_Expecter) Publish(ctx interface{}, topic interface{}, key interface{}, headers interface{}, payload interface{}) *MockBroker_Publish_Call {
+func (_e *MockBroker_Expecter) Publish(ctx any, topic any, key any, headers any, payload any) *MockBroker_Publish_Call {
 	return &MockBroker_Publish_Call{Call: _e.mock.On("Publish", ctx, topic, key, headers, payload)}
 }
 

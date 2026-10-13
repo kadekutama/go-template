@@ -14,7 +14,9 @@ import (
 )
 
 func newSubscriptionService(t *testing.T, uow port.UnitOfWork, subs command.SubscriptionStore, authz port.Authorizer) *command.SubscriptionService {
+	t.Helper()
 	storage := newMockObjectStorage(t)
+
 	return command.NewSubscriptionService(command.SubscriptionServiceParams{
 		UoW:           uow,
 		Subscriptions: subs,
@@ -22,11 +24,11 @@ func newSubscriptionService(t *testing.T, uow port.UnitOfWork, subs command.Subs
 			UoW:     uow,
 			Reports: newMockReportStore(t),
 			Storage: storage,
-			Clock:   newMockClock(t, tfrAt),
+			Clock:   newMockClock(t, tfrAt()),
 			IDs:     newMockIDGenerator(t, tfrTestIDs(40)...),
 			Authz:   authz,
 		}),
-		Clock: newMockClock(t, tfrAt),
+		Clock: newMockClock(t, tfrAt()),
 		IDs:   newMockIDGenerator(t, tfrTestIDs(40)...),
 		Authz: authz,
 	})
@@ -99,14 +101,17 @@ func TestSubscriptionSubscribe(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t)
 			subs := newMockSubscriptionStore(t)
 			authz := newMockAuthorizer(t)
+
 			tc.preload(uow)
 			svc := newSubscriptionService(t, uow, subs, authz)
 
 			actualResult, err := svc.Subscribe(context.Background(), tc.tenant, tc.template, tc.cron, tc.destination, tc.actor, tc.key)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.NotEmpty(t, actualResult.ID)
 				assert.Equal(t, tc.template, actualResult.Template)
@@ -124,6 +129,7 @@ func TestSubscriptions(t *testing.T) {
 	t.Parallel()
 
 	t.Run("deliver due subscription and unsubscribe", func(t *testing.T) {
+		t.Parallel()
 		uow := newMockUOW(t)
 		subs := newMockSubscriptionStore(t)
 		authz := newMockAuthorizer(t)
@@ -132,18 +138,18 @@ func TestSubscriptions(t *testing.T) {
 		sub, err := svc.Subscribe(context.Background(), tfrTenant, "transaction-volume", "0 9 * * *", "webhook:ops", "u-1", "key-sub-1")
 		require.NoError(t, err)
 
-		due, err := svc.DueSubscriptions(context.Background(), tfrTenant, opsAt)
+		due, err := svc.DueSubscriptions(context.Background(), tfrTenant, opsAt())
 		require.NoError(t, err)
 		require.Len(t, due, 1)
 
-		delivered, err := svc.DeliverSubscription(context.Background(), tfrTenant, sub.ID, "run-2026-09-15", "u-1", map[string]string{"period": "2026-09"}, opsAt)
+		delivered, err := svc.DeliverSubscription(context.Background(), tfrTenant, sub.ID, "run-2026-09-15", "u-1", map[string]string{"period": "2026-09"}, opsAt())
 		require.NoError(t, err)
 		assert.Equal(t, command.ReportReady, delivered.Status)
 		assert.Contains(t, outboxTypes(uow), command.EventReportGenerated)
 
 		updated, err := subs.FindSubscription(context.Background(), tfrTenant, sub.ID)
 		require.NoError(t, err)
-		assert.Equal(t, opsAt, updated.LastRun)
+		assert.Equal(t, opsAt(), updated.LastRun)
 
 		require.NoError(t, svc.Unsubscribe(context.Background(), tfrTenant, sub.ID, "u-1"))
 		_, err = subs.FindSubscription(context.Background(), tfrTenant, sub.ID)
@@ -197,12 +203,13 @@ func TestRegulatoryAllTypes(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t)
 			store := newMockComplianceStore(t)
 			storage := newMockObjectStorage(t)
 			authz := newMockAuthorizer(t)
 			svc := command.NewComplianceService(command.ComplianceServiceParams{
-				UoW: uow, Reviews: store, Storage: storage, Clock: newMockClock(t, tfrAt),
+				UoW: uow, Reviews: store, Storage: storage, Clock: newMockClock(t, tfrAt()),
 				IDs: newMockIDGenerator(t, tfrTestIDs(40)...), Authz: authz,
 			})
 			actualResult, err := svc.ExportRegulatoryReport(context.Background(), port.RegulatoryExportRequest{

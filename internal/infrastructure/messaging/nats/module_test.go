@@ -18,8 +18,8 @@ func TestModule(t *testing.T) {
 
 	err := fx.ValidateApp(
 		edgenats.Module(),
-		fx.Provide(func() edgenats.PublisherParams {
-			return edgenats.PublisherParams{
+		fx.Provide(func() edgenats.Params {
+			return edgenats.Params{
 				URL:            "nats://127.0.0.1:4222",
 				ConnectTimeout: 5 * time.Second,
 				RequestTimeout: 3 * time.Second,

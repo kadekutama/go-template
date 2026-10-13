@@ -9,23 +9,22 @@ import (
 	"github.com/kadekutama/go-template/internal/domain/event"
 )
 
-func catalogMeta() event.EventMetadata {
-	return event.EventMetadata{TenantID: testTenantID, LedgerID: testLedgerID, CorrelationID: testCorrID}
+func catalogMeta() event.Metadata {
+	return event.Metadata{TenantID: testTenantID, LedgerID: testLedgerID, CorrelationID: testCorrID}
 }
 
 func catalogAt() time.Time { return time.Date(2026, 9, 14, 4, 0, 0, 0, time.UTC) }
 
-func TestCatalogEventTypes(t *testing.T) {
+func TestCatalogEventTypesAccounts(t *testing.T) {
 	t.Parallel()
+
 	at, meta := catalogAt(), catalogMeta()
-	entries := []event.EntryPayload{
-		{EntryID: "e-1", AccountID: testAccount1, AccountNumber: "1000", Direction: "DEBIT", AmountMinor: 100, AssetCode: testUSD, AccountSeq: 1},
-		{EntryID: "e-2", AccountID: testAccount2, AccountNumber: "2000", Direction: "CREDIT", AmountMinor: 100, AssetCode: testUSD, AccountSeq: 1},
-	}
+
 	type testCase struct {
 		expectedType string
 		make         func() (event.DomainEvent, error)
 	}
+
 	testCases := []testCase{
 		{"account.created.v1", func() (event.DomainEvent, error) {
 			return event.NewAccountCreated(testEvent1, testAccount1, at, 1, 0, event.AccountCreatedPayload{AccountID: testAccount1, TenantID: testTenantID, AccountNumber: "1000", Name: "Cash", Type: "ASSET", AssetCode: testUSD, Status: "ACTIVE", OpenedBy: testUserID}, meta)
@@ -51,21 +50,42 @@ func TestCatalogEventTypes(t *testing.T) {
 		{"tenant.created.v1", func() (event.DomainEvent, error) {
 			return event.NewTenantCreated(testEvent1, "tn-1", at, 1, 0, event.TenantCreatedPayload{TenantID: testTenantID, LedgerID: testLedgerID, Name: "Acme", Region: "us", BaseAssetCode: testUSD, CreatedAt: at}, meta)
 		}},
-		{"pii.erased.v1", func() (event.DomainEvent, error) {
-			return event.NewPIIErased(testEvent1, "s-1", at, 1, 0, event.PIIErasedPayload{ErasureID: "er-1", TenantID: testTenantID, SubjectType: "user", SubjectID: "u-9", PolicyVersion: "v3", ErasedAt: at}, meta)
-		}},
-		{"transaction.posted.v1", func() (event.DomainEvent, error) {
-			return event.NewTransactionPosted(testEvent1, testPosting1, at, 1, 0, event.TransactionPostedPayload{PostingID: testPosting1, TenantID: testTenantID, LedgerID: testLedgerID, Operation: testTransferOp, Entries: entries, RecordedAt: at}, meta)
-		}},
-		{"transaction.reversed.v1", func() (event.DomainEvent, error) {
-			return event.NewTransactionReversed(testEvent1, testPosting2, at, 1, 0, event.TransactionReversedPayload{PostingID: testPosting2, TenantID: testTenantID, OriginalPostingID: testPosting1, ReversalType: "FULL", ReversedAmountMinor: 100, ReversedEntries: entries, Reason: "error", ReversedAt: at}, meta)
-		}},
-		{"transaction.failed.v1", func() (event.DomainEvent, error) {
-			return event.NewTransactionFailed(testEvent1, "att-1", at, 1, 0, event.TransactionFailedPayload{AttemptID: "att-1", TenantID: testTenantID, Code: "UNBALANCED_TRANSACTION", Message: "unbalanced"}, meta)
-		}},
-		{"transaction.pending.v1", func() (event.DomainEvent, error) {
-			return event.NewTransactionPending(testEvent1, "att-1", at, 1, 0, event.TransactionPendingPayload{AttemptID: "att-1", TenantID: testTenantID, Operation: testTransferOp}, meta)
-		}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.expectedType, func(t *testing.T) {
+			t.Parallel()
+
+			evt, err := tc.make()
+			if err != nil {
+				t.Fatalf("constructor: %v", err)
+			}
+
+			if evt.EventType() != tc.expectedType {
+				t.Errorf("EventType = %q, want %q", evt.EventType(), tc.expectedType)
+			}
+
+			if evt.EventID() != testEvent1 || evt.Metadata().TenantID != testTenantID {
+				t.Errorf("envelope broken: %+v", evt)
+			}
+
+			if !evt.OccurredAt().Equal(at) {
+				t.Errorf("OccurredAt = %v", evt.OccurredAt())
+			}
+		})
+	}
+}
+func TestCatalogEventTypesTransfers(t *testing.T) {
+	t.Parallel()
+
+	at, meta := catalogAt(), catalogMeta()
+
+	type testCase struct {
+		expectedType string
+		make         func() (event.DomainEvent, error)
+	}
+
+	testCases := []testCase{
 		{"transfer.created.v1", func() (event.DomainEvent, error) {
 			return event.NewTransferCreated(testEvent1, testTransfer1, at, 1, 0, event.TransferCreatedPayload{TransferID: testTransfer1, TenantID: testTenantID, SourceAccount: testAccount1, DestAccount: testAccount2, AmountMinor: 50, AssetCode: testUSD}, meta)
 		}},
@@ -84,6 +104,42 @@ func TestCatalogEventTypes(t *testing.T) {
 		{"transfer.batch.completed.v1", func() (event.DomainEvent, error) {
 			return event.NewTransferBatchCompleted(testEvent1, testBatch1, at, 1, 0, event.TransferBatchCompletedPayload{BatchID: testBatch1, TenantID: testTenantID, CompletedCount: 9, FailedCount: 1}, meta)
 		}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.expectedType, func(t *testing.T) {
+			t.Parallel()
+
+			evt, err := tc.make()
+			if err != nil {
+				t.Fatalf("constructor: %v", err)
+			}
+
+			if evt.EventType() != tc.expectedType {
+				t.Errorf("EventType = %q, want %q", evt.EventType(), tc.expectedType)
+			}
+
+			if evt.EventID() != testEvent1 || evt.Metadata().TenantID != testTenantID {
+				t.Errorf("envelope broken: %+v", evt)
+			}
+
+			if !evt.OccurredAt().Equal(at) {
+				t.Errorf("OccurredAt = %v", evt.OccurredAt())
+			}
+		})
+	}
+}
+func TestCatalogEventTypesPayments(t *testing.T) {
+	t.Parallel()
+
+	at, meta := catalogAt(), catalogMeta()
+
+	type testCase struct {
+		expectedType string
+		make         func() (event.DomainEvent, error)
+	}
+
+	testCases := []testCase{
 		{"payment_intent.created.v1", func() (event.DomainEvent, error) {
 			return event.NewPaymentIntentCreated(testEvent1, testPayment1, at, 1, 0, event.PaymentIntentCreatedPayload{PaymentID: testPayment1, TenantID: testTenantID, AmountMinor: 100, AssetCode: testUSD}, meta)
 		}},
@@ -125,6 +181,67 @@ func TestCatalogEventTypes(t *testing.T) {
 		}},
 		{"payout.failed.v1", func() (event.DomainEvent, error) {
 			return event.NewPayoutFailed(testEvent1, testPayout1, at, 1, 0, event.PayoutFailedPayload{PayoutID: testPayout1, TenantID: testTenantID, Code: "REJECT", Message: "no"}, meta)
+		}},
+		{"topup.succeeded.v1", func() (event.DomainEvent, error) {
+			return event.NewTopUpSucceeded(testEvent1, testTopUp1, at, 1, 0, event.TopUpPayload{TopUpID: testTopUp1, TenantID: testTenantID, AccountID: testAccount1, AmountMinor: 500, AssetCode: testUSD, BankAccountID: "ba-1"}, meta)
+		}},
+		{"topup.failed.v1", func() (event.DomainEvent, error) {
+			return event.NewTopUpFailed(testEvent1, testTopUp1, at, 1, 0, event.TopUpFailedPayload{TopUpID: testTopUp1, TenantID: testTenantID, Code: "REJECT", Message: "no"}, meta)
+		}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.expectedType, func(t *testing.T) {
+			t.Parallel()
+
+			evt, err := tc.make()
+			if err != nil {
+				t.Fatalf("constructor: %v", err)
+			}
+
+			if evt.EventType() != tc.expectedType {
+				t.Errorf("EventType = %q, want %q", evt.EventType(), tc.expectedType)
+			}
+
+			if evt.EventID() != testEvent1 || evt.Metadata().TenantID != testTenantID {
+				t.Errorf("envelope broken: %+v", evt)
+			}
+
+			if !evt.OccurredAt().Equal(at) {
+				t.Errorf("OccurredAt = %v", evt.OccurredAt())
+			}
+		})
+	}
+}
+func TestCatalogEventTypesLedgerCore(t *testing.T) {
+	t.Parallel()
+
+	at, meta := catalogAt(), catalogMeta()
+	entries := []event.EntryPayload{
+		{EntryID: "e-1", AccountID: testAccount1, AccountNumber: "1000", Direction: "DEBIT", AmountMinor: 100, AssetCode: testUSD, AccountSeq: 1},
+		{EntryID: "e-2", AccountID: testAccount2, AccountNumber: "2000", Direction: "CREDIT", AmountMinor: 100, AssetCode: testUSD, AccountSeq: 1},
+	}
+
+	type testCase struct {
+		expectedType string
+		make         func() (event.DomainEvent, error)
+	}
+
+	testCases := []testCase{
+		{"pii.erased.v1", func() (event.DomainEvent, error) {
+			return event.NewPIIErased(testEvent1, "s-1", at, 1, 0, event.PIIErasedPayload{ErasureID: "er-1", TenantID: testTenantID, SubjectType: "user", SubjectID: "u-9", PolicyVersion: "v3", ErasedAt: at}, meta)
+		}},
+		{"transaction.posted.v1", func() (event.DomainEvent, error) {
+			return event.NewTransactionPosted(testEvent1, testPosting1, at, 1, 0, event.TransactionPostedPayload{PostingID: testPosting1, TenantID: testTenantID, LedgerID: testLedgerID, Operation: testTransferOp, Entries: entries, RecordedAt: at}, meta)
+		}},
+		{"transaction.reversed.v1", func() (event.DomainEvent, error) {
+			return event.NewTransactionReversed(testEvent1, testPosting2, at, 1, 0, event.TransactionReversedPayload{PostingID: testPosting2, TenantID: testTenantID, OriginalPostingID: testPosting1, ReversalType: "FULL", ReversedAmountMinor: 100, ReversedEntries: entries, Reason: "error", ReversedAt: at}, meta)
+		}},
+		{"transaction.failed.v1", func() (event.DomainEvent, error) {
+			return event.NewTransactionFailed(testEvent1, "att-1", at, 1, 0, event.TransactionFailedPayload{AttemptID: "att-1", TenantID: testTenantID, Code: "UNBALANCED_TRANSACTION", Message: "unbalanced"}, meta)
+		}},
+		{"transaction.pending.v1", func() (event.DomainEvent, error) {
+			return event.NewTransactionPending(testEvent1, "att-1", at, 1, 0, event.TransactionPendingPayload{AttemptID: "att-1", TenantID: testTenantID, Operation: testTransferOp}, meta)
 		}},
 		{"reconciliation.run.started.v1", func() (event.DomainEvent, error) {
 			return event.NewReconciliationRunStarted(testEvent1, testRun1, at, 1, 0, event.ReconciliationRunStartedPayload{RunID: testRun1, TenantID: testTenantID, LedgerID: testLedgerID, StartedAt: at}, meta)
@@ -168,28 +285,25 @@ func TestCatalogEventTypes(t *testing.T) {
 		{"dispute.closed.v1", func() (event.DomainEvent, error) {
 			return event.NewDisputeClosed(testEvent1, testDispute1, at, 1, 0, event.DisputeClosedPayload{DisputeID: testDispute1, TenantID: testTenantID, Outcome: "WON"}, meta)
 		}},
-		{"topup.succeeded.v1", func() (event.DomainEvent, error) {
-			return event.NewTopUpSucceeded(testEvent1, testTopUp1, at, 1, 0, event.TopUpPayload{TopUpID: testTopUp1, TenantID: testTenantID, AccountID: testAccount1, AmountMinor: 500, AssetCode: testUSD, BankAccountID: "ba-1"}, meta)
-		}},
-		{"topup.failed.v1", func() (event.DomainEvent, error) {
-			return event.NewTopUpFailed(testEvent1, testTopUp1, at, 1, 0, event.TopUpFailedPayload{TopUpID: testTopUp1, TenantID: testTenantID, Code: "REJECT", Message: "no"}, meta)
-		}},
 	}
-	if len(testCases) != 49 {
-		t.Fatalf("catalog table has %d entries, want 49", len(testCases))
-	}
+
 	for _, tc := range testCases {
 		t.Run(tc.expectedType, func(t *testing.T) {
+			t.Parallel()
+
 			evt, err := tc.make()
 			if err != nil {
 				t.Fatalf("constructor: %v", err)
 			}
+
 			if evt.EventType() != tc.expectedType {
 				t.Errorf("EventType = %q, want %q", evt.EventType(), tc.expectedType)
 			}
+
 			if evt.EventID() != testEvent1 || evt.Metadata().TenantID != testTenantID {
 				t.Errorf("envelope broken: %+v", evt)
 			}
+
 			if !evt.OccurredAt().Equal(at) {
 				t.Errorf("OccurredAt = %v", evt.OccurredAt())
 			}
@@ -213,6 +327,7 @@ func TestCatalogValidation(t *testing.T) {
 			name: "empty account payload",
 			call: func() error {
 				_, err := event.NewAccountCreated(testEvent1, testAccount1, at, 1, 0, event.AccountCreatedPayload{}, meta)
+
 				return err
 			},
 			expectedError: true,
@@ -221,6 +336,7 @@ func TestCatalogValidation(t *testing.T) {
 			name: "zero transfer amount",
 			call: func() error {
 				_, err := event.NewTransferCreated(testEvent1, testTransfer1, at, 1, 0, event.TransferCreatedPayload{TransferID: testTransfer1, TenantID: testTenantID, AmountMinor: 0}, meta)
+
 				return err
 			},
 			expectedError: true,
@@ -229,6 +345,7 @@ func TestCatalogValidation(t *testing.T) {
 			name: "bad dispute outcome",
 			call: func() error {
 				_, err := event.NewDisputeClosed(testEvent1, testDispute1, at, 1, 0, event.DisputeClosedPayload{DisputeID: testDispute1, TenantID: testTenantID, Outcome: "MAYBE"}, meta)
+
 				return err
 			},
 			expectedError: true,
@@ -237,6 +354,7 @@ func TestCatalogValidation(t *testing.T) {
 			name: "posted transaction without entries",
 			call: func() error {
 				_, err := event.NewTransactionPosted(testEvent1, testPosting1, at, 1, 0, event.TransactionPostedPayload{PostingID: testPosting1, TenantID: testTenantID, LedgerID: testLedgerID}, meta)
+
 				return err
 			},
 			expectedError: true,
@@ -244,8 +362,9 @@ func TestCatalogValidation(t *testing.T) {
 		{
 			name: "empty tenant metadata",
 			call: func() error {
-				badMeta := event.EventMetadata{}
+				badMeta := event.Metadata{}
 				_, err := event.NewPayoutCreated(testEvent1, testPayout1, at, 1, 0, event.PayoutCreatedPayload{PayoutID: testPayout1, TenantID: testTenantID, AccountID: testAccount1, AmountMinor: 1}, badMeta)
+
 				return err
 			},
 			expectedError: true,
@@ -254,6 +373,8 @@ func TestCatalogValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.call()
 			if tc.expectedError {
 				if err == nil {
@@ -270,19 +391,23 @@ func TestCatalogValidation(t *testing.T) {
 
 func TestTransactionPostedPreservesEntries(t *testing.T) {
 	t.Parallel()
+
 	at, meta := catalogAt(), catalogMeta()
 	entries := []event.EntryPayload{
 		{EntryID: "e-1", AccountID: testAccount1, Direction: "DEBIT", AmountMinor: 100, AssetCode: testUSD, AccountSeq: 3},
 		{EntryID: "e-2", AccountID: testAccount2, Direction: "CREDIT", AmountMinor: 100, AssetCode: testUSD, AccountSeq: 9},
 	}
+
 	evt, err := event.NewTransactionPosted(testEvent1, testPosting1, at, 1, 0, event.TransactionPostedPayload{PostingID: testPosting1, TenantID: testTenantID, LedgerID: testLedgerID, Operation: testTransferOp, Entries: entries, RecordedAt: at}, meta)
 	if err != nil {
 		t.Fatalf("constructor: %v", err)
 	}
+
 	got := evt.Typed().Entries
 	if len(got) != 2 || got[0].AccountSeq != 3 || got[1].AccountSeq != 9 {
 		t.Fatalf("entries not preserved: %+v", got)
 	}
+
 	entries[0].AmountMinor = 999
 	if evt.Typed().Entries[0].AmountMinor != 100 {
 		t.Fatal("posted entries must be defensively copied")
@@ -291,284 +416,425 @@ func TestTransactionPostedPreservesEntries(t *testing.T) {
 
 func TestPIIErasedCarriesNoValue(t *testing.T) {
 	t.Parallel()
-	typ := reflect.TypeOf(event.PIIErasedPayload{})
-	for i := 0; i < typ.NumField(); i++ {
-		tag := typ.Field(i).Tag.Get("json")
-		name := strings.SplitN(tag, ",", 2)[0]
+
+	typ := reflect.TypeFor[event.PIIErasedPayload]()
+	for f := range typ.Fields() {
+		tag := f.Tag.Get("json")
+
+		name, _, _ := strings.Cut(tag, ",")
 		if name == "value" || name == "erased_value" || name == "pii" {
 			t.Errorf("PIIErasedPayload must not expose erased values (field %s)", name)
 		}
 	}
 }
 
-func TestCatalogValidationMatrix(t *testing.T) {
+func TestCatalogValidationMatrixAccounts(t *testing.T) {
 	t.Parallel()
+
 	at, meta := catalogAt(), catalogMeta()
-	bad := event.EventMetadata{}
+
 	type testCase struct {
 		name string
 		call func() error
 	}
+
 	testCases := []testCase{
 		{"account.created empty", func() error {
 			_, err := event.NewAccountCreated(testEvent1, testAccount1, at, 1, 0, event.AccountCreatedPayload{}, meta)
+
 			return err
 		}},
 		{"account.updated empty", func() error {
 			_, err := event.NewAccountUpdated(testEvent1, testAccount1, at, 1, 0, event.AccountUpdatedPayload{}, meta)
+
 			return err
 		}},
 		{"account.frozen empty", func() error {
 			_, err := event.NewAccountFrozen(testEvent1, testAccount1, at, 1, 0, event.AccountFrozenPayload{}, meta)
+
 			return err
 		}},
 		{"account.frozen no reason", func() error {
 			_, err := event.NewAccountFrozen(testEvent1, testAccount1, at, 1, 0, event.AccountFrozenPayload{AccountID: testAccount1, TenantID: testTenantID}, meta)
+
 			return err
 		}},
 		{"account.unfrozen empty", func() error {
 			_, err := event.NewAccountUnfrozen(testEvent1, testAccount1, at, 1, 0, event.AccountUnfrozenPayload{}, meta)
+
 			return err
 		}},
 		{"account.closed empty", func() error {
 			_, err := event.NewAccountClosed(testEvent1, testAccount1, at, 1, 0, event.AccountClosedPayload{}, meta)
+
 			return err
 		}},
 		{"account.closed no reason", func() error {
 			_, err := event.NewAccountClosed(testEvent1, testAccount1, at, 1, 0, event.AccountClosedPayload{AccountID: testAccount1, TenantID: testTenantID}, meta)
+
 			return err
 		}},
 		{"account.verified empty", func() error {
 			_, err := event.NewAccountVerified(testEvent1, testAccount1, at, 1, 0, event.AccountVerifiedPayload{}, meta)
+
 			return err
 		}},
 		{"balance.changed empty", func() error {
 			_, err := event.NewBalanceChanged(testEvent1, testAccount1, at, 1, 0, event.BalanceChangedPayload{}, meta)
+
 			return err
 		}},
 		{"tenant.created empty", func() error {
 			_, err := event.NewTenantCreated(testEvent1, testTenant1, at, 1, 0, event.TenantCreatedPayload{}, meta)
+
 			return err
 		}},
 		{"pii.erased empty", func() error {
 			_, err := event.NewPIIErased(testEvent1, testSubject1, at, 1, 0, event.PIIErasedPayload{}, meta)
+
 			return err
 		}},
 		{"transaction.posted empty", func() error {
 			_, err := event.NewTransactionPosted(testEvent1, testPosting1, at, 1, 0, event.TransactionPostedPayload{}, meta)
+
 			return err
 		}},
 		{"transaction.reversed empty", func() error {
 			_, err := event.NewTransactionReversed(testEvent1, testPosting1, at, 1, 0, event.TransactionReversedPayload{}, meta)
+
 			return err
 		}},
 		{"transaction.reversed no reason", func() error {
 			_, err := event.NewTransactionReversed(testEvent1, testPosting1, at, 1, 0, event.TransactionReversedPayload{PostingID: testPosting1, TenantID: testTenantID, OriginalPostingID: testOrigPosting}, meta)
+
 			return err
 		}},
 		{"transaction.failed empty", func() error {
 			_, err := event.NewTransactionFailed(testEvent1, testAccount1, at, 1, 0, event.TransactionFailedPayload{}, meta)
+
 			return err
 		}},
 		{"transaction.pending empty", func() error {
 			_, err := event.NewTransactionPending(testEvent1, testAccount1, at, 1, 0, event.TransactionPendingPayload{}, meta)
+
 			return err
 		}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if err := tc.call(); err == nil {
+				t.Errorf("expected error, got nil")
+			}
+		})
+	}
+}
+func TestCatalogValidationMatrixTransfers(t *testing.T) {
+	t.Parallel()
+
+	at, meta := catalogAt(), catalogMeta()
+
+	type testCase struct {
+		name string
+		call func() error
+	}
+
+	testCases := []testCase{
 		{"transfer.created empty", func() error {
 			_, err := event.NewTransferCreated(testEvent1, testTransfer1, at, 1, 0, event.TransferCreatedPayload{}, meta)
+
 			return err
 		}},
 		{"transfer.created negative", func() error {
 			_, err := event.NewTransferCreated(testEvent1, testTransfer1, at, 1, 0, event.TransferCreatedPayload{TransferID: testTransfer1, TenantID: testTenantID, AmountMinor: -1}, meta)
+
 			return err
 		}},
 		{"transfer.completed empty", func() error {
 			_, err := event.NewTransferCompleted(testEvent1, testTransfer1, at, 1, 0, event.TransferCompletedPayload{}, meta)
+
 			return err
 		}},
 		{"transfer.failed empty", func() error {
 			_, err := event.NewTransferFailed(testEvent1, testTransfer1, at, 1, 0, event.TransferFailedPayload{}, meta)
+
 			return err
 		}},
 		{"transfer.canceled empty", func() error {
 			_, err := event.NewTransferCanceled(testEvent1, testTransfer1, at, 1, 0, event.TransferCanceledPayload{}, meta)
+
 			return err
 		}},
 		{"batch.received empty", func() error {
 			_, err := event.NewTransferBatchReceived(testEvent1, testBatch1, at, 1, 0, event.TransferBatchReceivedPayload{}, meta)
+
 			return err
 		}},
 		{"batch.received zero items", func() error {
 			_, err := event.NewTransferBatchReceived(testEvent1, testBatch1, at, 1, 0, event.TransferBatchReceivedPayload{BatchID: testBatch1, TenantID: testTenantID}, meta)
+
 			return err
 		}},
 		{"batch.completed empty", func() error {
 			_, err := event.NewTransferBatchCompleted(testEvent1, testBatch1, at, 1, 0, event.TransferBatchCompletedPayload{}, meta)
+
 			return err
 		}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if err := tc.call(); err == nil {
+				t.Errorf("expected error, got nil")
+			}
+		})
+	}
+}
+func TestCatalogValidationMatrixPayments(t *testing.T) {
+	t.Parallel()
+
+	at, meta := catalogAt(), catalogMeta()
+
+	type testCase struct {
+		name string
+		call func() error
+	}
+
+	testCases := []testCase{
 		{"intent.created empty", func() error {
 			_, err := event.NewPaymentIntentCreated(testEvent1, testPayment1, at, 1, 0, event.PaymentIntentCreatedPayload{}, meta)
+
 			return err
 		}},
 		{"intent.succeeded empty", func() error {
 			_, err := event.NewPaymentIntentSucceeded(testEvent1, testPayment1, at, 1, 0, event.PaymentSucceededPayload{}, meta)
+
 			return err
 		}},
 		{"intent.failed empty", func() error {
 			_, err := event.NewPaymentIntentFailed(testEvent1, testPayment1, at, 1, 0, event.PaymentFailedPayload{}, meta)
+
 			return err
 		}},
 		{"intent.canceled empty", func() error {
 			_, err := event.NewPaymentIntentCanceled(testEvent1, testPayment1, at, 1, 0, event.PaymentCanceledPayload{}, meta)
+
 			return err
 		}},
 		{"requires_action empty", func() error {
 			_, err := event.NewPaymentIntentRequiresAction(testEvent1, testPayment1, at, 1, 0, event.PaymentActionRequiredPayload{}, meta)
+
 			return err
 		}},
 		{"captured empty", func() error {
 			_, err := event.NewPaymentCaptured(testEvent1, testPayment1, at, 1, 0, event.PaymentCapturedPayload{}, meta)
+
 			return err
 		}},
 		{"captured zero", func() error {
 			_, err := event.NewPaymentCaptured(testEvent1, testPayment1, at, 1, 0, event.PaymentCapturedPayload{PaymentID: testPayment1, TenantID: testTenantID, PostingID: testPosting1}, meta)
+
 			return err
 		}},
 		{"settled empty", func() error {
 			_, err := event.NewPaymentSettled(testEvent1, testPayment1, at, 1, 0, event.PaymentSettledPayload{}, meta)
+
 			return err
 		}},
 		{"refund.created empty", func() error {
 			_, err := event.NewRefundCreated(testEvent1, testRefund1, at, 1, 0, event.RefundCreatedPayload{}, meta)
+
 			return err
 		}},
 		{"refund.created zero", func() error {
 			_, err := event.NewRefundCreated(testEvent1, testRefund1, at, 1, 0, event.RefundCreatedPayload{RefundID: testRefund1, TenantID: testTenantID, OriginalPostingID: testPosting1}, meta)
+
 			return err
 		}},
 		{"refund.succeeded empty", func() error {
 			_, err := event.NewRefundSucceeded(testEvent1, testRefund1, at, 1, 0, event.RefundSucceededPayload{}, meta)
+
 			return err
 		}},
 		{"refund.failed empty", func() error {
 			_, err := event.NewRefundFailed(testEvent1, testRefund1, at, 1, 0, event.RefundFailedPayload{}, meta)
+
 			return err
 		}},
 		{"payout.created empty", func() error {
 			_, err := event.NewPayoutCreated(testEvent1, testPayout1, at, 1, 0, event.PayoutCreatedPayload{}, meta)
+
 			return err
 		}},
 		{"payout.created zero", func() error {
 			_, err := event.NewPayoutCreated(testEvent1, testPayout1, at, 1, 0, event.PayoutCreatedPayload{PayoutID: testPayout1, TenantID: testTenantID, AccountID: testAccount1}, meta)
+
 			return err
 		}},
 		{"payout.pending empty", func() error {
 			_, err := event.NewPayoutPending(testEvent1, testPayout1, at, 1, 0, event.PayoutPendingPayload{}, meta)
+
 			return err
 		}},
 		{"payout.paid empty", func() error {
 			_, err := event.NewPayoutPaid(testEvent1, testPayout1, at, 1, 0, event.PayoutPaidPayload{}, meta)
+
 			return err
 		}},
 		{"payout.failed empty", func() error {
 			_, err := event.NewPayoutFailed(testEvent1, testPayout1, at, 1, 0, event.PayoutFailedPayload{}, meta)
-			return err
-		}},
-		{"run.started empty", func() error {
-			_, err := event.NewReconciliationRunStarted(testEvent1, testRun1, at, 1, 0, event.ReconciliationRunStartedPayload{}, meta)
-			return err
-		}},
-		{"run.completed empty", func() error {
-			_, err := event.NewReconciliationRunCompleted(testEvent1, testRun1, at, 1, 0, event.ReconciliationRunCompletedPayload{}, meta)
-			return err
-		}},
-		{"break.found empty", func() error {
-			_, err := event.NewReconciliationBreakFound(testEvent1, testBreak1, at, 1, 0, event.ReconciliationBreakFoundPayload{}, meta)
-			return err
-		}},
-		{"break.resolved empty", func() error {
-			_, err := event.NewReconciliationBreakResolved(testEvent1, testBreak1, at, 1, 0, event.ReconciliationBreakResolvedPayload{}, meta)
-			return err
-		}},
-		{"break.acked empty", func() error {
-			_, err := event.NewReconciliationBreakAcknowledged(testEvent1, testBreak1, at, 1, 0, event.ReconciliationBreakAcknowledgedPayload{}, meta)
-			return err
-		}},
-		{"period.opened empty", func() error {
-			_, err := event.NewPeriodOpened(testEvent1, testPeriod1, at, 1, 0, event.PeriodOpenedPayload{}, meta)
-			return err
-		}},
-		{"period.closed empty", func() error {
-			_, err := event.NewPeriodClosed(testEvent1, testPeriod1, at, 1, 0, event.PeriodClosedPayload{}, meta)
-			return err
-		}},
-		{"period.reopened empty", func() error {
-			_, err := event.NewPeriodReopened(testEvent1, testPeriod1, at, 1, 0, event.PeriodReopenedPayload{}, meta)
-			return err
-		}},
-		{"fx empty", func() error {
-			_, err := event.NewFxRateUpdated(testEvent1, testFx1, at, 1, 0, event.FxRateUpdatedPayload{}, meta)
-			return err
-		}},
-		{"fx no rate", func() error {
-			_, err := event.NewFxRateUpdated(testEvent1, testFx1, at, 1, 0, event.FxRateUpdatedPayload{RateID: testFx1, TenantID: testTenantID, FromAsset: "EUR", ToAsset: testUSD}, meta)
-			return err
-		}},
-		{"fee.assessed empty", func() error {
-			_, err := event.NewFeeAssessed(testEvent1, testFee1, at, 1, 0, event.FeeAssessedPayload{}, meta)
-			return err
-		}},
-		{"fee.assessed zero", func() error {
-			_, err := event.NewFeeAssessed(testEvent1, testFee1, at, 1, 0, event.FeeAssessedPayload{FeeID: testFee1, TenantID: testTenantID, AccountID: testAccount1}, meta)
-			return err
-		}},
-		{"fee.collected empty", func() error {
-			_, err := event.NewFeeCollected(testEvent1, testFee1, at, 1, 0, event.FeeCollectedPayload{}, meta)
-			return err
-		}},
-		{"report empty", func() error {
-			_, err := event.NewReportGenerated(testEvent1, testReport1, at, 1, 0, event.ReportGeneratedPayload{}, meta)
-			return err
-		}},
-		{"dispute.opened empty", func() error {
-			_, err := event.NewDisputeOpened(testEvent1, testDispute1, at, 1, 0, event.DisputeOpenedPayload{}, meta)
-			return err
-		}},
-		{"dispute.opened zero", func() error {
-			_, err := event.NewDisputeOpened(testEvent1, testDispute1, at, 1, 0, event.DisputeOpenedPayload{DisputeID: testDispute1, TenantID: testTenantID, TransactionID: testPosting1, Network: "VISA"}, meta)
-			return err
-		}},
-		{"dispute.closed empty", func() error {
-			_, err := event.NewDisputeClosed(testEvent1, testDispute1, at, 1, 0, event.DisputeClosedPayload{}, meta)
-			return err
-		}},
-		{"dispute.closed bad outcome", func() error {
-			_, err := event.NewDisputeClosed(testEvent1, testDispute1, at, 1, 0, event.DisputeClosedPayload{DisputeID: testDispute1, TenantID: testTenantID, Outcome: "DRAW"}, meta)
+
 			return err
 		}},
 		{"topup.succeeded empty", func() error {
 			_, err := event.NewTopUpSucceeded(testEvent1, testTopUp1, at, 1, 0, event.TopUpPayload{}, meta)
+
 			return err
 		}},
 		{"topup.succeeded zero", func() error {
 			_, err := event.NewTopUpSucceeded(testEvent1, testTopUp1, at, 1, 0, event.TopUpPayload{TopUpID: testTopUp1, TenantID: testTenantID, AccountID: testAccount1}, meta)
+
 			return err
 		}},
 		{"topup.failed empty", func() error {
 			_, err := event.NewTopUpFailed(testEvent1, testTopUp1, at, 1, 0, event.TopUpFailedPayload{}, meta)
+
+			return err
+		}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if err := tc.call(); err == nil {
+				t.Errorf("expected error, got nil")
+			}
+		})
+	}
+}
+func TestCatalogValidationMatrixLedgerOps(t *testing.T) {
+	t.Parallel()
+
+	at, meta := catalogAt(), catalogMeta()
+	bad := event.Metadata{}
+
+	type testCase struct {
+		name string
+		call func() error
+	}
+
+	testCases := []testCase{
+		{"run.started empty", func() error {
+			_, err := event.NewReconciliationRunStarted(testEvent1, testRun1, at, 1, 0, event.ReconciliationRunStartedPayload{}, meta)
+
+			return err
+		}},
+		{"run.completed empty", func() error {
+			_, err := event.NewReconciliationRunCompleted(testEvent1, testRun1, at, 1, 0, event.ReconciliationRunCompletedPayload{}, meta)
+
+			return err
+		}},
+		{"break.found empty", func() error {
+			_, err := event.NewReconciliationBreakFound(testEvent1, testBreak1, at, 1, 0, event.ReconciliationBreakFoundPayload{}, meta)
+
+			return err
+		}},
+		{"break.resolved empty", func() error {
+			_, err := event.NewReconciliationBreakResolved(testEvent1, testBreak1, at, 1, 0, event.ReconciliationBreakResolvedPayload{}, meta)
+
+			return err
+		}},
+		{"break.acked empty", func() error {
+			_, err := event.NewReconciliationBreakAcknowledged(testEvent1, testBreak1, at, 1, 0, event.ReconciliationBreakAcknowledgedPayload{}, meta)
+
+			return err
+		}},
+		{"period.opened empty", func() error {
+			_, err := event.NewPeriodOpened(testEvent1, testPeriod1, at, 1, 0, event.PeriodOpenedPayload{}, meta)
+
+			return err
+		}},
+		{"period.closed empty", func() error {
+			_, err := event.NewPeriodClosed(testEvent1, testPeriod1, at, 1, 0, event.PeriodClosedPayload{}, meta)
+
+			return err
+		}},
+		{"period.reopened empty", func() error {
+			_, err := event.NewPeriodReopened(testEvent1, testPeriod1, at, 1, 0, event.PeriodReopenedPayload{}, meta)
+
+			return err
+		}},
+		{"fx empty", func() error {
+			_, err := event.NewFxRateUpdated(testEvent1, testFx1, at, 1, 0, event.FxRateUpdatedPayload{}, meta)
+
+			return err
+		}},
+		{"fx no rate", func() error {
+			_, err := event.NewFxRateUpdated(testEvent1, testFx1, at, 1, 0, event.FxRateUpdatedPayload{RateID: testFx1, TenantID: testTenantID, FromAsset: "EUR", ToAsset: testUSD}, meta)
+
+			return err
+		}},
+		{"fee.assessed empty", func() error {
+			_, err := event.NewFeeAssessed(testEvent1, testFee1, at, 1, 0, event.FeeAssessedPayload{}, meta)
+
+			return err
+		}},
+		{"fee.assessed zero", func() error {
+			_, err := event.NewFeeAssessed(testEvent1, testFee1, at, 1, 0, event.FeeAssessedPayload{FeeID: testFee1, TenantID: testTenantID, AccountID: testAccount1}, meta)
+
+			return err
+		}},
+		{"fee.collected empty", func() error {
+			_, err := event.NewFeeCollected(testEvent1, testFee1, at, 1, 0, event.FeeCollectedPayload{}, meta)
+
+			return err
+		}},
+		{"report empty", func() error {
+			_, err := event.NewReportGenerated(testEvent1, testReport1, at, 1, 0, event.ReportGeneratedPayload{}, meta)
+
+			return err
+		}},
+		{"dispute.opened empty", func() error {
+			_, err := event.NewDisputeOpened(testEvent1, testDispute1, at, 1, 0, event.DisputeOpenedPayload{}, meta)
+
+			return err
+		}},
+		{"dispute.opened zero", func() error {
+			_, err := event.NewDisputeOpened(testEvent1, testDispute1, at, 1, 0, event.DisputeOpenedPayload{DisputeID: testDispute1, TenantID: testTenantID, TransactionID: testPosting1, Network: "VISA"}, meta)
+
+			return err
+		}},
+		{"dispute.closed empty", func() error {
+			_, err := event.NewDisputeClosed(testEvent1, testDispute1, at, 1, 0, event.DisputeClosedPayload{}, meta)
+
+			return err
+		}},
+		{"dispute.closed bad outcome", func() error {
+			_, err := event.NewDisputeClosed(testEvent1, testDispute1, at, 1, 0, event.DisputeClosedPayload{DisputeID: testDispute1, TenantID: testTenantID, Outcome: "DRAW"}, meta)
+
 			return err
 		}},
 		{"empty envelope ids", func() error {
 			_, err := event.NewPayoutPending("", testPayout1, at, 1, 0, event.PayoutPendingPayload{PayoutID: testPayout1, TenantID: testTenantID}, meta)
+
 			return err
 		}},
 		{"empty tenant metadata", func() error {
 			_, err := event.NewPayoutPending(testEvent1, testPayout1, at, 1, 0, event.PayoutPendingPayload{PayoutID: testPayout1, TenantID: testTenantID}, bad)
+
 			return err
 		}},
 	}
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			if err := tc.call(); err == nil {
 				t.Errorf("expected error, got nil")
 			}

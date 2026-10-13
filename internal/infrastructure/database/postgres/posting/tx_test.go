@@ -2,7 +2,6 @@ package posting
 
 import (
 	"context"
-	"errors"
 	"math"
 	"testing"
 	"time"
@@ -32,14 +31,17 @@ func TestNewUnitOfWorkRequiresDB(t *testing.T) {
 				DB: nil,
 			},
 			expectedResult: nil,
-			expectedError:  errors.New("postgres: unit of work needs DB"),
+			expectedError:  ErrPostgresUnitOfWorkNeedsDB,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			uow, err := NewUnitOfWork(tc.params)
 			assert.Equal(t, tc.expectedResult, uow)
+
 			if tc.expectedError != nil {
 				require.Error(t, err)
 				assert.Equal(t, tc.expectedError.Error(), err.Error())
@@ -65,13 +67,16 @@ func TestDoRequiresCallback(t *testing.T) {
 			name:          "nil callback rejected before touching the database",
 			ctx:           context.Background(),
 			fn:            nil,
-			expectedError: errors.New("postgres: unit of work callback is required"),
+			expectedError: ErrPostgresUnitOfWorkCallbackIsRequired,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			uow := &UnitOfWork{}
+
 			err := uow.Do(tc.ctx, tc.fn)
 			if tc.expectedError != nil {
 				require.Error(t, err)
@@ -135,6 +140,8 @@ func TestLockOrderDeterministic(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actual := LockOrder(tc.ids)
 			assert.Equal(t, tc.expectedResult, actual)
 			assert.Equal(t, tc.expectedResult, LockOrder(actual), "lock order must be idempotent")
@@ -183,6 +190,7 @@ func TestAvailableMinor(t *testing.T) {
 			},
 			holds: func() []entity.HoldData {
 				now := time.Now()
+
 				return []entity.HoldData{
 					{AmountMinor: 3000, State: entity.HoldReleased, ExpiresAt: now},
 					{AmountMinor: 2000, State: entity.HoldExpired, ExpiresAt: now},
@@ -202,7 +210,7 @@ func TestAvailableMinor(t *testing.T) {
 			holds:          nil,
 			normalSide:     nil,
 			expectedResult: 0,
-			expectedError:  errors.New("postgres: entry total overflow"),
+			expectedError:  ErrPostgresEntryTotalOverflow,
 		},
 		{
 			name: "hold total overflow fails",
@@ -215,7 +223,7 @@ func TestAvailableMinor(t *testing.T) {
 			},
 			normalSide:     nil,
 			expectedResult: 0,
-			expectedError:  errors.New("postgres: hold total overflow"),
+			expectedError:  ErrPostgresHoldTotalOverflow,
 		},
 		{
 			name: "hold subtraction may go negative without overflow",
@@ -248,8 +256,11 @@ func TestAvailableMinor(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := AvailableMinor(tc.entries, tc.holds, tc.normalSide...)
 			assert.Equal(t, tc.expectedResult, actualResult)
+
 			if tc.expectedError != nil {
 				require.Error(t, err)
 				assert.Equal(t, tc.expectedError.Error(), err.Error())
@@ -337,8 +348,11 @@ func TestAvailableMinorForClass(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := AvailableMinorForClass(tc.entries, tc.holds, tc.class)
 			assert.Equal(t, tc.expectedResult, actualResult)
+
 			if tc.expectedError != nil {
 				require.Error(t, err)
 				assert.Equal(t, tc.expectedError.Error(), err.Error())

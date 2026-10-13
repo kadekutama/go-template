@@ -1,7 +1,6 @@
 package logging
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 )
@@ -17,12 +16,13 @@ type Config struct {
 func (c Config) Validate() error {
 	trimmed := strings.ToLower(strings.TrimSpace(c.Level))
 	if trimmed == "" {
-		return errors.New("logging: level is required")
+		return ErrLoggingLevelIsRequired
 	}
+
 	switch trimmed {
 	case "debug", "info", "warn", "error", "disabled":
 		return nil
 	default:
-		return fmt.Errorf("logging: unknown log level %q", c.Level)
+		return fmt.Errorf("logging: unknown log level %q: %w", c.Level, ErrLoggingUnknownLogLevel)
 	}
 }

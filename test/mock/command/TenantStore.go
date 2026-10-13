@@ -61,7 +61,7 @@ type MockTenantStore_Create_Call struct {
 // Create is a helper method to define mock.On call
 //   - ctx context.Context
 //   - tenant entity.TenantData
-func (_e *MockTenantStore_Expecter) Create(ctx interface{}, tenant interface{}) *MockTenantStore_Create_Call {
+func (_e *MockTenantStore_Expecter) Create(ctx any, tenant any) *MockTenantStore_Create_Call {
 	return &MockTenantStore_Create_Call{Call: _e.mock.On("Create", ctx, tenant)}
 }
 
@@ -118,7 +118,7 @@ type MockTenantStore_FindByID_Call struct {
 // FindByID is a helper method to define mock.On call
 //   - ctx context.Context
 //   - id valueobject.TenantID
-func (_e *MockTenantStore_Expecter) FindByID(ctx interface{}, id interface{}) *MockTenantStore_FindByID_Call {
+func (_e *MockTenantStore_Expecter) FindByID(ctx any, id any) *MockTenantStore_FindByID_Call {
 	return &MockTenantStore_FindByID_Call{Call: _e.mock.On("FindByID", ctx, id)}
 }
 
@@ -176,7 +176,7 @@ type MockTenantStore_ListAliases_Call struct {
 
 // ListAliases is a helper method to define mock.On call
 //   - ctx context.Context
-func (_e *MockTenantStore_Expecter) ListAliases(ctx interface{}) *MockTenantStore_ListAliases_Call {
+func (_e *MockTenantStore_Expecter) ListAliases(ctx any) *MockTenantStore_ListAliases_Call {
 	return &MockTenantStore_ListAliases_Call{Call: _e.mock.On("ListAliases", ctx)}
 }
 
@@ -234,7 +234,7 @@ type MockTenantStore_ListNames_Call struct {
 
 // ListNames is a helper method to define mock.On call
 //   - ctx context.Context
-func (_e *MockTenantStore_Expecter) ListNames(ctx interface{}) *MockTenantStore_ListNames_Call {
+func (_e *MockTenantStore_Expecter) ListNames(ctx any) *MockTenantStore_ListNames_Call {
 	return &MockTenantStore_ListNames_Call{Call: _e.mock.On("ListNames", ctx)}
 }
 
@@ -292,7 +292,7 @@ type MockTenantStore_ListTenants_Call struct {
 
 // ListTenants is a helper method to define mock.On call
 //   - ctx context.Context
-func (_e *MockTenantStore_Expecter) ListTenants(ctx interface{}) *MockTenantStore_ListTenants_Call {
+func (_e *MockTenantStore_Expecter) ListTenants(ctx any) *MockTenantStore_ListTenants_Call {
 	return &MockTenantStore_ListTenants_Call{Call: _e.mock.On("ListTenants", ctx)}
 }
 
@@ -340,7 +340,7 @@ type MockTenantStore_UpdateSettings_Call struct {
 //   - ctx context.Context
 //   - tenant entity.TenantData
 //   - expectedVersion int64
-func (_e *MockTenantStore_Expecter) UpdateSettings(ctx interface{}, tenant interface{}, expectedVersion interface{}) *MockTenantStore_UpdateSettings_Call {
+func (_e *MockTenantStore_Expecter) UpdateSettings(ctx any, tenant any, expectedVersion any) *MockTenantStore_UpdateSettings_Call {
 	return &MockTenantStore_UpdateSettings_Call{Call: _e.mock.On("UpdateSettings", ctx, tenant, expectedVersion)}
 }
 

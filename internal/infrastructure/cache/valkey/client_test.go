@@ -12,8 +12,8 @@ import (
 	"github.com/kadekutama/go-template/internal/infrastructure/cache/valkey"
 )
 
-func validTestParams() valkey.ValkeyParams {
-	return valkey.ValkeyParams{
+func validTestParams() valkey.Params {
+	return valkey.Params{
 		Addr:         "127.0.0.1:6379",
 		PoolSize:     10,
 		DialTimeout:  5 * time.Second,
@@ -29,7 +29,7 @@ func TestNewValkeyClient(t *testing.T) {
 
 	type testCase struct {
 		name           string
-		params         valkey.ValkeyParams
+		params         valkey.Params
 		expectedResult bool
 		expectedError  error
 	}
@@ -43,49 +43,54 @@ func TestNewValkeyClient(t *testing.T) {
 		},
 		{
 			name: "blank addr rejected",
-			params: func() valkey.ValkeyParams {
+			params: func() valkey.Params {
 				p := baseParams
 				p.Addr = ""
+
 				return p
 			}(),
 			expectedResult: false,
-			expectedError:  errors.New("valkey: invalid params (1 violation(s)): Addr: rule \"required\" on value "),
+			expectedError:  valkey.ErrValkeyInvalidParams1ViolationSAddrRuleRequiredOnValue,
 		},
 		{
 			name: "whitespace addr rejected",
-			params: func() valkey.ValkeyParams {
+			params: func() valkey.Params {
 				p := baseParams
 				p.Addr = "   "
+
 				return p
 			}(),
 			expectedResult: false,
-			expectedError:  errors.New("valkey: addr is required"),
+			expectedError:  valkey.ErrValkeyAddrIsRequired,
 		},
 		{
 			name: "invalid negative db rejected",
-			params: func() valkey.ValkeyParams {
+			params: func() valkey.Params {
 				p := baseParams
 				p.DB = -1
+
 				return p
 			}(),
 			expectedResult: false,
-			expectedError:  errors.New("valkey: invalid params (1 violation(s)): DB: rule \"gte\" on value -1"),
+			expectedError:  valkey.ErrValkeyInvalidParams1ViolationSDBRuleGteOnValue1,
 		},
 		{
 			name: "invalid high db rejected",
-			params: func() valkey.ValkeyParams {
+			params: func() valkey.Params {
 				p := baseParams
 				p.DB = 16
+
 				return p
 			}(),
 			expectedResult: false,
-			expectedError:  errors.New("valkey: invalid params (1 violation(s)): DB: rule \"lte\" on value 16"),
+			expectedError:  valkey.ErrValkeyInvalidParams1ViolationSDBRuleLteOnValue16,
 		},
 		{
 			name: "with tls enabled",
-			params: func() valkey.ValkeyParams {
+			params: func() valkey.Params {
 				p := baseParams
 				p.UseTLS = true
+
 				return p
 			}(),
 			expectedResult: true,
@@ -93,94 +98,106 @@ func TestNewValkeyClient(t *testing.T) {
 		},
 		{
 			name: "missing pool size rejected",
-			params: func() valkey.ValkeyParams {
+			params: func() valkey.Params {
 				p := baseParams
 				p.PoolSize = 0
+
 				return p
 			}(),
 			expectedResult: false,
-			expectedError:  errors.New("valkey: invalid params (1 violation(s)): PoolSize: rule \"required\" on value 0"),
+			expectedError:  valkey.ErrValkeyInvalidParams1ViolationSPoolSizeRuleRequiredOnValue,
 		},
 		{
 			name: "negative pool size rejected",
-			params: func() valkey.ValkeyParams {
+			params: func() valkey.Params {
 				p := baseParams
 				p.PoolSize = -1
+
 				return p
 			}(),
 			expectedResult: false,
-			expectedError:  errors.New("valkey: invalid params (1 violation(s)): PoolSize: rule \"gt\" on value -1"),
+			expectedError:  valkey.ErrValkeyInvalidParams1ViolationSPoolSizeRuleGtOnValue1,
 		},
 		{
 			name: "missing dial timeout rejected",
-			params: func() valkey.ValkeyParams {
+			params: func() valkey.Params {
 				p := baseParams
 				p.DialTimeout = 0
+
 				return p
 			}(),
 			expectedResult: false,
-			expectedError:  errors.New("valkey: invalid params (1 violation(s)): DialTimeout: rule \"required\" on value 0s"),
+			expectedError:  valkey.ErrValkeyInvalidParams1ViolationSDialTimeoutRuleRequiredOnVa,
 		},
 		{
 			name: "negative dial timeout rejected",
-			params: func() valkey.ValkeyParams {
+			params: func() valkey.Params {
 				p := baseParams
 				p.DialTimeout = -time.Second
+
 				return p
 			}(),
 			expectedResult: false,
-			expectedError:  errors.New("valkey: invalid params (1 violation(s)): DialTimeout: rule \"gt\" on value -1s"),
+			expectedError:  valkey.ErrValkeyInvalidParams1ViolationSDialTimeoutRuleGtOnValue1s,
 		},
 		{
 			name: "missing read timeout rejected",
-			params: func() valkey.ValkeyParams {
+			params: func() valkey.Params {
 				p := baseParams
 				p.ReadTimeout = 0
+
 				return p
 			}(),
 			expectedResult: false,
-			expectedError:  errors.New("valkey: invalid params (1 violation(s)): ReadTimeout: rule \"required\" on value 0s"),
+			expectedError:  valkey.ErrValkeyInvalidParams1ViolationSReadTimeoutRuleRequiredOnVa,
 		},
 		{
 			name: "negative read timeout rejected",
-			params: func() valkey.ValkeyParams {
+			params: func() valkey.Params {
 				p := baseParams
 				p.ReadTimeout = -time.Second
+
 				return p
 			}(),
 			expectedResult: false,
-			expectedError:  errors.New("valkey: invalid params (1 violation(s)): ReadTimeout: rule \"gt\" on value -1s"),
+			expectedError:  valkey.ErrValkeyInvalidParams1ViolationSReadTimeoutRuleGtOnValue1s,
 		},
 		{
 			name: "missing write timeout rejected",
-			params: func() valkey.ValkeyParams {
+			params: func() valkey.Params {
 				p := baseParams
 				p.WriteTimeout = 0
+
 				return p
 			}(),
 			expectedResult: false,
-			expectedError:  errors.New("valkey: invalid params (1 violation(s)): WriteTimeout: rule \"required\" on value 0s"),
+			expectedError:  valkey.ErrValkeyInvalidParams1ViolationSWriteTimeoutRuleRequiredOnV,
 		},
 		{
 			name: "negative write timeout rejected",
-			params: func() valkey.ValkeyParams {
+			params: func() valkey.Params {
 				p := baseParams
 				p.WriteTimeout = -time.Second
+
 				return p
 			}(),
 			expectedResult: false,
-			expectedError:  errors.New("valkey: invalid params (1 violation(s)): WriteTimeout: rule \"gt\" on value -1s"),
+			expectedError:  valkey.ErrValkeyInvalidParams1ViolationSWriteTimeoutRuleGtOnValue1s,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			client, err := valkey.NewValkeyClient(tc.params)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
 				assert.Nil(t, client)
+
 				return
 			}
+
 			require.NoError(t, err)
 			require.NotNil(t, client)
 			assert.Equal(t, tc.expectedResult, client != nil)
@@ -194,7 +211,7 @@ func TestValkeyClientPingValidation(t *testing.T) {
 
 	type testCase struct {
 		name          string
-		c             *valkey.ValkeyClient
+		c             *valkey.Client
 		ctx           context.Context
 		expectedError error
 	}
@@ -204,26 +221,28 @@ func TestValkeyClientPingValidation(t *testing.T) {
 			name:          "nil receiver rejected",
 			c:             nil,
 			ctx:           context.Background(),
-			expectedError: errors.New("valkey: client is not initialized"),
+			expectedError: valkey.ErrValkeyClientIsNotInitialized,
 		},
 		{
 			name:          "uninitialized internal client rejected",
-			c:             &valkey.ValkeyClient{},
+			c:             &valkey.Client{},
 			ctx:           context.Background(),
-			expectedError: errors.New("valkey: client is not initialized"),
+			expectedError: valkey.ErrValkeyClientIsNotInitialized,
 		},
 		{
 			name: "canceled context aborts ping",
-			c: func() *valkey.ValkeyClient {
+			c: func() *valkey.Client {
 				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
+
 				return client
 			}(),
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			}(),
 			expectedError: context.Canceled,
@@ -232,11 +251,15 @@ func TestValkeyClientPingValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			if tc.c != nil {
 				defer func() { _ = tc.c.Close() }()
 			}
+
 			err := tc.c.Ping(tc.ctx)
 			require.Error(t, err)
+
 			if errors.Is(tc.expectedError, context.Canceled) {
 				assert.ErrorIs(t, err, context.Canceled)
 			} else {
@@ -251,7 +274,7 @@ func TestValkeyClientGetValidation(t *testing.T) {
 
 	type testCase struct {
 		name           string
-		c              *valkey.ValkeyClient
+		c              *valkey.Client
 		ctx            context.Context
 		key            string
 		expectedResult []byte
@@ -265,42 +288,45 @@ func TestValkeyClientGetValidation(t *testing.T) {
 			ctx:            context.Background(),
 			key:            "key-1",
 			expectedResult: nil,
-			expectedError:  errors.New("valkey: client is not initialized"),
+			expectedError:  valkey.ErrValkeyClientIsNotInitialized,
 		},
 		{
 			name:           "uninitialized internal client rejected",
-			c:              &valkey.ValkeyClient{},
+			c:              &valkey.Client{},
 			ctx:            context.Background(),
 			key:            "key-1",
 			expectedResult: nil,
-			expectedError:  errors.New("valkey: client is not initialized"),
+			expectedError:  valkey.ErrValkeyClientIsNotInitialized,
 		},
 		{
 			name: "empty key rejected",
-			c: func() *valkey.ValkeyClient {
+			c: func() *valkey.Client {
 				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
+
 				return client
 			}(),
 			ctx:            context.Background(),
 			key:            "",
 			expectedResult: nil,
-			expectedError:  errors.New("valkey: key is required"),
+			expectedError:  valkey.ErrValkeyKeyIsRequired,
 		},
 		{
 			name: "canceled context aborts get",
-			c: func() *valkey.ValkeyClient {
+			c: func() *valkey.Client {
 				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
+
 				return client
 			}(),
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			}(),
 			key:            "k",
@@ -311,20 +337,27 @@ func TestValkeyClientGetValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			if tc.c != nil {
 				defer func() { _ = tc.c.Close() }()
 			}
+
 			actualResult, err := tc.c.Get(tc.ctx, tc.key)
 			if tc.expectedError != nil {
 				require.Error(t, err)
+
 				if errors.Is(tc.expectedError, context.Canceled) {
 					assert.ErrorIs(t, err, context.Canceled)
 				} else {
 					assert.EqualError(t, err, tc.expectedError.Error())
 				}
+
 				assert.Equal(t, tc.expectedResult, actualResult)
+
 				return
 			}
+
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -336,7 +369,7 @@ func TestValkeyClientSetValidation(t *testing.T) {
 
 	type testCase struct {
 		name          string
-		c             *valkey.ValkeyClient
+		c             *valkey.Client
 		ctx           context.Context
 		key           string
 		value         []byte
@@ -352,74 +385,79 @@ func TestValkeyClientSetValidation(t *testing.T) {
 			key:           "k",
 			value:         []byte(`x`),
 			ttl:           time.Minute,
-			expectedError: errors.New("valkey: client is not initialized"),
+			expectedError: valkey.ErrValkeyClientIsNotInitialized,
 		},
 		{
 			name:          "uninitialized internal client rejected",
-			c:             &valkey.ValkeyClient{},
+			c:             &valkey.Client{},
 			ctx:           context.Background(),
 			key:           "k",
 			value:         []byte(`x`),
 			ttl:           time.Minute,
-			expectedError: errors.New("valkey: client is not initialized"),
+			expectedError: valkey.ErrValkeyClientIsNotInitialized,
 		},
 		{
 			name: "empty key rejected",
-			c: func() *valkey.ValkeyClient {
+			c: func() *valkey.Client {
 				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
+
 				return client
 			}(),
 			ctx:           context.Background(),
 			key:           "",
 			value:         []byte(`x`),
 			ttl:           time.Minute,
-			expectedError: errors.New("valkey: key is required"),
+			expectedError: valkey.ErrValkeyKeyIsRequired,
 		},
 		{
 			name: "zero ttl rejected",
-			c: func() *valkey.ValkeyClient {
+			c: func() *valkey.Client {
 				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
+
 				return client
 			}(),
 			ctx:           context.Background(),
 			key:           "k",
 			value:         []byte(`x`),
 			ttl:           0,
-			expectedError: errors.New("valkey: ttl must be positive"),
+			expectedError: valkey.ErrValkeyTTLMustBePositive,
 		},
 		{
 			name: "negative ttl rejected",
-			c: func() *valkey.ValkeyClient {
+			c: func() *valkey.Client {
 				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
+
 				return client
 			}(),
 			ctx:           context.Background(),
 			key:           "k",
 			value:         []byte(`x`),
 			ttl:           -time.Second,
-			expectedError: errors.New("valkey: ttl must be positive"),
+			expectedError: valkey.ErrValkeyTTLMustBePositive,
 		},
 		{
 			name: "canceled context aborts set",
-			c: func() *valkey.ValkeyClient {
+			c: func() *valkey.Client {
 				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
+
 				return client
 			}(),
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			}(),
 			key:           "k",
@@ -431,9 +469,12 @@ func TestValkeyClientSetValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			if tc.c != nil {
 				defer func() { _ = tc.c.Close() }()
 			}
+
 			err := tc.c.Set(tc.ctx, tc.key, tc.value, tc.ttl)
 			if tc.expectedError != nil {
 				if errors.Is(tc.expectedError, context.Canceled) {
@@ -441,8 +482,10 @@ func TestValkeyClientSetValidation(t *testing.T) {
 				} else {
 					assert.EqualError(t, err, tc.expectedError.Error())
 				}
+
 				return
 			}
+
 			assert.NoError(t, err)
 		})
 	}
@@ -453,7 +496,7 @@ func TestValkeyClientDeleteValidation(t *testing.T) {
 
 	type testCase struct {
 		name          string
-		c             *valkey.ValkeyClient
+		c             *valkey.Client
 		ctx           context.Context
 		key           string
 		expectedError error
@@ -465,40 +508,43 @@ func TestValkeyClientDeleteValidation(t *testing.T) {
 			c:             nil,
 			ctx:           context.Background(),
 			key:           "k",
-			expectedError: errors.New("valkey: client is not initialized"),
+			expectedError: valkey.ErrValkeyClientIsNotInitialized,
 		},
 		{
 			name:          "uninitialized internal client rejected",
-			c:             &valkey.ValkeyClient{},
+			c:             &valkey.Client{},
 			ctx:           context.Background(),
 			key:           "k",
-			expectedError: errors.New("valkey: client is not initialized"),
+			expectedError: valkey.ErrValkeyClientIsNotInitialized,
 		},
 		{
 			name: "empty key rejected",
-			c: func() *valkey.ValkeyClient {
+			c: func() *valkey.Client {
 				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
+
 				return client
 			}(),
 			ctx:           context.Background(),
 			key:           "",
-			expectedError: errors.New("valkey: key is required"),
+			expectedError: valkey.ErrValkeyKeyIsRequired,
 		},
 		{
 			name: "canceled context aborts delete",
-			c: func() *valkey.ValkeyClient {
+			c: func() *valkey.Client {
 				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
+
 				return client
 			}(),
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			}(),
 			key:           "k",
@@ -508,9 +554,12 @@ func TestValkeyClientDeleteValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			if tc.c != nil {
 				defer func() { _ = tc.c.Close() }()
 			}
+
 			err := tc.c.Delete(tc.ctx, tc.key)
 			if tc.expectedError != nil {
 				if errors.Is(tc.expectedError, context.Canceled) {
@@ -518,8 +567,10 @@ func TestValkeyClientDeleteValidation(t *testing.T) {
 				} else {
 					assert.EqualError(t, err, tc.expectedError.Error())
 				}
+
 				return
 			}
+
 			assert.NoError(t, err)
 		})
 	}
@@ -530,7 +581,7 @@ func TestValkeyClientTTLValidation(t *testing.T) {
 
 	type testCase struct {
 		name           string
-		c              *valkey.ValkeyClient
+		c              *valkey.Client
 		ctx            context.Context
 		key            string
 		expectedResult time.Duration
@@ -544,42 +595,45 @@ func TestValkeyClientTTLValidation(t *testing.T) {
 			ctx:            context.Background(),
 			key:            "k",
 			expectedResult: 0,
-			expectedError:  errors.New("valkey: client is not initialized"),
+			expectedError:  valkey.ErrValkeyClientIsNotInitialized,
 		},
 		{
 			name:           "uninitialized internal client rejected",
-			c:              &valkey.ValkeyClient{},
+			c:              &valkey.Client{},
 			ctx:            context.Background(),
 			key:            "k",
 			expectedResult: 0,
-			expectedError:  errors.New("valkey: client is not initialized"),
+			expectedError:  valkey.ErrValkeyClientIsNotInitialized,
 		},
 		{
 			name: "empty key rejected",
-			c: func() *valkey.ValkeyClient {
+			c: func() *valkey.Client {
 				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
+
 				return client
 			}(),
 			ctx:            context.Background(),
 			key:            "",
 			expectedResult: 0,
-			expectedError:  errors.New("valkey: key is required"),
+			expectedError:  valkey.ErrValkeyKeyIsRequired,
 		},
 		{
 			name: "canceled context aborts ttl",
-			c: func() *valkey.ValkeyClient {
+			c: func() *valkey.Client {
 				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
+
 				return client
 			}(),
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			}(),
 			key:            "k",
@@ -590,20 +644,27 @@ func TestValkeyClientTTLValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			if tc.c != nil {
 				defer func() { _ = tc.c.Close() }()
 			}
+
 			actualResult, err := tc.c.TTL(tc.ctx, tc.key)
 			if tc.expectedError != nil {
 				require.Error(t, err)
+
 				if errors.Is(tc.expectedError, context.Canceled) {
 					assert.ErrorIs(t, err, context.Canceled)
 				} else {
 					assert.EqualError(t, err, tc.expectedError.Error())
 				}
+
 				assert.Equal(t, tc.expectedResult, actualResult)
+
 				return
 			}
+
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -615,7 +676,7 @@ func TestValkeyClientSetNXValidation(t *testing.T) {
 
 	type testCase struct {
 		name           string
-		c              *valkey.ValkeyClient
+		c              *valkey.Client
 		ctx            context.Context
 		key            string
 		value          []byte
@@ -633,25 +694,26 @@ func TestValkeyClientSetNXValidation(t *testing.T) {
 			value:          []byte(`x`),
 			ttl:            time.Minute,
 			expectedResult: false,
-			expectedError:  errors.New("valkey: client is not initialized"),
+			expectedError:  valkey.ErrValkeyClientIsNotInitialized,
 		},
 		{
 			name:           "uninitialized internal client rejected",
-			c:              &valkey.ValkeyClient{},
+			c:              &valkey.Client{},
 			ctx:            context.Background(),
 			key:            "k",
 			value:          []byte(`x`),
 			ttl:            time.Minute,
 			expectedResult: false,
-			expectedError:  errors.New("valkey: client is not initialized"),
+			expectedError:  valkey.ErrValkeyClientIsNotInitialized,
 		},
 		{
 			name: "empty key rejected",
-			c: func() *valkey.ValkeyClient {
+			c: func() *valkey.Client {
 				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
+
 				return client
 			}(),
 			ctx:            context.Background(),
@@ -659,15 +721,16 @@ func TestValkeyClientSetNXValidation(t *testing.T) {
 			value:          []byte(`x`),
 			ttl:            time.Minute,
 			expectedResult: false,
-			expectedError:  errors.New("valkey: key is required"),
+			expectedError:  valkey.ErrValkeyKeyIsRequired,
 		},
 		{
 			name: "zero ttl rejected",
-			c: func() *valkey.ValkeyClient {
+			c: func() *valkey.Client {
 				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
+
 				return client
 			}(),
 			ctx:            context.Background(),
@@ -675,15 +738,16 @@ func TestValkeyClientSetNXValidation(t *testing.T) {
 			value:          []byte(`x`),
 			ttl:            0,
 			expectedResult: false,
-			expectedError:  errors.New("valkey: ttl must be positive"),
+			expectedError:  valkey.ErrValkeyTTLMustBePositive,
 		},
 		{
 			name: "negative ttl rejected",
-			c: func() *valkey.ValkeyClient {
+			c: func() *valkey.Client {
 				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
+
 				return client
 			}(),
 			ctx:            context.Background(),
@@ -691,20 +755,22 @@ func TestValkeyClientSetNXValidation(t *testing.T) {
 			value:          []byte(`x`),
 			ttl:            -time.Second,
 			expectedResult: false,
-			expectedError:  errors.New("valkey: ttl must be positive"),
+			expectedError:  valkey.ErrValkeyTTLMustBePositive,
 		},
 		{
 			name: "canceled context aborts setnx",
-			c: func() *valkey.ValkeyClient {
+			c: func() *valkey.Client {
 				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
+
 				return client
 			}(),
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			}(),
 			key:            "k",
@@ -717,20 +783,27 @@ func TestValkeyClientSetNXValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			if tc.c != nil {
 				defer func() { _ = tc.c.Close() }()
 			}
+
 			actualResult, err := tc.c.SetNX(tc.ctx, tc.key, tc.value, tc.ttl)
 			if tc.expectedError != nil {
 				require.Error(t, err)
+
 				if errors.Is(tc.expectedError, context.Canceled) {
 					assert.ErrorIs(t, err, context.Canceled)
 				} else {
 					assert.EqualError(t, err, tc.expectedError.Error())
 				}
+
 				assert.Equal(t, tc.expectedResult, actualResult)
+
 				return
 			}
+
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -742,7 +815,7 @@ func TestValkeyClientEvalValidation(t *testing.T) {
 
 	type testCase struct {
 		name           string
-		c              *valkey.ValkeyClient
+		c              *valkey.Client
 		ctx            context.Context
 		script         string
 		keys           []string
@@ -760,30 +833,32 @@ func TestValkeyClientEvalValidation(t *testing.T) {
 			keys:           []string{"k"},
 			args:           nil,
 			expectedResult: nil,
-			expectedError:  errors.New("valkey: client is not initialized"),
+			expectedError:  valkey.ErrValkeyClientIsNotInitialized,
 		},
 		{
 			name:           "uninitialized internal client rejected",
-			c:              &valkey.ValkeyClient{},
+			c:              &valkey.Client{},
 			ctx:            context.Background(),
 			script:         "return 1",
 			keys:           []string{"k"},
 			args:           nil,
 			expectedResult: nil,
-			expectedError:  errors.New("valkey: client is not initialized"),
+			expectedError:  valkey.ErrValkeyClientIsNotInitialized,
 		},
 		{
 			name: "canceled context aborts eval",
-			c: func() *valkey.ValkeyClient {
+			c: func() *valkey.Client {
 				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
+
 				return client
 			}(),
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			}(),
 			script:         "return 1",
@@ -796,20 +871,27 @@ func TestValkeyClientEvalValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			if tc.c != nil {
 				defer func() { _ = tc.c.Close() }()
 			}
+
 			actualResult, err := tc.c.Eval(tc.ctx, tc.script, tc.keys, tc.args...)
 			if tc.expectedError != nil {
 				require.Error(t, err)
+
 				if errors.Is(tc.expectedError, context.Canceled) {
 					assert.ErrorIs(t, err, context.Canceled)
 				} else {
 					assert.EqualError(t, err, tc.expectedError.Error())
 				}
+
 				assert.Equal(t, tc.expectedResult, actualResult)
+
 				return
 			}
+
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -821,7 +903,7 @@ func TestValkeyClientClose(t *testing.T) {
 
 	type testCase struct {
 		name          string
-		c             *valkey.ValkeyClient
+		c             *valkey.Client
 		expectedError error
 	}
 
@@ -833,16 +915,17 @@ func TestValkeyClientClose(t *testing.T) {
 		},
 		{
 			name:          "uninitialized internal client succeeds",
-			c:             &valkey.ValkeyClient{},
+			c:             &valkey.Client{},
 			expectedError: nil,
 		},
 		{
 			name: "initialized client closes cleanly",
-			c: func() *valkey.ValkeyClient {
+			c: func() *valkey.Client {
 				client, err := valkey.NewValkeyClient(validTestParams())
 				if err != nil {
 					panic(err)
 				}
+
 				return client
 			}(),
 			expectedError: nil,
@@ -851,11 +934,15 @@ func TestValkeyClientClose(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.c.Close()
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
+
 				return
 			}
+
 			assert.NoError(t, err)
 		})
 	}

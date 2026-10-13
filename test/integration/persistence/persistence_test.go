@@ -3,7 +3,6 @@ package persistence_test
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -27,6 +26,7 @@ import (
 	repos "github.com/kadekutama/go-template/internal/infrastructure/database/postgres/repositories"
 	"github.com/kadekutama/go-template/internal/infrastructure/database/postgres/rls"
 	"github.com/kadekutama/go-template/internal/infrastructure/database/seed"
+	"github.com/kadekutama/go-template/test/integration/persistence"
 	"github.com/kadekutama/go-template/test/testcontainers"
 )
 
@@ -185,14 +185,17 @@ func TestLedgerCRUD(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ledger, err := entity.NewLedger(tc.ledgerID, tc.tenantID, tc.ledgerName, tc.baseAsset, "v1")
 			require.NoError(t, err)
+
 			ledger.Alias = tc.ledgerAlias
 
 			stored, createErr := ledgerRepo.Create(ctx, ledger)
 			if tc.expectConflict {
 				require.Error(t, createErr)
-				assert.True(t, errors.Is(createErr, repos.ErrConflict))
+				assert.ErrorIs(t, createErr, repos.ErrConflict)
+
 				return
 			}
+
 			require.NoError(t, createErr)
 			assert.Equal(t, tc.ledgerID, stored.ID)
 			assert.Equal(t, tc.ledgerAlias, stored.Alias)
@@ -300,7 +303,7 @@ func TestEntrySequencesMonotonic(t *testing.T) {
 			assert.Equal(t, tc.expectedFirstSeq, entries[0].AccountSeq)
 			assert.Equal(t, tc.expectedFinalSeq, entries[len(entries)-1].AccountSeq)
 
-			for i := 0; i < len(entries); i++ {
+			for i := range entries {
 				assert.Equal(t, int64(i+1), entries[i].AccountSeq, "sequence must strictly equal 1-based index")
 			}
 		})
@@ -644,10 +647,13 @@ func TestPostingSearchEndToEnd(t *testing.T) {
 			if tc.expectedError != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tc.expectedError)
+
 				return
 			}
+
 			require.NoError(t, err)
 			assert.Len(t, page.Postings, tc.expectedCount)
+
 			if tc.filter.Operation != "" && len(page.Postings) > 0 {
 				assert.Equal(t, tc.filter.Operation, page.Postings[0].Operation)
 			}
@@ -750,6 +756,7 @@ func TestDirectSQLInvariantAttacks(t *testing.T) {
 			if tc.inTransaction {
 				tx, err := sqlDB.BeginTx(ctx, nil)
 				require.NoError(t, err)
+
 				defer func() { _ = tx.Rollback() }()
 
 				_, err = tx.ExecContext(ctx, `INSERT INTO postings (id, tenant_id, ledger_id, operation, effective_at)
@@ -858,16 +865,19 @@ func TestDurableIdempotencyPostgres(t *testing.T) {
 					var domainErr *entity.Error
 					require.ErrorAs(t, resErr, &domainErr)
 					assert.Equal(t, "IDEMPOTENCY_CONFLICT", domainErr.Code)
+
 					return nil
 				}
 
 				require.NoError(t, resErr)
 				assert.Equal(t, tc.expectReplay, outcome.Replay)
+
 				if tc.expectReplay {
 					assert.Equal(t, tc.completePayload, outcome.Response)
 				} else {
 					assert.Nil(t, outcome.Response)
 				}
+
 				return nil
 			})
 			require.NoError(t, err)
@@ -882,6 +892,7 @@ type testSubscriber struct {
 func (s *testSubscriber) Publish(_ context.Context, facts ...port.OutboxFact) error {
 	for {
 		cur := s.published.Load()
+
 		var next []port.OutboxFact
 		if cur != nil {
 			next = make([]port.OutboxFact, len(*cur)+len(facts))
@@ -890,6 +901,7 @@ func (s *testSubscriber) Publish(_ context.Context, facts ...port.OutboxFact) er
 		} else {
 			next = append([]port.OutboxFact(nil), facts...)
 		}
+
 		if s.published.CompareAndSwap(cur, &next) {
 			return nil
 		}
@@ -900,6 +912,7 @@ func (s *testSubscriber) facts() []port.OutboxFact {
 	if p := s.published.Load(); p != nil {
 		return *p
 	}
+
 	return nil
 }
 
@@ -957,6 +970,7 @@ func TestOutboxRelayPostgres(t *testing.T) {
 	assert.Equal(t, "transfer.completed.v1", published[1].EventType)
 
 	var undeliveredCount int64
+
 	err = sqlDB.QueryRowContext(ctx, "SELECT count(*) FROM outbox_events WHERE delivered_at IS NULL").Scan(&undeliveredCount)
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), undeliveredCount)
@@ -1062,6 +1076,7 @@ func TestAdversarialRLS(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tx, err := sqlDB.BeginTx(ctx, nil)
 			require.NoError(t, err)
+
 			defer func() { _ = tx.Rollback() }()
 
 			if !tc.bypassRole {
@@ -1079,6 +1094,7 @@ func TestAdversarialRLS(t *testing.T) {
 				assert.Contains(t, err.Error(), tc.expectError)
 			} else {
 				var count int64
+
 				err = tx.QueryRowContext(ctx, tc.querySQL, tc.args...).Scan(&count)
 				require.NoError(t, err)
 				assert.Equal(t, tc.expectedCount, count)
@@ -1108,14 +1124,15 @@ func TestConcurrentPostingSpendSerialization(t *testing.T) {
 	require.NoError(t, err)
 
 	const numWorkers = 8
+
 	var wg sync.WaitGroup
+
 	errCh := make(chan error, numWorkers)
 
-	for i := 0; i < numWorkers; i++ {
+	for i := range numWorkers {
 		workerID := i
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+
+		wg.Go(func() {
 			now := time.Now()
 			pID := fmt.Sprintf("c0000000-0000-4000-8000-%012d", workerID+1)
 			eA := fmt.Sprintf("ca000000-0000-4000-8000-%012d", workerID+1)
@@ -1143,7 +1160,7 @@ func TestConcurrentPostingSpendSerialization(t *testing.T) {
 			if err != nil {
 				errCh <- fmt.Errorf("worker %d: %w", workerID, err)
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -1216,7 +1233,7 @@ func TestPostgresSeedEndToEnd(t *testing.T) {
 			db:   nil,
 			plan: seed.DevPlan(),
 			expectedError: func() error {
-				return errors.New("postgres seed: DB is required")
+				return persistence.ErrPostgresSeedDBIsRequired
 			}(),
 		},
 	}
@@ -1227,8 +1244,10 @@ func TestPostgresSeedEndToEnd(t *testing.T) {
 			if tc.expectedError != nil {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tc.expectedError.Error())
+
 				return
 			}
+
 			require.NoError(t, err)
 
 			var tenantCount, ledgerCount, accountCount, postingCount, entryCount int64
@@ -1247,7 +1266,7 @@ func TestPostgresSeedEndToEnd(t *testing.T) {
 			// Verify tenant JSONB settings is valid and non-empty
 			var settingsJSON string
 			require.NoError(t, sqlDB.QueryRowContext(tc.ctx, `SELECT settings::text FROM tenants WHERE id = $1`, tc.plan.Tenant.TenantID).Scan(&settingsJSON))
-			assert.Equal(t, "{}", settingsJSON)
+			assert.JSONEq(t, "{}", settingsJSON)
 		})
 	}
 }
@@ -1271,6 +1290,7 @@ func TestUUIDRoundTrip(t *testing.T) {
 		tenantID, "Roundtrip", "USD", "v1",
 	)
 	require.NoError(t, err)
+
 	ledger.Alias = "roundtrip"
 
 	storedLedger, err := ledgerRepo.Create(ctx, ledger)
@@ -1292,6 +1312,7 @@ func TestUUIDRoundTrip(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			var model models.AccountModel
+
 			model.TenantID = tenantID.String()
 			model.LedgerID = storedLedger.ID.String()
 			model.Number = tc.accountNumber

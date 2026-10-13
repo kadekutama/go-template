@@ -1,7 +1,6 @@
 package event
 
 import (
-	"errors"
 	"time"
 )
 
@@ -16,13 +15,15 @@ type TopUpPayload struct {
 }
 
 // NewTopUpSucceeded builds topup.succeeded.v1.
-func NewTopUpSucceeded(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TopUpPayload, meta EventMetadata) (TypedEvent[TopUpPayload], error) {
+func NewTopUpSucceeded(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TopUpPayload, meta Metadata) (TypedEvent[TopUpPayload], error) {
 	if err := requireIDs(map[string]string{"topup_id": payload.TopUpID, fieldTenantID: payload.TenantID, fieldAccountID: payload.AccountID}); err != nil {
 		return TypedEvent[TopUpPayload]{}, err
 	}
+
 	if payload.AmountMinor <= 0 {
-		return TypedEvent[TopUpPayload]{}, errors.New("event: amount_minor must be positive")
+		return TypedEvent[TopUpPayload]{}, ErrEventAmountMinorMustBePositive
 	}
+
 	return newTyped("topup.succeeded.v1", eventID, aggregateID, "TopUp", occurredAt, version, seq, payload, meta)
 }
 
@@ -35,9 +36,10 @@ type TopUpFailedPayload struct {
 }
 
 // NewTopUpFailed builds topup.failed.v1.
-func NewTopUpFailed(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TopUpFailedPayload, meta EventMetadata) (TypedEvent[TopUpFailedPayload], error) {
+func NewTopUpFailed(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TopUpFailedPayload, meta Metadata) (TypedEvent[TopUpFailedPayload], error) {
 	if err := requireIDs(map[string]string{"topup_id": payload.TopUpID, fieldTenantID: payload.TenantID, fieldCode: payload.Code}); err != nil {
 		return TypedEvent[TopUpFailedPayload]{}, err
 	}
+
 	return newTyped("topup.failed.v1", eventID, aggregateID, "TopUp", occurredAt, version, seq, payload, meta)
 }

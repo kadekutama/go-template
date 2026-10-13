@@ -1,7 +1,6 @@
 package valueobject_test
 
 import (
-	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -66,14 +65,17 @@ func TestRegistryLookup(t *testing.T) {
 			name:           "unknown currency code",
 			code:           "ZZZ",
 			expectedResult: valueobject.AssetInfo{},
-			expectedError:  errors.New("currency: unknown asset code \"ZZZ\""),
+			expectedError:  valueobject.ErrCurrencyUnknownAssetCodeZZZ,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, lookupErr := reg.Lookup(tc.code)
 			assert.Equal(t, tc.expectedResult, got)
+
 			if tc.expectedError != nil {
 				assert.Equal(t, tc.expectedError.Error(), lookupErr.Error())
 			} else {
@@ -116,7 +118,7 @@ func TestRegistryRegister(t *testing.T) {
 				Exponent: 2,
 				Kind:     valueobject.AssetKindFiat,
 			},
-			expectedError: errors.New("currency: duplicate asset code \"USD\""),
+			expectedError: valueobject.ErrCurrencyDuplicateAssetCodeUSD,
 		},
 		{
 			name: "empty code",
@@ -128,7 +130,7 @@ func TestRegistryRegister(t *testing.T) {
 				Exponent: 2,
 				Kind:     valueobject.AssetKindFiat,
 			},
-			expectedError: errors.New("currency: asset code is required"),
+			expectedError: valueobject.ErrCurrencyAssetCodeIsRequired,
 		},
 		{
 			name: "negative exponent",
@@ -140,14 +142,17 @@ func TestRegistryRegister(t *testing.T) {
 				Exponent: -1,
 				Kind:     valueobject.AssetKindFiat,
 			},
-			expectedError: errors.New("currency: negative exponent for \"XXX\""),
+			expectedError: valueobject.ErrCurrencyNegativeExponentForXXX,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			reg, err := valueobject.NewRegistry(tc.initialAssets...)
 			assert.NoError(t, err)
+
 			regErr := reg.Register(tc.info)
 			if tc.expectedError != nil {
 				assert.Equal(t, tc.expectedError.Error(), regErr.Error())
@@ -167,28 +172,31 @@ func TestNoSettersOnValueObjects(t *testing.T) {
 	}
 
 	testCases := []testCase{
-		{name: "Money", typ: reflect.TypeOf(valueobject.Money{})},
-		{name: "AssetCode", typ: reflect.TypeOf(valueobject.AssetCode(""))},
-		{name: "Registry", typ: reflect.TypeOf(valueobject.Registry{})},
-		{name: "AccountID", typ: reflect.TypeOf(valueobject.AccountID(""))},
-		{name: "PostingID", typ: reflect.TypeOf(valueobject.PostingID(""))},
-		{name: "EntryID", typ: reflect.TypeOf(valueobject.EntryID(""))},
-		{name: "HoldID", typ: reflect.TypeOf(valueobject.HoldID(""))},
-		{name: "TenantID", typ: reflect.TypeOf(valueobject.TenantID(""))},
-		{name: "LedgerID", typ: reflect.TypeOf(valueobject.LedgerID(""))},
-		{name: "UserID", typ: reflect.TypeOf(valueobject.UserID(""))},
-		{name: "JournalID", typ: reflect.TypeOf(valueobject.JournalID(""))},
-		{name: "PeriodID", typ: reflect.TypeOf(valueobject.PeriodID(""))},
+		{name: "Money", typ: reflect.TypeFor[valueobject.Money]()},
+		{name: "AssetCode", typ: reflect.TypeFor[valueobject.AssetCode]()},
+		{name: "Registry", typ: reflect.TypeFor[valueobject.Registry]()},
+		{name: "AccountID", typ: reflect.TypeFor[valueobject.AccountID]()},
+		{name: "PostingID", typ: reflect.TypeFor[valueobject.PostingID]()},
+		{name: "EntryID", typ: reflect.TypeFor[valueobject.EntryID]()},
+		{name: "HoldID", typ: reflect.TypeFor[valueobject.HoldID]()},
+		{name: "TenantID", typ: reflect.TypeFor[valueobject.TenantID]()},
+		{name: "LedgerID", typ: reflect.TypeFor[valueobject.LedgerID]()},
+		{name: "UserID", typ: reflect.TypeFor[valueobject.UserID]()},
+		{name: "JournalID", typ: reflect.TypeFor[valueobject.JournalID]()},
+		{name: "PeriodID", typ: reflect.TypeFor[valueobject.PeriodID]()},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			for i := 0; i < tc.typ.NumMethod(); i++ {
-				assert.False(t, strings.HasPrefix(tc.typ.Method(i).Name, "Set"), "type has setter: "+tc.typ.Method(i).Name)
+			t.Parallel()
+
+			for m := range tc.typ.Methods() {
+				assert.False(t, strings.HasPrefix(m.Name, "Set"), "type has setter: "+m.Name)
 			}
+
 			ptr := reflect.PointerTo(tc.typ)
-			for i := 0; i < ptr.NumMethod(); i++ {
-				assert.False(t, strings.HasPrefix(ptr.Method(i).Name, "Set"), "pointer type has setter: "+ptr.Method(i).Name)
+			for m := range ptr.Methods() {
+				assert.False(t, strings.HasPrefix(m.Name, "Set"), "pointer type has setter: "+m.Name)
 			}
 		})
 	}
@@ -203,16 +211,18 @@ func TestNoFloatsInValueObjects(t *testing.T) {
 	}
 
 	testCases := []testCase{
-		{name: "Money", typ: reflect.TypeOf(valueobject.Money{})},
-		{name: "AssetInfo", typ: reflect.TypeOf(valueobject.AssetInfo{})},
+		{name: "Money", typ: reflect.TypeFor[valueobject.Money]()},
+		{name: "AssetInfo", typ: reflect.TypeFor[valueobject.AssetInfo]()},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			for i := 0; i < tc.typ.NumField(); i++ {
-				k := tc.typ.Field(i).Type.Kind()
-				assert.NotEqual(t, reflect.Float32, k, "field uses float32: "+tc.typ.Field(i).Name)
-				assert.NotEqual(t, reflect.Float64, k, "field uses float64: "+tc.typ.Field(i).Name)
+			t.Parallel()
+
+			for f := range tc.typ.Fields() {
+				k := f.Type.Kind()
+				assert.NotEqual(t, reflect.Float32, k, "field uses float32: "+f.Name)
+				assert.NotEqual(t, reflect.Float64, k, "field uses float64: "+f.Name)
 			}
 		})
 	}

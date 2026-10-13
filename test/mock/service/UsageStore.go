@@ -59,7 +59,7 @@ type MockUsageStore_AppendEvent_Call struct {
 // AppendEvent is a helper method to define mock.On call
 //   - ctx context.Context
 //   - event service.UsageEvent
-func (_e *MockUsageStore_Expecter) AppendEvent(ctx interface{}, event interface{}) *MockUsageStore_AppendEvent_Call {
+func (_e *MockUsageStore_Expecter) AppendEvent(ctx any, event any) *MockUsageStore_AppendEvent_Call {
 	return &MockUsageStore_AppendEvent_Call{Call: _e.mock.On("AppendEvent", ctx, event)}
 }
 
@@ -119,7 +119,7 @@ type MockUsageStore_DayTotals_Call struct {
 //   - ctx context.Context
 //   - tenantID string
 //   - day string
-func (_e *MockUsageStore_Expecter) DayTotals(ctx interface{}, tenantID interface{}, day interface{}) *MockUsageStore_DayTotals_Call {
+func (_e *MockUsageStore_Expecter) DayTotals(ctx any, tenantID any, day any) *MockUsageStore_DayTotals_Call {
 	return &MockUsageStore_DayTotals_Call{Call: _e.mock.On("DayTotals", ctx, tenantID, day)}
 }
 
@@ -180,7 +180,7 @@ type MockUsageStore_PeriodLines_Call struct {
 //   - tenantID string
 //   - fromDay string
 //   - toDay string
-func (_e *MockUsageStore_Expecter) PeriodLines(ctx interface{}, tenantID interface{}, fromDay interface{}, toDay interface{}) *MockUsageStore_PeriodLines_Call {
+func (_e *MockUsageStore_Expecter) PeriodLines(ctx any, tenantID any, fromDay any, toDay any) *MockUsageStore_PeriodLines_Call {
 	return &MockUsageStore_PeriodLines_Call{Call: _e.mock.On("PeriodLines", ctx, tenantID, fromDay, toDay)}
 }
 

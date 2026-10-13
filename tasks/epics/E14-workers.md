@@ -30,6 +30,7 @@ has a durable run key and is safe to retry after lease loss.
 3. Job records (run key, last/next run, status, duration, error) persisted.
 4. Panic wrapper per SPEC §9.7 (FAILED + unlock + alert); health endpoints.
 5. Compose the optional gocron-ui server through E09.1-T02 on its dedicated HTTPS internal listener; keep it disabled by default, deny all UI mutations, and start/shut it down with the cron process lifecycle.
+   UI-side pieces are ready (verified composition Example in `internal/infrastructure/cronui/compose_example_test.go`, HMAC sessions, token-port bearer mapping, `cron_admin` config shape); this step still binds, in `cmd/cron`, the gocron scheduler it observes plus: (a) bearer trust against E09 JWT key material (shared secrets backend vs JWKS sync — public-only key entries cannot verify and private keys must not ship to cron), (b) operator allowlist rows and tenant model (E09-T03 owns the Casbin policy model), (c) the audit store behind the admin audit seam (structured-log adapter suffices until the chain logger binds), (d) session-key/TLS files from configuration. Enabling without required TLS/auth settings fails closed (criterion below).
 6. Map the default-off `cron_admin` config into E09.1-T02; load TLS credentials through E09-T05 and reject unsafe non-loopback settings before creating the listener.
 **Acceptance Criteria:**
 - [ ] Two replicas/retries → one durable effect per run key (Testcontainers test).

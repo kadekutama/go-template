@@ -86,13 +86,13 @@ func NewRefreshStore(params ReceiptParams) (*ReceiptStore, error) {
 	return &ReceiptStore{db: params.DB, ttl: params.TTL, clk: params.Clock}, nil
 }
 
-// now returns the current UTC time through the injected clock.
-func (s *ReceiptStore) now() time.Time {
-	return s.clk.Now().UTC()
-}
-
 // IssueRefresh mints one refresh token in a new family for subject.
-func (s *ReceiptStore) IssueRefresh(ctx context.Context, subject, tenant string) (familyID, token string, err error) {
+func (s *ReceiptStore) IssueRefresh(ctx context.Context, subject, tenant string) (string, string, error) {
+	var (
+		familyID, token string
+		err             error
+	)
+
 	if s == nil || s.db == nil || s.clk == nil {
 		return "", "", ErrNotInitialized
 	}
@@ -130,7 +130,6 @@ func (s *ReceiptStore) IssueRefresh(ctx context.Context, subject, tenant string)
 			TenantID:  tenant,
 		}).Error
 	})
-
 	if err != nil {
 		return "", "", err
 	}
@@ -138,13 +137,13 @@ func (s *ReceiptStore) IssueRefresh(ctx context.Context, subject, tenant string)
 	return familyID, token, nil
 }
 
-// spendFailure carries a domain failure out of the transaction callback:
+// spendError carries a domain failure out of the transaction callback:
 // returning it directly would roll back the revocation writes it must commit.
-type spendFailure struct{ err error }
+type spendError struct{ err error }
 
-func (e *spendFailure) Error() string { return e.err.Error() }
+func (e *spendError) Error() string { return e.err.Error() }
 
-func (e *spendFailure) Unwrap() error { return e.err }
+func (e *spendError) Unwrap() error { return e.err }
 
 // UseRefresh spends one refresh token once. A replay revokes the family.
 // The spend (lock family row → validate → mark used → mint successor) runs
@@ -171,7 +170,7 @@ func (s *ReceiptStore) UseRefresh(ctx context.Context, token string) (RefreshCla
 
 	var claim RefreshClaim
 
-	var failure *spendFailure
+	var failure *spendError
 
 	txErr := postgres.WithinTenantTx(ctx, s.db, tenant, func(tx *gorm.DB) error {
 		c, err := s.spend(ctx, tx, tenant, token)
@@ -187,7 +186,6 @@ func (s *ReceiptStore) UseRefresh(ctx context.Context, token string) (RefreshCla
 
 		return nil
 	})
-
 	if txErr != nil {
 		return RefreshClaim{}, txErr
 	}
@@ -197,6 +195,11 @@ func (s *ReceiptStore) UseRefresh(ctx context.Context, token string) (RefreshCla
 	}
 
 	return claim, nil
+}
+
+// now returns the current UTC time through the injected clock.
+func (s *ReceiptStore) now() time.Time {
+	return s.clk.Now().UTC()
 }
 
 // spend executes one spend inside the caller's transaction: lock the receipt
@@ -212,7 +215,7 @@ func (s *ReceiptStore) spend(ctx context.Context, tx *gorm.DB, tenant valueobjec
 	}
 
 	if family.Revoked {
-		return RefreshClaim{}, &spendFailure{err: ErrRefreshRevoked}
+		return RefreshClaim{}, &spendError{err: ErrRefreshRevoked}
 	}
 
 	if receipt.Used {
@@ -220,7 +223,7 @@ func (s *ReceiptStore) spend(ctx context.Context, tx *gorm.DB, tenant valueobjec
 			return RefreshClaim{}, err
 		}
 
-		return RefreshClaim{}, &spendFailure{err: ErrRefreshReuse}
+		return RefreshClaim{}, &spendError{err: ErrRefreshReuse}
 	}
 
 	if s.now().After(family.IssuedAt.Add(s.ttl)) {
@@ -228,7 +231,7 @@ func (s *ReceiptStore) spend(ctx context.Context, tx *gorm.DB, tenant valueobjec
 			return RefreshClaim{}, err
 		}
 
-		return RefreshClaim{}, &spendFailure{err: ErrExpired}
+		return RefreshClaim{}, &spendError{err: ErrExpired}
 	}
 
 	nextSeed := newOpaqueID()
@@ -267,7 +270,7 @@ func (s *ReceiptStore) lockLineage(tx *gorm.DB, tenant valueobject.TenantID, dig
 		Where("token_hash = ? AND tenant_id = ?", digest, string(tenant)).
 		First(&receipt).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return receipt, refreshFamilyModel{}, &spendFailure{err: ErrRefreshNotFound}
+			return receipt, refreshFamilyModel{}, &spendError{err: ErrRefreshNotFound}
 		}
 
 		return receipt, refreshFamilyModel{}, err
@@ -279,7 +282,7 @@ func (s *ReceiptStore) lockLineage(tx *gorm.DB, tenant valueobject.TenantID, dig
 		Where("family_id = ? AND tenant_id = ?", receipt.FamilyID, string(tenant)).
 		First(&family).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return receipt, family, &spendFailure{err: ErrRefreshRevoked}
+			return receipt, family, &spendError{err: ErrRefreshRevoked}
 		}
 
 		return receipt, family, err

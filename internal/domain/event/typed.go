@@ -1,7 +1,7 @@
 package event
 
 import (
-	"errors"
+	"fmt"
 	"time"
 )
 
@@ -25,6 +25,7 @@ const (
 // changes; new schema versions are new constructors with new type strings.
 type TypedEvent[P any] struct {
 	BaseEvent
+
 	typed P
 }
 
@@ -39,11 +40,12 @@ var _ DomainEvent = TypedEvent[struct{}]{}
 
 // newTyped validates envelope inputs through NewBaseEvent and attaches the
 // typed payload. It returns an error on invalid input and never panics.
-func newTyped[P any](eventType, eventID, aggregateID, aggregateType string, occurredAt time.Time, version, seq int64, payload P, meta EventMetadata) (TypedEvent[P], error) {
+func newTyped[P any](eventType, eventID, aggregateID, aggregateType string, occurredAt time.Time, version, seq int64, payload P, meta Metadata) (TypedEvent[P], error) {
 	base, err := NewBaseEvent(eventID, aggregateID, aggregateType, eventType, occurredAt, version, seq, nil, meta)
 	if err != nil {
 		return TypedEvent[P]{}, err
 	}
+
 	return TypedEvent[P]{BaseEvent: base, typed: payload}, nil
 }
 
@@ -51,8 +53,9 @@ func newTyped[P any](eventType, eventID, aggregateID, aggregateType string, occu
 func requireIDs(fields map[string]string) error {
 	for name, value := range fields {
 		if value == "" {
-			return errors.New("event: " + name + " is required")
+			return fmt.Errorf("event: %s is required: %w", name, ErrEventNameIsRequired)
 		}
 	}
+
 	return nil
 }

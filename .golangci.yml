@@ -1,33 +1,220 @@
 # golangci-lint strict configuration (E00-T03).
 # Referenced by `make lint` and `.github/workflows/ci.yml` (E00-T05).
-# Schema: golangci-lint v2 (`linters:` mapping). Zero exclusions by policy:
-# any future exclusion MUST name its owning task/ADR.
+# Schema: golangci-lint v2 (`linters:` mapping). Every exclusion must name its
+# owning task/ADR; the targeted test-only exclusion below is E18-T14 approved.
 version: "2"
 linters:
-  enable:
-    - errcheck
-    - govet
-    - staticcheck
-    - gosec
-    - bodyclose
-    - noctx
-    - rowserrcheck
-    - sqlclosecheck
-    - goconst
-    - gocritic
-    - gocyclo
-    - ineffassign
-    - misspell
-    - unconvert
-    - unparam
-    - unused
-    # NOTE (v2 schema): gofmt/goimports are formatters, not linters — they
-    # are enforced in the `formatters:` section below, not here.
+  default: all
+  disable:
+    - exhaustruct
+    - gomodguard
+    - wsl
+    # Owner-selected opt-outs from the all-linter census (2026-10-13).
+    - lll
+    - godot
+    - funlen
+    - varnamelen
+    - cyclop
+    - dupl
+    - exhaustruct_v5
+    - noinlineerr
+    - wrapcheck
+    - containedctx
+    - gochecknoinits
   settings:
-    gocyclo:
-      min-complexity: 12
+    depguard:
+      rules:
+        domain:
+          list-mode: strict
+          files:
+            - "**/internal/domain/**/*.go"
+            - "!$test"
+          allow:
+            - $gostd
+            - github.com/kadekutama/go-template/internal/domain
+        application:
+          list-mode: strict
+          files:
+            - "**/internal/application/**/*.go"
+            - "!$test"
+          allow:
+            - $gostd
+            - github.com/kadekutama/go-template/internal/application
+            - github.com/kadekutama/go-template/internal/domain
+            # Existing application-level JSON and error translation seams.
+            - github.com/kadekutama/go-template/pkg/jsonparser
+            - github.com/kadekutama/go-template/internal/shared/kernel/error
+        interface:
+          list-mode: lax
+          files:
+            - "**/internal/interface/**/*.go"
+            - "!$test"
+          deny:
+            - pkg: github.com/kadekutama/go-template/internal/infrastructure
+              desc: Delivery adapters depend on inward application/domain contracts, not infrastructure.
+            - pkg: github.com/kadekutama/go-template/internal/shared/di
+              desc: Dependency wiring belongs in composition roots, not delivery adapters.
+            - pkg: github.com/kadekutama/go-template/cmd
+              desc: Command packages are composition roots, not delivery dependencies.
+        infrastructure:
+          list-mode: lax
+          files:
+            - "**/internal/infrastructure/**/*.go"
+            - "!$test"
+          deny:
+            - pkg: github.com/kadekutama/go-template/internal/interface
+              desc: Infrastructure adapters implement inward contracts and must not depend on delivery.
+            - pkg: github.com/kadekutama/go-template/internal/shared/di
+              desc: Dependency wiring belongs in composition roots, not infrastructure adapters.
+            - pkg: github.com/kadekutama/go-template/cmd
+              desc: Command packages are composition roots, not infrastructure dependencies.
+        shared:
+          list-mode: lax
+          files:
+            - "**/internal/shared/**/*.go"
+            # Match both direct files and future nested files under the DI root.
+            - "!**/internal/shared/di/*.go"
+            - "!**/internal/shared/di/**/*.go"
+            - "!$test"
+          deny:
+            - pkg: github.com/kadekutama/go-template/internal/domain
+              desc: Shared kernel primitives must not depend on business-domain packages.
+            - pkg: github.com/kadekutama/go-template/internal/application
+              desc: Shared kernel primitives must not depend on use-case orchestration.
+            - pkg: github.com/kadekutama/go-template/internal/infrastructure
+              desc: Shared kernel primitives must not depend on outer infrastructure adapters.
+            - pkg: github.com/kadekutama/go-template/internal/interface
+              desc: Shared kernel primitives must not depend on delivery adapters.
+            - pkg: github.com/kadekutama/go-template/cmd
+              desc: Shared kernel primitives must not depend on composition roots.
+        composition-roots:
+          list-mode: lax
+          files:
+            - "**/cmd/**/*.go"
+            - "**/internal/shared/di/**/*.go"
+            - "!$test"
+          # Composition roots intentionally select concrete adapters and frameworks.
+          allow:
+            - $gostd
     goconst:
       ignore-tests: true
+    ireturn:
+      # Explicit allow replaces ireturn's implicit defaults, so preserve them
+      # and allow only the audited generic returns and named interface types.
+      allow:
+        - empty
+        - anon
+        - error
+        - stdlib
+        - generic
+        - '^github\.com/kadekutama/go-template/internal/application/port\.EventOutbox$'
+        - '^github\.com/kadekutama/go-template/internal/application/port\.IdempotencyStore$'
+        - '^github\.com/kadekutama/go-template/internal/application/port\.Lock$'
+        - '^github\.com/kadekutama/go-template/internal/domain/event\.DomainEvent$'
+        - '^github\.com/kadekutama/go-template/internal/domain/repository\.HoldRepository$'
+        - '^github\.com/kadekutama/go-template/internal/domain/repository\.PostingRepository$'
+        - '^github\.com/kadekutama/go-template/internal/infrastructure/cache/hybrid\.Codec$'
+        - '^github\.com/kadekutama/go-template/internal/infrastructure/coordination/etcd\.LeaderElector$'
+        - '^github\.com/kadekutama/go-template/internal/infrastructure/coordination/etcd\.Watcher$'
+        - '^github\.com/kadekutama/go-template/internal/interface/cron/admin\.SessionAuthenticator$'
+        - '^github\.com/kadekutama/go-template/internal/shared/kernel\.Clock$'
+        - '^github\.com/kadekutama/go-template/internal/shared/kernel\.IDGenerator$'
+        - '^github\.com/kadekutama/go-template/internal/shared/kernel/log\.Logger$'
+        - '^github\.com/kadekutama/go-template/internal/shared/kernel/trace\.Span$'
+        - '^github\.com/kadekutama/go-template/internal/shared/kernel/trace\.Tracer$'
+        - '^github\.com/pressly/goose/v3\.Logger$'
+        - '^github\.com/testcontainers/testcontainers-go\.Container$'
+        - '^github\.com/twmb/franz-go/pkg/sasl\.Mechanism$'
+        - '^go\.opentelemetry\.io/otel/propagation\.TextMapPropagator$'
+        - '^go\.uber\.org/fx\.Option$'
+    tagliatelle:
+      case:
+        rules:
+          # Keep JSON/API/YAML names consistent with the database's snake_case contract.
+          json: snake
+          yaml: snake
+    testifylint:
+      # The repository's canonical table tests use assert for error equality.
+      disable:
+        - require-error
+  exclusions:
+    rules:
+      # Forced type assertions are excluded only in tests, where mock APIs commonly require them.
+      - path: _test\.go$
+        linters:
+          - forcetypeassert
+      # White-box tests access unexported seams (e.g., zerolog per-instance exit);
+      # black-box remains preferred per docs/LINTERS.md and human review.
+      - path: _test\.go$
+        linters:
+          - testpackage
+      # Gosec G115: saturating uint32 conversion with explicit MaxUint32 guard (Otter weight).
+      - path: internal/infrastructure/cache/local/otter\.go$
+        linters:
+          - gosec
+        text: G115
+      # Gosec G101: ephemeral testcontainer credentials, never production secrets.
+      - path: test/testcontainers/(citus|services)\.go$
+        linters:
+          - gosec
+        text: G101
+      # Spancheck on the OTel Tracer.Start adapter: the span is intentionally
+      # handed to the caller (kernel trace port), which owns End; ending it
+      # inside Start would record nothing and break E11 observability.
+      - path: internal/infrastructure/tracing/otel\.go$
+        linters:
+          - spancheck
+      # Contextcheck on the singleflight shared call: the shared context is
+      # deliberately derived from the service base (not the request ctx) so
+      # no single waiter can cancel the collapsed call for the others.
+      - path: internal/infrastructure/cache/coalesce/singleflight\.go$
+        linters:
+          - contextcheck
+      # Contextcheck on the NATS fx OnStop hook: nats.go Conn.Close takes no
+      # context, so there is no ctx-accepting call to forward to.
+      - path: internal/infrastructure/messaging/nats/module\.go$
+        linters:
+          - contextcheck
+      # Parallelism linters on Setenv suites: the Go runtime forbids
+      # t.Parallel in tests that call t.Setenv (testing panics), and
+      # sibling tests in the same binaries read the same process env
+      # (config Load readers, fx providers, seed graph validation), so
+      # these suites stay sequential by necessity. One rule covers all
+      # seven suites for both linters; each name is exact (verified no
+      # superstring collisions).
+      - text: Test(SeedAppRequiresDSN|CoordinationEnvOverrides|EnvOverrideWins|FxLifecycle|ProvidersConstructInstances|RunAppLifecycle|HarnessProfiles)
+        linters:
+          - paralleltest
+          - tparallel
+      # Parallelism linters in integration suites: each parent test owns
+      # its containers/connections and its subtests share that single
+      # fixture by design (ordered lifecycles like migrate up/down,
+      # single-DB CRUD sequences), so subtests stay sequential while
+      # parents run in parallel. Unit tests carry parallel coverage.
+      - path: test/integration/
+        linters:
+          - paralleltest
+          - tparallel
+      # Recvcheck on GORM models: BeforeCreate/BeforeUpdate must stay
+      # pointer receivers (they mutate the record; value receivers would
+      # silently drop defaults and reintroduce 22P02 errors), while
+      # TableName must stay value (called on composite literals in
+      # models_test). Neither side can move without breaking callers.
+      - path: internal/infrastructure/database/postgres/models/(ledger|workflow)\.go$
+        linters:
+          - recvcheck
+      # Gochecknoglobals on load-bearing shared state (each case documented
+      # here and at its site): the atomic error-code registry (init-seeded,
+      # runtime Register with fail-fast duplicates), the zerolog shape
+      # OnceFunc (must run exactly once process-wide, mirroring OTel
+      # globals), sync.Map mock-attached tracker state in tests (testify
+      # mocks cannot carry extra fields), and the atomic test-code counter
+      # (uniqueness across parallel tests requires sharing). One rule with
+      # path+identifier alternations covers exactly these six bindings.
+      - path: (internal/shared/kernel/error/app_error\.go|internal/infrastructure/logging/zerolog_adapter\.go|internal/application/command/mock_stores_test\.go|internal/shared/kernel/error/error_test\.go)$
+        linters:
+          - gochecknoglobals
+        text: (registry|configureShape|transferStoreStatsMap|uowTrackerMap|authzStatsMap|testCodeCounter)
 issues:
   # Every issue fails the run: no warnings-only mode.
   max-issues-per-linter: 0
@@ -36,7 +223,7 @@ run:
   timeout: 10m
 output:
   formats:
-    colored-line-number:
+    text:
       path: stdout
 formatters:
   enable:
@@ -44,4 +231,5 @@ formatters:
     - goimports
   settings:
     goimports:
-      local-prefixes: github.com/kadekutama/go-template
+      local-prefixes:
+        - github.com/kadekutama/go-template

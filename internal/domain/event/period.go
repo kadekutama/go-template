@@ -15,10 +15,11 @@ type PeriodOpenedPayload struct {
 }
 
 // NewPeriodOpened builds period.opened.v1.
-func NewPeriodOpened(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PeriodOpenedPayload, meta EventMetadata) (TypedEvent[PeriodOpenedPayload], error) {
+func NewPeriodOpened(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PeriodOpenedPayload, meta Metadata) (TypedEvent[PeriodOpenedPayload], error) {
 	if err := requireIDs(map[string]string{fieldPeriodID: payload.PeriodID, fieldTenantID: payload.TenantID, fieldLedgerID: payload.LedgerID}); err != nil {
 		return TypedEvent[PeriodOpenedPayload]{}, err
 	}
+
 	return newTyped("period.opened.v1", eventID, aggregateID, "Period", occurredAt, version, seq, payload, meta)
 }
 
@@ -30,10 +31,11 @@ type PeriodClosedPayload struct {
 }
 
 // NewPeriodClosed builds period.closed.v1.
-func NewPeriodClosed(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PeriodClosedPayload, meta EventMetadata) (TypedEvent[PeriodClosedPayload], error) {
+func NewPeriodClosed(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PeriodClosedPayload, meta Metadata) (TypedEvent[PeriodClosedPayload], error) {
 	if err := requireIDs(map[string]string{fieldPeriodID: payload.PeriodID, fieldTenantID: payload.TenantID}); err != nil {
 		return TypedEvent[PeriodClosedPayload]{}, err
 	}
+
 	return newTyped("period.closed.v1", eventID, aggregateID, "Period", occurredAt, version, seq, payload, meta)
 }
 
@@ -46,9 +48,10 @@ type PeriodReopenedPayload struct {
 }
 
 // NewPeriodReopened builds period.reopened.v1.
-func NewPeriodReopened(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PeriodReopenedPayload, meta EventMetadata) (TypedEvent[PeriodReopenedPayload], error) {
+func NewPeriodReopened(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PeriodReopenedPayload, meta Metadata) (TypedEvent[PeriodReopenedPayload], error) {
 	if err := requireIDs(map[string]string{fieldPeriodID: payload.PeriodID, fieldTenantID: payload.TenantID}); err != nil {
 		return TypedEvent[PeriodReopenedPayload]{}, err
 	}
+
 	return newTyped("period.reopened.v1", eventID, aggregateID, "Period", occurredAt, version, seq, payload, meta)
 }

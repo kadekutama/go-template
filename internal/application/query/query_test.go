@@ -25,7 +25,9 @@ const (
 	qEuro     = valueobject.AssetCode("EUR")
 )
 
-var qAt = time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
+func qAt() time.Time {
+	return time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
+}
 
 type balanceEntriesPage struct {
 	entries []entity.Entry
@@ -58,7 +60,7 @@ func TestPostingQueryExecute(t *testing.T) {
 	stored := entity.PostingData{
 		ID: "p-1", TenantID: qTenant, LedgerID: qLedger, Operation: "transfer",
 		Entries:     []entity.Entry{qEntry("e-1", "p-1", valueobject.DirectionDebit, 5000, qCurrency)},
-		EffectiveAt: qAt, RecordedAt: qAt,
+		EffectiveAt: qAt(), RecordedAt: qAt(),
 	}
 
 	type testCase struct {
@@ -91,6 +93,7 @@ func TestPostingQueryExecute(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			postings := mockdomain.NewMockPostingRepository(t)
 			postings.EXPECT().
 				FindByID(mock.Anything, qTenant, valueobject.PostingID("p-1")).
@@ -105,7 +108,7 @@ func TestPostingQueryExecute(t *testing.T) {
 	}
 }
 
-func TestBalanceExecute(t *testing.T) {
+func TestBalanceExecuteComputation(t *testing.T) {
 	t.Parallel()
 
 	type testCase struct {
@@ -140,7 +143,7 @@ func TestBalanceExecute(t *testing.T) {
 				TenantID: qTenant, LedgerID: qLedger, AccountID: qAccount, AssetCode: qCurrency,
 			},
 			expectedResult: port.BalanceView{
-				AccountID: qAccount, AssetCode: qCurrency, AvailableMinor: 6500, AsOf: qAt,
+				AccountID: qAccount, AssetCode: qCurrency, AvailableMinor: 6500, AsOf: qAt(),
 			},
 			expectedError: nil,
 		},
@@ -161,7 +164,7 @@ func TestBalanceExecute(t *testing.T) {
 				TenantID: qTenant, LedgerID: qLedger, AccountID: qAccount, AssetCode: qCurrency,
 			},
 			expectedResult: port.BalanceView{
-				AccountID: qAccount, AssetCode: qCurrency, AvailableMinor: 8000, AsOf: qAt,
+				AccountID: qAccount, AssetCode: qCurrency, AvailableMinor: 8000, AsOf: qAt(),
 			},
 			expectedError: nil,
 		},
@@ -187,7 +190,7 @@ func TestBalanceExecute(t *testing.T) {
 				TenantID: qTenant, LedgerID: qLedger, AccountID: qAccount, AssetCode: qCurrency,
 			},
 			expectedResult: port.BalanceView{
-				AccountID: qAccount, AssetCode: qCurrency, AvailableMinor: 9000, AsOf: qAt,
+				AccountID: qAccount, AssetCode: qCurrency, AvailableMinor: 9000, AsOf: qAt(),
 			},
 			expectedError: nil,
 		},
@@ -209,10 +212,108 @@ func TestBalanceExecute(t *testing.T) {
 				TenantID: qTenant, LedgerID: qLedger, AccountID: qAccount, AssetCode: qCurrency,
 			},
 			expectedResult: port.BalanceView{
-				AccountID: qAccount, AssetCode: qCurrency, AvailableMinor: 10000, AsOf: qAt,
+				AccountID: qAccount, AssetCode: qCurrency, AvailableMinor: 10000, AsOf: qAt(),
 			},
 			expectedError: nil,
 		},
+		{
+			name:    "expired holds are excluded from hold summation",
+			account: qAccountData(valueobject.ClassLiability),
+			pages: map[string]balanceEntriesPage{
+				"": {
+					entries: []entity.Entry{
+						qEntry("e-1", "p-1", valueobject.DirectionCredit, 10000, qCurrency),
+					},
+					next: "",
+				},
+			},
+			holds: []entity.HoldData{
+				{
+					ID:          "h-expired",
+					TenantID:    qTenant,
+					LedgerID:    qLedger,
+					AccountID:   qAccount,
+					AssetCode:   qCurrency,
+					AmountMinor: 4000,
+					State:       entity.HoldActive,
+					ExpiresAt:   qAt().Add(-time.Hour),
+				},
+				{
+					ID:          "h-active",
+					TenantID:    qTenant,
+					LedgerID:    qLedger,
+					AccountID:   qAccount,
+					AssetCode:   qCurrency,
+					AmountMinor: 1000,
+					State:       entity.HoldActive,
+					ExpiresAt:   qAt().Add(time.Hour),
+				},
+			},
+			query: port.BalanceQuery{
+				TenantID: qTenant, LedgerID: qLedger, AccountID: qAccount, AssetCode: qCurrency,
+			},
+			expectedResult: port.BalanceView{
+				AccountID:      qAccount,
+				AssetCode:      qCurrency,
+				AvailableMinor: 9000,
+				AsOf:           qAt(),
+			},
+			expectedError: nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			accounts := mockdomain.NewMockAccountRepository(t)
+			entries := mockdomain.NewMockEntryReader(t)
+			holds := mockdomain.NewMockHoldRepository(t)
+			clock := mockapplication.NewMockClock(t)
+
+			clock.EXPECT().Now().Return(qAt()).Maybe()
+			accounts.EXPECT().
+				FindByID(mock.Anything, tc.query.TenantID, tc.query.AccountID).
+				Return(tc.account, tc.accountErr).
+				Maybe()
+			holds.EXPECT().
+				FindActiveByAccount(mock.Anything, tc.query.TenantID, tc.query.AccountID).
+				Return(tc.holds, nil).
+				Maybe()
+
+			for cursor, page := range tc.pages {
+				entries.EXPECT().
+					FindByAccount(mock.Anything, tc.query.TenantID, tc.query.AccountID, cursor, 500).
+					Return(page.entries, page.next, nil).
+					Maybe()
+			}
+
+			svc := query.NewBalanceService(query.BalanceServiceParams{
+				Accounts: accounts,
+				Entries:  entries,
+				Holds:    holds,
+				Clock:    clock,
+			})
+			actualResult, err := svc.Execute(context.Background(), tc.query)
+			assert.Equal(t, tc.expectedResult, actualResult)
+			assert.Equal(t, tc.expectedError, err)
+		})
+	}
+}
+func TestBalanceExecuteErrors(t *testing.T) {
+	t.Parallel()
+
+	type testCase struct {
+		name           string
+		account        entity.AccountData
+		accountErr     error
+		pages          map[string]balanceEntriesPage
+		holds          []entity.HoldData
+		query          port.BalanceQuery
+		expectedResult port.BalanceView
+		expectedError  error
+	}
+
+	testCases := []testCase{
 		{
 			name:       "unknown account propagates",
 			account:    entity.AccountData{},
@@ -272,50 +373,6 @@ func TestBalanceExecute(t *testing.T) {
 			},
 			expectedResult: port.BalanceView{},
 			expectedError:  entity.NewError("BALANCE_OVERFLOW", "balance computation overflowed"),
-		},
-		{
-			name:    "expired holds are excluded from hold summation",
-			account: qAccountData(valueobject.ClassLiability),
-			pages: map[string]balanceEntriesPage{
-				"": {
-					entries: []entity.Entry{
-						qEntry("e-1", "p-1", valueobject.DirectionCredit, 10000, qCurrency),
-					},
-					next: "",
-				},
-			},
-			holds: []entity.HoldData{
-				{
-					ID:          "h-expired",
-					TenantID:    qTenant,
-					LedgerID:    qLedger,
-					AccountID:   qAccount,
-					AssetCode:   qCurrency,
-					AmountMinor: 4000,
-					State:       entity.HoldActive,
-					ExpiresAt:   qAt.Add(-time.Hour),
-				},
-				{
-					ID:          "h-active",
-					TenantID:    qTenant,
-					LedgerID:    qLedger,
-					AccountID:   qAccount,
-					AssetCode:   qCurrency,
-					AmountMinor: 1000,
-					State:       entity.HoldActive,
-					ExpiresAt:   qAt.Add(time.Hour),
-				},
-			},
-			query: port.BalanceQuery{
-				TenantID: qTenant, LedgerID: qLedger, AccountID: qAccount, AssetCode: qCurrency,
-			},
-			expectedResult: port.BalanceView{
-				AccountID:      qAccount,
-				AssetCode:      qCurrency,
-				AvailableMinor: 9000,
-				AsOf:           qAt,
-			},
-			expectedError: nil,
 		},
 		{
 			name:    "hold sum addition overflow returns BALANCE_OVERFLOW",
@@ -387,12 +444,13 @@ func TestBalanceExecute(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			accounts := mockdomain.NewMockAccountRepository(t)
 			entries := mockdomain.NewMockEntryReader(t)
 			holds := mockdomain.NewMockHoldRepository(t)
 			clock := mockapplication.NewMockClock(t)
 
-			clock.EXPECT().Now().Return(qAt).Maybe()
+			clock.EXPECT().Now().Return(qAt()).Maybe()
 			accounts.EXPECT().
 				FindByID(mock.Anything, tc.query.TenantID, tc.query.AccountID).
 				Return(tc.account, tc.accountErr).
@@ -512,6 +570,8 @@ func TestEntriesExecute(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			entries := mockdomain.NewMockEntryReader(t)
 			if tc.expectedError == nil {
 				entries.EXPECT().

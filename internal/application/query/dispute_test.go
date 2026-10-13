@@ -71,6 +71,7 @@ func TestDisputeQueryServiceGetDispute(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			disputes := mockcommand.NewMockDisputeStore(t)
 			disputes.EXPECT().
 				FindDispute(mock.Anything, tc.query.DisputeID).
@@ -165,6 +166,8 @@ func TestDisputeQueryServiceListDisputes(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			disputes := mockcommand.NewMockDisputeStore(t)
 			if tc.filter.Limit > 0 && tc.filter.Limit <= 100 {
 				disputes.EXPECT().

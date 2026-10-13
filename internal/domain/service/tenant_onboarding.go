@@ -86,21 +86,23 @@ func slugifyTenantName(name string) string {
 		switch {
 		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
 			stem.WriteRune(r)
+
 			previousHyphen = false
 		default:
 			if !previousHyphen {
 				stem.WriteRune('-')
+
 				previousHyphen = true
 			}
 		}
 	}
 
 	slug := strings.Trim(stem.String(), "-")
-	if len(slug) < 3 {
+	if len(slug) < minSlug3 {
 		return ""
 	}
 
-	if len(slug) > 64 {
+	if len(slug) > maxSlug64 {
 		slug = strings.Trim(slug[:64], "-")
 	}
 
@@ -141,11 +143,13 @@ func IsRegionAllowed(region string, allowed []string) bool {
 	if trimmed == "" || len(allowed) == 0 {
 		return false
 	}
+
 	for _, a := range allowed {
 		if strings.EqualFold(strings.TrimSpace(a), trimmed) {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -155,11 +159,13 @@ func IsNameTaken(name string, existing []string) bool {
 	if trimmed == "" {
 		return false
 	}
+
 	for _, e := range existing {
 		if strings.EqualFold(strings.TrimSpace(e), trimmed) {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -169,23 +175,29 @@ func DefaultAccountsForAssets(assets []valueobject.AssetCode, maxAssets int) ([]
 	if maxAssets <= 0 {
 		return nil, entity.NewError("ONBOARDING_ASSETS_INVALID", "max assets must be positive")
 	}
+
 	if len(assets) == 0 {
 		return nil, entity.NewError("ONBOARDING_ASSETS_REQUIRED", "onboarding requires at least one asset")
 	}
+
 	if len(assets) > maxAssets {
 		return nil, entity.NewError("ONBOARDING_ASSETS_EXCEEDED", "onboarding requests too many assets")
 	}
+
 	seen := make(map[valueobject.AssetCode]struct{}, len(assets))
-	out := make([]DefaultAccount, 0, len(assets)*3)
+
+	out := make([]DefaultAccount, 0, len(assets)*capacityFactor3)
 	for _, asset := range assets {
 		trimmed := strings.TrimSpace(string(asset))
 		if trimmed == "" {
 			return nil, entity.NewError("ONBOARDING_ASSET_INVALID", "onboarding asset code is required")
 		}
+
 		cleanAsset := valueobject.AssetCode(trimmed)
 		if _, ok := seen[cleanAsset]; ok {
 			return nil, entity.NewError("ONBOARDING_ASSET_INVALID", "onboarding assets must be unique")
 		}
+
 		seen[cleanAsset] = struct{}{}
 		out = append(out,
 			DefaultAccount{Purpose: TenantPurposeOperating, AssetCode: cleanAsset, Number: "1000-" + string(cleanAsset), Name: "Operating " + string(cleanAsset), Class: valueobject.ClassLiability},
@@ -193,6 +205,7 @@ func DefaultAccountsForAssets(assets []valueobject.AssetCode, maxAssets int) ([]
 			DefaultAccount{Purpose: TenantPurposeSuspense, AssetCode: cleanAsset, Number: "1100-" + string(cleanAsset), Name: "Suspense " + string(cleanAsset), Class: valueobject.ClassAsset},
 		)
 	}
+
 	return out, nil
 }
 
@@ -202,36 +215,47 @@ func ValidateOnboarding(req OnboardingRequest) (OnboardingPlan, error) {
 	if req.MaxAssets <= 0 {
 		return OnboardingPlan{}, entity.NewError("ONBOARDING_ASSETS_INVALID", "max assets must be positive")
 	}
+
 	if err := validateOnboardingIdentity(req); err != nil {
 		return OnboardingPlan{}, err
 	}
+
 	if err := validateOnboardingPolicy(req); err != nil {
 		return OnboardingPlan{}, err
 	}
+
 	if err := validateOnboardingEnvelope(req); err != nil {
 		return OnboardingPlan{}, err
 	}
+
 	accounts, err := DefaultAccountsForAssets(req.Assets, req.MaxAssets)
 	if err != nil {
 		return OnboardingPlan{}, err
 	}
+
 	hasDefaultCurrency := false
+
 	for _, a := range req.Assets {
 		if strings.TrimSpace(string(a)) == string(req.Settings.DefaultCurrency) {
 			hasDefaultCurrency = true
+
 			break
 		}
 	}
+
 	if !hasDefaultCurrency {
 		return OnboardingPlan{}, entity.NewError("ONBOARDING_ASSET_INVALID", "default currency must be included in onboarding assets")
 	}
+
 	settings := req.Settings
 	settings.EnabledFeatures = slices.Clone(req.Settings.EnabledFeatures)
 	settings.EnabledPaymentMethods = slices.Clone(req.Settings.EnabledPaymentMethods)
+
 	alias, err := DeriveTenantAlias(req.RequestedAlias, req.Name, req.ExistingAliases)
 	if err != nil {
 		return OnboardingPlan{}, err
 	}
+
 	tenant := entity.TenantData{
 		ID:        req.TenantID,
 		Name:      strings.TrimSpace(req.Name),
@@ -246,11 +270,14 @@ func ValidateOnboarding(req OnboardingRequest) (OnboardingPlan, error) {
 	if err := tenant.Validate(); err != nil {
 		return OnboardingPlan{}, err
 	}
+
 	tenantID := req.TenantID.String()
+
 	prefix := tenantID
-	if len(prefix) > 8 {
+	if len(prefix) > maxPrefix8 {
 		prefix = prefix[:8]
 	}
+
 	key := APIKeyDescriptor{
 		KeyID:     "key_" + tenantID,
 		KeyPrefix: "pk_" + prefix,
@@ -265,6 +292,7 @@ func ValidateOnboarding(req OnboardingRequest) (OnboardingPlan, error) {
 		BaseAssetCode: string(req.Settings.DefaultCurrency),
 		CreatedAt:     req.Now.UTC(),
 	}
+
 	return OnboardingPlan{
 		Tenant:   tenant,
 		LedgerID: req.LedgerID.String(),
@@ -280,17 +308,21 @@ func validateOnboardingIdentity(req OnboardingRequest) error {
 			return entity.NewError("TENANT_ID_INVALID", "tenant id is invalid")
 		}
 	}
+
 	if req.LedgerID.String() != "" {
 		if _, err := valueobject.ParseLedgerID(req.LedgerID.String()); err != nil {
 			return entity.NewError("LEDGER_ID_INVALID", "ledger id is invalid")
 		}
 	}
+
 	if err := entity.ValidateTenantName(req.Name); err != nil {
 		return err
 	}
+
 	if strings.TrimSpace(req.Region) == "" {
 		return entity.NewError("TENANT_REGION_REQUIRED", "tenant region is required")
 	}
+
 	return nil
 }
 
@@ -298,12 +330,15 @@ func validateOnboardingPolicy(req OnboardingRequest) error {
 	if !IsRegionAllowed(req.Region, req.AllowedRegions) {
 		return entity.NewError("TENANT_REGION_INVALID", "tenant region is not allowed")
 	}
+
 	if IsNameTaken(req.Name, req.ExistingNames) {
 		return entity.NewError("TENANT_NAME_DUPLICATE", "tenant name is already taken")
 	}
+
 	if err := req.Settings.Validate(); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -311,11 +346,14 @@ func validateOnboardingEnvelope(req OnboardingRequest) error {
 	if strings.TrimSpace(req.RequestedBy.String()) == "" {
 		return entity.NewError("ONBOARDING_ACTOR_REQUIRED", "onboarding actor is required")
 	}
+
 	if strings.TrimSpace(req.EventID) == "" {
 		return entity.NewError("ONBOARDING_EVENT_REQUIRED", "onboarding event id is required")
 	}
+
 	if req.Now.IsZero() {
 		return entity.NewError("ONBOARDING_TIME_REQUIRED", "onboarding time is required")
 	}
+
 	return nil
 }

@@ -1,7 +1,6 @@
 package event
 
 import (
-	"errors"
 	"strings"
 	"time"
 
@@ -19,10 +18,11 @@ type TenantUpdatedPayload struct {
 }
 
 // NewTenantUpdated builds tenant.updated.v1.
-func NewTenantUpdated(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TenantUpdatedPayload, meta EventMetadata) (TypedEvent[TenantUpdatedPayload], error) {
+func NewTenantUpdated(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TenantUpdatedPayload, meta Metadata) (TypedEvent[TenantUpdatedPayload], error) {
 	if err := requireIDs(map[string]string{fieldTenantID: payload.TenantID}); err != nil {
 		return TypedEvent[TenantUpdatedPayload]{}, err
 	}
+
 	return newTyped("tenant.updated.v1", eventID, aggregateID, "Tenant", occurredAt, version, seq, payload, meta)
 }
 
@@ -34,13 +34,15 @@ type TenantSuspendedPayload struct {
 }
 
 // NewTenantSuspended builds tenant.suspended.v1.
-func NewTenantSuspended(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TenantSuspendedPayload, meta EventMetadata) (TypedEvent[TenantSuspendedPayload], error) {
+func NewTenantSuspended(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TenantSuspendedPayload, meta Metadata) (TypedEvent[TenantSuspendedPayload], error) {
 	if err := requireIDs(map[string]string{fieldTenantID: payload.TenantID}); err != nil {
 		return TypedEvent[TenantSuspendedPayload]{}, err
 	}
+
 	if strings.TrimSpace(payload.Reason) == "" {
-		return TypedEvent[TenantSuspendedPayload]{}, errors.New("event: reason is required")
+		return TypedEvent[TenantSuspendedPayload]{}, ErrEventReasonIsRequired
 	}
+
 	return newTyped("tenant.suspended.v1", eventID, aggregateID, "Tenant", occurredAt, version, seq, payload, meta)
 }
 
@@ -51,10 +53,11 @@ type TenantReactivatedPayload struct {
 }
 
 // NewTenantReactivated builds tenant.reactivated.v1.
-func NewTenantReactivated(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TenantReactivatedPayload, meta EventMetadata) (TypedEvent[TenantReactivatedPayload], error) {
+func NewTenantReactivated(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TenantReactivatedPayload, meta Metadata) (TypedEvent[TenantReactivatedPayload], error) {
 	if err := requireIDs(map[string]string{fieldTenantID: payload.TenantID}); err != nil {
 		return TypedEvent[TenantReactivatedPayload]{}, err
 	}
+
 	return newTyped("tenant.reactivated.v1", eventID, aggregateID, "Tenant", occurredAt, version, seq, payload, meta)
 }
 
@@ -66,12 +69,14 @@ type TenantClosedPayload struct {
 }
 
 // NewTenantClosed builds tenant.closed.v1.
-func NewTenantClosed(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TenantClosedPayload, meta EventMetadata) (TypedEvent[TenantClosedPayload], error) {
+func NewTenantClosed(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TenantClosedPayload, meta Metadata) (TypedEvent[TenantClosedPayload], error) {
 	if err := requireIDs(map[string]string{fieldTenantID: payload.TenantID}); err != nil {
 		return TypedEvent[TenantClosedPayload]{}, err
 	}
+
 	if strings.TrimSpace(payload.Reason) == "" {
-		return TypedEvent[TenantClosedPayload]{}, errors.New("event: reason is required")
+		return TypedEvent[TenantClosedPayload]{}, ErrEventReasonIsRequired
 	}
+
 	return newTyped("tenant.closed.v1", eventID, aggregateID, "Tenant", occurredAt, version, seq, payload, meta)
 }

@@ -51,6 +51,7 @@ func TestDomainError(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Equal(t, tc.expectedCode, tc.err.Code)
 			assert.Equal(t, tc.expectedMessage, tc.err.Message)
 			assert.Equal(t, tc.expectedString, tc.err.Error())
@@ -139,6 +140,8 @@ func TestNewLedger(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			ledger, err := entity.NewLedger(tc.id, tc.tenantID, tc.nameField, tc.assetCode, tc.chartVersion)
 			if tc.expectedError != nil {
 				assert.Equal(t, tc.expectedError, err)
@@ -183,6 +186,7 @@ func TestAccountDataValidate(t *testing.T) {
 			account: func() entity.AccountData {
 				a := valid
 				a.ID = ""
+
 				return a
 			}(),
 			expectedError: nil,
@@ -192,6 +196,7 @@ func TestAccountDataValidate(t *testing.T) {
 			account: func() entity.AccountData {
 				a := valid
 				a.ID = "not-a-uuid"
+
 				return a
 			}(),
 			expectedError: entity.NewError("ACCOUNT_ID_INVALID", "account id is invalid"),
@@ -201,6 +206,7 @@ func TestAccountDataValidate(t *testing.T) {
 			account: func() entity.AccountData {
 				a := valid
 				a.TenantID = ""
+
 				return a
 			}(),
 			expectedError: entity.NewError("TENANT_REQUIRED", "tenant id is required"),
@@ -210,6 +216,7 @@ func TestAccountDataValidate(t *testing.T) {
 			account: func() entity.AccountData {
 				a := valid
 				a.LedgerID = ""
+
 				return a
 			}(),
 			expectedError: entity.NewError("LEDGER_REQUIRED", "ledger id is required"),
@@ -219,6 +226,7 @@ func TestAccountDataValidate(t *testing.T) {
 			account: func() entity.AccountData {
 				a := valid
 				a.Number = ""
+
 				return a
 			}(),
 			expectedError: entity.NewError("ACCOUNT_NUMBER_REQUIRED", "account number is required"),
@@ -228,6 +236,7 @@ func TestAccountDataValidate(t *testing.T) {
 			account: func() entity.AccountData {
 				a := valid
 				a.Name = ""
+
 				return a
 			}(),
 			expectedError: entity.NewError("ACCOUNT_NAME_REQUIRED", "account name is required"),
@@ -237,6 +246,7 @@ func TestAccountDataValidate(t *testing.T) {
 			account: func() entity.AccountData {
 				a := valid
 				a.Class = "NOPE"
+
 				return a
 			}(),
 			expectedError: entity.NewError("ACCOUNT_CLASS_INVALID", "account class is invalid"),
@@ -246,6 +256,7 @@ func TestAccountDataValidate(t *testing.T) {
 			account: func() entity.AccountData {
 				a := valid
 				a.AssetCode = ""
+
 				return a
 			}(),
 			expectedError: entity.NewError("ACCOUNT_ASSET_REQUIRED", "asset code is explicit on every postable account"),
@@ -255,6 +266,7 @@ func TestAccountDataValidate(t *testing.T) {
 			account: func() entity.AccountData {
 				a := valid
 				a.Status = "PENDING"
+
 				return a
 			}(),
 			expectedError: entity.NewError("ACCOUNT_STATUS_INVALID", "account status is invalid"),
@@ -264,6 +276,7 @@ func TestAccountDataValidate(t *testing.T) {
 			account: func() entity.AccountData {
 				a := valid
 				a.Version = 0
+
 				return a
 			}(),
 			expectedError: entity.NewError("ACCOUNT_VERSION_INVALID", "version starts at 1"),
@@ -272,6 +285,8 @@ func TestAccountDataValidate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.account.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})

@@ -57,6 +57,7 @@ func TestToTransferDTO(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Equal(t, tc.expectedResult, dto.ToTransferDTO(tc.record, tc.cursor))
 		})
 	}
@@ -68,6 +69,8 @@ func TestToBatchDTO(t *testing.T) {
 	at := time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
 
 	t.Run("batch status maps counts and items", func(t *testing.T) {
+		t.Parallel()
+
 		actual := dto.ToBatchStatusDTO(port.BatchStatusResult{
 			BatchID: "b-1", State: "PARTIAL", Succeeded: 2, Failed: 1,
 			Items: []port.BatchItemStatus{{Index: 1, TransferID: "x-2", Status: "FAILED", ErrorCode: "INSUFFICIENT_FUNDS"}},
@@ -81,6 +84,8 @@ func TestToBatchDTO(t *testing.T) {
 	})
 
 	t.Run("stored batch maps record plus outcomes", func(t *testing.T) {
+		t.Parallel()
+
 		actual := dto.ToBatchDTO(command.BatchRecord{
 			ID: "b-1", TenantID: "t-1", LedgerID: "l-1", State: "COMPLETED", CreatedAt: at,
 		}, []command.BatchItem{
@@ -97,6 +102,8 @@ func TestToReverseTransactionDTO(t *testing.T) {
 	t.Parallel()
 
 	t.Run("reversal maps link and cursor", func(t *testing.T) {
+		t.Parallel()
+
 		actual := dto.ToReverseTransactionDTO(port.PostingResult{
 			PostingID: "p-2", TenantID: "t-1", LedgerID: "l-1", Cursor: "cursor-5",
 		}, "p-1", "duplicate")

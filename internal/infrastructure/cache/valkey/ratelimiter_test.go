@@ -33,6 +33,7 @@ func TestNewRateLimiter(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
+
 				return valkey.LimiterParams{Client: client}
 			}(),
 			expectedResult: true,
@@ -44,18 +45,22 @@ func TestNewRateLimiter(t *testing.T) {
 				Client: nil,
 			},
 			expectedResult: false,
-			expectedError:  errors.New("ratelimit: valkey client is required"),
+			expectedError:  valkey.ErrRatelimitValkeyClientIsRequired,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			limiter, err := valkey.NewRateLimiter(tc.params)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
 				assert.Nil(t, limiter)
+
 				return
 			}
+
 			require.NoError(t, err)
 			require.NotNil(t, limiter)
 			assert.Equal(t, tc.expectedResult, limiter != nil)
@@ -87,8 +92,10 @@ func TestRateLimiterAllowDecisions(t *testing.T) {
 			budget: 10,
 			window: time.Minute,
 			runner: func(t *testing.T) valkey.ScriptRunner {
+				t.Helper()
 				m := mockvalkey.NewMockScriptRunner(t)
 				m.EXPECT().Eval(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]any{int64(1), int64(9), int64(60000)}, nil).Once()
+
 				return m
 			},
 			expectedResult: appport.RateLimitDecision{
@@ -107,8 +114,10 @@ func TestRateLimiterAllowDecisions(t *testing.T) {
 			budget: 10,
 			window: time.Minute,
 			runner: func(t *testing.T) valkey.ScriptRunner {
+				t.Helper()
 				m := mockvalkey.NewMockScriptRunner(t)
 				m.EXPECT().Eval(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]any{int64(0), int64(0), int64(15000)}, nil).Once()
+
 				return m
 			},
 			expectedResult: appport.RateLimitDecision{
@@ -127,12 +136,14 @@ func TestRateLimiterAllowDecisions(t *testing.T) {
 			budget: 10,
 			window: time.Minute,
 			runner: func(t *testing.T) valkey.ScriptRunner {
+				t.Helper()
 				m := mockvalkey.NewMockScriptRunner(t)
-				m.EXPECT().Eval(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil, errors.New("valkey down")).Once()
+				m.EXPECT().Eval(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil, valkey.ErrValkeyDown).Once()
+
 				return m
 			},
 			expectedResult: appport.RateLimitDecision{},
-			expectedError:  errors.New("valkey down"),
+			expectedError:  valkey.ErrValkeyDown,
 			expectAllowed:  0,
 			expectDenied:   0,
 		},
@@ -143,12 +154,14 @@ func TestRateLimiterAllowDecisions(t *testing.T) {
 			budget: 10,
 			window: time.Minute,
 			runner: func(t *testing.T) valkey.ScriptRunner {
+				t.Helper()
 				m := mockvalkey.NewMockScriptRunner(t)
 				m.EXPECT().Eval(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]any{int64(1)}, nil).Once()
+
 				return m
 			},
 			expectedResult: appport.RateLimitDecision{},
-			expectedError:  errors.New("ratelimit: unexpected script result []interface {}"),
+			expectedError:  valkey.ErrRatelimitUnexpectedScriptResultInterface,
 			expectAllowed:  0,
 			expectDenied:   0,
 		},
@@ -156,6 +169,8 @@ func TestRateLimiterAllowDecisions(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			allowed, denied := 0, 0
 			limiter, err := valkey.NewRateLimiter(valkey.LimiterParams{
 				Client:  tc.runner(t),
@@ -169,8 +184,10 @@ func TestRateLimiterAllowDecisions(t *testing.T) {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tc.expectedError.Error())
 				assert.Equal(t, tc.expectedResult, actualResult)
+
 				return
 			}
+
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectAllowed, allowed)
@@ -207,7 +224,7 @@ func TestRateLimiterAllowValidation(t *testing.T) {
 			budget:         5,
 			window:         time.Minute,
 			expectedResult: appport.RateLimitDecision{},
-			expectedError:  errors.New("ratelimit: not initialized"),
+			expectedError:  valkey.ErrRatelimitNotInitialized,
 		},
 		{
 			name:           "uninitialized internal client rejected",
@@ -217,7 +234,7 @@ func TestRateLimiterAllowValidation(t *testing.T) {
 			budget:         5,
 			window:         time.Minute,
 			expectedResult: appport.RateLimitDecision{},
-			expectedError:  errors.New("ratelimit: not initialized"),
+			expectedError:  valkey.ErrRatelimitNotInitialized,
 		},
 		{
 			name:           "empty key rejected",
@@ -227,7 +244,7 @@ func TestRateLimiterAllowValidation(t *testing.T) {
 			budget:         5,
 			window:         time.Minute,
 			expectedResult: appport.RateLimitDecision{},
-			expectedError:  errors.New("ratelimit: key is required"),
+			expectedError:  valkey.ErrRatelimitKeyIsRequired,
 		},
 		{
 			name:           "zero budget rejected",
@@ -237,7 +254,7 @@ func TestRateLimiterAllowValidation(t *testing.T) {
 			budget:         0,
 			window:         time.Minute,
 			expectedResult: appport.RateLimitDecision{},
-			expectedError:  errors.New("ratelimit: budget must be positive"),
+			expectedError:  valkey.ErrRatelimitBudgetMustBePositive,
 		},
 		{
 			name:           "negative budget rejected",
@@ -247,7 +264,7 @@ func TestRateLimiterAllowValidation(t *testing.T) {
 			budget:         -1,
 			window:         time.Minute,
 			expectedResult: appport.RateLimitDecision{},
-			expectedError:  errors.New("ratelimit: budget must be positive"),
+			expectedError:  valkey.ErrRatelimitBudgetMustBePositive,
 		},
 		{
 			name:           "zero window rejected",
@@ -257,7 +274,7 @@ func TestRateLimiterAllowValidation(t *testing.T) {
 			budget:         5,
 			window:         0,
 			expectedResult: appport.RateLimitDecision{},
-			expectedError:  errors.New("ratelimit: window must be positive"),
+			expectedError:  valkey.ErrRatelimitWindowMustBePositive,
 		},
 		{
 			name:           "negative window rejected",
@@ -267,7 +284,7 @@ func TestRateLimiterAllowValidation(t *testing.T) {
 			budget:         5,
 			window:         -time.Minute,
 			expectedResult: appport.RateLimitDecision{},
-			expectedError:  errors.New("ratelimit: window must be positive"),
+			expectedError:  valkey.ErrRatelimitWindowMustBePositive,
 		},
 		{
 			name:    "canceled context aborts",
@@ -275,6 +292,7 @@ func TestRateLimiterAllowValidation(t *testing.T) {
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			}(),
 			key:            "ratelimit:t1:u1",
@@ -287,17 +305,23 @@ func TestRateLimiterAllowValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := tc.limiter.Allow(tc.ctx, tc.key, tc.budget, tc.window)
 			if tc.expectedError != nil {
 				require.Error(t, err)
+
 				if errors.Is(tc.expectedError, context.Canceled) {
 					assert.ErrorIs(t, err, context.Canceled)
 				} else {
 					assert.EqualError(t, err, tc.expectedError.Error())
 				}
+
 				assert.Equal(t, tc.expectedResult, actualResult)
+
 				return
 			}
+
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})

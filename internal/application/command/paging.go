@@ -14,5 +14,6 @@ func validatePageLimit(limit int) error {
 	if limit < MinPageLimit || limit > MaxPageLimit {
 		return entity.NewError("INVALID_PAGE_LIMIT", "page limit must be between 1 and 100")
 	}
+
 	return nil
 }

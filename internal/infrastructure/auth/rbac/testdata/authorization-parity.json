@@ -1,0 +1,89 @@
+{
+  "role": "PRE-UPGRADE BASELINE — decisions recorded under casbin v2.8.0 before the v3.11.0 swap. The live module pin is github.com/casbin/casbin/v3 v3.11.0 (see go.mod); the filename carries no version by convention, but this provenance block must stay: without it the parity guarantee cannot be tied to the captured module.",
+  "module": "github.com/casbin/casbin/v2",
+  "version": "v2.8.0",
+  "go_sum_h1": "nwdR80wHl5k/FtkoGknveITda8AJmnU90wFGTGzgecw=",
+  "live_pin": "github.com/casbin/casbin/v3 v3.11.0",
+  "cases": [
+    {
+      "name": "alice writes acme ledger",
+      "sub": "alice",
+      "dom": "tenant-acme",
+      "obj": "ledger",
+      "act": "write",
+      "allow": true
+    },
+    {
+      "name": "alice reads acme ledger",
+      "sub": "alice",
+      "dom": "tenant-acme",
+      "obj": "ledger",
+      "act": "read",
+      "allow": false
+    },
+    {
+      "name": "bob reads acme ledger",
+      "sub": "bob",
+      "dom": "tenant-acme",
+      "obj": "ledger",
+      "act": "read",
+      "allow": true
+    },
+    {
+      "name": "bob writes acme ledger",
+      "sub": "bob",
+      "dom": "tenant-acme",
+      "obj": "ledger",
+      "act": "write",
+      "allow": false
+    },
+    {
+      "name": "carol writes beta ledger",
+      "sub": "carol",
+      "dom": "tenant-beta",
+      "obj": "ledger",
+      "act": "write",
+      "allow": true
+    },
+    {
+      "name": "carol writes acme ledger",
+      "sub": "carol",
+      "dom": "tenant-acme",
+      "obj": "ledger",
+      "act": "write",
+      "allow": false
+    },
+    {
+      "name": "blocked dave reads acme ledger",
+      "sub": "dave",
+      "dom": "tenant-acme",
+      "obj": "ledger",
+      "act": "read",
+      "allow": false
+    },
+    {
+      "name": "unassigned mallory reads acme ledger",
+      "sub": "mallory",
+      "dom": "tenant-acme",
+      "obj": "ledger",
+      "act": "read",
+      "allow": false
+    },
+    {
+      "name": "alice writes beta ledger",
+      "sub": "alice",
+      "dom": "tenant-beta",
+      "obj": "ledger",
+      "act": "write",
+      "allow": false
+    },
+    {
+      "name": "bob deletes acme ledger",
+      "sub": "bob",
+      "dom": "tenant-acme",
+      "obj": "ledger",
+      "act": "delete",
+      "allow": false
+    }
+  ]
+}

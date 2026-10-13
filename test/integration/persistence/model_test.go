@@ -1,8 +1,6 @@
 package persistence_test
 
 import (
-	"errors"
-	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,7 +8,40 @@ import (
 
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
 	postingtx "github.com/kadekutama/go-template/internal/infrastructure/database/postgres/posting"
+	"github.com/kadekutama/go-template/test/integration/persistence"
 )
+
+// testRNG is a minimal deterministic xorshift64 for model tests. It avoids
+// math/rand (gosec G404) while preserving seed-reproducible sequences.
+type testRNG struct {
+	state int64
+}
+
+func newTestRNG(seed int64) *testRNG {
+	if seed == 0 {
+		seed = 1
+	}
+
+	return &testRNG{state: seed}
+}
+
+func (r *testRNG) Intn(n int) int {
+	if n <= 0 {
+		return 0
+	}
+
+	x := r.state
+	x ^= x << 13
+	x ^= x >> 7
+	x ^= x << 17
+
+	r.state = x
+	if x < 0 {
+		x = -x
+	}
+
+	return int(x % int64(n))
+}
 
 // modelLedger is a DB-free spend model: balances with deterministic ordering.
 // Overdraft disabled: spends exceeding available fail instead of applying.
@@ -41,7 +72,7 @@ func (l *modelLedger) spend(account string, amount int64) error {
 }
 
 // errInsufficient marks a spend blocked by available balance.
-var errInsufficient = errors.New("insufficient available balance")
+var errInsufficient = persistence.ErrInsufficientAvailableBalance
 
 func TestModelBasedNoOverspend(t *testing.T) {
 	t.Parallel()
@@ -66,17 +97,17 @@ func TestModelBasedNoOverspend(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			rng := rand.New(rand.NewSource(tc.seed)) //nolint:gosec // E07-T06: seeded deterministic model requires math/rand.
+			rng := newTestRNG(tc.seed)
 
 			names := make([]string, 0, tc.accounts)
-			for i := 0; i < tc.accounts; i++ {
+			for i := range tc.accounts {
 				names = append(names, string(rune('a'+i)))
 			}
 
 			ledger := newModelLedger(names, tc.funding)
 			violations := 0
 
-			for i := 0; i < tc.sequences; i++ {
+			for range tc.sequences {
 				// Deterministic lock order before every multi-account step.
 				ids := make([]valueobject.AccountID, 0, 2)
 				first := names[rng.Intn(len(names))]

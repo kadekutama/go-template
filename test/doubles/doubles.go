@@ -7,6 +7,7 @@
 package doubles
 
 import (
+	"maps"
 	"sync"
 	"sync/atomic"
 )
@@ -21,6 +22,7 @@ type DedupSet struct {
 // Claim records consumer:eventID and reports whether it was already present.
 func (d *DedupSet) Claim(consumer, eventID string) bool {
 	_, loaded := d.seen.LoadOrStore(consumer+":"+eventID, struct{}{})
+
 	return loaded
 }
 
@@ -42,9 +44,8 @@ type PublishRecord struct {
 // SnapshotPublish captures one publish with deep-copied headers and payload.
 func SnapshotPublish(topic, key string, headers map[string]string, payload []byte) PublishRecord {
 	headersCopy := make(map[string]string, len(headers))
-	for k, v := range headers {
-		headersCopy[k] = v
-	}
+	maps.Copy(headersCopy, headers)
+
 	return PublishRecord{
 		Topic:   topic,
 		Key:     key,
@@ -63,12 +64,14 @@ type MessageLog[T any] struct {
 func (l *MessageLog[T]) Add(msg T) {
 	for {
 		old := l.messages.Load()
+
 		var next []T
 		if old != nil {
 			next = append(append([]T(nil), *old...), msg)
 		} else {
 			next = []T{msg}
 		}
+
 		if l.messages.CompareAndSwap(old, &next) {
 			return
 		}
@@ -81,5 +84,6 @@ func (l *MessageLog[T]) All() []T {
 	if loaded == nil {
 		return nil
 	}
+
 	return append([]T(nil), *loaded...)
 }

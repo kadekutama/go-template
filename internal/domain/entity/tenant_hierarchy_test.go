@@ -57,6 +57,8 @@ func TestTenantLinkValidate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.link.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -184,6 +186,8 @@ func TestValidateHierarchy(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := entity.ValidateHierarchy(tc.links)
 			assert.Equal(t, tc.expectedError, err)
 		})

@@ -44,6 +44,7 @@ func TestMapCarrier(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Equal(t, tc.expectedValue, c.Get(tc.key))
 		})
 	}
@@ -81,6 +82,7 @@ func TestHeaderCarrier(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Equal(t, tc.expectedValue, c.Get(tc.key))
 		})
 	}
@@ -90,6 +92,8 @@ func TestHeaderCarrier(t *testing.T) {
 }
 
 func TestInjectAndExtractHTTP(t *testing.T) {
+	t.Parallel()
+
 	traceID, err := oteltrace.TraceIDFromHex("4bf92f3577b34da6a3ce929d0e0e4736")
 	require.NoError(t, err)
 	spanID, err := oteltrace.SpanIDFromHex("00f067aa0ba902b7")
@@ -106,7 +110,7 @@ func TestInjectAndExtractHTTP(t *testing.T) {
 	header := make(http.Header)
 	InjectHTTP(ctx, header)
 
-	assert.NotEmpty(t, header.Get("traceparent"))
+	assert.NotEmpty(t, header.Get("Traceparent"))
 
 	extractedCtx := ExtractHTTP(context.Background(), header)
 	extractedSC := oteltrace.SpanContextFromContext(extractedCtx)
@@ -118,6 +122,8 @@ func TestInjectAndExtractHTTP(t *testing.T) {
 }
 
 func TestInjectAndExtractMapCarrier(t *testing.T) {
+	t.Parallel()
+
 	traceID, err := oteltrace.TraceIDFromHex("1234567890abcdef1234567890abcdef")
 	require.NoError(t, err)
 	spanID, err := oteltrace.SpanIDFromHex("abcdef1234567890")
@@ -145,6 +151,8 @@ func TestInjectAndExtractMapCarrier(t *testing.T) {
 }
 
 func TestPropagator(t *testing.T) {
+	t.Parallel()
+
 	prop := Propagator()
 	require.NotNil(t, prop)
 	fields := prop.Fields()
@@ -153,6 +161,8 @@ func TestPropagator(t *testing.T) {
 }
 
 func TestNilSafety(t *testing.T) {
+	t.Parallel()
+
 	var nilCtx context.Context
 	// Inject and Extract with nil context / carrier / header must not panic
 	Inject(nilCtx, nil)

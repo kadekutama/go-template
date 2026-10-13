@@ -24,7 +24,9 @@ const (
 	acctAsset  = valueobject.AssetCode("USD")
 )
 
-var acctAt = time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
+func acctAt() time.Time {
+	return time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
+}
 
 type accountTestFixture struct {
 	uow    *mockapplication.MockUnitOfWork
@@ -58,7 +60,7 @@ func newAccountFixture(t *testing.T) *accountTestFixture {
 	tx.EXPECT().Outbox().Return(outbox).Maybe()
 	tx.EXPECT().Cursor().Return("cursor-3").Maybe()
 
-	clock.EXPECT().Now().Return(acctAt).Maybe()
+	clock.EXPECT().Now().Return(acctAt()).Maybe()
 	ids.EXPECT().NewID().Return(string(acctID1)).Maybe()
 
 	idem.EXPECT().Reserve(mock.Anything, mock.Anything).Return(port.ReserveOutcome{}, nil).Maybe()
@@ -154,6 +156,7 @@ func TestAccountOpen(t *testing.T) {
 			req:  openTestAccount(),
 			setup: func(f *accountTestFixture) {
 				f.authz.EXPECT().Authorize(mock.Anything, mock.Anything, "account.open", "ledger/"+string(acctLedger)).Return(nil)
+
 				cachedResult := port.AccountResult{
 					Account: entity.AccountData{ID: acctID1, Status: valueobject.StatusActive, Version: 1},
 					Cursor:  "cursor-3",
@@ -173,6 +176,7 @@ func TestAccountOpen(t *testing.T) {
 			req: func() port.OpenAccountRequest {
 				r := openTestAccount()
 				r.Name = "changed"
+
 				return r
 			}(),
 			setup: func(f *accountTestFixture) {
@@ -188,6 +192,7 @@ func TestAccountOpen(t *testing.T) {
 			req: func() port.OpenAccountRequest {
 				r := openTestAccount()
 				r.Number = ""
+
 				return r
 			}(),
 			setup:          func(_ *accountTestFixture) {},
@@ -207,11 +212,13 @@ func TestAccountOpen(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			f := newAccountFixture(t)
 			tc.setup(f)
 
 			actualResult, err := f.svc.OpenAccount(context.Background(), tc.req)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, tc.expectedStatus, actualResult.Account.Status)
 				assert.Equal(t, int64(1), actualResult.Account.Version)
@@ -338,11 +345,15 @@ func TestAccountLifecycle(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			f := newAccountFixture(t)
 			tc.setup(f)
 
-			var actualResult port.AccountResult
-			var err error
+			var (
+				actualResult port.AccountResult
+				err          error
+			)
+
 			switch tc.action {
 			case "freeze":
 				actualResult, err = f.svc.FreezeAccount(context.Background(), tc.req)
@@ -353,6 +364,7 @@ func TestAccountLifecycle(t *testing.T) {
 			}
 
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, tc.expectedStatus, actualResult.Account.Status)
 			}
@@ -398,8 +410,8 @@ func TestUpdateAccount(t *testing.T) {
 					Purpose:   "ops",
 					Status:    valueobject.StatusActive,
 					Version:   1,
-					CreatedAt: acctAt,
-					UpdatedAt: acctAt,
+					CreatedAt: acctAt(),
+					UpdatedAt: acctAt(),
 				}, nil)
 				f.repo.EXPECT().UpdateMetadata(mock.Anything, mock.MatchedBy(func(data entity.AccountData) bool {
 					return data.Name == "Operating Account Updated" && data.Purpose == "Updated treasury ops"
@@ -418,8 +430,8 @@ func TestUpdateAccount(t *testing.T) {
 					Status:    valueobject.StatusActive,
 					Version:   2,
 					Metadata:  map[string]string{"env": "staging"},
-					CreatedAt: acctAt,
-					UpdatedAt: acctAt,
+					CreatedAt: acctAt(),
+					UpdatedAt: acctAt(),
 				},
 				Cursor: "cursor-3",
 			},
@@ -430,6 +442,7 @@ func TestUpdateAccount(t *testing.T) {
 			req: func() port.UpdateAccountRequest {
 				r := baseReq
 				r.TenantID = ""
+
 				return r
 			}(),
 			setup:          func(_ *accountTestFixture) {},
@@ -441,6 +454,7 @@ func TestUpdateAccount(t *testing.T) {
 			req: func() port.UpdateAccountRequest {
 				r := baseReq
 				r.AccountID = ""
+
 				return r
 			}(),
 			setup:          func(_ *accountTestFixture) {},
@@ -452,6 +466,7 @@ func TestUpdateAccount(t *testing.T) {
 			req: func() port.UpdateAccountRequest {
 				r := baseReq
 				r.Actor = ""
+
 				return r
 			}(),
 			setup:          func(_ *accountTestFixture) {},
@@ -463,6 +478,7 @@ func TestUpdateAccount(t *testing.T) {
 			req: func() port.UpdateAccountRequest {
 				r := baseReq
 				r.ExpectedVersion = 0
+
 				return r
 			}(),
 			setup:          func(_ *accountTestFixture) {},
@@ -474,6 +490,7 @@ func TestUpdateAccount(t *testing.T) {
 			req: func() port.UpdateAccountRequest {
 				r := baseReq
 				r.Name = ""
+
 				return r
 			}(),
 			setup: func(f *accountTestFixture) {
@@ -503,6 +520,7 @@ func TestUpdateAccount(t *testing.T) {
 			req: func() port.UpdateAccountRequest {
 				r := baseReq
 				r.ExpectedVersion = 99
+
 				return r
 			}(),
 			setup: func(f *accountTestFixture) {
@@ -533,11 +551,13 @@ func TestUpdateAccount(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			f := newAccountFixture(t)
 			tc.setup(f)
 
 			result, err := f.svc.UpdateAccount(context.Background(), tc.req)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, tc.expectedResult.Account.Name, result.Account.Name)
 				assert.Equal(t, tc.expectedResult.Account.Purpose, result.Account.Purpose)

@@ -63,7 +63,7 @@ type MockPeriodRepository_Create_Call struct {
 // Create is a helper method to define mock.On call
 //   - ctx context.Context
 //   - period entity.PeriodData
-func (_e *MockPeriodRepository_Expecter) Create(ctx interface{}, period interface{}) *MockPeriodRepository_Create_Call {
+func (_e *MockPeriodRepository_Expecter) Create(ctx any, period any) *MockPeriodRepository_Create_Call {
 	return &MockPeriodRepository_Create_Call{Call: _e.mock.On("Create", ctx, period)}
 }
 
@@ -122,7 +122,7 @@ type MockPeriodRepository_FindByDate_Call struct {
 //   - tenant valueobject.TenantID
 //   - ledger valueobject.LedgerID
 //   - t time.Time
-func (_e *MockPeriodRepository_Expecter) FindByDate(ctx interface{}, tenant interface{}, ledger interface{}, t interface{}) *MockPeriodRepository_FindByDate_Call {
+func (_e *MockPeriodRepository_Expecter) FindByDate(ctx any, tenant any, ledger any, t any) *MockPeriodRepository_FindByDate_Call {
 	return &MockPeriodRepository_FindByDate_Call{Call: _e.mock.On("FindByDate", ctx, tenant, ledger, t)}
 }
 
@@ -180,7 +180,7 @@ type MockPeriodRepository_FindByID_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - id valueobject.PeriodID
-func (_e *MockPeriodRepository_Expecter) FindByID(ctx interface{}, tenant interface{}, id interface{}) *MockPeriodRepository_FindByID_Call {
+func (_e *MockPeriodRepository_Expecter) FindByID(ctx any, tenant any, id any) *MockPeriodRepository_FindByID_Call {
 	return &MockPeriodRepository_FindByID_Call{Call: _e.mock.On("FindByID", ctx, tenant, id)}
 }
 
@@ -238,7 +238,7 @@ type MockPeriodRepository_FindOpen_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - ledger valueobject.LedgerID
-func (_e *MockPeriodRepository_Expecter) FindOpen(ctx interface{}, tenant interface{}, ledger interface{}) *MockPeriodRepository_FindOpen_Call {
+func (_e *MockPeriodRepository_Expecter) FindOpen(ctx any, tenant any, ledger any) *MockPeriodRepository_FindOpen_Call {
 	return &MockPeriodRepository_FindOpen_Call{Call: _e.mock.On("FindOpen", ctx, tenant, ledger)}
 }
 

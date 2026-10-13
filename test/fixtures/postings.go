@@ -37,8 +37,8 @@ func Postings(tenantID string, ledgerID string) []PostingFixture {
 			Operation:   "FUNDING",
 			Description: "initial funding",
 			Lines: []PostingLine{
-				{AccountID: AcctOperatingUSD, Side: SideDebit, AmountMinor: 100000, AssetCode: AssetUSD},
-				{AccountID: AcctSuspenseUSD, Side: SideCredit, AmountMinor: 100000, AssetCode: AssetUSD},
+				{AccountID: AcctOperatingUSD, Side: SideDebit, AmountMinor: amountMinor100000, AssetCode: AssetUSD},
+				{AccountID: AcctSuspenseUSD, Side: SideCredit, AmountMinor: amountMinor100000, AssetCode: AssetUSD},
 			},
 		},
 		{
@@ -48,8 +48,8 @@ func Postings(tenantID string, ledgerID string) []PostingFixture {
 			Operation:   "TRANSFER",
 			Description: "test transfer",
 			Lines: []PostingLine{
-				{AccountID: AcctOperatingUSD, Side: SideCredit, AmountMinor: 25000, AssetCode: AssetUSD},
-				{AccountID: AcctOperatingEUR, Side: SideDebit, AmountMinor: 25000, AssetCode: AssetUSD},
+				{AccountID: AcctOperatingUSD, Side: SideCredit, AmountMinor: amountMinor25000, AssetCode: AssetUSD},
+				{AccountID: AcctOperatingEUR, Side: SideDebit, AmountMinor: amountMinor25000, AssetCode: AssetUSD},
 			},
 		},
 		{
@@ -59,8 +59,8 @@ func Postings(tenantID string, ledgerID string) []PostingFixture {
 			Operation:   "FEE",
 			Description: "test fee",
 			Lines: []PostingLine{
-				{AccountID: AcctOperatingUSD, Side: SideDebit, AmountMinor: 290, AssetCode: AssetUSD},
-				{AccountID: AcctFeeUSD, Side: SideCredit, AmountMinor: 290, AssetCode: AssetUSD},
+				{AccountID: AcctOperatingUSD, Side: SideDebit, AmountMinor: amountMinor290, AssetCode: AssetUSD},
+				{AccountID: AcctFeeUSD, Side: SideCredit, AmountMinor: amountMinor290, AssetCode: AssetUSD},
 			},
 		},
 		{
@@ -70,8 +70,8 @@ func Postings(tenantID string, ledgerID string) []PostingFixture {
 			Operation:   "REFUND",
 			Description: "test refund",
 			Lines: []PostingLine{
-				{AccountID: AcctOperatingUSD, Side: SideDebit, AmountMinor: 5000, AssetCode: AssetUSD},
-				{AccountID: AcctSuspenseUSD, Side: SideCredit, AmountMinor: 5000, AssetCode: AssetUSD},
+				{AccountID: AcctOperatingUSD, Side: SideDebit, AmountMinor: amountMinor5000, AssetCode: AssetUSD},
+				{AccountID: AcctSuspenseUSD, Side: SideCredit, AmountMinor: amountMinor5000, AssetCode: AssetUSD},
 			},
 		},
 	}

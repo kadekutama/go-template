@@ -50,7 +50,7 @@ type MockIdempotencyStore_Complete_Call struct {
 //   - ctx context.Context
 //   - key string
 //   - response []byte
-func (_e *MockIdempotencyStore_Expecter) Complete(ctx interface{}, key interface{}, response interface{}) *MockIdempotencyStore_Complete_Call {
+func (_e *MockIdempotencyStore_Expecter) Complete(ctx any, key any, response any) *MockIdempotencyStore_Complete_Call {
 	return &MockIdempotencyStore_Complete_Call{Call: _e.mock.On("Complete", ctx, key, response)}
 }
 
@@ -107,7 +107,7 @@ type MockIdempotencyStore_Reserve_Call struct {
 // Reserve is a helper method to define mock.On call
 //   - ctx context.Context
 //   - rec port.IdempotencyRecord
-func (_e *MockIdempotencyStore_Expecter) Reserve(ctx interface{}, rec interface{}) *MockIdempotencyStore_Reserve_Call {
+func (_e *MockIdempotencyStore_Expecter) Reserve(ctx any, rec any) *MockIdempotencyStore_Reserve_Call {
 	return &MockIdempotencyStore_Reserve_Call{Call: _e.mock.On("Reserve", ctx, rec)}
 }
 

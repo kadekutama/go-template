@@ -45,6 +45,7 @@ func TestTenantDataValidate(t *testing.T) {
 			tenant: func() entity.TenantData {
 				tenant := baseTenant
 				tenant.Alias = "acme-corp"
+
 				return tenant
 			}(),
 			expectedError: nil,
@@ -54,6 +55,7 @@ func TestTenantDataValidate(t *testing.T) {
 			tenant: func() entity.TenantData {
 				tenant := baseTenant
 				tenant.Alias = "-Bad_Alias!"
+
 				return tenant
 			}(),
 			expectedError: entity.NewError("TENANT_ALIAS_INVALID", "tenant alias must be lowercase alphanumeric with hyphens"),
@@ -63,6 +65,7 @@ func TestTenantDataValidate(t *testing.T) {
 			tenant: func() entity.TenantData {
 				d := baseTenant
 				d.ID = ""
+
 				return d
 			}(),
 			expectedError: nil,
@@ -72,6 +75,7 @@ func TestTenantDataValidate(t *testing.T) {
 			tenant: func() entity.TenantData {
 				d := baseTenant
 				d.ID = "   "
+
 				return d
 			}(),
 			expectedError: entity.NewError("TENANT_ID_INVALID", "tenant id is invalid"),
@@ -81,6 +85,7 @@ func TestTenantDataValidate(t *testing.T) {
 			tenant: func() entity.TenantData {
 				d := baseTenant
 				d.ID = "not-a-uuid"
+
 				return d
 			}(),
 			expectedError: entity.NewError("TENANT_ID_INVALID", "tenant id is invalid"),
@@ -90,6 +95,7 @@ func TestTenantDataValidate(t *testing.T) {
 			tenant: func() entity.TenantData {
 				d := baseTenant
 				d.Name = "   "
+
 				return d
 			}(),
 			expectedError: entity.NewError("TENANT_NAME_REQUIRED", "tenant name is required"),
@@ -99,6 +105,7 @@ func TestTenantDataValidate(t *testing.T) {
 			tenant: func() entity.TenantData {
 				d := baseTenant
 				d.Name = "ab"
+
 				return d
 			}(),
 			expectedError: entity.NewError("TENANT_NAME_INVALID", "tenant name must be at least 3 characters"),
@@ -108,6 +115,7 @@ func TestTenantDataValidate(t *testing.T) {
 			tenant: func() entity.TenantData {
 				d := baseTenant
 				d.Name = strings.Repeat("a", 65)
+
 				return d
 			}(),
 			expectedError: entity.NewError("TENANT_NAME_INVALID", "tenant name must be at most 64 characters"),
@@ -117,6 +125,7 @@ func TestTenantDataValidate(t *testing.T) {
 			tenant: func() entity.TenantData {
 				d := baseTenant
 				d.Name = "Acme\x00Corp"
+
 				return d
 			}(),
 			expectedError: entity.NewError("TENANT_NAME_INVALID", "tenant name must not contain control characters"),
@@ -126,6 +135,7 @@ func TestTenantDataValidate(t *testing.T) {
 			tenant: func() entity.TenantData {
 				d := baseTenant
 				d.Region = "  "
+
 				return d
 			}(),
 			expectedError: entity.NewError("TENANT_REGION_REQUIRED", "tenant region is required"),
@@ -135,6 +145,7 @@ func TestTenantDataValidate(t *testing.T) {
 			tenant: func() entity.TenantData {
 				d := baseTenant
 				d.Region = strings.Repeat("r", 33)
+
 				return d
 			}(),
 			expectedError: entity.NewError("TENANT_REGION_INVALID", "tenant region is too long"),
@@ -144,6 +155,7 @@ func TestTenantDataValidate(t *testing.T) {
 			tenant: func() entity.TenantData {
 				d := baseTenant
 				d.Region = "us east 1"
+
 				return d
 			}(),
 			expectedError: entity.NewError("TENANT_REGION_INVALID", "tenant region must not contain whitespace"),
@@ -153,6 +165,7 @@ func TestTenantDataValidate(t *testing.T) {
 			tenant: func() entity.TenantData {
 				d := baseTenant
 				d.Region = "us-east\x001"
+
 				return d
 			}(),
 			expectedError: entity.NewError("TENANT_REGION_INVALID", "tenant region must not contain control characters"),
@@ -162,6 +175,7 @@ func TestTenantDataValidate(t *testing.T) {
 			tenant: func() entity.TenantData {
 				d := baseTenant
 				d.Status = "WEIRD"
+
 				return d
 			}(),
 			expectedError: entity.NewError("TENANT_STATUS_INVALID", "tenant status is invalid"),
@@ -171,6 +185,7 @@ func TestTenantDataValidate(t *testing.T) {
 			tenant: func() entity.TenantData {
 				d := baseTenant
 				d.Status = ""
+
 				return d
 			}(),
 			expectedError: entity.NewError("TENANT_STATUS_INVALID", "tenant status is invalid"),
@@ -180,6 +195,7 @@ func TestTenantDataValidate(t *testing.T) {
 			tenant: func() entity.TenantData {
 				d := baseTenant
 				d.Settings.DefaultCurrency = ""
+
 				return d
 			}(),
 			expectedError: entity.NewError("TENANT_SETTINGS_INVALID", "default currency is required"),
@@ -189,6 +205,7 @@ func TestTenantDataValidate(t *testing.T) {
 			tenant: func() entity.TenantData {
 				d := baseTenant
 				d.Version = 0
+
 				return d
 			}(),
 			expectedError: entity.NewError("TENANT_VERSION_INVALID", "version starts at 1"),
@@ -198,6 +215,7 @@ func TestTenantDataValidate(t *testing.T) {
 			tenant: func() entity.TenantData {
 				d := baseTenant
 				d.Version = -1
+
 				return d
 			}(),
 			expectedError: entity.NewError("TENANT_VERSION_INVALID", "version starts at 1"),
@@ -207,6 +225,7 @@ func TestTenantDataValidate(t *testing.T) {
 			tenant: func() entity.TenantData {
 				d := baseTenant
 				d.CreatedAt = time.Time{}
+
 				return d
 			}(),
 			expectedError: entity.NewError("TENANT_TIME_REQUIRED", "tenant timestamps are required"),
@@ -216,6 +235,7 @@ func TestTenantDataValidate(t *testing.T) {
 			tenant: func() entity.TenantData {
 				d := baseTenant
 				d.UpdatedAt = time.Time{}
+
 				return d
 			}(),
 			expectedError: entity.NewError("TENANT_TIME_REQUIRED", "tenant timestamps are required"),
@@ -224,6 +244,8 @@ func TestTenantDataValidate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.tenant.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -284,6 +306,8 @@ func TestValidateTenantName(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := entity.ValidateTenantName(tc.tenantName)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -315,6 +339,7 @@ func TestTenantSettingsValidate(t *testing.T) {
 			settings: func() entity.TenantSettings {
 				s := baseSettings
 				s.DefaultCurrency = ""
+
 				return s
 			}(),
 			expectedError: entity.NewError("TENANT_SETTINGS_INVALID", "default currency is required"),
@@ -324,6 +349,7 @@ func TestTenantSettingsValidate(t *testing.T) {
 			settings: func() entity.TenantSettings {
 				s := baseSettings
 				s.Timezone = ""
+
 				return s
 			}(),
 			expectedError: entity.NewError("TENANT_SETTINGS_INVALID", "timezone is required"),
@@ -333,6 +359,7 @@ func TestTenantSettingsValidate(t *testing.T) {
 			settings: func() entity.TenantSettings {
 				s := baseSettings
 				s.Timezone = "   "
+
 				return s
 			}(),
 			expectedError: entity.NewError("TENANT_SETTINGS_INVALID", "timezone is required"),
@@ -342,6 +369,7 @@ func TestTenantSettingsValidate(t *testing.T) {
 			settings: func() entity.TenantSettings {
 				s := baseSettings
 				s.Timezone = " UTC"
+
 				return s
 			}(),
 			expectedError: entity.NewError("TENANT_SETTINGS_INVALID", "timezone must not contain whitespace"),
@@ -351,6 +379,7 @@ func TestTenantSettingsValidate(t *testing.T) {
 			settings: func() entity.TenantSettings {
 				s := baseSettings
 				s.Timezone = "US Eastern"
+
 				return s
 			}(),
 			expectedError: entity.NewError("TENANT_SETTINGS_INVALID", "timezone must not contain whitespace"),
@@ -360,6 +389,7 @@ func TestTenantSettingsValidate(t *testing.T) {
 			settings: func() entity.TenantSettings {
 				s := baseSettings
 				s.Timezone = strings.Repeat("z", 65)
+
 				return s
 			}(),
 			expectedError: entity.NewError("TENANT_SETTINGS_INVALID", "timezone is too long"),
@@ -369,6 +399,7 @@ func TestTenantSettingsValidate(t *testing.T) {
 			settings: func() entity.TenantSettings {
 				s := baseSettings
 				s.Timezone = "UTC\x00"
+
 				return s
 			}(),
 			expectedError: entity.NewError("TENANT_SETTINGS_INVALID", "timezone must not contain control characters"),
@@ -378,6 +409,7 @@ func TestTenantSettingsValidate(t *testing.T) {
 			settings: func() entity.TenantSettings {
 				s := baseSettings
 				s.EnabledFeatures = []string{"transfers", "transfers"}
+
 				return s
 			}(),
 			expectedError: entity.NewError("TENANT_SETTINGS_INVALID", "feature entries must be unique"),
@@ -387,6 +419,7 @@ func TestTenantSettingsValidate(t *testing.T) {
 			settings: func() entity.TenantSettings {
 				s := baseSettings
 				s.EnabledFeatures = []string{"transfers", "TRANSFERS"}
+
 				return s
 			}(),
 			expectedError: entity.NewError("TENANT_SETTINGS_INVALID", "feature entries must be unique"),
@@ -396,6 +429,7 @@ func TestTenantSettingsValidate(t *testing.T) {
 			settings: func() entity.TenantSettings {
 				s := baseSettings
 				s.EnabledFeatures = []string{" transfers "}
+
 				return s
 			}(),
 			expectedError: entity.NewError("TENANT_SETTINGS_INVALID", "feature entry must not contain leading or trailing whitespace"),
@@ -405,6 +439,7 @@ func TestTenantSettingsValidate(t *testing.T) {
 			settings: func() entity.TenantSettings {
 				s := baseSettings
 				s.EnabledFeatures = []string{""}
+
 				return s
 			}(),
 			expectedError: entity.NewError("TENANT_SETTINGS_INVALID", "feature entries must be non-empty"),
@@ -414,6 +449,7 @@ func TestTenantSettingsValidate(t *testing.T) {
 			settings: func() entity.TenantSettings {
 				s := baseSettings
 				s.EnabledFeatures = []string{strings.Repeat("f", 65)}
+
 				return s
 			}(),
 			expectedError: entity.NewError("TENANT_SETTINGS_INVALID", "feature entry is too long"),
@@ -423,6 +459,7 @@ func TestTenantSettingsValidate(t *testing.T) {
 			settings: func() entity.TenantSettings {
 				s := baseSettings
 				s.EnabledFeatures = []string{"feature\x00x"}
+
 				return s
 			}(),
 			expectedError: entity.NewError("TENANT_SETTINGS_INVALID", "feature entry must not contain control characters"),
@@ -432,6 +469,7 @@ func TestTenantSettingsValidate(t *testing.T) {
 			settings: func() entity.TenantSettings {
 				s := baseSettings
 				s.EnabledPaymentMethods = []string{"ach", "ach"}
+
 				return s
 			}(),
 			expectedError: entity.NewError("TENANT_SETTINGS_INVALID", "feature entries must be unique"),
@@ -441,6 +479,7 @@ func TestTenantSettingsValidate(t *testing.T) {
 			settings: func() entity.TenantSettings {
 				s := baseSettings
 				s.EnabledPaymentMethods = []string{""}
+
 				return s
 			}(),
 			expectedError: entity.NewError("TENANT_SETTINGS_INVALID", "feature entries must be non-empty"),
@@ -449,6 +488,8 @@ func TestTenantSettingsValidate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.settings.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -506,6 +547,8 @@ func TestParseTenantStatus(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := entity.ParseTenantStatus(tc.status)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)

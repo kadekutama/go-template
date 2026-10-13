@@ -59,7 +59,7 @@ type MockAccountQueryUseCases_GetAccount_Call struct {
 // GetAccount is a helper method to define mock.On call
 //   - ctx context.Context
 //   - query port.AccountQuery
-func (_e *MockAccountQueryUseCases_Expecter) GetAccount(ctx interface{}, query interface{}) *MockAccountQueryUseCases_GetAccount_Call {
+func (_e *MockAccountQueryUseCases_Expecter) GetAccount(ctx any, query any) *MockAccountQueryUseCases_GetAccount_Call {
 	return &MockAccountQueryUseCases_GetAccount_Call{Call: _e.mock.On("GetAccount", ctx, query)}
 }
 
@@ -116,7 +116,7 @@ type MockAccountQueryUseCases_ListAccounts_Call struct {
 // ListAccounts is a helper method to define mock.On call
 //   - ctx context.Context
 //   - query port.AccountListQuery
-func (_e *MockAccountQueryUseCases_Expecter) ListAccounts(ctx interface{}, query interface{}) *MockAccountQueryUseCases_ListAccounts_Call {
+func (_e *MockAccountQueryUseCases_Expecter) ListAccounts(ctx any, query any) *MockAccountQueryUseCases_ListAccounts_Call {
 	return &MockAccountQueryUseCases_ListAccounts_Call{Call: _e.mock.On("ListAccounts", ctx, query)}
 }
 

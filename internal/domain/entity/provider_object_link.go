@@ -15,9 +15,11 @@ func (l ProviderObjectLink) Validate() error {
 	if l.ProviderObjectID == "" {
 		return NewError("PROVIDER_OBJECT_REQUIRED", "provider object id is required")
 	}
+
 	if l.PaymentID == "" {
 		return NewError("PAYMENT_ID_REQUIRED", "provider mapping requires a payment id")
 	}
+
 	return nil
 }
 

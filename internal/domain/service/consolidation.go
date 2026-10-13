@@ -31,24 +31,31 @@ func ConsolidateBalances(req ConsolidationRequest) (int64, error) {
 	if strings.TrimSpace(string(req.BaseAsset)) == "" {
 		return 0, entity.NewError("CONSOLIDATION_ASSET_REQUIRED", "consolidation requires a base asset")
 	}
+
 	if len(req.Children) == 0 {
 		return 0, entity.NewError("CONSOLIDATION_EMPTY", "consolidation requires at least one child balance")
 	}
+
 	if req.At.IsZero() {
 		return 0, entity.NewError("CONSOLIDATION_TIME_REQUIRED", "consolidation time is required")
 	}
+
 	var total int64
+
 	for _, child := range req.Children {
 		converted, err := convertChildBalance(child, req.BaseAsset, req.Rates, req.At)
 		if err != nil {
 			return 0, err
 		}
+
 		next, ok := checkedAdd(total, converted)
 		if !ok {
 			return 0, entity.NewError("CONSOLIDATION_OVERFLOW", "consolidation total overflowed")
 		}
+
 		total = next
 	}
+
 	return total, nil
 }
 
@@ -59,22 +66,28 @@ func convertChildBalance(child ChildBalance, base valueobject.AssetCode, rates m
 	if strings.TrimSpace(child.TenantID) == "" {
 		return 0, entity.NewError("CONSOLIDATION_TENANT_REQUIRED", "consolidation child requires a tenant id")
 	}
+
 	if strings.TrimSpace(string(child.AssetCode)) == "" {
 		return 0, entity.NewError("CONSOLIDATION_ASSET_REQUIRED", "consolidation child requires an asset code")
 	}
+
 	if child.AmountMinor < 0 {
 		return 0, entity.NewError("CONSOLIDATION_AMOUNT_INVALID", "consolidation amount must be non-negative")
 	}
+
 	if child.AssetCode == base {
 		return child.AmountMinor, nil
 	}
+
 	rate, ok := rates[child.AssetCode]
 	if !ok {
 		return 0, entity.NewError("FX_RATE_MISSING", "consolidation requires an FX rate for child asset")
 	}
+
 	if rate.Pair.Base != child.AssetCode || rate.Pair.Quote != base {
 		return 0, entity.NewError("FX_RATE_MISMATCH", "fx rate pair must convert child asset to base asset")
 	}
+
 	return Convert(child.AmountMinor, rate, at)
 }
 
@@ -84,6 +97,7 @@ func HasTransferGrant(grants map[string]bool, childTenantID string) bool {
 	if strings.TrimSpace(childTenantID) == "" {
 		return false
 	}
+
 	return grants[strings.TrimSpace(childTenantID)]
 }
 
@@ -93,9 +107,11 @@ func ValidateTransferGrant(grants map[string]bool, childTenantID string) error {
 	if strings.TrimSpace(childTenantID) == "" {
 		return entity.NewError("HIERARCHY_ID_REQUIRED", "hierarchy grant requires a child tenant id")
 	}
+
 	if !HasTransferGrant(grants, childTenantID) {
 		return entity.NewError("HIERARCHY_GRANT_REQUIRED", "cross-child transfer requires an explicit hierarchy grant")
 	}
+
 	return nil
 }
 
@@ -110,8 +126,10 @@ func ValidateReadGrant(grants map[string]bool, childTenantID string) error {
 	if strings.TrimSpace(childTenantID) == "" {
 		return entity.NewError("HIERARCHY_ID_REQUIRED", "hierarchy grant requires a child tenant id")
 	}
+
 	if !HasReadGrant(grants, childTenantID) {
 		return entity.NewError("HIERARCHY_GRANT_REQUIRED", "parent read access requires an explicit hierarchy grant")
 	}
+
 	return nil
 }

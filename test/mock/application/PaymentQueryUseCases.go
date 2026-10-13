@@ -61,7 +61,7 @@ type MockPaymentQueryUseCases_GetIntent_Call struct {
 // GetIntent is a helper method to define mock.On call
 //   - ctx context.Context
 //   - query port.PaymentQuery
-func (_e *MockPaymentQueryUseCases_Expecter) GetIntent(ctx interface{}, query interface{}) *MockPaymentQueryUseCases_GetIntent_Call {
+func (_e *MockPaymentQueryUseCases_Expecter) GetIntent(ctx any, query any) *MockPaymentQueryUseCases_GetIntent_Call {
 	return &MockPaymentQueryUseCases_GetIntent_Call{Call: _e.mock.On("GetIntent", ctx, query)}
 }
 
@@ -118,7 +118,7 @@ type MockPaymentQueryUseCases_GetPayout_Call struct {
 // GetPayout is a helper method to define mock.On call
 //   - ctx context.Context
 //   - query port.PaymentQuery
-func (_e *MockPaymentQueryUseCases_Expecter) GetPayout(ctx interface{}, query interface{}) *MockPaymentQueryUseCases_GetPayout_Call {
+func (_e *MockPaymentQueryUseCases_Expecter) GetPayout(ctx any, query any) *MockPaymentQueryUseCases_GetPayout_Call {
 	return &MockPaymentQueryUseCases_GetPayout_Call{Call: _e.mock.On("GetPayout", ctx, query)}
 }
 
@@ -175,7 +175,7 @@ type MockPaymentQueryUseCases_GetRefund_Call struct {
 // GetRefund is a helper method to define mock.On call
 //   - ctx context.Context
 //   - query port.PaymentQuery
-func (_e *MockPaymentQueryUseCases_Expecter) GetRefund(ctx interface{}, query interface{}) *MockPaymentQueryUseCases_GetRefund_Call {
+func (_e *MockPaymentQueryUseCases_Expecter) GetRefund(ctx any, query any) *MockPaymentQueryUseCases_GetRefund_Call {
 	return &MockPaymentQueryUseCases_GetRefund_Call{Call: _e.mock.On("GetRefund", ctx, query)}
 }
 
@@ -233,7 +233,7 @@ type MockPaymentQueryUseCases_GetTopup_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - topupID string
-func (_e *MockPaymentQueryUseCases_Expecter) GetTopup(ctx interface{}, tenant interface{}, topupID interface{}) *MockPaymentQueryUseCases_GetTopup_Call {
+func (_e *MockPaymentQueryUseCases_Expecter) GetTopup(ctx any, tenant any, topupID any) *MockPaymentQueryUseCases_GetTopup_Call {
 	return &MockPaymentQueryUseCases_GetTopup_Call{Call: _e.mock.On("GetTopup", ctx, tenant, topupID)}
 }
 
@@ -293,7 +293,7 @@ type MockPaymentQueryUseCases_ListIntents_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - limit int
-func (_e *MockPaymentQueryUseCases_Expecter) ListIntents(ctx interface{}, tenant interface{}, limit interface{}) *MockPaymentQueryUseCases_ListIntents_Call {
+func (_e *MockPaymentQueryUseCases_Expecter) ListIntents(ctx any, tenant any, limit any) *MockPaymentQueryUseCases_ListIntents_Call {
 	return &MockPaymentQueryUseCases_ListIntents_Call{Call: _e.mock.On("ListIntents", ctx, tenant, limit)}
 }
 
@@ -353,7 +353,7 @@ type MockPaymentQueryUseCases_ListPayouts_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - limit int
-func (_e *MockPaymentQueryUseCases_Expecter) ListPayouts(ctx interface{}, tenant interface{}, limit interface{}) *MockPaymentQueryUseCases_ListPayouts_Call {
+func (_e *MockPaymentQueryUseCases_Expecter) ListPayouts(ctx any, tenant any, limit any) *MockPaymentQueryUseCases_ListPayouts_Call {
 	return &MockPaymentQueryUseCases_ListPayouts_Call{Call: _e.mock.On("ListPayouts", ctx, tenant, limit)}
 }
 
@@ -413,7 +413,7 @@ type MockPaymentQueryUseCases_ListRefunds_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - limit int
-func (_e *MockPaymentQueryUseCases_Expecter) ListRefunds(ctx interface{}, tenant interface{}, limit interface{}) *MockPaymentQueryUseCases_ListRefunds_Call {
+func (_e *MockPaymentQueryUseCases_Expecter) ListRefunds(ctx any, tenant any, limit any) *MockPaymentQueryUseCases_ListRefunds_Call {
 	return &MockPaymentQueryUseCases_ListRefunds_Call{Call: _e.mock.On("ListRefunds", ctx, tenant, limit)}
 }
 
@@ -473,7 +473,7 @@ type MockPaymentQueryUseCases_ListTopups_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - limit int
-func (_e *MockPaymentQueryUseCases_Expecter) ListTopups(ctx interface{}, tenant interface{}, limit interface{}) *MockPaymentQueryUseCases_ListTopups_Call {
+func (_e *MockPaymentQueryUseCases_Expecter) ListTopups(ctx any, tenant any, limit any) *MockPaymentQueryUseCases_ListTopups_Call {
 	return &MockPaymentQueryUseCases_ListTopups_Call{Call: _e.mock.On("ListTopups", ctx, tenant, limit)}
 }
 

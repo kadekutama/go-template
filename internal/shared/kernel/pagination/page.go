@@ -5,7 +5,6 @@
 package pagination
 
 import (
-	"errors"
 	"strconv"
 )
 
@@ -23,11 +22,13 @@ type PageRequest struct {
 // Validate ensures Limit and Offset are within valid bounds.
 func (r PageRequest) Validate() error {
 	if r.Limit <= 0 || r.Limit > MaxLimit {
-		return errors.New("pagination: limit must be between 1 and 200")
+		return ErrPaginationLimitMustBeBetween1And200
 	}
+
 	if r.Offset < 0 {
-		return errors.New("pagination: offset must be non-negative")
+		return ErrPaginationOffsetMustBeNonNegative
 	}
+
 	return nil
 }
 
@@ -43,24 +44,27 @@ type PageResult[T any] struct {
 // It returns an error if limit or offset are missing, non-numeric, or out of bounds.
 func ParseLimitOffset(limitRaw, offsetRaw string) (PageRequest, error) {
 	if limitRaw == "" {
-		return PageRequest{}, errors.New("pagination: limit is required")
+		return PageRequest{}, ErrPaginationLimitIsRequired
 	}
+
 	limit, err := strconv.Atoi(limitRaw)
 	if err != nil {
-		return PageRequest{}, errors.New("pagination: invalid limit integer")
+		return PageRequest{}, ErrPaginationInvalidLimitInteger
 	}
 
 	if offsetRaw == "" {
-		return PageRequest{}, errors.New("pagination: offset is required")
+		return PageRequest{}, ErrPaginationOffsetIsRequired
 	}
+
 	offset, err := strconv.Atoi(offsetRaw)
 	if err != nil {
-		return PageRequest{}, errors.New("pagination: invalid offset integer")
+		return PageRequest{}, ErrPaginationInvalidOffsetInteger
 	}
 
 	req := PageRequest{Limit: limit, Offset: offset}
 	if err := req.Validate(); err != nil {
 		return PageRequest{}, err
 	}
+
 	return req, nil
 }

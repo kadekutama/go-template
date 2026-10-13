@@ -1,7 +1,7 @@
 package valueobject_test
 
 import (
-	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -72,18 +72,20 @@ func TestParsePaymentStatus(t *testing.T) {
 			name:           "invalid status",
 			s:              "UNKNOWN",
 			expectedResult: valueobject.PaymentStatus(""),
-			expectedError:  errors.New(`payment: invalid status "UNKNOWN"`),
+			expectedError:  fmt.Errorf("payment: invalid status %q: %w", "UNKNOWN", valueobject.ErrPaymentInvalidStatus),
 		},
 		{
 			name:           "empty status",
 			s:              "",
 			expectedResult: valueobject.PaymentStatus(""),
-			expectedError:  errors.New(`payment: invalid status ""`),
+			expectedError:  fmt.Errorf("payment: invalid status %q: %w", "", valueobject.ErrPaymentInvalidStatus),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := valueobject.ParsePaymentStatus(tc.s)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -202,6 +204,8 @@ func TestCanTransitionPayment(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := valueobject.CanTransitionPayment(tc.from, tc.to)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})

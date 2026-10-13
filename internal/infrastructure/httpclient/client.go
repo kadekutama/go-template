@@ -51,8 +51,8 @@ func NewShared(params Params) (*http.Client, error) {
 	}
 
 	dialer := &net.Dialer{
-		Timeout:   30 * time.Second,
-		KeepAlive: 30 * time.Second,
+		Timeout:   timeout30 * time.Second,
+		KeepAlive: keepAlive30 * time.Second,
 	}
 
 	transport := &http.Transport{
@@ -62,7 +62,7 @@ func NewShared(params Params) (*http.Client, error) {
 		MaxIdleConns:          params.MaxIdleConns,
 		MaxIdleConnsPerHost:   params.MaxIdleConnsPerHost,
 		IdleConnTimeout:       params.IdleConnTimeout,
-		TLSHandshakeTimeout:   10 * time.Second,
+		TLSHandshakeTimeout:   tlsHandshakeTimeout10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 		ResponseHeaderTimeout: params.Timeout,
 	}
@@ -76,6 +76,7 @@ func NewShared(params Params) (*http.Client, error) {
 // ClientIn supplies parameters via fx.
 type ClientIn struct {
 	fx.In
+
 	Params Params
 }
 

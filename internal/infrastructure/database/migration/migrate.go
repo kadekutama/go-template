@@ -54,11 +54,11 @@ type Runner struct {
 // idempotently, so existing databases never replay migrations 1..4 on upgrade.
 func NewRunner(params RunnerParams) (*Runner, error) {
 	if params.DB == nil {
-		return nil, fmt.Errorf("migration: DB is required")
+		return nil, ErrMigrationDBIsRequired
 	}
 
 	if params.Timeout <= 0 {
-		return nil, fmt.Errorf("migration: timeout must be positive")
+		return nil, ErrMigrationTimeoutMustBePositive
 	}
 
 	fsys := params.FS
@@ -209,7 +209,7 @@ func ListPairs(fsys fs.FS, dir string) ([]Migration, error) {
 func parseGooseFile(fsys fs.FS, dir, filename string) (Migration, error) {
 	match := gooseFile.FindStringSubmatch(filename)
 	if match == nil {
-		return Migration{}, fmt.Errorf("migration: bad file name %s", filename)
+		return Migration{}, fmt.Errorf("migration: bad file name %s: %w", filename, ErrMigrationBadFileName)
 	}
 
 	version, err := strconv.ParseInt(match[1], 10, 64)
@@ -224,7 +224,7 @@ func parseGooseFile(fsys fs.FS, dir, filename string) (Migration, error) {
 
 	up, down := splitGooseBlocks(string(raw))
 	if strings.TrimSpace(up) == "" || strings.TrimSpace(down) == "" {
-		return Migration{}, fmt.Errorf("migration: %s needs non-empty Up and Down blocks", filename)
+		return Migration{}, fmt.Errorf("migration: %s needs non-empty Up and Down blocks: %w", filename, ErrMigrationNeedsNonEmptyUpAndDownBlocks)
 	}
 
 	name := strings.TrimSuffix(filename, ".sql")
@@ -249,15 +249,15 @@ func splitGooseBlocks(raw string) (string, string) {
 // files use 14-digit UTC timestamps in ascending order).
 func orderGoose(migrations []Migration) ([]Migration, error) {
 	if len(migrations) == 0 {
-		return nil, fmt.Errorf("migration: no .sql migration files found")
+		return nil, ErrMigrationNoSQLMigrationFilesFound
 	}
 
 	sort.Slice(migrations, func(i, j int) bool { return migrations[i].Version < migrations[j].Version })
 
 	for index := 1; index < len(migrations); index++ {
 		if migrations[index].Version == migrations[index-1].Version {
-			return nil, fmt.Errorf("migration: duplicate version %d (%s and %s)",
-				migrations[index].Version, migrations[index-1].Source, migrations[index].Source)
+			return nil, fmt.Errorf("migration: duplicate version %d (%s and %s): %w",
+				migrations[index].Version, migrations[index-1].Source, migrations[index].Source, ErrMigrationDuplicateVersion)
 		}
 	}
 
@@ -271,7 +271,7 @@ func orderGoose(migrations []Migration) ([]Migration, error) {
 
 	for index, version := range legacy {
 		if version != int64(index+1) {
-			return nil, fmt.Errorf("migration: legacy numbering gaps: %v", legacy)
+			return nil, fmt.Errorf("migration: legacy numbering gaps: %v: %w", legacy, ErrMigrationLegacyNumberingGaps)
 		}
 	}
 

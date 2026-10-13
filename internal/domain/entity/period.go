@@ -30,29 +30,37 @@ func (p PeriodData) Validate() error {
 	if p.ID.String() == "" {
 		return NewError("PERIOD_ID_REQUIRED", "period id is required")
 	}
+
 	if p.TenantID.String() == "" {
 		return NewError("TENANT_REQUIRED", "tenant id is required")
 	}
+
 	if p.LedgerID.String() == "" {
 		return NewError("LEDGER_REQUIRED", "ledger id is required")
 	}
+
 	if p.Start.IsZero() || p.End.IsZero() {
 		return NewError("PERIOD_BOUNDS_REQUIRED", "period start and end are required")
 	}
+
 	if !p.Start.Before(p.End) {
 		return NewError("PERIOD_BOUNDS_INVALID", "period start must precede end")
 	}
+
 	if p.Timezone == "" {
 		return NewError("PERIOD_TIMEZONE_REQUIRED", "accounting timezone is required")
 	}
+
 	switch p.Status {
 	case PeriodOpen, PeriodClosed:
 	default:
 		return NewError("PERIOD_STATUS_INVALID", "period status must be OPEN or CLOSED")
 	}
+
 	if p.Version < 1 {
 		return NewError("PERIOD_VERSION_INVALID", "version starts at 1")
 	}
+
 	return nil
 }
 

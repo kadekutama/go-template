@@ -2,7 +2,6 @@ package consumer_test
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -31,7 +30,7 @@ func TestValkeyReceiptStoreValidation(t *testing.T) {
 				Client: nil,
 				TTL:    time.Hour,
 			},
-			expectedError: errors.New("consumer: invalid receipt params (1 violation(s)): Client: rule \"required\" on value <nil>"),
+			expectedError: consumer.ErrConsumerInvalidReceiptParams1ViolationSClientRuleRequired,
 		},
 		{
 			name: "non-positive ttl rejected",
@@ -39,7 +38,7 @@ func TestValkeyReceiptStoreValidation(t *testing.T) {
 				Client: mockconsumer.NewMockReceiptKV(t),
 				TTL:    0,
 			},
-			expectedError: errors.New("consumer: invalid receipt params (1 violation(s)): TTL: rule \"required\" on value 0s"),
+			expectedError: consumer.ErrConsumerInvalidReceiptParams1ViolationSTTLRuleRequiredOnV,
 		},
 		{
 			name: "valid client accepted",
@@ -53,12 +52,16 @@ func TestValkeyReceiptStoreValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			store, err := consumer.NewValkeyReceiptStore(tc.params)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
 				assert.Nil(t, store)
+
 				return
 			}
+
 			require.NoError(t, err)
 			require.NotNil(t, store)
 		})
@@ -68,13 +71,17 @@ func TestValkeyReceiptStoreValidation(t *testing.T) {
 func newMockReceiptKV(t *testing.T, fail error) *mockconsumer.MockReceiptKV {
 	t.Helper()
 	m := mockconsumer.NewMockReceiptKV(t)
+
 	var data sync.Map
+
 	m.EXPECT().SetNX(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		RunAndReturn(func(_ context.Context, key string, _ []byte, _ time.Duration) (bool, error) {
 			if fail != nil {
 				return false, fail
 			}
+
 			_, loaded := data.LoadOrStore(key, struct{}{})
+
 			return !loaded, nil
 		}).Maybe()
 	m.EXPECT().Delete(mock.Anything, mock.Anything).
@@ -82,9 +89,12 @@ func newMockReceiptKV(t *testing.T, fail error) *mockconsumer.MockReceiptKV {
 			if fail != nil {
 				return fail
 			}
+
 			data.Delete(key)
+
 			return nil
 		}).Maybe()
+
 	return m
 }
 
@@ -122,12 +132,12 @@ func TestValkeyReceiptStoreClaim(t *testing.T) {
 		},
 		{
 			name:              "store error surfaces",
-			kvFail:            errors.New("down"),
+			kvFail:            consumer.ErrDown,
 			consumer:          "g",
 			eventID:           "e-1",
 			preClaim:          false,
 			expectedDuplicate: false,
-			expectedError:     errors.New("down"),
+			expectedError:     consumer.ErrDown,
 		},
 		{
 			name:              "blank consumer rejected",
@@ -136,12 +146,13 @@ func TestValkeyReceiptStoreClaim(t *testing.T) {
 			eventID:           "e-1",
 			preClaim:          false,
 			expectedDuplicate: false,
-			expectedError:     errors.New("receipt: consumer is required"),
+			expectedError:     consumer.ErrReceiptConsumerIsRequired,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			kv := newMockReceiptKV(t, tc.kvFail)
 			store, err := consumer.NewValkeyReceiptStore(consumer.ValkeyReceiptParams{Client: kv, TTL: time.Hour})
 			require.NoError(t, err)
@@ -154,8 +165,10 @@ func TestValkeyReceiptStoreClaim(t *testing.T) {
 			duplicate, err := store.Claim(context.Background(), tc.consumer, tc.eventID)
 			if tc.expectedError != nil {
 				assert.Error(t, err)
+
 				return
 			}
+
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedDuplicate, duplicate)
 		})
@@ -185,11 +198,11 @@ func TestValkeyReceiptStoreRelease(t *testing.T) {
 		},
 		{
 			name:          "release store error surfaces",
-			kvFail:        errors.New("down"),
+			kvFail:        consumer.ErrDown,
 			consumer:      "g",
 			eventID:       "e-1",
 			preClaim:      false,
-			expectedError: errors.New("down"),
+			expectedError: consumer.ErrDown,
 		},
 		{
 			name:          "blank consumer rejected",
@@ -197,12 +210,13 @@ func TestValkeyReceiptStoreRelease(t *testing.T) {
 			consumer:      "",
 			eventID:       "e-1",
 			preClaim:      false,
-			expectedError: errors.New("receipt: consumer is required"),
+			expectedError: consumer.ErrReceiptConsumerIsRequired,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			kv := newMockReceiptKV(t, tc.kvFail)
 			store, err := consumer.NewValkeyReceiptStore(consumer.ValkeyReceiptParams{Client: kv, TTL: time.Hour})
 			require.NoError(t, err)
@@ -215,8 +229,10 @@ func TestValkeyReceiptStoreRelease(t *testing.T) {
 			err = store.Release(context.Background(), tc.consumer, tc.eventID)
 			if tc.expectedError != nil {
 				assert.Error(t, err)
+
 				return
 			}
+
 			require.NoError(t, err)
 		})
 	}

@@ -21,7 +21,7 @@ func ParseTopupStatus(s string) (TopupStatus, error) {
 	case TopupPending, TopupSucceeded, TopupFailed, TopupCanceled:
 		return TopupStatus(s), nil
 	default:
-		return "", fmt.Errorf("topup: invalid status %q", s)
+		return "", fmt.Errorf("topup: invalid status %q: %w", s, ErrTopupInvalidStatus)
 	}
 }
 

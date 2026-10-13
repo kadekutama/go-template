@@ -28,7 +28,7 @@ type PostingSearch struct {
 // NewPostingSearch builds the adapter; DB must be non-nil.
 func NewPostingSearch(params PostingSearchParams) (*PostingSearch, error) {
 	if params.DB == nil {
-		return nil, fmt.Errorf("postgres: posting search needs DB")
+		return nil, ErrPostgresPostingSearchNeedsDB
 	}
 
 	return &PostingSearch{db: params.DB}, nil
@@ -99,15 +99,15 @@ func (s *PostingSearch) Search(ctx context.Context, filter appport.PostingFilter
 // validateSearch rejects unsupported filters and normalizes paging.
 func validateSearch(filter appport.PostingFilter) (int, int64, error) {
 	if filter.TenantID.String() == "" {
-		return 0, 0, fmt.Errorf("postgres: tenant is required")
+		return 0, 0, ErrPostgresTenantIsRequired
 	}
 
 	if filter.MinAmount != 0 || filter.MaxAmount != 0 {
-		return 0, 0, fmt.Errorf("postgres: amount bounds need the reporting read model (E06-T09)")
+		return 0, 0, ErrPostgresAmountBoundsNeedTheReportingReadModelE06T09
 	}
 
 	if filter.Status != "" {
-		return 0, 0, fmt.Errorf("postgres: postings carry no status; corrections are new linked postings")
+		return 0, 0, ErrPostgresPostingsCarryNoStatusCorrectionsAreNewLinkedPosti
 	}
 
 	limit := filter.Limit

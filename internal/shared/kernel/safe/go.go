@@ -16,13 +16,13 @@ import (
 	"github.com/kadekutama/go-template/internal/shared/kernel/log"
 )
 
-// Panic carries a recovered goroutine failure to its owner.
-type Panic struct {
+// PanicError carries a recovered goroutine failure to its owner.
+type PanicError struct {
 	Value any
 	Stack []byte
 }
 
-func (p Panic) Error() string {
+func (p PanicError) Error() string {
 	return fmt.Sprintf("safe: recovered panic: %v", p.Value)
 }
 
@@ -30,14 +30,15 @@ func (p Panic) Error() string {
 // with stack trace via logger (if non-nil) using standardized error and metadata
 // keys, and delivered to onPanic (if non-nil). Normal return delivers nothing.
 // Callers MUST NOT treat onPanic delivery or recovery as completion.
-func Go(ctx context.Context, logger log.Logger, onPanic func(Panic), fn func(ctx context.Context)) {
+func Go(ctx context.Context, logger log.Logger, onPanic func(PanicError), fn func(ctx context.Context)) {
 	if fn == nil {
 		return
 	}
+
 	go func() {
 		defer func() {
 			if recovered := recover(); recovered != nil {
-				p := Panic{Value: recovered, Stack: debug.Stack()}
+				p := PanicError{Value: recovered, Stack: debug.Stack()}
 				if logger != nil {
 					logger.Error(ctx, "recovered panic in goroutine",
 						log.Err(p),
@@ -46,11 +47,13 @@ func Go(ctx context.Context, logger log.Logger, onPanic func(Panic), fn func(ctx
 						}),
 					)
 				}
+
 				if onPanic != nil {
 					onPanic(p)
 				}
 			}
 		}()
+
 		fn(ctx)
 	}()
 }
@@ -63,17 +66,17 @@ func Go(ctx context.Context, logger log.Logger, onPanic func(Panic), fn func(ctx
 type Group struct {
 	wg      sync.WaitGroup
 	logger  log.Logger
-	onPanic func(Panic)
+	onPanic func(PanicError)
 }
 
 // NewGroup builds a Group that reports contained panics through the given
 // logger and onPanic sink (either may be nil).
-func NewGroup(logger log.Logger, onPanic func(Panic)) *Group {
+func NewGroup(logger log.Logger, onPanic func(PanicError)) *Group {
 	return &Group{logger: logger, onPanic: onPanic}
 }
 
 // Go runs fn in a new goroutine tracked by the group, bound to ctx. Panics
-// are contained; delivery of a Panic does NOT count as completion.
+// are contained; delivery of a PanicError does NOT count as completion.
 func (g *Group) Go(ctx context.Context, fn func(ctx context.Context)) {
 	if g == nil || fn == nil {
 		return
@@ -82,7 +85,7 @@ func (g *Group) Go(ctx context.Context, fn func(ctx context.Context)) {
 	g.wg.Go(func() {
 		defer func() {
 			if recovered := recover(); recovered != nil {
-				p := Panic{Value: recovered, Stack: debug.Stack()}
+				p := PanicError{Value: recovered, Stack: debug.Stack()}
 				if g.logger != nil {
 					g.logger.Error(ctx, "recovered panic in goroutine",
 						log.Err(p),
@@ -91,11 +94,13 @@ func (g *Group) Go(ctx context.Context, fn func(ctx context.Context)) {
 						}),
 					)
 				}
+
 				if g.onPanic != nil {
 					g.onPanic(p)
 				}
 			}
 		}()
+
 		fn(ctx)
 	})
 }

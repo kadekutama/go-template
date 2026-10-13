@@ -11,16 +11,20 @@ func AmountWithinTolerance(ledgerSum, externalSum, toleranceMinor int64) bool {
 	if toleranceMinor < 0 {
 		return false
 	}
+
 	diff := ledgerSum - externalSum
 	if (ledgerSum > 0 && externalSum < 0 && diff < 0) || (ledgerSum < 0 && externalSum > 0 && diff > 0) {
 		return false
 	}
+
 	if diff < 0 {
 		if diff == math.MinInt64 {
 			return false
 		}
+
 		diff = -diff
 	}
+
 	return diff <= toleranceMinor
 }
 
@@ -29,12 +33,15 @@ func TimingWithinWindow(skew, window time.Duration) bool {
 	if window < 0 {
 		return false
 	}
+
 	if skew < 0 {
 		if skew == time.Duration(math.MinInt64) {
 			return false
 		}
+
 		skew = -skew
 	}
+
 	return skew <= window
 }
 
@@ -44,8 +51,10 @@ func CanAutoResolveTiming(breakType string, allowed []string, skew, maxSkew time
 	if breakType == "AMOUNT_MISMATCH" || breakType == "DUPLICATE" {
 		return false
 	}
+
 	if !slices.Contains(allowed, breakType) {
 		return false
 	}
+
 	return TimingWithinWindow(skew, maxSkew)
 }

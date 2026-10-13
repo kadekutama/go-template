@@ -1,3 +1,4 @@
+// Package crypto encrypts sensitive payloads with envelope data keys (rewrappable without re-encrypting data).
 package crypto
 
 import (
@@ -10,10 +11,10 @@ import (
 	"github.com/kadekutama/go-template/pkg/jsonparser"
 )
 
-// CryptoParams carries enveloper dependencies (Parameter Object pattern).
+// Params carries enveloper dependencies (Parameter Object pattern).
 // The KEK is the only key handle: production wires OpenBao Transit
 // (durable, server-side); tests supply a test-local double from *_test.go.
-type CryptoParams struct {
+type Params struct {
 	KEK KeyEncryptionKey
 }
 
@@ -26,7 +27,7 @@ type Enveloper struct {
 var _ appport.EnvelopeCrypto = (*Enveloper)(nil)
 
 // NewEnveloper builds the envelope adapter; KEK must be non-nil.
-func NewEnveloper(params CryptoParams) (*Enveloper, error) {
+func NewEnveloper(params Params) (*Enveloper, error) {
 	if params.KEK == nil {
 		return nil, ErrConfigRequired
 	}
@@ -48,7 +49,7 @@ func (e *Enveloper) Encrypt(ctx context.Context, tenant valueobject.TenantID, pu
 		return appport.EncryptedEnvelope{}, fmt.Errorf("%w: tenant, purpose and plaintext required", ErrConfigRequired)
 	}
 
-	dek := make([]byte, 32)
+	dek := make([]byte, dekSizeBytes)
 	if _, err := rand.Read(dek); err != nil {
 		return appport.EncryptedEnvelope{}, err
 	}
@@ -156,7 +157,7 @@ func packCiphertext(wrapped []byte, purpose string, sealed []byte) []byte {
 }
 
 // unpackCiphertext parses the packed envelope framing.
-func unpackCiphertext(packed []byte) (wrapped []byte, purpose string, sealed []byte, err error) {
+func unpackCiphertext(packed []byte) ([]byte, string, []byte, error) {
 	var frame packedEnvelope
 	if uerr := jsonparser.Unmarshal(packed, &frame); uerr != nil {
 		return nil, "", nil, ErrAuthFailed

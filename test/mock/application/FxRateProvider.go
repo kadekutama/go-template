@@ -63,7 +63,7 @@ type MockFxRateProvider_GetRate_Call struct {
 //   - base valueobject.AssetCode
 //   - quote valueobject.AssetCode
 //   - at time.Time
-func (_e *MockFxRateProvider_Expecter) GetRate(ctx interface{}, base interface{}, quote interface{}, at interface{}) *MockFxRateProvider_GetRate_Call {
+func (_e *MockFxRateProvider_Expecter) GetRate(ctx any, base any, quote any, at any) *MockFxRateProvider_GetRate_Call {
 	return &MockFxRateProvider_GetRate_Call{Call: _e.mock.On("GetRate", ctx, base, quote, at)}
 }
 

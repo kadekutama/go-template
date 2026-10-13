@@ -13,14 +13,17 @@ func (l PaymentLink) Validate() error {
 	if l.PaymentID == "" {
 		return NewError("PAYMENT_ID_REQUIRED", "payment link requires a payment id")
 	}
+
 	if l.LinkedType == "" || l.LinkedID == "" {
 		return NewError("LINK_TARGET_REQUIRED", "payment link requires a linked type and id")
 	}
+
 	switch l.LinkedType {
 	case "invoice", "order", "subscription":
 	default:
 		return NewError("LINK_TYPE_INVALID", "payment link type must be invoice, order, or subscription")
 	}
+
 	return nil
 }
 

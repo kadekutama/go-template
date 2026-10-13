@@ -41,6 +41,7 @@ func TestNewShared(t *testing.T) {
 				p := validParams
 				p.Timeout = 3 * time.Second
 				p.MaxIdleConnsPerHost = 4
+
 				return p
 			}(),
 			expectedError: false,
@@ -50,6 +51,7 @@ func TestNewShared(t *testing.T) {
 			params: func() httpclient.Params {
 				p := validParams
 				p.Timeout = 0
+
 				return p
 			}(),
 			expectedError: true,
@@ -59,6 +61,7 @@ func TestNewShared(t *testing.T) {
 			params: func() httpclient.Params {
 				p := validParams
 				p.MaxIdleConns = -1
+
 				return p
 			}(),
 			expectedError: true,
@@ -67,9 +70,12 @@ func TestNewShared(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			client, err := httpclient.NewShared(tc.params)
 			if tc.expectedError {
 				assert.Error(t, err)
+
 				return
 			}
 
@@ -118,8 +124,12 @@ func TestModule(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			var client *http.Client
-			var doer httpclient.Doer
+			t.Parallel()
+
+			var (
+				client *http.Client
+				doer   httpclient.Doer
+			)
 
 			app := fxtest.New(t,
 				httpclient.Module(),
@@ -128,6 +138,7 @@ func TestModule(t *testing.T) {
 				}),
 				fx.Populate(&client, &doer),
 			)
+
 			app.RequireStart()
 			defer app.RequireStop()
 

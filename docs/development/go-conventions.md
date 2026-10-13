@@ -61,8 +61,14 @@ database splitting or event sourcing:
 
 - Run `gofmt` (and `goimports` where available); keep exported declarations
   documented with sentence-style comments. Use short, lower-case package names.
-- Prefer concrete return types and consumer-owned interfaces. Avoid empty
-  interfaces when a type parameter or a meaningful contract is possible.
+- Prefer concrete return types and consumer-owned interfaces. Return a stable
+  interface when it is the intended port contract, the runtime result may be
+  one of several concrete event/adapter types, or a library exposes only an
+  interface constructor. Do not force a concrete return if it breaks a port's
+  exact method signature, leaks an outer adapter into an inner layer, or narrows
+  a heterogeneous result. Review `ireturn` findings individually; it is a
+  heuristic, not a blanket prohibition. Avoid empty interfaces when a type
+  parameter or a meaningful contract is possible.
 - Use ordinary Go `(value, error)` returns for internal APIs. A generic
   `Result[T]`/monad is optional and requires an ADR showing a concrete benefit;
   transport envelopes are separate DTOs.
@@ -237,8 +243,10 @@ Every test suite in this repository adheres to a strict table-driven pattern opt
 - Every test case entry in `testCases` must be formatted across multiple lines using standard Go indentation. Never condense test cases into dense one-liners.
 
 ### 4. Concurrency & Determinism
-- Parent tests must invoke `t.Parallel()`.
-- Do NOT use `tc := tc` (obsolete in Go 1.22+) and do NOT invoke `t.Parallel()` inside subtests (`t.Run`), keeping subtests clean, sequential, and deterministic.
+- Follow the upstream [`paralleltest` guidance](https://github.com/kunwardeep/paralleltest/blob/main/README.md): call `t.Parallel()` first in an independent/safe parent test and first inside each independent/safe table subtest's `t.Run` callback. Use the range value in the `t.Run` name.
+- First establish that cases are actually isolated: do not share mutable maps/slices, database keys, files, ports, or external state across parallel cases. A test that depends on order or a shared resource remains sequential; record the specific safety reason rather than parallelizing blindly.
+- If a parent owns a resource that parallel children use, register cleanup with `t.Cleanup`; a parent `defer` runs as the parent returns, before paused parallel subtests resume. Use `t.Cleanup` for subtest-owned resources too when cleanup ordering requires it.
+- Do NOT use `tc := tc`: Go 1.27 has per-iteration range variables, so the upstream README's reinitialization workaround is unnecessary here. Retain its `t.Parallel()`/`t.Run` pattern without that capture.
 - Test helpers and generators must be strictly thread-safe (e.g., using `sync.Mutex` or atomics for sequential counters).
 - No global state or package-level shared mutable fixtures.
 
@@ -249,7 +257,13 @@ Every test suite in this repository adheres to a strict table-driven pattern opt
   - State machine illegal and legal transitions.
   - Expired, stale, or unverified preconditions.
 
-### 6. Complete Unit Test Examples
+### 6. Return-value assertion cardinality and placement
+- For each invocation of the function under test in a table case, assert every returned value exactly once and make the assertion count match the function's return arity. A `(result, error)` function has two assertions; a function returning five values has five.
+- Each assertion must correspond to one returned value. Compare a returned aggregate as one value instead of asserting each field separately; do not add duplicate checks or assertions about implementation details/test-double internals.
+- Put all behavior assertions for the function under test inside the matching table-driven subtest. Do not invoke and assert the function under test outside the table loop.
+- If a required side effect cannot be verified through the function's return values without exceeding this cardinality, resolve an explicit exception in the task packet before writing the test.
+
+### 7. Complete Unit Test Examples
 
 #### Example A: Method on Struct / Entity Returning `error`
 Tested signature: `func (b SettlementBatch) Validate() error`
@@ -318,6 +332,7 @@ func TestSettlementBatchValidate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			err := tc.batch.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -395,6 +410,7 @@ func TestAssessTransactionFee(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			actualResult, err := service.AssessTransactionFee(tc.amountMinor, tc.bps, tc.floorMinor, tc.capMinor)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -460,6 +476,7 @@ func TestPaymentServiceAuthorize(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			svc := NewPaymentService()
 			res, err := svc.Authorize(tc.ctx, tc.req)
 			assert.Equal(t, tc.expectedResult, res)
@@ -497,6 +514,16 @@ func TestPaymentServiceAuthorize(t *testing.T) {
   supplied solely in an ordinary body field. Scope comes from authenticated
   context and is checked again in the application/persistence boundary.
 
+## Modernization diagnostics
+
+Keep golangci-lint's complete `modernize` suite enabled and gopls's `modernize`
+analysis enabled in `.zed/settings.json`. `make lint` invokes `gopls check
+-severity=hint` so editor-level modernization suggestions are visible alongside
+the strict golangci-lint gate. Do not disable analyzers or filter diagnostics to
+silence existing findings. Apply behavior-preserving modernization fixes only
+within the active task's change surface; record and coordinate findings owned by
+another task without editing those files.
+
 ## Required proof
 
 Every task packet must name the relevant checks. At minimum, implementation
@@ -530,4 +557,3 @@ by a command, test, or review assertion must be recorded as an explicit risk.
 - [Go Code Review Comments](https://go.dev/wiki/CodeReviewComments)
 - [Effective Go](https://go.dev/doc/effective_go)
 - [Echo v5 context and handler API](https://echo.labstack.com/guide/context/)
-

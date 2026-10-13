@@ -29,7 +29,7 @@ type SubscriptionDTO struct {
 	Template    string    `json:"template"`
 	Cron        string    `json:"cron"`
 	Destination string    `json:"destination"`
-	LastRun     time.Time `json:"last_run,omitempty"`
+	LastRun     time.Time `json:"last_run"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 
@@ -54,5 +54,6 @@ func ToVolumeBuckets(buckets []query.VolumeBucket) []VolumeBucketDTO {
 	for _, bucket := range buckets {
 		out = append(out, VolumeBucketDTO{Bucket: bucket.Bucket, Count: bucket.Count, TotalMinor: bucket.TotalMinor})
 	}
+
 	return out
 }

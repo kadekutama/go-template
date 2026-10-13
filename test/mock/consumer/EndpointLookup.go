@@ -52,7 +52,7 @@ type MockEndpointLookup_Find_Call struct {
 //   - ctx context.Context
 //   - tenant string
 //   - event string
-func (_e *MockEndpointLookup_Expecter) Find(ctx interface{}, tenant interface{}, event interface{}) *MockEndpointLookup_Find_Call {
+func (_e *MockEndpointLookup_Expecter) Find(ctx any, tenant any, event any) *MockEndpointLookup_Find_Call {
 	return &MockEndpointLookup_Find_Call{Call: _e.mock.On("Find", ctx, tenant, event)}
 }
 

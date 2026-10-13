@@ -49,7 +49,7 @@ type MockWORMExporter_ArchiveCheckpoint_Call struct {
 // ArchiveCheckpoint is a helper method to define mock.On call
 //   - ctx context.Context
 //   - root audit.SignedRoot
-func (_e *MockWORMExporter_Expecter) ArchiveCheckpoint(ctx interface{}, root interface{}) *MockWORMExporter_ArchiveCheckpoint_Call {
+func (_e *MockWORMExporter_Expecter) ArchiveCheckpoint(ctx any, root any) *MockWORMExporter_ArchiveCheckpoint_Call {
 	return &MockWORMExporter_ArchiveCheckpoint_Call{Call: _e.mock.On("ArchiveCheckpoint", ctx, root)}
 }
 

@@ -49,7 +49,7 @@ type MockKVStore_Delete_Call struct {
 // Delete is a helper method to define mock.On call
 //   - ctx context.Context
 //   - key string
-func (_e *MockKVStore_Expecter) Delete(ctx interface{}, key interface{}) *MockKVStore_Delete_Call {
+func (_e *MockKVStore_Expecter) Delete(ctx any, key any) *MockKVStore_Delete_Call {
 	return &MockKVStore_Delete_Call{Call: _e.mock.On("Delete", ctx, key)}
 }
 
@@ -108,7 +108,7 @@ type MockKVStore_Get_Call struct {
 // Get is a helper method to define mock.On call
 //   - ctx context.Context
 //   - key string
-func (_e *MockKVStore_Expecter) Get(ctx interface{}, key interface{}) *MockKVStore_Get_Call {
+func (_e *MockKVStore_Expecter) Get(ctx any, key any) *MockKVStore_Get_Call {
 	return &MockKVStore_Get_Call{Call: _e.mock.On("Get", ctx, key)}
 }
 
@@ -157,7 +157,7 @@ type MockKVStore_Set_Call struct {
 //   - key string
 //   - value []byte
 //   - ttl time.Duration
-func (_e *MockKVStore_Expecter) Set(ctx interface{}, key interface{}, value interface{}, ttl interface{}) *MockKVStore_Set_Call {
+func (_e *MockKVStore_Expecter) Set(ctx any, key any, value any, ttl any) *MockKVStore_Set_Call {
 	return &MockKVStore_Set_Call{Call: _e.mock.On("Set", ctx, key, value, ttl)}
 }
 
@@ -216,7 +216,7 @@ type MockKVStore_SetNX_Call struct {
 //   - key string
 //   - value []byte
 //   - ttl time.Duration
-func (_e *MockKVStore_Expecter) SetNX(ctx interface{}, key interface{}, value interface{}, ttl interface{}) *MockKVStore_SetNX_Call {
+func (_e *MockKVStore_Expecter) SetNX(ctx any, key any, value any, ttl any) *MockKVStore_SetNX_Call {
 	return &MockKVStore_SetNX_Call{Call: _e.mock.On("SetNX", ctx, key, value, ttl)}
 }
 

@@ -22,6 +22,6 @@ func ParseBreakType(s string) (BreakType, error) {
 	case BreakMissingInLedger, BreakMissingInBank, BreakAmountMismatch, BreakDateMismatch, BreakDuplicate:
 		return BreakType(s), nil
 	default:
-		return "", fmt.Errorf("reconciliation: invalid break type %q", s)
+		return "", fmt.Errorf("reconciliation: invalid break type %q: %w", s, ErrReconciliationInvalidBreakType)
 	}
 }

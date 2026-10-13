@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"maps"
 	"sort"
 	"sync/atomic"
 	"time"
@@ -83,9 +84,7 @@ func (p *SnapshotProvider) Swap(keys map[string]KeyEntry, active string) {
 		}
 
 		merged := make(map[string]KeyEntry, len(base)+len(keys))
-		for kid, entry := range base {
-			merged[kid] = entry
-		}
+		maps.Copy(merged, base)
 
 		for kid, entry := range keys {
 			entry.KID = kid

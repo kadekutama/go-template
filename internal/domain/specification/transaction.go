@@ -2,6 +2,7 @@ package specification
 
 import (
 	"context"
+	"maps"
 	"strconv"
 
 	"github.com/kadekutama/go-template/internal/domain/entity"
@@ -24,7 +25,7 @@ type OriginalRef struct {
 // EntryAmountPositive passes for strictly positive minor-unit entries; side
 // carries direction.
 func EntryAmountPositive() Specification[entity.Entry] {
-	return NewFuncSpec[entity.Entry]("INVALID_ENTRY_AMOUNT", "entry amount must be positive",
+	return NewFuncSpec("INVALID_ENTRY_AMOUNT", "entry amount must be positive",
 		func(_ context.Context, e entity.Entry) bool { return e.AmountMinor > 0 })
 }
 
@@ -33,6 +34,7 @@ func EntryAmountPositive() Specification[entity.Entry] {
 func PostingBalancesPerCurrency() Specification[entity.PostingData] {
 	return evalFunc[entity.PostingData](func(_ context.Context, p entity.PostingData) SpecResult {
 		type sums struct{ debit, credit int64 }
+
 		byAsset := map[valueobject.AssetCode]*sums{}
 		for _, e := range p.Entries {
 			s, ok := byAsset[e.AssetCode]
@@ -40,13 +42,16 @@ func PostingBalancesPerCurrency() Specification[entity.PostingData] {
 				s = &sums{}
 				byAsset[e.AssetCode] = s
 			}
+
 			if e.Side == valueobject.DirectionDebit {
 				s.debit += e.AmountMinor
 			} else {
 				s.credit += e.AmountMinor
 			}
 		}
+
 		var out []Violation
+
 		for asset, s := range byAsset {
 			if s.debit != s.credit {
 				out = append(out, Violation{
@@ -60,9 +65,11 @@ func PostingBalancesPerCurrency() Specification[entity.PostingData] {
 				})
 			}
 		}
+
 		if len(out) == 0 {
 			return SpecResult{}
 		}
+
 		return SpecResult{Violations: out}
 	})
 }
@@ -87,10 +94,10 @@ type TemplateRule struct {
 func PostingTemplateAllowed(template PostingTemplate, accounts map[valueobject.AccountID]entity.AccountData) Specification[entity.PostingData] {
 	rules := make([]TemplateRule, len(template.Rules))
 	copy(rules, template.Rules)
+
 	accts := make(map[valueobject.AccountID]entity.AccountData, len(accounts))
-	for k, v := range accounts {
-		accts[k] = v
-	}
+	maps.Copy(accts, accounts)
+
 	return evalFunc[entity.PostingData](func(_ context.Context, p entity.PostingData) SpecResult {
 		fail := func(detail string) SpecResult {
 			return SpecResult{Violations: []Violation{{
@@ -101,22 +108,28 @@ func PostingTemplateAllowed(template PostingTemplate, accounts map[valueobject.A
 		if p.Operation != template.Operation {
 			return fail("operation mismatch")
 		}
+
 		for _, e := range p.Entries {
 			acct, ok := accts[e.AccountID]
 			if !ok {
 				return fail("unknown account " + e.AccountID.String())
 			}
+
 			matched := false
+
 			for _, r := range rules {
 				if r.Class == acct.Class && r.Side == e.Side {
 					matched = true
+
 					break
 				}
 			}
+
 			if !matched {
 				return fail("class/side not permitted for account " + e.AccountID.String())
 			}
 		}
+
 		return SpecResult{}
 	})
 }
@@ -124,7 +137,7 @@ func PostingTemplateAllowed(template PostingTemplate, accounts map[valueobject.A
 // ValidCurrency passes when both asset codes match or an approved FX rate
 // covers the pair.
 func ValidCurrency() Specification[CurrencyCheck] {
-	return NewFuncSpec[CurrencyCheck]("CURRENCY_MISMATCH", "asset codes differ without approved FX",
+	return NewFuncSpec("CURRENCY_MISMATCH", "asset codes differ without approved FX",
 		func(_ context.Context, c CurrencyCheck) bool {
 			return c.EntryAsset != "" && c.EntryAsset == c.AccountAsset || c.FXApproved
 		})
@@ -132,6 +145,6 @@ func ValidCurrency() Specification[CurrencyCheck] {
 
 // OriginalExists passes when the referenced original was found.
 func OriginalExists() Specification[OriginalRef] {
-	return NewFuncSpec[OriginalRef]("ORIGINAL_NOT_FOUND", "referenced original does not exist",
+	return NewFuncSpec("ORIGINAL_NOT_FOUND", "referenced original does not exist",
 		func(_ context.Context, r OriginalRef) bool { return r.Found })
 }

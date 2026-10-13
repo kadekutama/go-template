@@ -1,8 +1,9 @@
-// Package consumer: durable DLQ sinks. Unlike the in-memory test doubles in
+package consumer
+
+// Durable DLQ sinks. Unlike the in-memory test doubles in
 // the fakes package, these write poison messages to the Redpanda dead-letter
 // topics so alerts and operator replay see the same durable record a
 // consumer group failed on (docs/domain-events.md §7).
-package consumer
 
 import (
 	"context"
@@ -37,11 +38,11 @@ var _ DLQSink = (*RedpandaMessageDLQ)(nil)
 // NewRedpandaMessageDLQ builds the durable sink; Broker and Topics are required.
 func NewRedpandaMessageDLQ(params RedpandaMessageDLQParams) (*RedpandaMessageDLQ, error) {
 	if params.Broker == nil {
-		return nil, fmt.Errorf("dlq: broker is required")
+		return nil, ErrDlqBrokerIsRequired
 	}
 
 	if params.Topics == nil {
-		return nil, fmt.Errorf("dlq: topic registry is required")
+		return nil, ErrDlqTopicRegistryIsRequired
 	}
 
 	return &RedpandaMessageDLQ{broker: params.Broker, topics: params.Topics, logger: params.Logger}, nil
@@ -61,7 +62,7 @@ type messageEnvelope struct {
 // broker write failing surfaces so the caller keeps the claim/ack decision).
 func (s *RedpandaMessageDLQ) Record(ctx context.Context, msg appport.Message) error {
 	if s == nil || s.broker == nil || s.topics == nil {
-		return fmt.Errorf("dlq: not initialized")
+		return ErrDlqNotInitialized
 	}
 
 	dlqTopic, err := s.topics.DLQFor(s.topics.LedgerEventsTopic())
@@ -117,11 +118,11 @@ var _ webhook.DLQSink = (*RedpandaWebhookDLQ)(nil)
 // NewRedpandaWebhookDLQ builds the durable sink; Broker and Topics are required.
 func NewRedpandaWebhookDLQ(params RedpandaWebhookDLQParams) (*RedpandaWebhookDLQ, error) {
 	if params.Broker == nil {
-		return nil, fmt.Errorf("dlq: broker is required")
+		return nil, ErrDlqBrokerIsRequired
 	}
 
 	if params.Topics == nil {
-		return nil, fmt.Errorf("dlq: topic registry is required")
+		return nil, ErrDlqTopicRegistryIsRequired
 	}
 
 	return &RedpandaWebhookDLQ{broker: params.Broker, topics: params.Topics, logger: params.Logger}, nil
@@ -139,7 +140,7 @@ type webhookEnvelope struct {
 // Record publishes the exhausted delivery to the DLQ topic.
 func (s *RedpandaWebhookDLQ) Record(ctx context.Context, msg webhook.DLQMessage) error {
 	if s == nil || s.broker == nil || s.topics == nil {
-		return fmt.Errorf("dlq: not initialized")
+		return ErrDlqNotInitialized
 	}
 
 	dlqTopic, err := s.topics.DLQFor(s.topics.WebhookJobsTopic())

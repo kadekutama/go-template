@@ -59,7 +59,7 @@ type MockGetBalance_Execute_Call struct {
 // Execute is a helper method to define mock.On call
 //   - ctx context.Context
 //   - query port.BalanceQuery
-func (_e *MockGetBalance_Expecter) Execute(ctx interface{}, query interface{}) *MockGetBalance_Execute_Call {
+func (_e *MockGetBalance_Expecter) Execute(ctx any, query any) *MockGetBalance_Execute_Call {
 	return &MockGetBalance_Execute_Call{Call: _e.mock.On("Execute", ctx, query)}
 }
 

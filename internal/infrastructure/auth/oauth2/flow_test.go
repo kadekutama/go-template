@@ -33,7 +33,7 @@ func mockHTTPClient() *http.Client {
 	transport.RegisterResponder("POST", mockOIDCBase+"/token",
 		func(req *http.Request) (*http.Response, error) {
 			if err := req.ParseForm(); err != nil {
-				return httpmock.NewStringResponse(http.StatusBadRequest, ""), nil
+				return nil, err
 			}
 
 			if req.Form.Get("code") == "bad-code" {
@@ -50,12 +50,13 @@ func mockHTTPClient() *http.Client {
 }
 
 // errFakeMiss backs the test-only KV double.
-var errFakeMiss = errors.New("fake kv: miss")
+var errFakeMiss = oauth2.ErrFakeKvMiss
 
 func newMockKV(t *testing.T) *mockoauth2.MockKVStore {
 	t.Helper()
 
 	m := mockoauth2.NewMockKVStore(t)
+
 	var store sync.Map
 
 	m.EXPECT().Get(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, key string) ([]byte, error) {
@@ -63,21 +64,25 @@ func newMockKV(t *testing.T) *mockoauth2.MockKVStore {
 		if !ok {
 			return nil, errFakeMiss
 		}
+
 		return append([]byte(nil), val.([]byte)...), nil
 	}).Maybe()
 
 	m.EXPECT().Set(mock.Anything, mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, key string, value []byte, _ time.Duration) error {
 		store.Store(key, append([]byte(nil), value...))
+
 		return nil
 	}).Maybe()
 
 	m.EXPECT().Delete(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, key string) error {
 		store.Delete(key)
+
 		return nil
 	}).Maybe()
 
 	m.EXPECT().SetNX(mock.Anything, mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, key string, value []byte, _ time.Duration) (bool, error) {
 		_, loaded := store.LoadOrStore(key, append([]byte(nil), value...))
+
 		return !loaded, nil
 	}).Maybe()
 
@@ -129,6 +134,7 @@ func TestOAuthValidation(t *testing.T) {
 			params: func() oauth2.OAuthParams {
 				p := testParams(t, clk, mockHTTPClient())
 				p.Providers = map[string]oauth2.ProviderConfig{}
+
 				return p
 			}(),
 			expectedError: oauth2.ErrConfigRequired,
@@ -138,6 +144,7 @@ func TestOAuthValidation(t *testing.T) {
 			params: func() oauth2.OAuthParams {
 				p := testParams(t, clk, mockHTTPClient())
 				p.StateSecret = []byte("short")
+
 				return p
 			}(),
 			expectedError: oauth2.ErrConfigRequired,
@@ -147,6 +154,7 @@ func TestOAuthValidation(t *testing.T) {
 			params: func() oauth2.OAuthParams {
 				p := testParams(t, clk, mockHTTPClient())
 				p.HTTP = nil
+
 				return p
 			}(),
 			expectedError: oauth2.ErrConfigRequired,
@@ -156,6 +164,7 @@ func TestOAuthValidation(t *testing.T) {
 			params: func() oauth2.OAuthParams {
 				p := testParams(t, clk, mockHTTPClient())
 				p.KV = nil
+
 				return p
 			}(),
 			expectedError: oauth2.ErrConfigRequired,
@@ -165,6 +174,7 @@ func TestOAuthValidation(t *testing.T) {
 			params: func() oauth2.OAuthParams {
 				p := testParams(t, clk, mockHTTPClient())
 				p.Clock = nil
+
 				return p
 			}(),
 			expectedError: oauth2.ErrClockRequired,
@@ -173,9 +183,12 @@ func TestOAuthValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			_, err := oauth2.NewProvider(tc.params)
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
+
 				return
 			}
 
@@ -190,6 +203,7 @@ func TestOAuthFlow(t *testing.T) {
 	now := time.Date(2026, 9, 23, 0, 0, 0, 0, time.UTC)
 	clk := mockapplication.NewMockClock(t)
 	clk.EXPECT().Now().Return(now).Maybe()
+
 	tenant := valueobject.TenantID("tenant-oauth")
 
 	type testCase struct {
@@ -244,6 +258,7 @@ func TestOAuthFlow(t *testing.T) {
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			}(),
 			provider:      "google",
@@ -256,14 +271,17 @@ func TestOAuthFlow(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			provider, err := oauth2.NewProvider(testParams(t, clk, mockHTTPClient()))
 			require.NoError(t, err)
 
 			sess, err := provider.AuthURL(tc.ctx, tenant, "google", "https://app.example/cb")
-			if tc.expectedError == context.Canceled {
+			if errors.Is(tc.expectedError, context.Canceled) {
 				assert.Error(t, err)
+
 				return
 			}
+
 			require.NoError(t, err)
 			assert.Contains(t, sess.RedirectURL, "code_challenge=")
 			assert.Contains(t, sess.RedirectURL, "state=")
@@ -271,6 +289,7 @@ func TestOAuthFlow(t *testing.T) {
 			if tc.provider == "nope" {
 				_, err = provider.Exchange(context.Background(), tenant, tc.provider, tc.code, sess.State)
 				assert.ErrorIs(t, err, oauth2.ErrUnknownProvider)
+
 				return
 			}
 
@@ -282,14 +301,17 @@ func TestOAuthFlow(t *testing.T) {
 			identity, err := provider.Exchange(context.Background(), tenant, tc.provider, tc.code, state)
 			if tc.tamperState {
 				assert.ErrorIs(t, err, oauth2.ErrStateInvalid)
+
 				return
 			}
+
 			if tc.replay {
 				require.NoError(t, err)
 				sess2, err := provider.AuthURL(context.Background(), tenant, "google", "https://app.example/cb")
 				require.NoError(t, err)
 				_, err = provider.Exchange(context.Background(), tenant, tc.provider, tc.code, sess2.State)
 				assert.ErrorIs(t, err, tc.expectedError)
+
 				return
 			}
 
@@ -306,6 +328,7 @@ func testParamsWithKV(t *testing.T, clk appport.Clock, doer httpclient.Doer, kv 
 
 	params := testParams(t, clk, doer)
 	params.KV = kv
+
 	return params
 }
 
@@ -336,8 +359,10 @@ func TestOAuthStateExpiry(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			clk := mockapplication.NewMockClock(t)
 			clk.EXPECT().Now().Return(now).Maybe()
+
 			kv := newMockKV(t)
 
 			provider, err := oauth2.NewProvider(testParamsWithKV(t, clk, mockHTTPClient(), kv))
@@ -354,6 +379,7 @@ func TestOAuthStateExpiry(t *testing.T) {
 			identity, err := later.Exchange(context.Background(), tenant, "google", "code-exp", sess.State)
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
+
 				return
 			}
 
@@ -369,6 +395,7 @@ func TestOAuthExchangeCanceledContext(t *testing.T) {
 	now := time.Date(2026, 9, 23, 0, 0, 0, 0, time.UTC)
 	clk := mockapplication.NewMockClock(t)
 	clk.EXPECT().Now().Return(now).Maybe()
+
 	tenant := valueobject.TenantID("tenant-oauth")
 
 	provider, err := oauth2.NewProvider(testParams(t, clk, mockHTTPClient()))

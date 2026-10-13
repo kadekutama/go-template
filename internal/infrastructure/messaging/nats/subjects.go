@@ -5,7 +5,6 @@
 package nats
 
 import (
-	"fmt"
 	"strings"
 
 	domainservice "github.com/kadekutama/go-template/internal/domain/service"
@@ -26,7 +25,7 @@ func EventSubject(tenant, eventType string) (string, error) {
 }
 
 // ParseEventSubject inverts EventSubject.
-func ParseEventSubject(subject string) (tenant, eventType string, err error) {
+func ParseEventSubject(subject string) (string, string, error) {
 	return domainservice.ParseSubject(subject)
 }
 
@@ -40,7 +39,7 @@ func BalanceSubject(tenant string) (string, error) {
 func QueueGroupFor(group string) (string, error) {
 	trimmed := strings.TrimSpace(group)
 	if trimmed == "" {
-		return "", fmt.Errorf("nats: consumer group is required")
+		return "", ErrNatsConsumerGroupIsRequired
 	}
 
 	return "q-" + trimmed, nil

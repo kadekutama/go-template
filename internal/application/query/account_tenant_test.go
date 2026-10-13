@@ -57,6 +57,7 @@ func TestAccountQueryServiceGetAccount(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			accounts := mockdomain.NewMockAccountRepository(t)
 			accounts.EXPECT().
 				FindByID(mock.Anything, tc.query.TenantID, tc.query.AccountID).
@@ -133,6 +134,8 @@ func TestAccountQueryServiceListAccounts(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			accounts := mockdomain.NewMockAccountRepository(t)
 			if tc.query.Limit > 0 && tc.query.Limit <= 100 {
 				accounts.EXPECT().
@@ -190,6 +193,7 @@ func TestTenantQueryServiceGetTenant(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			tenants := mockcommand.NewMockTenantStore(t)
 			tenants.EXPECT().
 				FindByID(mock.Anything, tc.query.TenantID).
@@ -239,6 +243,7 @@ func TestTenantQueryServiceListTenants(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			tenants := mockcommand.NewMockTenantStore(t)
 			tenants.EXPECT().
 				ListTenants(mock.Anything).

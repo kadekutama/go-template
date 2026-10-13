@@ -46,6 +46,7 @@ func TestDisputeValidate(t *testing.T) {
 			dispute: func() entity.Dispute {
 				d := base
 				d.ID = ""
+
 				return d
 			}(),
 			expectedError: entity.NewError("DISPUTE_ID_REQUIRED", "dispute requires id, payment, and original posting"),
@@ -55,6 +56,7 @@ func TestDisputeValidate(t *testing.T) {
 			dispute: func() entity.Dispute {
 				d := base
 				d.PaymentID = ""
+
 				return d
 			}(),
 			expectedError: entity.NewError("DISPUTE_ID_REQUIRED", "dispute requires id, payment, and original posting"),
@@ -64,6 +66,7 @@ func TestDisputeValidate(t *testing.T) {
 			dispute: func() entity.Dispute {
 				d := base
 				d.OriginalPostingID = ""
+
 				return d
 			}(),
 			expectedError: entity.NewError("DISPUTE_ID_REQUIRED", "dispute requires id, payment, and original posting"),
@@ -73,6 +76,7 @@ func TestDisputeValidate(t *testing.T) {
 			dispute: func() entity.Dispute {
 				d := base
 				d.Network = ""
+
 				return d
 			}(),
 			expectedError: entity.NewError("DISPUTE_NETWORK_REQUIRED", "dispute requires a network"),
@@ -82,6 +86,7 @@ func TestDisputeValidate(t *testing.T) {
 			dispute: func() entity.Dispute {
 				d := base
 				d.AmountMinor = 0
+
 				return d
 			}(),
 			expectedError: entity.NewError("INVALID_DISPUTE_AMOUNT", "dispute amount must be positive"),
@@ -91,6 +96,7 @@ func TestDisputeValidate(t *testing.T) {
 			dispute: func() entity.Dispute {
 				d := base
 				d.AmountMinor = -10
+
 				return d
 			}(),
 			expectedError: entity.NewError("INVALID_DISPUTE_AMOUNT", "dispute amount must be positive"),
@@ -100,6 +106,7 @@ func TestDisputeValidate(t *testing.T) {
 			dispute: func() entity.Dispute {
 				d := base
 				d.OpenedAt = time.Time{}
+
 				return d
 			}(),
 			expectedError: entity.NewError("DISPUTE_WINDOW_INVALID", "dispute requires an evidence window after opening"),
@@ -109,6 +116,7 @@ func TestDisputeValidate(t *testing.T) {
 			dispute: func() entity.Dispute {
 				d := base
 				d.EvidenceDueAt = time.Time{}
+
 				return d
 			}(),
 			expectedError: entity.NewError("DISPUTE_WINDOW_INVALID", "dispute requires an evidence window after opening"),
@@ -118,6 +126,7 @@ func TestDisputeValidate(t *testing.T) {
 			dispute: func() entity.Dispute {
 				d := base
 				d.EvidenceDueAt = now.Add(-time.Hour)
+
 				return d
 			}(),
 			expectedError: entity.NewError("DISPUTE_WINDOW_INVALID", "dispute requires an evidence window after opening"),
@@ -127,6 +136,7 @@ func TestDisputeValidate(t *testing.T) {
 			dispute: func() entity.Dispute {
 				d := base
 				d.EvidenceDueAt = now
+
 				return d
 			}(),
 			expectedError: entity.NewError("DISPUTE_WINDOW_INVALID", "dispute requires an evidence window after opening"),
@@ -136,6 +146,7 @@ func TestDisputeValidate(t *testing.T) {
 			dispute: func() entity.Dispute {
 				d := base
 				d.Status = "INVALID_STATUS"
+
 				return d
 			}(),
 			expectedError: entity.NewError("DISPUTE_STATUS_INVALID", "dispute status is invalid"),
@@ -145,6 +156,7 @@ func TestDisputeValidate(t *testing.T) {
 			dispute: func() entity.Dispute {
 				d := base
 				d.HoldID = ""
+
 				return d
 			}(),
 			expectedError: entity.NewError("DISPUTE_HOLD_REQUIRED", "dispute requires a durable hold reference"),
@@ -154,6 +166,7 @@ func TestDisputeValidate(t *testing.T) {
 			dispute: func() entity.Dispute {
 				d := base
 				d.PolicyVersion = ""
+
 				return d
 			}(),
 			expectedError: entity.NewError("DISPUTE_POLICY_REQUIRED", "dispute requires a versioned network policy"),
@@ -162,6 +175,8 @@ func TestDisputeValidate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.dispute.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})

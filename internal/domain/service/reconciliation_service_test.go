@@ -11,11 +11,26 @@ import (
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
 )
 
-func TestMatchStatements(t *testing.T) {
-	t.Parallel()
+func externalWithFirstModified(base []entity.ExternalStatementLine, mod func(*entity.ExternalStatementLine)) []entity.ExternalStatementLine {
+	out := append([]entity.ExternalStatementLine(nil), base...)
+	mod(&out[0])
 
-	baseTime := time.Date(2026, 9, 14, 2, 0, 0, 0, time.UTC)
-	baseCfg := service.MatchConfig{
+	return out
+}
+
+func externalWithDuplicate(base []entity.ExternalStatementLine, id string) []entity.ExternalStatementLine {
+	out := append([]entity.ExternalStatementLine(nil), base...)
+	dup := out[0]
+	dup.LineID = id
+
+	return append(out, dup)
+}
+
+func matchStatementsBaseTime() time.Time {
+	return time.Date(2026, 9, 14, 2, 0, 0, 0, time.UTC)
+}
+func matchStatementsBaseConfig() service.MatchConfig {
+	return service.MatchConfig{
 		RuleVersion:  "v1",
 		TimingWindow: 24 * time.Hour,
 		Tolerances: []service.TolerancePolicy{
@@ -26,8 +41,9 @@ func TestMatchStatements(t *testing.T) {
 		RunID:    "run-1",
 		TenantID: "t-1",
 	}
-
-	baseLedger := []service.LedgerFact{
+}
+func matchStatementsBaseLedger(baseTime time.Time) []service.LedgerFact {
+	return []service.LedgerFact{
 		{
 			PostingID:   "p-exact",
 			Reference:   "ref-exact",
@@ -50,8 +66,9 @@ func TestMatchStatements(t *testing.T) {
 			EffectiveAt: baseTime,
 		},
 	}
-
-	baseExternal := []entity.ExternalStatementLine{
+}
+func matchStatementsBaseExternal(baseTime time.Time) []entity.ExternalStatementLine {
+	return []entity.ExternalStatementLine{
 		{
 			LineID:        "e-exact",
 			SourceAccount: "bank-1",
@@ -92,6 +109,147 @@ func TestMatchStatements(t *testing.T) {
 			CoverageEnd:   baseTime.Add(24 * time.Hour),
 		},
 	}
+}
+
+func matchedGoldenGroup(groupID string, ledgerRefs, extRefs []string, sum int64, conf string) service.MatchGroup {
+	return service.MatchGroup{
+		GroupID: groupID, RuleVersion: "v1", Confidence: conf,
+		Decision:   valueobject.MatchMatched,
+		LedgerRefs: ledgerRefs, ExternalRefs: extRefs,
+		LedgerSum: sum, ExternalSum: sum,
+		DecisionActor: "recon-engine",
+	}
+}
+
+func reconGoldenBreak(breakID, runID string, typ valueobject.BreakType, ledgerRef, extRef string, expected, actual int64, evidence map[string]string) entity.ReconciliationBreak {
+	return entity.ReconciliationBreak{
+		BreakID: breakID, RunID: runID, TenantID: "t-1", Type: typ,
+		LedgerRef: ledgerRef, ExternalRef: extRef,
+		ExpectedMinor: expected, ActualMinor: actual,
+		Evidence: evidence, RuleVersion: "v1",
+	}
+}
+
+func crossAssetLedger(baseTime time.Time) []service.LedgerFact {
+	return []service.LedgerFact{
+		{
+			PostingID:   "p-1",
+			Reference:   "ref-fx",
+			AmountMinor: 10000,
+			AssetCode:   "USD",
+			EffectiveAt: baseTime,
+		},
+	}
+}
+
+func crossAssetExternal(baseTime time.Time) []entity.ExternalStatementLine {
+	return []entity.ExternalStatementLine{
+		{
+			LineID:        "e-1",
+			SourceAccount: "bank-1",
+			Reference:     "ref-fx",
+			AmountMinor:   10000,
+			AssetCode:     "EUR",
+			EffectiveAt:   baseTime,
+			Hash:          "h-1",
+			ParserVersion: "csv-v1",
+			RawLineage:    "sftp/x:1",
+			CoverageStart: baseTime.Add(-24 * time.Hour),
+			CoverageEnd:   baseTime.Add(24 * time.Hour),
+		},
+	}
+}
+
+func tiedMatchLedger(baseTime time.Time) []service.LedgerFact {
+	return []service.LedgerFact{
+		{
+			PostingID:   "p-b",
+			Reference:   "ref-same",
+			AmountMinor: 100,
+			AssetCode:   "USD",
+			EffectiveAt: baseTime,
+		},
+		{
+			PostingID:   "p-a",
+			Reference:   "ref-same",
+			AmountMinor: 100,
+			AssetCode:   "USD",
+			EffectiveAt: baseTime,
+		},
+		{
+			PostingID:   "p-c",
+			Reference:   "ref-same",
+			AmountMinor: 50,
+			AssetCode:   "USD",
+			EffectiveAt: baseTime.Add(time.Hour),
+		},
+	}
+}
+
+func tiedMatchExternal(baseTime time.Time) []entity.ExternalStatementLine {
+	return []entity.ExternalStatementLine{
+		{
+			LineID:        "e-b",
+			SourceAccount: "bank-1",
+			Reference:     "ref-same",
+			AmountMinor:   100,
+			AssetCode:     "USD",
+			EffectiveAt:   baseTime,
+			Hash:          "h-b",
+			ParserVersion: "csv-v1",
+			RawLineage:    "sftp/x:2",
+			CoverageStart: baseTime.Add(-24 * time.Hour),
+			CoverageEnd:   baseTime.Add(48 * time.Hour),
+		},
+		{
+			LineID:        "e-a",
+			SourceAccount: "bank-1",
+			Reference:     "ref-same",
+			AmountMinor:   100,
+			AssetCode:     "USD",
+			EffectiveAt:   baseTime,
+			Hash:          "h-a",
+			ParserVersion: "csv-v1",
+			RawLineage:    "sftp/x:1",
+			CoverageStart: baseTime.Add(-24 * time.Hour),
+			CoverageEnd:   baseTime.Add(48 * time.Hour),
+		},
+		{
+			LineID:        "e-c",
+			SourceAccount: "bank-1",
+			Reference:     "ref-same",
+			AmountMinor:   50,
+			AssetCode:     "USD",
+			EffectiveAt:   baseTime.Add(2 * time.Hour),
+			Hash:          "h-c",
+			ParserVersion: "csv-v1",
+			RawLineage:    "sftp/x:3",
+			CoverageStart: baseTime.Add(-24 * time.Hour),
+			CoverageEnd:   baseTime.Add(48 * time.Hour),
+		},
+	}
+}
+
+func orphanExternal(baseTime time.Time) []entity.ExternalStatementLine {
+	return []entity.ExternalStatementLine{
+		{
+			LineID:        "e-orphan",
+			SourceAccount: "bank-1",
+			Reference:     "ref-orphan",
+			AmountMinor:   7500,
+			AssetCode:     "USD",
+			EffectiveAt:   baseTime,
+			Hash:          "h-orphan",
+			ParserVersion: "csv-v1",
+			RawLineage:    "sftp/x:9",
+			CoverageStart: baseTime.Add(-24 * time.Hour),
+			CoverageEnd:   baseTime.Add(24 * time.Hour),
+		},
+	}
+}
+
+func TestMatchStatementsGolden(t *testing.T) {
+	t.Parallel()
 
 	type testCase struct {
 		name            string
@@ -103,6 +261,11 @@ func TestMatchStatements(t *testing.T) {
 		expectedError   error
 	}
 
+	baseTime := matchStatementsBaseTime()
+	baseCfg := matchStatementsBaseConfig()
+	baseLedger := matchStatementsBaseLedger(baseTime)
+	baseExternal := matchStatementsBaseExternal(baseTime)
+
 	testCases := []testCase{
 		{
 			name:     "golden exact plus split plus missing",
@@ -110,233 +273,75 @@ func TestMatchStatements(t *testing.T) {
 			external: baseExternal,
 			cfg:      baseCfg,
 			expectedMatched: []service.MatchGroup{
-				{
-					GroupID:       "grp:run-1:ref-exact:0",
-					RuleVersion:   "v1",
-					Confidence:    "HIGH",
-					Decision:      valueobject.MatchMatched,
-					LedgerRefs:    []string{"p-exact"},
-					ExternalRefs:  []string{"e-exact"},
-					LedgerSum:     10000,
-					ExternalSum:   10000,
-					DecisionActor: "recon-engine",
-				},
-				{
-					GroupID:       "grp:run-1:ref-split:0",
-					RuleVersion:   "v1",
-					Confidence:    "MEDIUM",
-					Decision:      valueobject.MatchMatched,
-					LedgerRefs:    []string{"p-split"},
-					ExternalRefs:  []string{"e-split-2", "e-split-1"},
-					LedgerSum:     10000,
-					ExternalSum:   10000,
-					DecisionActor: "recon-engine",
-				},
+				matchedGoldenGroup("grp:run-1:ref-exact:0", []string{"p-exact"}, []string{"e-exact"}, 10000, "HIGH"),
+				matchedGoldenGroup("grp:run-1:ref-split:0", []string{"p-split"}, []string{"e-split-2", "e-split-1"}, 10000, "MEDIUM"),
 			},
 			expectedBreaks: []entity.ReconciliationBreak{
-				{
-					BreakID:       "brk:run-1:MISSING_IN_BANK:ref-only-ledger:0",
-					RunID:         "run-1",
-					TenantID:      "t-1",
-					Type:          valueobject.BreakMissingInBank,
-					LedgerRef:     "p-only",
-					ExpectedMinor: 5000,
-					Evidence:      map[string]string{"reference": "ref-only-ledger"},
-					RuleVersion:   "v1",
-				},
+				reconGoldenBreak("brk:run-1:MISSING_IN_BANK:ref-only-ledger:0", "run-1", valueobject.BreakMissingInBank, "p-only", "", 5000, 0, map[string]string{"reference": "ref-only-ledger"}),
 			},
 			expectedError: nil,
 		},
 		{
 			name:   "amount mismatch beyond tolerance",
 			ledger: baseLedger,
-			external: func() []entity.ExternalStatementLine {
-				out := append([]entity.ExternalStatementLine(nil), baseExternal...)
-				out[0].AmountMinor = 9999
-				out[0].Hash = "h-exact-diff"
-				return out
-			}(),
+			external: externalWithFirstModified(baseExternal, func(e *entity.ExternalStatementLine) {
+				e.AmountMinor = 9999
+				e.Hash = "h-exact-diff"
+			}),
 			cfg: baseCfg,
 			expectedMatched: []service.MatchGroup{
-				{
-					GroupID:       "grp:run-1:ref-split:0",
-					RuleVersion:   "v1",
-					Confidence:    "MEDIUM",
-					Decision:      valueobject.MatchMatched,
-					LedgerRefs:    []string{"p-split"},
-					ExternalRefs:  []string{"e-split-2", "e-split-1"},
-					LedgerSum:     10000,
-					ExternalSum:   10000,
-					DecisionActor: "recon-engine",
-				},
+				matchedGoldenGroup("grp:run-1:ref-split:0", []string{"p-split"}, []string{"e-split-2", "e-split-1"}, 10000, "MEDIUM"),
 			},
 			expectedBreaks: []entity.ReconciliationBreak{
-				{
-					BreakID:       "brk:run-1:AMOUNT_MISMATCH:ref-exact:0",
-					RunID:         "run-1",
-					TenantID:      "t-1",
-					Type:          valueobject.BreakAmountMismatch,
-					LedgerRef:     "p-exact",
-					ExternalRef:   "e-exact",
-					ExpectedMinor: 10000,
-					ActualMinor:   9999,
-					Evidence:      map[string]string{"reference": "ref-exact", "tolerance_minor": "0"},
-					RuleVersion:   "v1",
-				},
-				{
-					BreakID:       "brk:run-1:MISSING_IN_BANK:ref-only-ledger:0",
-					RunID:         "run-1",
-					TenantID:      "t-1",
-					Type:          valueobject.BreakMissingInBank,
-					LedgerRef:     "p-only",
-					ExpectedMinor: 5000,
-					Evidence:      map[string]string{"reference": "ref-only-ledger"},
-					RuleVersion:   "v1",
-				},
+				reconGoldenBreak("brk:run-1:AMOUNT_MISMATCH:ref-exact:0", "run-1", valueobject.BreakAmountMismatch, "p-exact", "e-exact", 10000, 9999, map[string]string{"reference": "ref-exact", "tolerance_minor": "0"}),
+				reconGoldenBreak("brk:run-1:MISSING_IN_BANK:ref-only-ledger:0", "run-1", valueobject.BreakMissingInBank, "p-only", "", 5000, 0, map[string]string{"reference": "ref-only-ledger"}),
 			},
 			expectedError: nil,
 		},
 		{
 			name:   "date mismatch beyond window",
 			ledger: baseLedger,
-			external: func() []entity.ExternalStatementLine {
-				out := append([]entity.ExternalStatementLine(nil), baseExternal...)
-				out[0].EffectiveAt = baseTime.Add(48 * time.Hour)
-				return out
-			}(),
+			external: externalWithFirstModified(baseExternal, func(e *entity.ExternalStatementLine) {
+				e.EffectiveAt = baseTime.Add(48 * time.Hour)
+			}),
 			cfg: baseCfg,
 			expectedMatched: []service.MatchGroup{
-				{
-					GroupID:       "grp:run-1:ref-split:0",
-					RuleVersion:   "v1",
-					Confidence:    "MEDIUM",
-					Decision:      valueobject.MatchMatched,
-					LedgerRefs:    []string{"p-split"},
-					ExternalRefs:  []string{"e-split-2", "e-split-1"},
-					LedgerSum:     10000,
-					ExternalSum:   10000,
-					DecisionActor: "recon-engine",
-				},
+				matchedGoldenGroup("grp:run-1:ref-split:0", []string{"p-split"}, []string{"e-split-2", "e-split-1"}, 10000, "MEDIUM"),
 			},
 			expectedBreaks: []entity.ReconciliationBreak{
-				{
-					BreakID:       "brk:run-1:DATE_MISMATCH:ref-exact:0",
-					RunID:         "run-1",
-					TenantID:      "t-1",
-					Type:          valueobject.BreakDateMismatch,
-					LedgerRef:     "p-exact",
-					ExternalRef:   "e-exact",
-					ExpectedMinor: 10000,
-					ActualMinor:   10000,
-					Evidence:      map[string]string{"reference": "ref-exact", "timing_window": "24h0m0s"},
-					RuleVersion:   "v1",
-				},
-				{
-					BreakID:       "brk:run-1:MISSING_IN_BANK:ref-only-ledger:0",
-					RunID:         "run-1",
-					TenantID:      "t-1",
-					Type:          valueobject.BreakMissingInBank,
-					LedgerRef:     "p-only",
-					ExpectedMinor: 5000,
-					Evidence:      map[string]string{"reference": "ref-only-ledger"},
-					RuleVersion:   "v1",
-				},
+				reconGoldenBreak("brk:run-1:DATE_MISMATCH:ref-exact:0", "run-1", valueobject.BreakDateMismatch, "p-exact", "e-exact", 10000, 10000, map[string]string{"reference": "ref-exact", "timing_window": "24h0m0s"}),
+				reconGoldenBreak("brk:run-1:MISSING_IN_BANK:ref-only-ledger:0", "run-1", valueobject.BreakMissingInBank, "p-only", "", 5000, 0, map[string]string{"reference": "ref-only-ledger"}),
 			},
 			expectedError: nil,
 		},
 		{
-			name:   "duplicate external reference same hash",
-			ledger: baseLedger,
-			external: func() []entity.ExternalStatementLine {
-				out := append([]entity.ExternalStatementLine(nil), baseExternal...)
-				dup := out[0]
-				dup.LineID = "e-exact-dup"
-				out = append(out, dup)
-				return out
-			}(),
-			cfg: baseCfg,
+			name:     "duplicate external reference same hash",
+			ledger:   baseLedger,
+			external: externalWithDuplicate(baseExternal, "e-exact-dup"),
+			cfg:      baseCfg,
 			expectedMatched: []service.MatchGroup{
-				{
-					GroupID:       "grp:run-1:ref-exact:0",
-					RuleVersion:   "v1",
-					Confidence:    "HIGH",
-					Decision:      valueobject.MatchMatched,
-					LedgerRefs:    []string{"p-exact"},
-					ExternalRefs:  []string{"e-exact"},
-					LedgerSum:     10000,
-					ExternalSum:   10000,
-					DecisionActor: "recon-engine",
-				},
-				{
-					GroupID:       "grp:run-1:ref-split:0",
-					RuleVersion:   "v1",
-					Confidence:    "MEDIUM",
-					Decision:      valueobject.MatchMatched,
-					LedgerRefs:    []string{"p-split"},
-					ExternalRefs:  []string{"e-split-2", "e-split-1"},
-					LedgerSum:     10000,
-					ExternalSum:   10000,
-					DecisionActor: "recon-engine",
-				},
+				matchedGoldenGroup("grp:run-1:ref-exact:0", []string{"p-exact"}, []string{"e-exact"}, 10000, "HIGH"),
+				matchedGoldenGroup("grp:run-1:ref-split:0", []string{"p-split"}, []string{"e-split-2", "e-split-1"}, 10000, "MEDIUM"),
 			},
 			expectedBreaks: []entity.ReconciliationBreak{
-				{
-					BreakID:     "brk:run-1:DUPLICATE:ref-exact:0",
-					RunID:       "run-1",
-					TenantID:    "t-1",
-					Type:        valueobject.BreakDuplicate,
-					ExternalRef: "e-exact-dup",
-					Evidence:    map[string]string{"duplicate_of": "ref-exact", "hash": "h-exact"},
-					RuleVersion: "v1",
-				},
-				{
-					BreakID:       "brk:run-1:MISSING_IN_BANK:ref-only-ledger:0",
-					RunID:         "run-1",
-					TenantID:      "t-1",
-					Type:          valueobject.BreakMissingInBank,
-					LedgerRef:     "p-only",
-					ExpectedMinor: 5000,
-					Evidence:      map[string]string{"reference": "ref-only-ledger"},
-					RuleVersion:   "v1",
-				},
+				reconGoldenBreak("brk:run-1:DUPLICATE:ref-exact:0", "run-1", valueobject.BreakDuplicate, "", "e-exact-dup", 0, 0, map[string]string{"duplicate_of": "ref-exact", "hash": "h-exact"}),
+				reconGoldenBreak("brk:run-1:MISSING_IN_BANK:ref-only-ledger:0", "run-1", valueobject.BreakMissingInBank, "p-only", "", 5000, 0, map[string]string{"reference": "ref-only-ledger"}),
 			},
 			expectedError: nil,
 		},
 		{
-			name:   "orphan external yields missing in ledger",
-			ledger: nil,
-			external: []entity.ExternalStatementLine{
-				{
-					LineID:        "e-orphan",
-					SourceAccount: "bank-1",
-					Reference:     "ref-orphan",
-					AmountMinor:   7500,
-					AssetCode:     "USD",
-					EffectiveAt:   baseTime,
-					Hash:          "h-orphan",
-					ParserVersion: "csv-v1",
-					RawLineage:    "sftp/x:9",
-					CoverageStart: baseTime.Add(-24 * time.Hour),
-					CoverageEnd:   baseTime.Add(24 * time.Hour),
-				},
-			},
+			name:     "orphan external yields missing in ledger",
+			ledger:   nil,
+			external: orphanExternal(baseTime),
 			cfg: func() service.MatchConfig {
 				c := baseCfg
 				c.RunID = "run-missing"
+
 				return c
 			}(),
 			expectedMatched: []service.MatchGroup{},
 			expectedBreaks: []entity.ReconciliationBreak{
-				{
-					BreakID:     "brk:run-missing:MISSING_IN_LEDGER:ref-orphan:0",
-					RunID:       "run-missing",
-					TenantID:    "t-1",
-					Type:        valueobject.BreakMissingInLedger,
-					ExternalRef: "e-orphan",
-					ActualMinor: 7500,
-					Evidence:    map[string]string{"reference": "ref-orphan"},
-					RuleVersion: "v1",
-				},
+				reconGoldenBreak("brk:run-missing:MISSING_IN_LEDGER:ref-orphan:0", "run-missing", valueobject.BreakMissingInLedger, "", "e-orphan", 0, 7500, map[string]string{"reference": "ref-orphan"}),
 			},
 			expectedError: nil,
 		},
@@ -350,31 +355,9 @@ func TestMatchStatements(t *testing.T) {
 			expectedError:   nil,
 		},
 		{
-			name: "cross-asset reference is amount mismatch",
-			ledger: []service.LedgerFact{
-				{
-					PostingID:   "p-1",
-					Reference:   "ref-fx",
-					AmountMinor: 10000,
-					AssetCode:   "USD",
-					EffectiveAt: baseTime,
-				},
-			},
-			external: []entity.ExternalStatementLine{
-				{
-					LineID:        "e-1",
-					SourceAccount: "bank-1",
-					Reference:     "ref-fx",
-					AmountMinor:   10000,
-					AssetCode:     "EUR",
-					EffectiveAt:   baseTime,
-					Hash:          "h-1",
-					ParserVersion: "csv-v1",
-					RawLineage:    "sftp/x:1",
-					CoverageStart: baseTime.Add(-24 * time.Hour),
-					CoverageEnd:   baseTime.Add(24 * time.Hour),
-				},
-			},
+			name:     "cross-asset reference is amount mismatch",
+			ledger:   crossAssetLedger(baseTime),
+			external: crossAssetExternal(baseTime),
 			cfg: func() service.MatchConfig {
 				c := baseCfg
 				c.RunID = "run-fx"
@@ -382,190 +365,71 @@ func TestMatchStatements(t *testing.T) {
 					{Rail: "ACH", AssetCode: "USD", ToleranceMinor: 0},
 					{Rail: "ACH", AssetCode: "EUR", ToleranceMinor: 0},
 				}
+
 				return c
 			}(),
 			expectedMatched: []service.MatchGroup{},
 			expectedBreaks: []entity.ReconciliationBreak{
-				{
-					BreakID:       "brk:run-fx:AMOUNT_MISMATCH:ref-fx:0",
-					RunID:         "run-fx",
-					TenantID:      "t-1",
-					Type:          valueobject.BreakAmountMismatch,
-					LedgerRef:     "p-1",
-					ExternalRef:   "e-1",
-					ExpectedMinor: 10000,
-					ActualMinor:   10000,
-					Evidence:      map[string]string{"reference": "ref-fx", "tolerance_minor": "0"},
-					RuleVersion:   "v1",
-				},
+				reconGoldenBreak("brk:run-fx:AMOUNT_MISMATCH:ref-fx:0", "run-fx", valueobject.BreakAmountMismatch, "p-1", "e-1", 10000, 10000, map[string]string{"reference": "ref-fx", "tolerance_minor": "0"}),
 			},
 			expectedError: nil,
 		},
 		{
-			name: "tied sort keys match deterministically",
-			ledger: []service.LedgerFact{
-				{
-					PostingID:   "p-b",
-					Reference:   "ref-same",
-					AmountMinor: 100,
-					AssetCode:   "USD",
-					EffectiveAt: baseTime,
-				},
-				{
-					PostingID:   "p-a",
-					Reference:   "ref-same",
-					AmountMinor: 100,
-					AssetCode:   "USD",
-					EffectiveAt: baseTime,
-				},
-				{
-					PostingID:   "p-c",
-					Reference:   "ref-same",
-					AmountMinor: 50,
-					AssetCode:   "USD",
-					EffectiveAt: baseTime.Add(time.Hour),
-				},
-			},
-			external: []entity.ExternalStatementLine{
-				{
-					LineID:        "e-b",
-					SourceAccount: "bank-1",
-					Reference:     "ref-same",
-					AmountMinor:   100,
-					AssetCode:     "USD",
-					EffectiveAt:   baseTime,
-					Hash:          "h-b",
-					ParserVersion: "csv-v1",
-					RawLineage:    "sftp/x:2",
-					CoverageStart: baseTime.Add(-24 * time.Hour),
-					CoverageEnd:   baseTime.Add(48 * time.Hour),
-				},
-				{
-					LineID:        "e-a",
-					SourceAccount: "bank-1",
-					Reference:     "ref-same",
-					AmountMinor:   100,
-					AssetCode:     "USD",
-					EffectiveAt:   baseTime,
-					Hash:          "h-a",
-					ParserVersion: "csv-v1",
-					RawLineage:    "sftp/x:1",
-					CoverageStart: baseTime.Add(-24 * time.Hour),
-					CoverageEnd:   baseTime.Add(48 * time.Hour),
-				},
-				{
-					LineID:        "e-c",
-					SourceAccount: "bank-1",
-					Reference:     "ref-same",
-					AmountMinor:   50,
-					AssetCode:     "USD",
-					EffectiveAt:   baseTime.Add(2 * time.Hour),
-					Hash:          "h-c",
-					ParserVersion: "csv-v1",
-					RawLineage:    "sftp/x:3",
-					CoverageStart: baseTime.Add(-24 * time.Hour),
-					CoverageEnd:   baseTime.Add(48 * time.Hour),
-				},
-			},
+			name:     "tied sort keys match deterministically",
+			ledger:   tiedMatchLedger(baseTime),
+			external: tiedMatchExternal(baseTime),
 			cfg: func() service.MatchConfig {
 				c := baseCfg
 				c.RunID = "run-tie"
 				c.TimingWindow = 48 * time.Hour
+
 				return c
 			}(),
 			expectedMatched: []service.MatchGroup{
-				{
-					GroupID:       "grp:run-tie:ref-same:0",
-					RuleVersion:   "v1",
-					Confidence:    "MEDIUM",
-					Decision:      valueobject.MatchMatched,
-					LedgerRefs:    []string{"p-c", "p-a", "p-b"},
-					ExternalRefs:  []string{"e-c", "e-a", "e-b"},
-					LedgerSum:     250,
-					ExternalSum:   250,
-					DecisionActor: "recon-engine",
-				},
+				matchedGoldenGroup("grp:run-tie:ref-same:0", []string{"p-c", "p-a", "p-b"}, []string{"e-c", "e-a", "e-b"}, 250, "MEDIUM"),
 			},
 			expectedBreaks: []entity.ReconciliationBreak{},
 			expectedError:  nil,
 		},
-		{
-			name:   "missing tolerance policy",
-			ledger: baseLedger,
-			external: func() []entity.ExternalStatementLine {
-				out := append([]entity.ExternalStatementLine(nil), baseExternal...)
-				return out
-			}(),
-			cfg: func() service.MatchConfig {
-				c := baseCfg
-				c.Tolerances = nil
-				return c
-			}(),
-			expectedMatched: nil,
-			expectedBreaks:  nil,
-			expectedError:   entity.NewError("TOLERANCE_POLICY_REQUIRED", "tolerance policy is required for rail and asset"),
-		},
-		{
-			name:   "duplicate tolerance conflict",
-			ledger: baseLedger,
-			external: func() []entity.ExternalStatementLine {
-				out := append([]entity.ExternalStatementLine(nil), baseExternal...)
-				return out
-			}(),
-			cfg: func() service.MatchConfig {
-				c := baseCfg
-				c.Tolerances = []service.TolerancePolicy{
-					{Rail: "ACH", AssetCode: "USD", ToleranceMinor: 0},
-					{Rail: "ACH", AssetCode: "USD", ToleranceMinor: 5},
-				}
-				return c
-			}(),
-			expectedMatched: nil,
-			expectedBreaks:  nil,
-			expectedError:   entity.NewError("TOLERANCE_POLICY_CONFLICT", "duplicate tolerance policy for rail and asset"),
-		},
-		{
-			name:   "negative tolerance rejected",
-			ledger: baseLedger,
-			external: func() []entity.ExternalStatementLine {
-				out := append([]entity.ExternalStatementLine(nil), baseExternal...)
-				return out
-			}(),
-			cfg: func() service.MatchConfig {
-				c := baseCfg
-				c.Tolerances = []service.TolerancePolicy{
-					{Rail: "ACH", AssetCode: "USD", ToleranceMinor: -1},
-				}
-				return c
-			}(),
-			expectedMatched: nil,
-			expectedBreaks:  nil,
-			expectedError:   entity.NewError("TOLERANCE_POLICY_REQUIRED", "tolerance must be non-negative"),
-		},
-		{
-			name:   "empty tolerance rail rejected",
-			ledger: baseLedger,
-			external: func() []entity.ExternalStatementLine {
-				out := append([]entity.ExternalStatementLine(nil), baseExternal...)
-				return out
-			}(),
-			cfg: func() service.MatchConfig {
-				c := baseCfg
-				c.Tolerances = []service.TolerancePolicy{
-					{Rail: "", AssetCode: "USD", ToleranceMinor: 0},
-				}
-				return c
-			}(),
-			expectedMatched: nil,
-			expectedBreaks:  nil,
-			expectedError:   entity.NewError("TOLERANCE_POLICY_REQUIRED", "tolerance requires rail and asset"),
-		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			actualMatched, actualBreaks, err := service.MatchStatements(tc.ledger, tc.external, tc.cfg)
+			assert.Equal(t, tc.expectedMatched, actualMatched)
+			assert.Equal(t, tc.expectedBreaks, actualBreaks)
+			assert.Equal(t, tc.expectedError, err)
+		})
+	}
+}
+func TestMatchStatementsInputValidation(t *testing.T) {
+	t.Parallel()
+
+	type testCase struct {
+		name            string
+		ledger          []service.LedgerFact
+		external        []entity.ExternalStatementLine
+		cfg             service.MatchConfig
+		expectedMatched []service.MatchGroup
+		expectedBreaks  []entity.ReconciliationBreak
+		expectedError   error
+	}
+
+	baseTime := matchStatementsBaseTime()
+	baseCfg := matchStatementsBaseConfig()
+	baseLedger := matchStatementsBaseLedger(baseTime)
+	baseExternal := matchStatementsBaseExternal(baseTime)
+
+	testCases := []testCase{
 		{
 			name:   "missing snapshot identity",
 			ledger: baseLedger,
 			external: func() []entity.ExternalStatementLine {
 				out := append([]entity.ExternalStatementLine(nil), baseExternal...)
 				out[0].Hash = ""
+
 				return out
 			}(),
 			cfg:             baseCfg,
@@ -748,16 +612,130 @@ func TestMatchStatements(t *testing.T) {
 			expectedBreaks:  nil,
 			expectedError:   entity.NewError("AMOUNT_OVERFLOW", "external sum overflowed int64"),
 		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			actualMatched, actualBreaks, err := service.MatchStatements(tc.ledger, tc.external, tc.cfg)
+			assert.Equal(t, tc.expectedMatched, actualMatched)
+			assert.Equal(t, tc.expectedBreaks, actualBreaks)
+			assert.Equal(t, tc.expectedError, err)
+		})
+	}
+}
+
+func TestMatchStatementsConfigValidation(t *testing.T) {
+	t.Parallel()
+
+	type testCase struct {
+		name            string
+		ledger          []service.LedgerFact
+		external        []entity.ExternalStatementLine
+		cfg             service.MatchConfig
+		expectedMatched []service.MatchGroup
+		expectedBreaks  []entity.ReconciliationBreak
+		expectedError   error
+	}
+
+	baseTime := matchStatementsBaseTime()
+	baseCfg := matchStatementsBaseConfig()
+	baseLedger := matchStatementsBaseLedger(baseTime)
+	baseExternal := matchStatementsBaseExternal(baseTime)
+
+	testCases := []testCase{
+		{
+			name:   "missing tolerance policy",
+			ledger: baseLedger,
+			external: func() []entity.ExternalStatementLine {
+				out := append([]entity.ExternalStatementLine(nil), baseExternal...)
+
+				return out
+			}(),
+			cfg: func() service.MatchConfig {
+				c := baseCfg
+				c.Tolerances = nil
+
+				return c
+			}(),
+			expectedMatched: nil,
+			expectedBreaks:  nil,
+			expectedError:   entity.NewError("TOLERANCE_POLICY_REQUIRED", "tolerance policy is required for rail and asset"),
+		},
+		{
+			name:   "duplicate tolerance conflict",
+			ledger: baseLedger,
+			external: func() []entity.ExternalStatementLine {
+				out := append([]entity.ExternalStatementLine(nil), baseExternal...)
+
+				return out
+			}(),
+			cfg: func() service.MatchConfig {
+				c := baseCfg
+				c.Tolerances = []service.TolerancePolicy{
+					{Rail: "ACH", AssetCode: "USD", ToleranceMinor: 0},
+					{Rail: "ACH", AssetCode: "USD", ToleranceMinor: 5},
+				}
+
+				return c
+			}(),
+			expectedMatched: nil,
+			expectedBreaks:  nil,
+			expectedError:   entity.NewError("TOLERANCE_POLICY_CONFLICT", "duplicate tolerance policy for rail and asset"),
+		},
+		{
+			name:   "negative tolerance rejected",
+			ledger: baseLedger,
+			external: func() []entity.ExternalStatementLine {
+				out := append([]entity.ExternalStatementLine(nil), baseExternal...)
+
+				return out
+			}(),
+			cfg: func() service.MatchConfig {
+				c := baseCfg
+				c.Tolerances = []service.TolerancePolicy{
+					{Rail: "ACH", AssetCode: "USD", ToleranceMinor: -1},
+				}
+
+				return c
+			}(),
+			expectedMatched: nil,
+			expectedBreaks:  nil,
+			expectedError:   entity.NewError("TOLERANCE_POLICY_REQUIRED", "tolerance must be non-negative"),
+		},
+		{
+			name:   "empty tolerance rail rejected",
+			ledger: baseLedger,
+			external: func() []entity.ExternalStatementLine {
+				out := append([]entity.ExternalStatementLine(nil), baseExternal...)
+
+				return out
+			}(),
+			cfg: func() service.MatchConfig {
+				c := baseCfg
+				c.Tolerances = []service.TolerancePolicy{
+					{Rail: "", AssetCode: "USD", ToleranceMinor: 0},
+				}
+
+				return c
+			}(),
+			expectedMatched: nil,
+			expectedBreaks:  nil,
+			expectedError:   entity.NewError("TOLERANCE_POLICY_REQUIRED", "tolerance requires rail and asset"),
+		},
 		{
 			name:   "missing rule version",
 			ledger: baseLedger,
 			external: func() []entity.ExternalStatementLine {
 				out := append([]entity.ExternalStatementLine(nil), baseExternal...)
+
 				return out
 			}(),
 			cfg: func() service.MatchConfig {
 				c := baseCfg
 				c.RuleVersion = ""
+
 				return c
 			}(),
 			expectedMatched: nil,
@@ -769,11 +747,13 @@ func TestMatchStatements(t *testing.T) {
 			ledger: baseLedger,
 			external: func() []entity.ExternalStatementLine {
 				out := append([]entity.ExternalStatementLine(nil), baseExternal...)
+
 				return out
 			}(),
 			cfg: func() service.MatchConfig {
 				c := baseCfg
 				c.Rail = ""
+
 				return c
 			}(),
 			expectedMatched: nil,
@@ -785,11 +765,13 @@ func TestMatchStatements(t *testing.T) {
 			ledger: baseLedger,
 			external: func() []entity.ExternalStatementLine {
 				out := append([]entity.ExternalStatementLine(nil), baseExternal...)
+
 				return out
 			}(),
 			cfg: func() service.MatchConfig {
 				c := baseCfg
 				c.RunID = "  "
+
 				return c
 			}(),
 			expectedMatched: nil,
@@ -801,11 +783,13 @@ func TestMatchStatements(t *testing.T) {
 			ledger: baseLedger,
 			external: func() []entity.ExternalStatementLine {
 				out := append([]entity.ExternalStatementLine(nil), baseExternal...)
+
 				return out
 			}(),
 			cfg: func() service.MatchConfig {
 				c := baseCfg
 				c.TenantID = ""
+
 				return c
 			}(),
 			expectedMatched: nil,
@@ -817,11 +801,13 @@ func TestMatchStatements(t *testing.T) {
 			ledger: baseLedger,
 			external: func() []entity.ExternalStatementLine {
 				out := append([]entity.ExternalStatementLine(nil), baseExternal...)
+
 				return out
 			}(),
 			cfg: func() service.MatchConfig {
 				c := baseCfg
 				c.TimingWindow = -time.Hour
+
 				return c
 			}(),
 			expectedMatched: nil,
@@ -833,11 +819,13 @@ func TestMatchStatements(t *testing.T) {
 			ledger: baseLedger,
 			external: func() []entity.ExternalStatementLine {
 				out := append([]entity.ExternalStatementLine(nil), baseExternal...)
+
 				return out
 			}(),
 			cfg: func() service.MatchConfig {
 				c := baseCfg
 				c.Actor = "   "
+
 				return c
 			}(),
 			expectedMatched: nil,
@@ -848,6 +836,8 @@ func TestMatchStatements(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualMatched, actualBreaks, err := service.MatchStatements(tc.ledger, tc.external, tc.cfg)
 			assert.Equal(t, tc.expectedMatched, actualMatched)
 			assert.Equal(t, tc.expectedBreaks, actualBreaks)
@@ -910,6 +900,7 @@ func TestAutoResolveBreak(t *testing.T) {
 			b: func() entity.ReconciliationBreak {
 				b := baseBreak
 				b.Type = valueobject.BreakAmountMismatch
+
 				return b
 			}(),
 			skew:           0,
@@ -922,6 +913,7 @@ func TestAutoResolveBreak(t *testing.T) {
 			b: func() entity.ReconciliationBreak {
 				b := baseBreak
 				b.Type = valueobject.BreakDuplicate
+
 				return b
 			}(),
 			skew:           0,
@@ -936,6 +928,7 @@ func TestAutoResolveBreak(t *testing.T) {
 			policy: func() service.AutoResolvePolicy {
 				p := basePolicy
 				p.AllowedTypes = []valueobject.BreakType{valueobject.BreakMissingInBank}
+
 				return p
 			}(),
 			expectedResult: false,
@@ -948,6 +941,7 @@ func TestAutoResolveBreak(t *testing.T) {
 			policy: func() service.AutoResolvePolicy {
 				p := basePolicy
 				p.RuleVersion = ""
+
 				return p
 			}(),
 			expectedResult: false,
@@ -960,6 +954,7 @@ func TestAutoResolveBreak(t *testing.T) {
 			policy: func() service.AutoResolvePolicy {
 				p := basePolicy
 				p.DecisionActor = ""
+
 				return p
 			}(),
 			expectedResult: false,
@@ -972,6 +967,7 @@ func TestAutoResolveBreak(t *testing.T) {
 			policy: func() service.AutoResolvePolicy {
 				p := basePolicy
 				p.DecisionActor = "   "
+
 				return p
 			}(),
 			expectedResult: false,
@@ -981,6 +977,8 @@ func TestAutoResolveBreak(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.AutoResolveBreak(tc.b, tc.skew, tc.policy)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -1017,6 +1015,7 @@ func TestLedgerFactValidate(t *testing.T) {
 			fact: func() service.LedgerFact {
 				f := baseFact
 				f.PostingID = ""
+
 				return f
 			}(),
 			expectedError: entity.NewError("POSTING_ID_REQUIRED", "ledger fact posting id is required"),
@@ -1026,6 +1025,7 @@ func TestLedgerFactValidate(t *testing.T) {
 			fact: func() service.LedgerFact {
 				f := baseFact
 				f.Reference = "  "
+
 				return f
 			}(),
 			expectedError: entity.NewError("LEDGER_REFERENCE_REQUIRED", "ledger fact reference is required"),
@@ -1035,6 +1035,7 @@ func TestLedgerFactValidate(t *testing.T) {
 			fact: func() service.LedgerFact {
 				f := baseFact
 				f.AmountMinor = -1
+
 				return f
 			}(),
 			expectedError: entity.NewError("INVALID_ENTRY_AMOUNT", "ledger fact amount must be positive"),
@@ -1044,6 +1045,7 @@ func TestLedgerFactValidate(t *testing.T) {
 			fact: func() service.LedgerFact {
 				f := baseFact
 				f.AssetCode = ""
+
 				return f
 			}(),
 			expectedError: entity.NewError("LEDGER_ASSET_REQUIRED", "ledger fact asset is required"),
@@ -1053,6 +1055,7 @@ func TestLedgerFactValidate(t *testing.T) {
 			fact: func() service.LedgerFact {
 				f := baseFact
 				f.EffectiveAt = time.Time{}
+
 				return f
 			}(),
 			expectedError: entity.NewError("LEDGER_EFFECTIVE_REQUIRED", "ledger fact effective time is required"),
@@ -1061,6 +1064,8 @@ func TestLedgerFactValidate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.fact.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})

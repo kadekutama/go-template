@@ -1,29 +1,42 @@
 package valueobject
 
 import (
-	"errors"
+	"fmt"
 	"uuid"
 )
 
-// Typed domain identifiers. All IDs share the canonical UUID string shape;
-// Parse* accepts any canonical UUID. TransactionID is a public compatibility
-// alias for the immutable capture PostingID.
+// AccountID identifies a ledger account. All IDs below share the canonical
+// UUID string shape; Parse* accepts any canonical UUID.
 //
 // The domain mints nothing: new identities come from the IDGenerator port.
 // The shared kernel UUIDGenerator implements this interface (implicitly —
 // both spell NewID() string), as do deterministic test stubs, so generation
 // stays injectable and swappable per SPEC §7.10.
-type (
-	AccountID string
-	PostingID string
-	EntryID   string
-	HoldID    string
-	TenantID  string
-	LedgerID  string
-	UserID    string
-	JournalID string
-	PeriodID  string
-)
+type AccountID string
+
+// PostingID identifies a ledger posting.
+type PostingID string
+
+// EntryID identifies a journal entry line.
+type EntryID string
+
+// HoldID identifies a funds hold.
+type HoldID string
+
+// TenantID identifies a tenant.
+type TenantID string
+
+// LedgerID identifies a ledger within a tenant.
+type LedgerID string
+
+// UserID identifies a user or operator.
+type UserID string
+
+// JournalID identifies a journal.
+type JournalID string
+
+// PeriodID identifies an accounting period.
+type PeriodID string
 
 // TransactionID aliases PostingID for payment/provider-facing compatibility.
 type TransactionID = PostingID
@@ -41,10 +54,12 @@ func validUUID(s string) bool {
 	// Validation itself is delegated to the standard library (uuid.Parse);
 	// the length gate keeps the alternate urn:/braced/bare-hex forms Parse
 	// also accepts out of the domain contract.
-	if len(s) != 36 {
+	if len(s) != uuidStringLen {
 		return false
 	}
+
 	_, err := uuid.Parse(s)
+
 	return err == nil
 }
 
@@ -52,8 +67,9 @@ func validUUID(s string) bool {
 func parseID[T ~string](s, kind string) (T, error) {
 	var zero T
 	if !validUUID(s) {
-		return zero, errors.New("ids: invalid " + kind + " id")
+		return zero, fmt.Errorf("ids: invalid %s id: %w", kind, ErrIDsInvalidID)
 	}
+
 	return T(s), nil
 }
 

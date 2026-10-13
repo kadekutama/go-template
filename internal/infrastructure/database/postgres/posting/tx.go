@@ -33,7 +33,7 @@ type UnitOfWork struct {
 // NewUnitOfWork builds the adapter; DB must be non-nil.
 func NewUnitOfWork(params UnitOfWorkParams) (*UnitOfWork, error) {
 	if params.DB == nil {
-		return nil, fmt.Errorf("postgres: unit of work needs DB")
+		return nil, ErrPostgresUnitOfWorkNeedsDB
 	}
 
 	return &UnitOfWork{db: params.DB}, nil
@@ -42,7 +42,7 @@ func NewUnitOfWork(params UnitOfWorkParams) (*UnitOfWork, error) {
 // Do runs fn inside one atomic transaction; nil commits, non-nil rolls back.
 func (u *UnitOfWork) Do(ctx context.Context, fn func(ctx context.Context, tx appport.Tx) error) error {
 	if fn == nil {
-		return fmt.Errorf("postgres: unit of work callback is required")
+		return ErrPostgresUnitOfWorkCallbackIsRequired
 	}
 
 	return u.db.WithContext(ctx).Transaction(func(gormTx *gorm.DB) error {
@@ -91,6 +91,7 @@ func newTx(db *gorm.DB) (*tx, error) {
 // reads can address this transaction exactly.
 type txPostings struct {
 	*repos.PostingRepository
+
 	tx       *gorm.DB
 	onCursor func(cursor string)
 }
@@ -111,13 +112,6 @@ func (p *txPostings) Commit(ctx context.Context, posting entity.PostingData) (en
 	p.onCursor(cursor)
 
 	return stored, nil
-}
-
-// setCursor records the latest posting cursor of this transaction.
-func (t *tx) setCursor(cursor string) {
-	if cursor != "" {
-		t.cursor = cursor
-	}
 }
 
 // Postings returns the tx-scoped posting path.
@@ -171,42 +165,6 @@ func (s *idempotencyStore) Reserve(ctx context.Context, rec appport.IdempotencyR
 	}
 }
 
-func replayOrConflict(existing models.IdempotencyModel, rec appport.IdempotencyRecord) (appport.ReserveOutcome, error) {
-	if existing.Fingerprint != rec.Fingerprint {
-		return appport.ReserveOutcome{}, entity.NewError("IDEMPOTENCY_CONFLICT", "idempotency key already used for a different request")
-	}
-
-	if existing.Response != nil {
-		return appport.ReserveOutcome{Replay: true, Response: existing.Response}, nil
-	}
-
-	return appport.ReserveOutcome{}, nil
-}
-
-func (s *idempotencyStore) lease(ctx context.Context, rec appport.IdempotencyRecord) (appport.ReserveOutcome, error) {
-	model := models.IdempotencyModel{
-		TenantID:    rec.TenantID.String(),
-		Key:         rec.Key,
-		Fingerprint: rec.Fingerprint,
-	}
-
-	if err := s.db.WithContext(ctx).Create(&model).Error; err != nil {
-		var existing models.IdempotencyModel
-
-		// Lost the insert race: re-read and apply reserve rules once.
-		readErr := s.db.WithContext(ctx).
-			Where("tenant_id = ? AND key = ?", rec.TenantID.String(), rec.Key).
-			First(&existing).Error
-		if readErr != nil {
-			return appport.ReserveOutcome{}, fmt.Errorf("postgres: lease idempotency: %w", err)
-		}
-
-		return replayOrConflict(existing, rec)
-	}
-
-	return appport.ReserveOutcome{}, nil
-}
-
 // Complete stores the command response for Key inside the same transaction,
 // scoped to the Reserved tenant so identical keys in other tenants are safe.
 func (s *idempotencyStore) Complete(ctx context.Context, key string, response []byte) error {
@@ -221,7 +179,7 @@ func (s *idempotencyStore) Complete(ctx context.Context, key string, response []
 	}
 
 	if res.RowsAffected == 0 {
-		return fmt.Errorf("postgres: complete idempotency: no lease for key")
+		return ErrPostgresCompleteIdempotencyNoLeaseForKey
 	}
 
 	return nil
@@ -230,6 +188,18 @@ func (s *idempotencyStore) Complete(ctx context.Context, key string, response []
 // outboxStore stages facts inside the running transaction.
 type outboxStore struct {
 	db *gorm.DB
+}
+
+func replayOrConflict(existing models.IdempotencyModel, rec appport.IdempotencyRecord) (appport.ReserveOutcome, error) {
+	if existing.Fingerprint != rec.Fingerprint {
+		return appport.ReserveOutcome{}, entity.NewError("IDEMPOTENCY_CONFLICT", "idempotency key already used for a different request")
+	}
+
+	if existing.Response != nil {
+		return appport.ReserveOutcome{Replay: true, Response: existing.Response}, nil
+	}
+
+	return appport.ReserveOutcome{}, nil
 }
 
 // Append stages facts; per-aggregate versions allocate monotonically inside
@@ -263,18 +233,49 @@ func (s *outboxStore) Append(ctx context.Context, facts ...appport.OutboxFact) e
 	return nil
 }
 
+// setCursor records the latest posting cursor of this transaction.
+func (t *tx) setCursor(cursor string) {
+	if cursor != "" {
+		t.cursor = cursor
+	}
+}
+
+func (s *idempotencyStore) lease(ctx context.Context, rec appport.IdempotencyRecord) (appport.ReserveOutcome, error) {
+	model := models.IdempotencyModel{
+		TenantID:    rec.TenantID.String(),
+		Key:         rec.Key,
+		Fingerprint: rec.Fingerprint,
+	}
+
+	if err := s.db.WithContext(ctx).Create(&model).Error; err != nil {
+		var existing models.IdempotencyModel
+
+		// Lost the insert race: re-read and apply reserve rules once.
+		readErr := s.db.WithContext(ctx).
+			Where("tenant_id = ? AND key = ?", rec.TenantID.String(), rec.Key).
+			First(&existing).Error
+		if readErr != nil {
+			return appport.ReserveOutcome{}, fmt.Errorf("postgres: lease idempotency: %w", err)
+		}
+
+		return replayOrConflict(existing, rec)
+	}
+
+	return appport.ReserveOutcome{}, nil
+}
+
 // nextVersion allocates MAX(existing, 0) + 1 + already-staged offset.
 func (s *outboxStore) nextVersion(ctx context.Context, aggregate string, offset int64) (int64, error) {
-	var max int64
+	var maxVersion int64
 
 	err := s.db.WithContext(ctx).Model(&models.OutboxModel{}).
 		Where("aggregate_id = ?", aggregate).
-		Select("COALESCE(MAX(aggregate_version), 0)").Scan(&max).Error
+		Select("COALESCE(MAX(aggregate_version), 0)").Scan(&maxVersion).Error
 	if err != nil {
 		return 0, fmt.Errorf("postgres: outbox version: %w", err)
 	}
 
-	return max + 1 + offset, nil
+	return maxVersion + 1 + offset, nil
 }
 
 // LockOrder returns account IDs in deterministic lock order (sorted).
@@ -312,7 +313,7 @@ func AvailableMinor(entries []entity.Entry, holds []entity.HoldData, normalSide 
 
 		sum, overflow := addChecked(total, delta)
 		if overflow {
-			return 0, fmt.Errorf("postgres: entry total overflow")
+			return 0, ErrPostgresEntryTotalOverflow
 		}
 
 		total = sum
@@ -325,7 +326,7 @@ func AvailableMinor(entries []entity.Entry, holds []entity.HoldData, normalSide 
 
 		remaining, overflow := addChecked(total, -hold.AmountMinor)
 		if overflow {
-			return 0, fmt.Errorf("postgres: hold total overflow")
+			return 0, ErrPostgresHoldTotalOverflow
 		}
 
 		total = remaining

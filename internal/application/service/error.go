@@ -12,15 +12,17 @@ import (
 // envelope codes. Domain business rejections are client errors; only unknown
 // shapes become INTERNAL_ERROR. Codes not listed here map to
 // VALIDATION_FAILED with the domain message preserved.
-var domainCodeMap = map[string]apperror.Code{
-	"PLATFORM_ACCOUNT_NOT_FOUND":  apperror.CodeNotFound,
-	"CONNECTED_ACCOUNT_NOT_FOUND": apperror.CodeNotFound,
-	"PROCESSOR_ACCOUNT_NOT_FOUND": apperror.CodeNotFound,
-	"POSTING_NOT_FOUND":           apperror.CodeNotFound,
-	"HOLD_NOT_FOUND":              apperror.CodeNotFound,
-	"IDEMPOTENCY_CONFLICT":        apperror.CodeConflict,
-	"FORBIDDEN":                   apperror.CodeForbidden,
-	"PAYOUT_BLOCKED":              apperror.CodePayoutBlocked,
+func domainCodeMap() map[string]apperror.Code {
+	return map[string]apperror.Code{
+		"PLATFORM_ACCOUNT_NOT_FOUND":  apperror.CodeNotFound,
+		"CONNECTED_ACCOUNT_NOT_FOUND": apperror.CodeNotFound,
+		"PROCESSOR_ACCOUNT_NOT_FOUND": apperror.CodeNotFound,
+		"POSTING_NOT_FOUND":           apperror.CodeNotFound,
+		"HOLD_NOT_FOUND":              apperror.CodeNotFound,
+		"IDEMPOTENCY_CONFLICT":        apperror.CodeConflict,
+		"FORBIDDEN":                   apperror.CodeForbidden,
+		"PAYOUT_BLOCKED":              apperror.CodePayoutBlocked,
+	}
 }
 
 // ToAppError converts err to the transport envelope. *apperror.AppError
@@ -31,21 +33,24 @@ func ToAppError(err error) *apperror.AppError {
 	if err == nil {
 		return nil
 	}
-	var appErr *apperror.AppError
-	if errors.As(err, &appErr) {
+
+	if appErr, ok := errors.AsType[*apperror.AppError](err); ok {
 		return appErr
 	}
-	var domainErr *entity.Error
-	if errors.As(err, &domainErr) {
-		code, ok := domainCodeMap[domainErr.Code]
+
+	if domainErr, ok := errors.AsType[*entity.Error](err); ok {
+		code, ok := domainCodeMap()[domainErr.Code]
 		if !ok {
 			code = apperror.CodeValidationFailed
 		}
+
 		if converted, buildErr := apperror.New(code, domainErr.Message, apperror.WithCause(domainErr)); buildErr == nil {
 			return converted
 		}
 	}
+
 	converted, _ := apperror.New(apperror.CodeInternalError, err.Error(), apperror.WithCause(err))
+
 	return converted
 }
 
@@ -56,5 +61,6 @@ func Localize(ctx context.Context, translator *apperror.Translator, err error) s
 	if err == nil {
 		return ""
 	}
+
 	return translator.Translate(ctx, ToAppError(err))
 }

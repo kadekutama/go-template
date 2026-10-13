@@ -87,6 +87,7 @@ func TestTenancySliceOnboarding(t *testing.T) {
 			req: func() service.OnboardingRequest {
 				r := baseReq
 				r.Region = "eu-central-1"
+
 				return r
 			}(),
 			expectedResult: service.OnboardingPlan{},
@@ -97,6 +98,7 @@ func TestTenancySliceOnboarding(t *testing.T) {
 			req: func() service.OnboardingRequest {
 				r := baseReq
 				r.ExistingNames = []string{"slice corp"}
+
 				return r
 			}(),
 			expectedResult: service.OnboardingPlan{},
@@ -107,6 +109,7 @@ func TestTenancySliceOnboarding(t *testing.T) {
 			req: func() service.OnboardingRequest {
 				r := baseReq
 				r.Assets = []valueobject.AssetCode{"EUR"}
+
 				return r
 			}(),
 			expectedResult: service.OnboardingPlan{},
@@ -117,6 +120,7 @@ func TestTenancySliceOnboarding(t *testing.T) {
 			req: func() service.OnboardingRequest {
 				r := baseReq
 				r.Name = "   "
+
 				return r
 			}(),
 			expectedResult: service.OnboardingPlan{},
@@ -127,6 +131,7 @@ func TestTenancySliceOnboarding(t *testing.T) {
 			req: func() service.OnboardingRequest {
 				r := baseReq
 				r.MaxAssets = 0
+
 				return r
 			}(),
 			expectedResult: service.OnboardingPlan{},
@@ -136,6 +141,8 @@ func TestTenancySliceOnboarding(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.ValidateOnboarding(tc.req)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -181,6 +188,7 @@ func TestTenancySliceAggregateLifecycle(t *testing.T) {
 			p: func() aggregate.OpenTenantParams {
 				p := baseParams
 				p.ID = ""
+
 				return p
 			}(),
 			expectedStatus:  entity.TenantActive,
@@ -193,6 +201,7 @@ func TestTenancySliceAggregateLifecycle(t *testing.T) {
 			p: func() aggregate.OpenTenantParams {
 				p := baseParams
 				p.ID = "invalid-uuid"
+
 				return p
 			}(),
 			expectedStatus:  "",
@@ -205,6 +214,7 @@ func TestTenancySliceAggregateLifecycle(t *testing.T) {
 			p: func() aggregate.OpenTenantParams {
 				p := baseParams
 				p.LedgerID = "invalid-uuid"
+
 				return p
 			}(),
 			expectedStatus:  "",
@@ -217,6 +227,7 @@ func TestTenancySliceAggregateLifecycle(t *testing.T) {
 			p: func() aggregate.OpenTenantParams {
 				p := baseParams
 				p.OpenedBy = ""
+
 				return p
 			}(),
 			expectedStatus:  "",
@@ -229,6 +240,7 @@ func TestTenancySliceAggregateLifecycle(t *testing.T) {
 			p: func() aggregate.OpenTenantParams {
 				p := baseParams
 				p.EventID = ""
+
 				return p
 			}(),
 			expectedStatus:  "",
@@ -241,6 +253,7 @@ func TestTenancySliceAggregateLifecycle(t *testing.T) {
 			p: func() aggregate.OpenTenantParams {
 				p := baseParams
 				p.OccurredAt = time.Time{}
+
 				return p
 			}(),
 			expectedStatus:  "",
@@ -252,11 +265,15 @@ func TestTenancySliceAggregateLifecycle(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := aggregate.OpenTenant(tc.p)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, tc.expectedStatus, actualResult.Record().Status)
 				assert.Equal(t, tc.expectedVersion, actualResult.Record().Version)
+
 				evts := actualResult.UncommittedEvents()
 				if tc.expectedEvent != "" {
 					require.Len(t, evts, 1)
@@ -325,6 +342,8 @@ func TestTenancySliceValidateHierarchy(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := entity.ValidateHierarchy(tc.links)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -376,6 +395,8 @@ func TestTenancySliceValidateTransferGrant(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := service.ValidateTransferGrant(tc.grants, tc.childTenantID)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -427,6 +448,8 @@ func TestTenancySliceValidateReadGrant(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := service.ValidateReadGrant(tc.grants, tc.childTenantID)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -479,6 +502,7 @@ func TestTenancySliceHierarchyAndConsolidation(t *testing.T) {
 					{TenantID: "t-a", AssetCode: "USD", AmountMinor: 5000},
 					{TenantID: "t-b", AssetCode: "USD", AmountMinor: 10000},
 				}
+
 				return r
 			}(),
 			expectedResult: int64(15000),
@@ -489,6 +513,7 @@ func TestTenancySliceHierarchyAndConsolidation(t *testing.T) {
 			req: func() service.ConsolidationRequest {
 				r := baseReq
 				r.Rates = map[valueobject.AssetCode]valueobject.FxRate{}
+
 				return r
 			}(),
 			expectedResult: 0,
@@ -509,6 +534,7 @@ func TestTenancySliceHierarchyAndConsolidation(t *testing.T) {
 						TTL:         time.Hour,
 					},
 				}
+
 				return r
 			}(),
 			expectedResult: 0,
@@ -519,6 +545,7 @@ func TestTenancySliceHierarchyAndConsolidation(t *testing.T) {
 			req: func() service.ConsolidationRequest {
 				r := baseReq
 				r.Children = nil
+
 				return r
 			}(),
 			expectedResult: 0,
@@ -531,6 +558,7 @@ func TestTenancySliceHierarchyAndConsolidation(t *testing.T) {
 				r.Children = []service.ChildBalance{
 					{TenantID: "t-a", AssetCode: "USD", AmountMinor: -100},
 				}
+
 				return r
 			}(),
 			expectedResult: 0,
@@ -540,6 +568,8 @@ func TestTenancySliceHierarchyAndConsolidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.ConsolidateBalances(tc.req)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -601,6 +631,8 @@ func TestTenancySliceIsolationParseBalanceKey(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualTenant, actualAccount, actualAsset, actualCursor, err := service.ParseBalanceKey(tc.key)
 			assert.Equal(t, tc.expectedTenant, actualTenant)
 			assert.Equal(t, tc.expectedAccount, actualAccount)
@@ -652,6 +684,8 @@ func TestTenancySliceIsolationParseIdempotencyKey(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualTenant, actualOp, actualClientKey, err := service.ParseIdempotencyKey(tc.key)
 			assert.Equal(t, tc.expectedTenant, actualTenant)
 			assert.Equal(t, tc.expectedOperation, actualOp)
@@ -698,6 +732,8 @@ func TestTenancySliceIsolationParseRateLimitKey(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualTenant, actualUser, err := service.ParseRateLimitKey(tc.key)
 			assert.Equal(t, tc.expectedTenant, actualTenant)
 			assert.Equal(t, tc.expectedUser, actualUser)
@@ -743,6 +779,8 @@ func TestTenancySliceIsolationParseSubject(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualTenant, actualEvent, err := service.ParseSubject(tc.subject)
 			assert.Equal(t, tc.expectedTenant, actualTenant)
 			assert.Equal(t, tc.expectedEvent, actualEvent)
@@ -780,6 +818,8 @@ func TestTenancySliceIsolationRequireTenant(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := service.RequireTenant(tc.tenantID)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -811,6 +851,7 @@ func TestTenancySliceIsolationResidencySettings(t *testing.T) {
 			r: func() service.ResidencySettings {
 				s := baseSettings
 				s.Region = ""
+
 				return s
 			}(),
 			expectedError: entity.NewError("RESIDENCY_REGION_REQUIRED", "residency region is required"),
@@ -820,6 +861,7 @@ func TestTenancySliceIsolationResidencySettings(t *testing.T) {
 			r: func() service.ResidencySettings {
 				s := baseSettings
 				s.Region = "   "
+
 				return s
 			}(),
 			expectedError: entity.NewError("RESIDENCY_REGION_REQUIRED", "residency region is required"),
@@ -829,6 +871,7 @@ func TestTenancySliceIsolationResidencySettings(t *testing.T) {
 			r: func() service.ResidencySettings {
 				s := baseSettings
 				s.DBPointer = ""
+
 				return s
 			}(),
 			expectedError: entity.NewError("RESIDENCY_DB_REQUIRED", "residency db pointer is required"),
@@ -837,6 +880,8 @@ func TestTenancySliceIsolationResidencySettings(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.r.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -868,6 +913,7 @@ func TestTenancySliceIsolationWhiteLabelSettings(t *testing.T) {
 			w: func() service.WhiteLabelSettings {
 				s := baseSettings
 				s.BrandName = ""
+
 				return s
 			}(),
 			expectedError: entity.NewError("WHITELABEL_BRAND_REQUIRED", "brand name is required"),
@@ -877,6 +923,7 @@ func TestTenancySliceIsolationWhiteLabelSettings(t *testing.T) {
 			w: func() service.WhiteLabelSettings {
 				s := baseSettings
 				s.Domains = []string{"https://pay.slice.example.com/path"}
+
 				return s
 			}(),
 			expectedError: entity.NewError("WHITELABEL_DOMAIN_INVALID", "white-label domain must be a bare hostname"),
@@ -886,6 +933,7 @@ func TestTenancySliceIsolationWhiteLabelSettings(t *testing.T) {
 			w: func() service.WhiteLabelSettings {
 				s := baseSettings
 				s.Domains = []string{"pay slice com"}
+
 				return s
 			}(),
 			expectedError: entity.NewError("WHITELABEL_DOMAIN_INVALID", "white-label domain must be a bare hostname"),
@@ -895,6 +943,7 @@ func TestTenancySliceIsolationWhiteLabelSettings(t *testing.T) {
 			w: func() service.WhiteLabelSettings {
 				s := baseSettings
 				s.PrimaryColor = "blue"
+
 				return s
 			}(),
 			expectedError: entity.NewError("WHITELABEL_COLOR_INVALID", "primary color must be hex"),
@@ -904,6 +953,7 @@ func TestTenancySliceIsolationWhiteLabelSettings(t *testing.T) {
 			w: func() service.WhiteLabelSettings {
 				s := baseSettings
 				s.LogoURL = "http://cdn.slice.example.com/logo.png"
+
 				return s
 			}(),
 			expectedError: entity.NewError("WHITELABEL_LOGO_INVALID", "logo url must be an https url without spaces"),
@@ -912,6 +962,8 @@ func TestTenancySliceIsolationWhiteLabelSettings(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.w.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -995,6 +1047,8 @@ func TestTenancySliceIsolationRLSPolicyMatrix(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := service.RLSPolicyMatrix()
 			assert.Len(t, actualResult, tc.expectedLength)
 			assert.Contains(t, actualResult, tc.expectedPolicy)

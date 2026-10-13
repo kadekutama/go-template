@@ -35,7 +35,7 @@ func (accountActive) Evaluate(_ context.Context, a entity.AccountData) SpecResul
 
 // SameTenant passes when both tenant scopes are equal and non-empty.
 func SameTenant() Specification[TenantPair] {
-	return NewFuncSpec[TenantPair]("TENANT_MISMATCH", "tenant scopes differ",
+	return NewFuncSpec("TENANT_MISMATCH", "tenant scopes differ",
 		func(_ context.Context, p TenantPair) bool {
 			return p.A != "" && p.A == p.B
 		})

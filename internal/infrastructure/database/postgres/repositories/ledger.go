@@ -37,7 +37,7 @@ type LedgerRepository struct {
 // NewLedgerRepository builds the adapter; DB must be non-nil.
 func NewLedgerRepository(params LedgerRepositoryParams) (*LedgerRepository, error) {
 	if params.DB == nil {
-		return nil, fmt.Errorf("postgres: ledger repository needs DB")
+		return nil, ErrPostgresLedgerRepositoryNeedsDB
 	}
 
 	return &LedgerRepository{db: params.DB}, nil
@@ -75,7 +75,7 @@ func (r *LedgerRepository) Create(ctx context.Context, ledger entity.Ledger) (en
 // FindByID returns one ledger by tenant + ID (strong read).
 func (r *LedgerRepository) FindByID(ctx context.Context, tenant valueobject.TenantID, id valueobject.LedgerID) (entity.Ledger, error) {
 	if tenant.String() == "" {
-		return entity.Ledger{}, fmt.Errorf("postgres: tenant is required")
+		return entity.Ledger{}, ErrPostgresTenantIsRequired
 	}
 
 	var model models.LedgerModel
@@ -104,7 +104,7 @@ func (r *LedgerRepository) FindByID(ctx context.Context, tenant valueobject.Tena
 // ListByTenant returns all ledgers of a tenant (strong read, small result).
 func (r *LedgerRepository) ListByTenant(ctx context.Context, tenant valueobject.TenantID) ([]entity.Ledger, error) {
 	if tenant.String() == "" {
-		return nil, fmt.Errorf("postgres: tenant is required")
+		return nil, ErrPostgresTenantIsRequired
 	}
 
 	if err := scopeTenant(ctx, r.db, tenant); err != nil {

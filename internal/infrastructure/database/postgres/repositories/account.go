@@ -40,7 +40,7 @@ type AccountRepository struct {
 // NewAccountRepository builds the adapter; DB must be non-nil.
 func NewAccountRepository(params AccountRepositoryParams) (*AccountRepository, error) {
 	if params.DB == nil {
-		return nil, fmt.Errorf("postgres: account repository needs DB")
+		return nil, ErrPostgresAccountRepositoryNeedsDB
 	}
 
 	return &AccountRepository{db: params.DB}, nil
@@ -78,7 +78,7 @@ func (r *AccountRepository) FindByID(
 	id valueobject.AccountID,
 ) (entity.AccountData, error) {
 	if tenant.String() == "" {
-		return entity.AccountData{}, fmt.Errorf("postgres: tenant is required")
+		return entity.AccountData{}, ErrPostgresTenantIsRequired
 	}
 
 	if err := scopeTenant(ctx, r.db, tenant); err != nil {
@@ -107,7 +107,7 @@ func (r *AccountRepository) FindByTenant(
 	limit int,
 ) ([]entity.AccountData, string, error) {
 	if tenant.String() == "" {
-		return nil, "", fmt.Errorf("postgres: tenant is required")
+		return nil, "", ErrPostgresTenantIsRequired
 	}
 
 	if err := scopeTenant(ctx, r.db, tenant); err != nil {
@@ -178,7 +178,7 @@ func (r *AccountRepository) UpdateStatus(
 	expectedVersion int64,
 ) error {
 	if tenant.String() == "" {
-		return fmt.Errorf("postgres: tenant is required")
+		return ErrPostgresTenantIsRequired
 	}
 
 	if err := scopeTenant(ctx, r.db, tenant); err != nil {

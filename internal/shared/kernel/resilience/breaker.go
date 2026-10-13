@@ -43,14 +43,14 @@ func (e *PermanentError) Unwrap() error { return e.Err }
 
 // DefaultClassifier maps the wrapper types; anything else is Unknown.
 func DefaultClassifier(err error) Class {
-	var retryable *RetryableError
-	if errors.As(err, &retryable) {
+	if _, ok := errors.AsType[*RetryableError](err); ok {
 		return Retryable
 	}
-	var permanent *PermanentError
-	if errors.As(err, &permanent) {
+
+	if _, ok := errors.AsType[*PermanentError](err); ok {
 		return Permanent
 	}
+
 	return Unknown
 }
 

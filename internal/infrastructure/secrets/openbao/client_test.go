@@ -46,8 +46,8 @@ func mockHTTPClient() *http.Client {
 	return &http.Client{Transport: transport}
 }
 
-func testParams(clk appport.Clock, doer httpclient.Doer) openbao.OpenBaoParams {
-	return openbao.OpenBaoParams{
+func testParams(clk appport.Clock, doer httpclient.Doer) openbao.Params {
+	return openbao.Params{
 		Address:    mockOpenBaoBase,
 		Token:      "test-token-12345678",
 		KVMount:    "kv",
@@ -66,7 +66,7 @@ func TestOpenBaoValidation(t *testing.T) {
 
 	type testCase struct {
 		name          string
-		params        openbao.OpenBaoParams
+		params        openbao.Params
 		expectedError error
 	}
 
@@ -78,45 +78,50 @@ func TestOpenBaoValidation(t *testing.T) {
 		},
 		{
 			name: "missing address",
-			params: func() openbao.OpenBaoParams {
+			params: func() openbao.Params {
 				p := testParams(clk, mockHTTPClient())
 				p.Address = ""
+
 				return p
 			}(),
 			expectedError: openbao.ErrConfigRequired,
 		},
 		{
 			name: "missing http",
-			params: func() openbao.OpenBaoParams {
+			params: func() openbao.Params {
 				p := testParams(clk, mockHTTPClient())
 				p.HTTP = nil
+
 				return p
 			}(),
 			expectedError: openbao.ErrConfigRequired,
 		},
 		{
 			name: "missing clock",
-			params: func() openbao.OpenBaoParams {
+			params: func() openbao.Params {
 				p := testParams(clk, mockHTTPClient())
 				p.Clock = nil
+
 				return p
 			}(),
 			expectedError: openbao.ErrClockRequired,
 		},
 		{
 			name: "zero ttl",
-			params: func() openbao.OpenBaoParams {
+			params: func() openbao.Params {
 				p := testParams(clk, mockHTTPClient())
 				p.DefaultTTL = 0
+
 				return p
 			}(),
 			expectedError: openbao.ErrConfigRequired,
 		},
 		{
 			name: "missing db mount rejected",
-			params: func() openbao.OpenBaoParams {
+			params: func() openbao.Params {
 				p := testParams(clk, mockHTTPClient())
 				p.DBMount = ""
+
 				return p
 			}(),
 			expectedError: openbao.ErrConfigRequired,
@@ -125,9 +130,12 @@ func TestOpenBaoValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			_, err := openbao.NewStore(tc.params)
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
+
 				return
 			}
 
@@ -177,6 +185,7 @@ func TestOpenBaoGet(t *testing.T) {
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			}(),
 			tenant:        valueobject.TenantID("t1"),
@@ -187,6 +196,7 @@ func TestOpenBaoGet(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
 			store, err := openbao.NewStore(testParams(clk, mockHTTPClient()))
 			require.NoError(t, err)
@@ -194,10 +204,12 @@ func TestOpenBaoGet(t *testing.T) {
 			secret, err := store.Get(tc.ctx, tc.tenant, tc.secretName)
 			if tc.expectedError != nil {
 				assert.Error(t, err)
+
 				if tc.secretName == "missing" {
 					assert.ErrorIs(t, err, openbao.ErrSecretNotFound)
 					assert.Contains(t, err.Error(), "missing")
 				}
+
 				return
 			}
 
@@ -240,6 +252,7 @@ func TestOpenBaoDynamicDB(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
 			store, err := openbao.NewStore(testParams(clk, mockHTTPClient()))
 			require.NoError(t, err)
@@ -247,6 +260,7 @@ func TestOpenBaoDynamicDB(t *testing.T) {
 			creds, err := store.LeaseDB(context.Background(), tc.role)
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
+
 				return
 			}
 
@@ -294,6 +308,8 @@ func TestResolveReference(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			path, ok := openbao.ResolveReference(tc.ref)
 			assert.Equal(t, tc.expectedPath, path)
 			assert.Equal(t, tc.expectedOK, ok)

@@ -1,9 +1,5 @@
 package valueobject
 
-import (
-	"fmt"
-)
-
 // FxPair is a currency conversion pair quoted as base → quote.
 type FxPair struct {
 	Base  AssetCode
@@ -13,10 +9,12 @@ type FxPair struct {
 // NewFxPair validates a conversion pair: both codes required and distinct.
 func NewFxPair(base, quote AssetCode) (FxPair, error) {
 	if base == "" || quote == "" {
-		return FxPair{}, fmt.Errorf("fx: pair requires base and quote codes")
+		return FxPair{}, ErrFxPairRequiresBaseAndQuoteCodes
 	}
+
 	if base == quote {
-		return FxPair{}, fmt.Errorf("fx: pair base and quote must differ")
+		return FxPair{}, ErrFxPairBaseAndQuoteMustDiffer
 	}
+
 	return FxPair{Base: base, Quote: quote}, nil
 }

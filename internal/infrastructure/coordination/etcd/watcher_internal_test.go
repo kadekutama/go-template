@@ -13,9 +13,9 @@ import (
 
 // serveHarness runs serve in a goroutine and returns a waiter for its exit.
 func serveHarness(
+	ctx context.Context,
 	t *testing.T,
 	w *watcher,
-	ctx context.Context,
 	prefix string,
 	stream clientv3.WatchChan,
 	onChange WatchHandler,
@@ -26,6 +26,7 @@ func serveHarness(
 
 	go func() {
 		defer close(done)
+
 		w.serve(ctx, prefix, stream, onChange)
 	}()
 
@@ -85,7 +86,10 @@ func TestWatcherServeErrorPaths(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			w := &watcher{errCh: make(chan error, 4)}
+
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -93,7 +97,7 @@ func TestWatcherServeErrorPaths(t *testing.T) {
 				cancel()
 			}
 
-			done := serveHarness(t, w, ctx, "/config/", tc.stream, func(_, _ []byte) {})
+			done := serveHarness(ctx, t, w, "/config/", tc.stream, func(_, _ []byte) {})
 
 			select {
 			case err := <-w.Err():
@@ -136,8 +140,11 @@ func TestWatcherSpawnRecoversPanics(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			w := &watcher{errCh: make(chan error, 4)}
-			ctx, cancel := context.WithCancel(context.Background())
+
+			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 
 			stream := make(chan clientv3.WatchResponse)
@@ -170,6 +177,7 @@ func TestWatcherServeMutation(t *testing.T) {
 	t.Parallel()
 
 	w := &watcher{errCh: make(chan error, 4)}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -187,7 +195,7 @@ func TestWatcherServeMutation(t *testing.T) {
 	}
 
 	handled := make(chan []byte, 1)
-	done := serveHarness(t, w, ctx, "/config/", stream, func(_, value []byte) {
+	done := serveHarness(ctx, t, w, "/config/", stream, func(_, value []byte) {
 		handled <- value
 	})
 

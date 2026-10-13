@@ -49,7 +49,7 @@ type MockDLQSink_Record_Call struct {
 // Record is a helper method to define mock.On call
 //   - ctx context.Context
 //   - msg webhook.DLQMessage
-func (_e *MockDLQSink_Expecter) Record(ctx interface{}, msg interface{}) *MockDLQSink_Record_Call {
+func (_e *MockDLQSink_Expecter) Record(ctx any, msg any) *MockDLQSink_Record_Call {
 	return &MockDLQSink_Record_Call{Call: _e.mock.On("Record", ctx, msg)}
 }
 

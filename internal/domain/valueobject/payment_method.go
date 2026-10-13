@@ -24,7 +24,7 @@ func ParsePaymentMethod(s string) (PaymentMethod, error) {
 	case MethodACH, MethodWire, MethodRTP, MethodCard, MethodCrypto, MethodWallet:
 		return PaymentMethod(s), nil
 	default:
-		return "", fmt.Errorf("payment: invalid method %q", s)
+		return "", fmt.Errorf("payment: invalid method %q: %w", s, ErrPaymentInvalidMethod)
 	}
 }
 
@@ -38,20 +38,23 @@ type Capabilities struct {
 
 // methodRegistry is the rail capability table. New rails extend the table,
 // not a switch.
-var methodRegistry = map[PaymentMethod]Capabilities{
-	MethodACH:    {Push: true, Pull: true, Lag: 48 * time.Hour, Reversible: true},
-	MethodWire:   {Push: true, Pull: false, Lag: 12 * time.Hour, Reversible: false},
-	MethodRTP:    {Push: true, Pull: false, Lag: 15 * time.Minute, Reversible: false},
-	MethodCard:   {Push: false, Pull: true, Lag: time.Hour, Reversible: true},
-	MethodCrypto: {Push: true, Pull: false, Lag: time.Hour, Reversible: false},
-	MethodWallet: {Push: true, Pull: true, Lag: time.Hour, Reversible: true},
+func methodRegistry() map[PaymentMethod]Capabilities {
+	return map[PaymentMethod]Capabilities{
+		MethodACH:    {Push: true, Pull: true, Lag: lag48 * time.Hour, Reversible: true},
+		MethodWire:   {Push: true, Pull: false, Lag: lag12 * time.Hour, Reversible: false},
+		MethodRTP:    {Push: true, Pull: false, Lag: lag15 * time.Minute, Reversible: false},
+		MethodCard:   {Push: false, Pull: true, Lag: time.Hour, Reversible: true},
+		MethodCrypto: {Push: true, Pull: false, Lag: time.Hour, Reversible: false},
+		MethodWallet: {Push: true, Pull: true, Lag: time.Hour, Reversible: true},
+	}
 }
 
 // MethodCapabilities returns the registry entry per rail.
 func MethodCapabilities(m PaymentMethod) (Capabilities, error) {
-	caps, ok := methodRegistry[m]
+	caps, ok := methodRegistry()[m]
 	if !ok {
-		return Capabilities{}, fmt.Errorf("payment: invalid method %q", string(m))
+		return Capabilities{}, fmt.Errorf("payment: invalid method %q: %w", string(m), ErrPaymentInvalidMethod2)
 	}
+
 	return caps, nil
 }

@@ -2,7 +2,6 @@ package command
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"time"
 
@@ -96,8 +95,9 @@ type RefundService struct {
 // at runtime instead of at wiring time.
 func NewRefundService(params RefundServiceParams) (*RefundService, error) {
 	if params.WindowDays <= 0 {
-		return nil, errors.New("refund: window days must be positive")
+		return nil, ErrRefundWindowDaysMustBePositive
 	}
+
 	return &RefundService{
 		uow:        params.UoW,
 		refunds:    params.Refunds,
@@ -119,23 +119,28 @@ func (s *RefundService) CreateRefund(ctx context.Context, req port.RefundRequest
 	if err := validateRefundEnvelope(req); err != nil {
 		return port.RefundResult{}, err
 	}
+
 	subject := port.Subject{ID: req.Actor, TenantID: req.TenantID}
 	if err := RequireAuthz(ctx, s.authz, subject, "refund.create", "payment/"+req.OriginalTxn); err != nil {
 		return port.RefundResult{}, err
 	}
+
 	original, err := s.validateRefundable(ctx, req)
 	if err != nil {
 		return port.RefundResult{}, err
 	}
+
 	charged, err := s.processor.RefundCharge(ctx, port.RefundChargeRequest{
 		TenantID: req.TenantID, ProviderID: original.ProviderID,
 		AmountMinor: req.AmountMinor, IdempotencyKey: req.IdempotencyKey, Timeout: processorTimeout,
 	})
 	_ = charged
+
 	now := s.clock.Now().UTC()
 	if err != nil {
 		return s.persistRefund(ctx, req, now, RefundFailed, errorCodeOf(err), EventRefundFailed)
 	}
+
 	return s.persistRefund(ctx, req, now, RefundSucceeded, "", EventRefundSucceeded)
 }
 
@@ -145,6 +150,7 @@ func (s *RefundService) GetRefund(ctx context.Context, query port.PaymentQuery) 
 	if err != nil {
 		return port.RefundResult{}, err
 	}
+
 	return port.RefundResult{RefundID: record.ID, OriginalID: record.OriginalTxn, Status: record.Status}, nil
 }
 
@@ -153,14 +159,17 @@ func (s *RefundService) ListRefunds(ctx context.Context, tenant valueobject.Tena
 	if err := validatePageLimit(limit); err != nil {
 		return nil, err
 	}
+
 	records, err := s.refunds.ListRefunds(ctx, tenant, limit)
 	if err != nil {
 		return nil, err
 	}
+
 	out := make([]port.RefundResult, 0, len(records))
 	for _, record := range records {
 		out = append(out, port.RefundResult{RefundID: record.ID, OriginalID: record.OriginalTxn, Status: record.Status})
 	}
+
 	return out, nil
 }
 
@@ -173,20 +182,26 @@ func (s *RefundService) persistRefund(ctx context.Context, req port.RefundReques
 		Fingerprint: Fingerprint(req.IdempotencyKey, string(req.TenantID), req.OriginalTxn, int64ToString(req.AmountMinor)),
 		TenantID:    req.TenantID,
 	}
+
 	var result port.RefundResult
+
 	err := s.uow.Do(ctx, func(ctx context.Context, tx port.Tx) error {
 		outcome, err := tx.Idempotency().Reserve(ctx, rec)
 		if err != nil {
 			return err
 		}
+
 		if outcome.Replay {
 			decoded, err := decodeRefundResult(outcome.Response)
 			if err != nil {
 				return err
 			}
+
 			result = decoded
+
 			return nil
 		}
+
 		if status == RefundSucceeded {
 			// Atomic recheck: a concurrent refund may have landed between
 			// validation and the processor call. Failed attempts always
@@ -195,31 +210,38 @@ func (s *RefundService) persistRefund(ctx context.Context, req port.RefundReques
 				return err
 			}
 		}
+
 		if err := s.refunds.CreateRefund(ctx, RefundRecord{
 			ID: refundID, TenantID: req.TenantID, OriginalTxn: req.OriginalTxn,
 			AmountMinor: req.AmountMinor, Status: status, ErrorCode: errorCode, CreatedAt: now,
 		}); err != nil {
 			return err
 		}
+
 		result = port.RefundResult{RefundID: refundID, OriginalID: req.OriginalTxn, Status: status, Cursor: tx.Cursor()}
+
 		encoded, err := jsonparser.Marshal(result)
 		if err != nil {
 			return err
 		}
+
 		if err := tx.Outbox().Append(ctx, port.OutboxFact{
 			TenantID: req.TenantID, EventType: eventType,
 			AggregateID: refundID, Payload: refundPayload(refundID, req.OriginalTxn, status, errorCode), OccurredAt: now,
 		}); err != nil {
 			return err
 		}
+
 		return tx.Idempotency().Complete(ctx, rec.Key, encoded)
 	})
 	if err != nil {
 		return port.RefundResult{}, err
 	}
+
 	if status == RefundFailed {
 		return result, entity.NewError("REFUND_PROCESSOR_FAILED", "processor refund failed")
 	}
+
 	return result, nil
 }
 
@@ -232,14 +254,17 @@ func (s *RefundService) validateRefundable(ctx context.Context, req port.RefundR
 	if err != nil {
 		return IntentRecord{}, err
 	}
+
 	prior, err := s.refunds.SumPriorRefunds(ctx, req.TenantID, req.OriginalTxn)
 	if err != nil {
 		return IntentRecord{}, err
 	}
+
 	accounts, err := s.loadRefundAccounts(ctx, req.TenantID)
 	if err != nil {
 		return IntentRecord{}, err
 	}
+
 	if _, err := service.ValidateRefund(service.RefundRequest{
 		OriginalPostingID:   valueobject.PostingID(req.OriginalTxn),
 		OriginalAmountMinor: original.AmountMinor,
@@ -256,21 +281,25 @@ func (s *RefundService) validateRefundable(ctx context.Context, req port.RefundR
 	}, true, accounts); err != nil {
 		return IntentRecord{}, err
 	}
+
 	return original, nil
 }
 
 func (s *RefundService) loadRefundAccounts(ctx context.Context, tenant valueobject.TenantID) (map[valueobject.AccountID]entity.AccountData, error) {
-	accounts := make(map[valueobject.AccountID]entity.AccountData, 3)
+	accounts := make(map[valueobject.AccountID]entity.AccountData, mapCapacityHint3)
 	for _, id := range []valueobject.AccountID{s.settlement.MerchantPayable, s.settlement.RefundsPayable, s.settlement.CashAccount} {
 		if _, ok := accounts[id]; ok {
 			continue
 		}
+
 		account, err := s.accounts.FindByID(ctx, tenant, id)
 		if err != nil {
 			return nil, err
 		}
+
 		accounts[id] = account
 	}
+
 	return accounts, nil
 }
 
@@ -284,24 +313,30 @@ func validateRefundEnvelope(req port.RefundRequest) error {
 	if strings.TrimSpace(req.TenantID.String()) == "" {
 		return entity.NewError("TENANT_REQUIRED", "tenant id is required")
 	}
+
 	if strings.TrimSpace(req.OriginalTxn) == "" {
 		return entity.NewError("REFUND_ORIGINAL_REQUIRED", "refund requires the original transaction")
 	}
+
 	if req.AmountMinor <= 0 {
 		return entity.NewError("INVALID_REFUND_AMOUNT", "refund amount must be positive")
 	}
+
 	if strings.TrimSpace(req.Actor) == "" {
 		return entity.NewError("ACTOR_REQUIRED", "refund actor is required")
 	}
+
 	if strings.TrimSpace(req.IdempotencyKey) == "" {
 		return entity.NewError("IDEMPOTENCY_KEY_REQUIRED", "refund requires an idempotency key")
 	}
+
 	return nil
 }
 
 // refundPayload builds the §10-shaped webhook payload: id, original, status.
 func refundPayload(id, original, status, errorCode string) []byte {
 	encoded, _ := jsonparser.Marshal(map[string]string{payloadIDKey: id, payloadOriginalKey: original, payloadStatusKey: status, payloadErrorKey: errorCode})
+
 	return encoded
 }
 
@@ -311,8 +346,10 @@ func decodeRefundResult(response []byte) (port.RefundResult, error) {
 	if err := jsonparser.Unmarshal(response, &result); err != nil {
 		return port.RefundResult{}, entity.NewError("IDEMPOTENCY_RECORD_INVALID", "stored idempotency response is corrupt")
 	}
+
 	if result.RefundID == "" {
 		return port.RefundResult{}, entity.NewError("IDEMPOTENCY_RECORD_INVALID", "stored idempotency response is corrupt")
 	}
+
 	return result, nil
 }

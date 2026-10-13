@@ -16,12 +16,12 @@ import (
 // (later adapter work) replace scanning for hot accounts.
 const balancePageSize = 500
 
-// BalanceService derives available balances from committed entries minus
-// ACTIVE holds. It reads the strong projection only; cached or replica
-// figures MUST NOT back spend decisions. Signing follows the account's
-// normal side (ledger-core §5): normal-debit accounts read debits minus
-// credits, normal-credit accounts the reverse.
-// BalanceServiceParams encapsulates dependencies for BalanceService.
+// BalanceServiceParams encapsulates dependencies for BalanceService, which
+// derives available balances from committed entries minus ACTIVE holds. It
+// reads the strong projection only; cached or replica figures MUST NOT back
+// spend decisions. Signing follows the account's normal side (ledger-core
+// §5): normal-debit accounts read debits minus credits, normal-credit
+// accounts the reverse.
 type BalanceServiceParams struct {
 	Accounts repository.AccountRepository
 	Entries  repository.EntryReader
@@ -60,26 +60,33 @@ func (s *BalanceService) Execute(ctx context.Context, query port.BalanceQuery) (
 	if err := validateBalanceQuery(query); err != nil {
 		return port.BalanceView{}, err
 	}
+
 	account, err := s.accounts.FindByID(ctx, query.TenantID, query.AccountID)
 	if err != nil {
 		return port.BalanceView{}, err
 	}
+
 	if account.LedgerID != query.LedgerID {
 		return port.BalanceView{}, entity.NewError("LEDGER_MISMATCH", "account belongs to a different ledger")
 	}
+
 	posted, err := s.scanPosted(ctx, query, account.Class.NormalSide())
 	if err != nil {
 		return port.BalanceView{}, err
 	}
+
 	now := s.clock.Now().UTC()
+
 	held, err := s.sumActiveHolds(ctx, query, now)
 	if err != nil {
 		return port.BalanceView{}, err
 	}
+
 	available, ok := service.CheckedSub(posted, held)
 	if !ok {
 		return port.BalanceView{}, entity.NewError("BALANCE_OVERFLOW", "balance computation overflowed")
 	}
+
 	return port.BalanceView{
 		AccountID:      query.AccountID,
 		AssetCode:      query.AssetCode,
@@ -93,15 +100,19 @@ func validateBalanceQuery(query port.BalanceQuery) error {
 	if strings.TrimSpace(query.TenantID.String()) == "" {
 		return entity.NewError("TENANT_REQUIRED", "tenant id is required")
 	}
+
 	if strings.TrimSpace(query.LedgerID.String()) == "" {
 		return entity.NewError("LEDGER_REQUIRED", "ledger id is required")
 	}
+
 	if strings.TrimSpace(query.AccountID.String()) == "" {
 		return entity.NewError("BALANCE_ACCOUNT_REQUIRED", "balance requires an account id")
 	}
+
 	if strings.TrimSpace(string(query.AssetCode)) == "" {
 		return entity.NewError("BALANCE_ASSET_REQUIRED", "balance requires an asset code")
 	}
+
 	return nil
 }
 
@@ -110,29 +121,36 @@ func validateBalanceQuery(query port.BalanceQuery) error {
 // cursor ends the scan defensively so a faulty adapter cannot loop it.
 func (s *BalanceService) scanPosted(ctx context.Context, query port.BalanceQuery, normal valueobject.Direction) (int64, error) {
 	var total int64
+
 	cursor := ""
 	for {
 		entries, next, err := s.entries.FindByAccount(ctx, query.TenantID, query.AccountID, cursor, balancePageSize)
 		if err != nil {
 			return 0, err
 		}
+
 		for _, entry := range entries {
 			signed, include, signErr := signedEntryAmount(entry, query.AssetCode, normal)
 			if signErr != nil {
 				return 0, signErr
 			}
+
 			if !include {
 				continue
 			}
+
 			summed, ok := service.CheckedAdd(total, signed)
 			if !ok {
 				return 0, entity.NewError("BALANCE_OVERFLOW", "balance computation overflowed")
 			}
+
 			total = summed
 		}
+
 		if next == "" || next == cursor {
 			return total, nil
 		}
+
 		cursor = next
 	}
 }
@@ -144,13 +162,16 @@ func signedEntryAmount(entry entity.Entry, asset valueobject.AssetCode, normal v
 	if entry.AssetCode != asset {
 		return 0, false, nil
 	}
+
 	if entry.Side == normal {
 		return entry.AmountMinor, true, nil
 	}
+
 	negated, ok := service.CheckedSub(0, entry.AmountMinor)
 	if !ok {
 		return 0, false, entity.NewError("BALANCE_OVERFLOW", "balance computation overflowed")
 	}
+
 	return negated, true, nil
 }
 
@@ -162,19 +183,25 @@ func (s *BalanceService) sumActiveHolds(ctx context.Context, query port.BalanceQ
 	if err != nil {
 		return 0, err
 	}
+
 	var total int64
+
 	for _, hold := range holds {
 		if hold.AssetCode != query.AssetCode || hold.State != entity.HoldActive {
 			continue
 		}
+
 		if !hold.ExpiresAt.IsZero() && !hold.ExpiresAt.After(now) {
 			continue
 		}
+
 		next, ok := service.CheckedAdd(total, hold.AmountMinor)
 		if !ok {
 			return 0, entity.NewError("BALANCE_OVERFLOW", "balance computation overflowed")
 		}
+
 		total = next
 	}
+
 	return total, nil
 }

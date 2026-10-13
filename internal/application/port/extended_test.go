@@ -2,7 +2,6 @@ package port_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -45,14 +44,16 @@ func TestTransferUseCasesMock(t *testing.T) {
 		{
 			name:             "programmed failure propagates",
 			programmedResult: port.TransferResult{},
-			programmedError:  errors.New("processor down"),
+			programmedError:  port.ErrProcessorDown,
 			expectedResult:   port.TransferResult{},
-			expectedError:    errors.New("processor down"),
+			expectedError:    port.ErrProcessorDown,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			transfers := new(mockapplication.MockTransferUseCases)
 			transfers.On("CreateTransfer", mock.Anything, mock.Anything).Return(tc.programmedResult, tc.programmedError).Once()
 			actualResult, err := transfers.CreateTransfer(context.Background(), port.TransferRequest{
@@ -99,6 +100,8 @@ func TestPostingRepositoryMock(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			postings := new(mockdomain.MockPostingRepository)
 			postings.On("Commit", mock.Anything, mock.Anything).Return(tc.programmedResult, tc.programmedError).Once()
 			actualResult, err := postings.Commit(context.Background(), entity.PostingData{ID: valueobject.PostingID("p-1")})

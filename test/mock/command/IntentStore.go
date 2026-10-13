@@ -51,7 +51,7 @@ type MockIntentStore_CreateIntent_Call struct {
 // CreateIntent is a helper method to define mock.On call
 //   - ctx context.Context
 //   - record command.IntentRecord
-func (_e *MockIntentStore_Expecter) CreateIntent(ctx interface{}, record interface{}) *MockIntentStore_CreateIntent_Call {
+func (_e *MockIntentStore_Expecter) CreateIntent(ctx any, record any) *MockIntentStore_CreateIntent_Call {
 	return &MockIntentStore_CreateIntent_Call{Call: _e.mock.On("CreateIntent", ctx, record)}
 }
 
@@ -109,7 +109,7 @@ type MockIntentStore_FindIntent_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - id string
-func (_e *MockIntentStore_Expecter) FindIntent(ctx interface{}, tenant interface{}, id interface{}) *MockIntentStore_FindIntent_Call {
+func (_e *MockIntentStore_Expecter) FindIntent(ctx any, tenant any, id any) *MockIntentStore_FindIntent_Call {
 	return &MockIntentStore_FindIntent_Call{Call: _e.mock.On("FindIntent", ctx, tenant, id)}
 }
 
@@ -169,7 +169,7 @@ type MockIntentStore_ListIntents_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - limit int
-func (_e *MockIntentStore_Expecter) ListIntents(ctx interface{}, tenant interface{}, limit interface{}) *MockIntentStore_ListIntents_Call {
+func (_e *MockIntentStore_Expecter) ListIntents(ctx any, tenant any, limit any) *MockIntentStore_ListIntents_Call {
 	return &MockIntentStore_ListIntents_Call{Call: _e.mock.On("ListIntents", ctx, tenant, limit)}
 }
 
@@ -216,7 +216,7 @@ type MockIntentStore_UpdateIntent_Call struct {
 // UpdateIntent is a helper method to define mock.On call
 //   - ctx context.Context
 //   - record command.IntentRecord
-func (_e *MockIntentStore_Expecter) UpdateIntent(ctx interface{}, record interface{}) *MockIntentStore_UpdateIntent_Call {
+func (_e *MockIntentStore_Expecter) UpdateIntent(ctx any, record any) *MockIntentStore_UpdateIntent_Call {
 	return &MockIntentStore_UpdateIntent_Call{Call: _e.mock.On("UpdateIntent", ctx, record)}
 }
 

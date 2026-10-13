@@ -30,5 +30,6 @@ func (g *UUIDGenerator) NewID() string {
 	if err != nil {
 		panic(fmt.Sprintf("kernel: uuid v7: %v", err))
 	}
+
 	return id.String()
 }

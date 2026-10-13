@@ -24,6 +24,7 @@ func TestRoundTripMinorMoney(t *testing.T) {
 	assert.NotContains(t, string(data), "E+")
 
 	var out moneyShape
+
 	err = Unmarshal(data, &out)
 	assert.NoError(t, err)
 	assert.Equal(t, in, out)
@@ -33,17 +34,19 @@ func TestRoundTripLargePayload(t *testing.T) {
 	t.Parallel()
 
 	in := make([]moneyShape, 0, 20000)
-	for i := 0; i < 20000; i++ {
+	for i := range 20000 {
 		in = append(in, moneyShape{AccountID: "acc", AmountMinor: int64(i), AssetCode: "IDR"})
 	}
+
 	data, err := Marshal(in)
 	assert.NoError(t, err)
 	assert.GreaterOrEqual(t, len(data), 1<<20)
 
 	var out []moneyShape
+
 	err = Unmarshal(data, &out)
 	assert.NoError(t, err)
-	assert.Equal(t, len(in), len(out))
+	assert.Len(t, out, len(in))
 	assert.Equal(t, int64(19999), out[19999].AmountMinor)
 }
 
@@ -100,6 +103,8 @@ func TestGet(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, err := Get(tc.data, tc.path...)
 			if tc.expectedError {
 				assert.Error(t, err)
@@ -139,6 +144,8 @@ func TestMarshal(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			data, err := Marshal(tc.v)
 			if tc.expectedError {
 				assert.Error(t, err)
@@ -178,6 +185,8 @@ func TestUnmarshal(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := Unmarshal(tc.data, tc.target)
 			if tc.expectedError {
 				assert.Error(t, err)
@@ -190,7 +199,9 @@ func TestUnmarshal(t *testing.T) {
 
 func BenchmarkMarshal(b *testing.B) {
 	in := moneyShape{AccountID: "acc_bench", AmountMinor: 123456, AssetCode: "USD"}
+
 	b.ReportAllocs()
+
 	for b.Loop() {
 		if _, err := Marshal(in); err != nil {
 			b.Fatalf("Marshal: %v", err)

@@ -10,7 +10,7 @@ import (
 // Module registers the OAuth provider in an fx container.
 func Module() fx.Option {
 	return fx.Module("oauth2",
-		fx.Provide(func(client *valkey.ValkeyClient) KVStore {
+		fx.Provide(func(client *valkey.Client) KVStore {
 			return client
 		}),
 		fx.Provide(NewProvider),

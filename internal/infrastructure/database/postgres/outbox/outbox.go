@@ -5,8 +5,9 @@ package outbox
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"time"
 
 	"gorm.io/gorm"
@@ -42,7 +43,7 @@ type Writer struct {
 // NewWriter builds the writer; DB must be non-nil.
 func NewWriter(params WriterParams) (*Writer, error) {
 	if params.DB == nil {
-		return nil, fmt.Errorf("outbox: writer needs DB")
+		return nil, ErrOutboxWriterNeedsDB
 	}
 
 	return &Writer{db: params.DB}, nil
@@ -52,17 +53,17 @@ func NewWriter(params WriterParams) (*Writer, error) {
 // per-aggregate versions monotonically (dedupe guard holds).
 func (w *Writer) AppendTx(ctx context.Context, tx *gorm.DB, facts ...appport.OutboxFact) error {
 	if tx == nil {
-		return fmt.Errorf("outbox: transaction is required")
+		return ErrOutboxTransactionIsRequired
 	}
 
 	offsets := make(map[string]int64)
 
 	for _, fact := range facts {
-		var max int64
+		var maxVersion int64
 
 		err := tx.WithContext(ctx).Model(&models.OutboxModel{}).
 			Where("aggregate_id = ?", fact.AggregateID).
-			Select("COALESCE(MAX(aggregate_version), 0)").Scan(&max).Error
+			Select("COALESCE(MAX(aggregate_version), 0)").Scan(&maxVersion).Error
 		if err != nil {
 			return fmt.Errorf("outbox: version: %w", err)
 		}
@@ -74,7 +75,7 @@ func (w *Writer) AppendTx(ctx context.Context, tx *gorm.DB, facts ...appport.Out
 			LedgerID:         fact.LedgerID.String(),
 			EventType:        fact.EventType,
 			AggregateID:      fact.AggregateID,
-			AggregateVersion: max + offsets[fact.AggregateID],
+			AggregateVersion: maxVersion + offsets[fact.AggregateID],
 			Payload:          fact.Payload,
 			OccurredAt:       fact.OccurredAt,
 		}
@@ -109,19 +110,19 @@ type Poller struct {
 // NewPoller builds the poller; Publisher, positive MaxBatch, BaseBackoff, and ClaimTimeout are required.
 func NewPoller(params PollerParams) (*Poller, error) {
 	if params.Publisher == nil {
-		return nil, fmt.Errorf("outbox: poller needs a publisher")
+		return nil, ErrOutboxPollerNeedsAPublisher
 	}
 
 	if params.MaxBatch <= 0 {
-		return nil, fmt.Errorf("outbox: max batch must be positive")
+		return nil, ErrOutboxMaxBatchMustBePositive
 	}
 
 	if params.BaseBackoff <= 0 {
-		return nil, fmt.Errorf("outbox: base backoff must be positive")
+		return nil, ErrOutboxBaseBackoffMustBePositive
 	}
 
 	if params.ClaimTimeout <= 0 {
-		return nil, fmt.Errorf("outbox: claim timeout must be positive")
+		return nil, ErrOutboxClaimTimeoutMustBePositive
 	}
 
 	return &Poller{
@@ -145,12 +146,20 @@ func (p *Poller) Backoff(n int) time.Duration {
 		n = 0
 	}
 
-	if n > 6 {
+	if n > maxBackoffShift {
 		n = 6
 	}
 
 	wait := p.baseBackoff * time.Duration(1<<n)
-	jitter := time.Duration(rand.Int63n(int64(p.baseBackoff))) //nolint:gosec // jitter only
+	// Crypto jitter in [0, baseBackoff); on crypto failure fall back to no
+	// jitter rather than weak math/rand.
+	var jitter time.Duration
+
+	if p.baseBackoff > 0 {
+		if n, err := rand.Int(rand.Reader, big.NewInt(int64(p.baseBackoff))); err == nil {
+			jitter = time.Duration(n.Int64())
+		}
+	}
 
 	return wait + jitter
 }
@@ -159,7 +168,7 @@ func (p *Poller) Backoff(n int) time.Duration {
 // Crash between commit and publish leaves rows claimable after lease expiration.
 func (p *Poller) RunOnce(ctx context.Context, db *gorm.DB) (int, error) {
 	if db == nil {
-		return 0, fmt.Errorf("outbox: DB is required")
+		return 0, ErrOutboxDBIsRequired
 	}
 
 	var rows []models.OutboxModel

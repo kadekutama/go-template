@@ -19,10 +19,10 @@ import (
 	"github.com/kadekutama/go-template/pkg/jsonparser"
 )
 
-// APIKeyParams carries constructor dependencies (Parameter Object pattern).
+// Params carries constructor dependencies (Parameter Object pattern).
 // Hasher is required; pass an explicit NewHasher(HasherParams) configured for
 // the deployment hardware.
-type APIKeyParams struct {
+type Params struct {
 	DB             *gorm.DB
 	Hasher         Hasher
 	RotationWindow time.Duration `validate:"gte=0"`
@@ -70,7 +70,7 @@ var _ appport.APIKeyStore = (*Manager)(nil)
 // NewManager builds the API key adapter; DB, Clock, and Hasher must be
 // non-nil and RotationWindow must be positive (a zero window would leave
 // rotated keys valid indefinitely — fail fast instead of defaulting).
-func NewManager(params APIKeyParams) (*Manager, error) {
+func NewManager(params Params) (*Manager, error) {
 	if params.DB == nil {
 		return nil, fmt.Errorf("%w: DB is required", ErrConfigRequired)
 	}
@@ -94,11 +94,6 @@ func NewManager(params APIKeyParams) (*Manager, error) {
 		clock:          params.Clock,
 		onUse:          params.OnUse,
 	}, nil
-}
-
-// now returns the current UTC time through the injected clock.
-func (m *Manager) now() time.Time {
-	return m.clock.Now().UTC()
 }
 
 // Create mints one key with its single plaintext reveal.
@@ -143,36 +138,6 @@ func (m *Manager) Create(ctx context.Context, tenant valueobject.TenantID, name 
 	}, nil
 }
 
-// mintRow formats one key, seals it, and builds the row without touching
-// the database. ID stays empty: PostgreSQL mints uuidv7() on insert and
-// GORM reads it back (E06-T15, no app pre-mint).
-func (m *Manager) mintRow(tenant valueobject.TenantID, name string, scopes []string, ttl time.Duration) (apiKeyModel, string, error) {
-	prefix := newPrefix()
-	secret := newSecret()
-	plaintext := "ak_" + prefix + "." + string(tenant) + "." + secret + "." + checksumOf(prefix, string(tenant), secret)
-
-	sealed, err := m.hasher.Hash(plaintext)
-	if err != nil {
-		return apiKeyModel{}, "", err
-	}
-
-	scopesJSON, err := jsonparser.Marshal(append([]string(nil), scopes...))
-	if err != nil {
-		return apiKeyModel{}, "", err
-	}
-
-	return apiKeyModel{
-		TenantID:  string(tenant),
-		Name:      name,
-		Prefix:    prefix,
-		Hash:      sealed.Hash,
-		Salt:      sealed.Salt,
-		Version:   sealed.Version,
-		Scopes:    string(scopesJSON),
-		ExpiresAt: m.now().Add(ttl),
-	}, plaintext, nil
-}
-
 // Verify authenticates one plaintext key and fails closed. Lookup,
 // validity, hash verification, and the transparent re-hash upgrade all run
 // inside one tenant-scoped transaction: the RLS GUC is set (CR-001), and a
@@ -209,6 +174,95 @@ func (m *Manager) Verify(ctx context.Context, plaintext string) (appport.APIKey,
 	}
 
 	return m.toPort(row)
+}
+
+// Revoke disables one key by ID and is idempotent.
+func (m *Manager) Revoke(ctx context.Context, tenant valueobject.TenantID, id string) error {
+	if m == nil || m.db == nil || m.clock == nil {
+		return ErrNotInitialized
+	}
+
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("apikey: revoke: %w", err)
+	}
+
+	return postgres.WithinTenantTx(ctx, m.db, tenant, func(tx *gorm.DB) error {
+		result := tx.Model(&apiKeyModel{}).
+			Where("id = ? AND tenant_id = ?", id, string(tenant)).
+			Update("revoked", true)
+		if result.Error != nil {
+			return result.Error
+		}
+
+		if result.RowsAffected == 0 {
+			return ErrNotFound
+		}
+
+		return nil
+	})
+}
+
+// Rotate mints a successor for id, keeping the old key valid for the
+// rotation window (dual-active). Mint, insert, and the old key's rotates_at
+// stamp commit in one tenant-scoped transaction: a crash between them can no
+// longer leave a live successor with an unstamped predecessor (CR-008).
+// Adapter-specific; port stays exact.
+func (m *Manager) Rotate(ctx context.Context, tenant valueobject.TenantID, id string, ttl time.Duration) (appport.APIKeySecret, error) {
+	if err := m.guardRotateInput(ctx, tenant, ttl); err != nil {
+		return appport.APIKeySecret{}, err
+	}
+
+	var secret appport.APIKeySecret
+
+	if err := postgres.WithinTenantTx(ctx, m.db, tenant, func(tx *gorm.DB) error {
+		minted, err := m.mintSuccessor(tx, tenant, id, ttl)
+		if err != nil {
+			return err
+		}
+
+		secret = minted
+
+		return nil
+	}); err != nil {
+		return appport.APIKeySecret{}, err
+	}
+
+	return secret, nil
+}
+
+// now returns the current UTC time through the injected clock.
+func (m *Manager) now() time.Time {
+	return m.clock.Now().UTC()
+}
+
+// mintRow formats one key, seals it, and builds the row without touching
+// the database. ID stays empty: PostgreSQL mints uuidv7() on insert and
+// GORM reads it back (E06-T15, no app pre-mint).
+func (m *Manager) mintRow(tenant valueobject.TenantID, name string, scopes []string, ttl time.Duration) (apiKeyModel, string, error) {
+	prefix := newPrefix()
+	secret := newSecret()
+	plaintext := "ak_" + prefix + "." + string(tenant) + "." + secret + "." + checksumOf(prefix, string(tenant), secret)
+
+	sealed, err := m.hasher.Hash(plaintext)
+	if err != nil {
+		return apiKeyModel{}, "", err
+	}
+
+	scopesJSON, err := jsonparser.Marshal(append([]string(nil), scopes...))
+	if err != nil {
+		return apiKeyModel{}, "", err
+	}
+
+	return apiKeyModel{
+		TenantID:  string(tenant),
+		Name:      name,
+		Prefix:    prefix,
+		Hash:      sealed.Hash,
+		Salt:      sealed.Salt,
+		Version:   sealed.Version,
+		Scopes:    string(scopesJSON),
+		ExpiresAt: m.now().Add(ttl),
+	}, plaintext, nil
 }
 
 // parseVerifyInput guards the receiver/context and parses the tenant-scoped
@@ -294,60 +348,6 @@ func (m *Manager) verifyRow(tx *gorm.DB, row apiKeyModel, plaintext string) (api
 	row.Version = newSealed.Version
 
 	return row, nil
-}
-
-// Revoke disables one key by ID and is idempotent.
-func (m *Manager) Revoke(ctx context.Context, tenant valueobject.TenantID, id string) error {
-	if m == nil || m.db == nil || m.clock == nil {
-		return ErrNotInitialized
-	}
-
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("apikey: revoke: %w", err)
-	}
-
-	return postgres.WithinTenantTx(ctx, m.db, tenant, func(tx *gorm.DB) error {
-		result := tx.Model(&apiKeyModel{}).
-			Where("id = ? AND tenant_id = ?", id, string(tenant)).
-			Update("revoked", true)
-		if result.Error != nil {
-			return result.Error
-		}
-
-		if result.RowsAffected == 0 {
-			return ErrNotFound
-		}
-
-		return nil
-	})
-}
-
-// Rotate mints a successor for id, keeping the old key valid for the
-// rotation window (dual-active). Mint, insert, and the old key's rotates_at
-// stamp commit in one tenant-scoped transaction: a crash between them can no
-// longer leave a live successor with an unstamped predecessor (CR-008).
-// Adapter-specific; port stays exact.
-func (m *Manager) Rotate(ctx context.Context, tenant valueobject.TenantID, id string, ttl time.Duration) (appport.APIKeySecret, error) {
-	if err := m.guardRotateInput(ctx, tenant, ttl); err != nil {
-		return appport.APIKeySecret{}, err
-	}
-
-	var secret appport.APIKeySecret
-
-	if err := postgres.WithinTenantTx(ctx, m.db, tenant, func(tx *gorm.DB) error {
-		minted, err := m.mintSuccessor(tx, tenant, id, ttl)
-		if err != nil {
-			return err
-		}
-
-		secret = minted
-
-		return nil
-	}); err != nil {
-		return appport.APIKeySecret{}, err
-	}
-
-	return secret, nil
 }
 
 // guardRotateInput validates receiver, context, and rotation arguments.
@@ -482,7 +482,7 @@ func checksumOf(prefix, tenant, secret string) string {
 // splitPlaintext parses ak_PREFIX.TENANT.SECRET.CHECKSUM. The tenant segment
 // lets Verify scope RLS before the row is known; it is re-checked against
 // the stored row implicitly by the lookup predicate.
-func splitPlaintext(plaintext string) (prefix, tenant, secret, checksum string, err error) {
+func splitPlaintext(plaintext string) (string, string, string, string, error) {
 	rest, ok := strings.CutPrefix(plaintext, "ak_")
 	if !ok {
 		return "", "", "", "", ErrInvalidFormat

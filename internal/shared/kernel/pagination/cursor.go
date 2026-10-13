@@ -3,7 +3,6 @@ package pagination
 import (
 	"encoding/base64"
 	"encoding/binary"
-	"errors"
 	"hash/crc32"
 	"math"
 )
@@ -21,14 +20,17 @@ type Cursor struct {
 // rejected: callers normalize first (PageRequest.Normalize floors at zero).
 func (c Cursor) Encode() (string, error) {
 	if c.Offset < 0 {
-		return "", errors.New("pagination: negative offset")
+		return "", ErrPaginationNegativeOffset
 	}
+
 	var payload [8]byte
-	binary.BigEndian.PutUint64(payload[:], uint64(c.Offset)) //nolint:gosec // guarded non-negative above
+	binary.BigEndian.PutUint64(payload[:], uint64(c.Offset))
 	sum := crc32.Checksum(payload[:], crc32.MakeTable(crc32.Castagnoli))
+
 	var raw [12]byte
 	copy(raw[:8], payload[:])
 	binary.BigEndian.PutUint32(raw[8:], sum)
+
 	return base64.RawURLEncoding.EncodeToString(raw[:]), nil
 }
 
@@ -37,17 +39,21 @@ func (c Cursor) Encode() (string, error) {
 func DecodeCursor(token string) (Cursor, error) {
 	raw, err := base64.RawURLEncoding.DecodeString(token)
 	if err != nil || len(raw) != 12 {
-		return Cursor{}, errors.New("pagination: malformed cursor")
+		return Cursor{}, ErrPaginationMalformedCursor
 	}
+
 	var payload [8]byte
 	copy(payload[:], raw[:8])
+
 	want := crc32.Checksum(payload[:], crc32.MakeTable(crc32.Castagnoli))
 	if binary.BigEndian.Uint32(raw[8:]) != want {
-		return Cursor{}, errors.New("pagination: cursor checksum mismatch")
+		return Cursor{}, ErrPaginationCursorChecksumMismatch
 	}
+
 	offset := binary.BigEndian.Uint64(payload[:])
 	if offset > math.MaxInt64 {
-		return Cursor{}, errors.New("pagination: cursor offset overflow")
+		return Cursor{}, ErrPaginationCursorOffsetOverflow
 	}
+
 	return Cursor{Offset: int64(offset)}, nil
 }

@@ -22,17 +22,21 @@ type Config struct {
 // Validate verifies all required PostgreSQL pool configuration fields are set.
 func (c Config) Validate() error {
 	if c.DSN == "" {
-		return fmt.Errorf("postgres: DSN is required")
+		return ErrPostgresDSNIsRequired
 	}
+
 	if c.MaxOpen <= 0 {
-		return fmt.Errorf("postgres: MaxOpen must be positive")
+		return ErrPostgresMaxOpenMustBePositive
 	}
+
 	if c.MaxIdle <= 0 {
-		return fmt.Errorf("postgres: MaxIdle must be positive")
+		return ErrPostgresMaxIdleMustBePositive
 	}
+
 	if c.ConnMaxLifetime <= 0 {
-		return fmt.Errorf("postgres: ConnMaxLifetime must be positive")
+		return ErrPostgresConnMaxLifetimeMustBePositive
 	}
+
 	return nil
 }
 

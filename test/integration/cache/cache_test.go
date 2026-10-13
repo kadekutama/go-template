@@ -22,8 +22,8 @@ import (
 	testcontainers "github.com/kadekutama/go-template/test/testcontainers"
 )
 
-func newTestValkeyClient(addr string) (*valkey.ValkeyClient, error) {
-	return valkey.NewValkeyClient(valkey.ValkeyParams{
+func newTestValkeyClient(addr string) (*valkey.Client, error) {
+	return valkey.NewValkeyClient(valkey.Params{
 		Addr:         addr,
 		PoolSize:     10,
 		DialTimeout:  5 * time.Second,
@@ -55,6 +55,7 @@ func newHybrid(t *testing.T, addr string) *hybrid.Cache {
 }
 
 func TestHybridNegativeCaching(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	handle, err := testcontainers.StartValkey(t)
@@ -81,11 +82,13 @@ func TestHybridNegativeCaching(t *testing.T) {
 	// After the TTL it becomes a normal miss again.
 	require.NoError(t, cache.Set(ctx, "balance:t1:absent:USD", nil, 50*time.Millisecond))
 	time.Sleep(120 * time.Millisecond)
+
 	_, err = cache.Get(ctx, "balance:t1:absent:USD")
 	assert.ErrorIs(t, err, hybrid.ErrCacheMiss)
 }
 
 func TestHybridHitMissInvalidation(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	handle, err := testcontainers.StartValkey(t)
@@ -110,6 +113,7 @@ func TestHybridHitMissInvalidation(t *testing.T) {
 }
 
 func TestHybridTTLExpiry(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	handle, err := testcontainers.StartValkey(t)
@@ -128,6 +132,7 @@ func TestHybridTTLExpiry(t *testing.T) {
 }
 
 func TestHybridBenchmarks(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	handle, err := testcontainers.StartValkey(t)
@@ -156,6 +161,7 @@ func TestHybridBenchmarks(t *testing.T) {
 	start := time.Now()
 	_, err = cache.Get(ctx, "balance:t1:bench:USD")
 	require.NoError(t, err)
+
 	l1Hit := time.Since(start)
 	t.Logf("L1 hit: %s (target <1ms informational)", l1Hit)
 
@@ -165,11 +171,13 @@ func TestHybridBenchmarks(t *testing.T) {
 	start = time.Now()
 	_, err = cache.Get(ctx, "balance:t1:bench:USD")
 	require.NoError(t, err)
+
 	l2Hit := time.Since(start)
 	t.Logf("L2 hit: %s (target <5ms informational)", l2Hit)
 }
 
 func TestRedlockOneWinner(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	handle, err := testcontainers.StartValkey(t)
@@ -186,30 +194,33 @@ func TestRedlockOneWinner(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
+
 	const contenders = 8
 
 	var winners atomic.Int64
 
 	var wg sync.WaitGroup
-	for i := 0; i < contenders; i++ {
+	for range contenders {
 		wg.Go(func() {
 			lease, err := redlock.Acquire(ctx, tenant, "recon-run", 30*time.Second)
 			if err != nil {
 				return
 			}
-			defer func() { _ = lease.Release(context.Background()) }()
+			defer func() { _ = lease.Release(ctx) }()
 
 			winners.Add(1)
 
 			time.Sleep(50 * time.Millisecond)
 		})
 	}
+
 	wg.Wait()
 
 	assert.Equal(t, int64(1), winners.Load())
 }
 
 func TestRedlockRefresh(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	handle, err := testcontainers.StartValkey(t)
@@ -237,6 +248,7 @@ func TestRedlockRefresh(t *testing.T) {
 }
 
 func TestRedlockReleaseDoesNotSteal(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	handle, err := testcontainers.StartValkey(t)
@@ -266,6 +278,7 @@ func TestRedlockReleaseDoesNotSteal(t *testing.T) {
 }
 
 func TestWithLockDurableEffect(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	handle, err := testcontainers.StartValkey(t)
@@ -289,7 +302,7 @@ func TestWithLockDurableEffect(t *testing.T) {
 	var committed atomic.Int64
 
 	var wg sync.WaitGroup
-	for i := 0; i < contenders; i++ {
+	for range contenders {
 		wg.Go(func() {
 			err := lock.WithLock(ctx, lock.GuardParams{
 				Locker:          redlock,
@@ -306,18 +319,19 @@ func TestWithLockDurableEffect(t *testing.T) {
 
 				return nil
 			})
-
 			if err != nil {
 				assert.ErrorIs(t, err, lock.ErrLockHeld)
 			}
 		})
 	}
+
 	wg.Wait()
 
 	assert.Equal(t, int64(1), committed.Load())
 }
 
 func TestRateLimiterBurst(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	handle, err := testcontainers.StartValkey(t)
@@ -332,12 +346,15 @@ func TestRateLimiterBurst(t *testing.T) {
 
 	ctx := context.Background()
 	key := fmt.Sprintf("ratelimit:burst:%d", time.Now().UnixNano())
+
 	const budget = int64(10)
 
 	allowed := 0
-	for i := 0; i < 20; i++ {
+
+	for range 20 {
 		decision, err := limiter.Allow(ctx, key, budget, time.Minute)
 		require.NoError(t, err)
+
 		if decision.Allowed {
 			allowed++
 		}

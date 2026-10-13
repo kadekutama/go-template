@@ -87,7 +87,7 @@ func (s *Store) requestCreds(ctx context.Context, role string) (dbCredsResponse,
 		return dbCredsResponse{}, fmt.Errorf("%w: %s status %d", ErrLeaseFailed, role, resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<httpMaxBodyShift))
 	if err != nil {
 		return dbCredsResponse{}, fmt.Errorf("%w: %s", ErrLeaseFailed, role)
 	}
@@ -139,7 +139,7 @@ func (s *Store) RenewLease(ctx context.Context, leaseID string) (time.Duration, 
 		LeaseDuration int `json:"lease_duration"`
 	}
 
-	if body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20)); err != nil {
+	if body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<httpMaxBodyShift)); err != nil {
 		return 0, fmt.Errorf("%w: %s", ErrLeaseFailed, leaseID)
 	} else if err := jsonparser.Unmarshal(body, &payload); err != nil {
 		return 0, fmt.Errorf("%w: %s", ErrLeaseFailed, leaseID)

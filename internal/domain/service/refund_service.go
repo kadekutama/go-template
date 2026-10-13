@@ -51,15 +51,19 @@ func ValidateRefund(req RefundRequest, originalExists bool, accounts map[valueob
 	if err := validateRefundAmounts(req, originalExists); err != nil {
 		return RefundLines{}, err
 	}
+
 	if err := validateRefundWindow(req); err != nil {
 		return RefundLines{}, err
 	}
+
 	if err := validateRefundAccounts(req, accounts); err != nil {
 		return RefundLines{}, err
 	}
+
 	if err := validateRefundFeePolicy(req.FeePolicy); err != nil {
 		return RefundLines{}, err
 	}
+
 	return RefundLines{
 		OriginalPostingID: req.OriginalPostingID,
 		AcceptanceDebit:   req.MerchantPayable,
@@ -75,18 +79,23 @@ func validateRefundAmounts(req RefundRequest, originalExists bool) error {
 	if !originalExists || req.OriginalPostingID.String() == "" {
 		return entity.NewError("ORIGINAL_NOT_FOUND", "original payment does not exist")
 	}
+
 	if req.AmountMinor <= 0 {
 		return entity.NewError("INVALID_REFUND_AMOUNT", "refund amount must be positive")
 	}
+
 	if req.OriginalAmountMinor <= 0 {
 		return entity.NewError("ORIGINAL_AMOUNT_INVALID", "original amount must be positive")
 	}
+
 	if req.PriorRefundedMinor < 0 || req.PriorRefundedMinor > req.OriginalAmountMinor {
 		return entity.NewError("REFUND_EXCEEDS_ORIGINAL", "prior refunds exceed original amount")
 	}
+
 	if req.AmountMinor > req.OriginalAmountMinor-req.PriorRefundedMinor {
 		return entity.NewError("REFUND_EXCEEDS_ORIGINAL", "refund exceeds remaining refundable amount")
 	}
+
 	return nil
 }
 
@@ -94,9 +103,11 @@ func validateRefundWindow(req RefundRequest) error {
 	if req.WindowDays <= 0 {
 		return entity.NewError("INVALID_REFUND_WINDOW", "refund window days must be positive")
 	}
+
 	if req.Now.Sub(req.OriginalAt) > time.Duration(req.WindowDays)*24*time.Hour {
 		return entity.NewError("REFUND_WINDOW_EXPIRED", "refund window has expired")
 	}
+
 	return nil
 }
 
@@ -107,14 +118,17 @@ func validateRefundAccounts(req RefundRequest, accounts map[valueobject.AccountI
 			return entity.NewError("REFUND_ACCOUNT_REQUIRED", "refund requires merchant, refunds-payable, and cash accounts")
 		}
 	}
+
 	if req.MerchantPayable == req.RefundsPayable || req.RefundsPayable == req.CashAccount || req.MerchantPayable == req.CashAccount {
 		return entity.NewError("REFUND_ACCOUNT_INVALID", "refund posting accounts must be distinct")
 	}
+
 	for _, id := range parties {
 		acct, ok := accounts[id]
 		if !ok {
 			return entity.NewError("REFUND_ACCOUNT_NOT_FOUND", "refund account is unknown")
 		}
+
 		switch acct.Status {
 		case valueobject.StatusActive:
 		case valueobject.StatusFrozen:
@@ -124,10 +138,12 @@ func validateRefundAccounts(req RefundRequest, accounts map[valueobject.AccountI
 		default:
 			return entity.NewError("ACCOUNT_STATUS_INVALID", "refund account status is invalid")
 		}
+
 		if acct.AssetCode != req.AssetCode {
 			return entity.NewError("CURRENCY_MISMATCH", "refund account asset must match the refund asset")
 		}
 	}
+
 	return nil
 }
 
@@ -135,5 +151,6 @@ func validateRefundFeePolicy(policy FeeRefundPolicy) error {
 	if policy.ProcessorFeeRefundMinor < 0 || policy.PlatformFeeRefundMinor < 0 {
 		return entity.NewError("FEE_POLICY_INVALID", "fee refunds must be explicit non-negative amounts")
 	}
+
 	return nil
 }

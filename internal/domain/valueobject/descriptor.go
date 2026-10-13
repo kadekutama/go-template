@@ -10,31 +10,38 @@ import (
 // control characters and other symbols).
 func ValidateDescriptor(s, network string) error {
 	if s == "" {
-		return fmt.Errorf("descriptor: value is required")
+		return ErrDescriptorValueIsRequired
 	}
-	if len([]rune(s)) > 22 {
-		return fmt.Errorf("descriptor: INVALID_DESCRIPTOR exceeds 22 characters")
+
+	if len([]rune(s)) > maxDescriptorLen {
+		return ErrDescriptorINVALIDDESCRIPTORExceeds22Characters
 	}
+
 	for _, r := range s {
 		if err := checkDescriptorRune(r); err != nil {
 			return err
 		}
 	}
+
 	if network == "" {
-		return fmt.Errorf("descriptor: network is required")
+		return ErrDescriptorNetworkIsRequired
 	}
+
 	return nil
 }
 
 func checkDescriptorRune(r rune) error {
 	if r < 0x20 || r == 0x7f {
-		return fmt.Errorf("descriptor: INVALID_DESCRIPTOR control character")
+		return ErrDescriptorINVALIDDESCRIPTORControlCharacter
 	}
+
 	if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
 		return nil
 	}
+
 	if strings.ContainsRune(" .,-*'&", r) {
 		return nil
 	}
-	return fmt.Errorf("descriptor: INVALID_DESCRIPTOR illegal character %q", r)
+
+	return fmt.Errorf("descriptor: INVALID_DESCRIPTOR illegal character %q: %w", r, ErrDescriptorINVALIDDESCRIPTORIllegalCharacter)
 }

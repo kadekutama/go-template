@@ -13,10 +13,11 @@ type PaymentIntentCreatedPayload struct {
 }
 
 // NewPaymentIntentCreated builds payment_intent.created.v1.
-func NewPaymentIntentCreated(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PaymentIntentCreatedPayload, meta EventMetadata) (TypedEvent[PaymentIntentCreatedPayload], error) {
+func NewPaymentIntentCreated(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PaymentIntentCreatedPayload, meta Metadata) (TypedEvent[PaymentIntentCreatedPayload], error) {
 	if err := requireIDs(map[string]string{fieldPaymentID: payload.PaymentID, fieldTenantID: payload.TenantID, "asset_code": payload.AssetCode}); err != nil {
 		return TypedEvent[PaymentIntentCreatedPayload]{}, err
 	}
+
 	return newTyped("payment_intent.created.v1", eventID, aggregateID, "PaymentIntent", occurredAt, version, seq, payload, meta)
 }
 
@@ -29,10 +30,11 @@ type PaymentSucceededPayload struct {
 }
 
 // NewPaymentIntentSucceeded builds payment_intent.succeeded.v1.
-func NewPaymentIntentSucceeded(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PaymentSucceededPayload, meta EventMetadata) (TypedEvent[PaymentSucceededPayload], error) {
+func NewPaymentIntentSucceeded(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PaymentSucceededPayload, meta Metadata) (TypedEvent[PaymentSucceededPayload], error) {
 	if err := requireIDs(map[string]string{fieldPaymentID: payload.PaymentID, fieldTenantID: payload.TenantID}); err != nil {
 		return TypedEvent[PaymentSucceededPayload]{}, err
 	}
+
 	return newTyped("payment_intent.succeeded.v1", eventID, aggregateID, "PaymentIntent", occurredAt, version, seq, payload, meta)
 }
 
@@ -45,10 +47,11 @@ type PaymentFailedPayload struct {
 }
 
 // NewPaymentIntentFailed builds payment_intent.failed.v1.
-func NewPaymentIntentFailed(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PaymentFailedPayload, meta EventMetadata) (TypedEvent[PaymentFailedPayload], error) {
+func NewPaymentIntentFailed(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PaymentFailedPayload, meta Metadata) (TypedEvent[PaymentFailedPayload], error) {
 	if err := requireIDs(map[string]string{fieldPaymentID: payload.PaymentID, fieldTenantID: payload.TenantID, fieldCode: payload.Code}); err != nil {
 		return TypedEvent[PaymentFailedPayload]{}, err
 	}
+
 	return newTyped("payment_intent.failed.v1", eventID, aggregateID, "PaymentIntent", occurredAt, version, seq, payload, meta)
 }
 
@@ -60,10 +63,11 @@ type PaymentCanceledPayload struct {
 }
 
 // NewPaymentIntentCanceled builds payment_intent.canceled.v1 (American spelling).
-func NewPaymentIntentCanceled(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PaymentCanceledPayload, meta EventMetadata) (TypedEvent[PaymentCanceledPayload], error) {
+func NewPaymentIntentCanceled(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PaymentCanceledPayload, meta Metadata) (TypedEvent[PaymentCanceledPayload], error) {
 	if err := requireIDs(map[string]string{fieldPaymentID: payload.PaymentID, fieldTenantID: payload.TenantID}); err != nil {
 		return TypedEvent[PaymentCanceledPayload]{}, err
 	}
+
 	return newTyped("payment_intent.canceled.v1", eventID, aggregateID, "PaymentIntent", occurredAt, version, seq, payload, meta)
 }
 
@@ -76,9 +80,10 @@ type PaymentActionRequiredPayload struct {
 }
 
 // NewPaymentIntentRequiresAction builds payment_intent.requires_action.v1.
-func NewPaymentIntentRequiresAction(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PaymentActionRequiredPayload, meta EventMetadata) (TypedEvent[PaymentActionRequiredPayload], error) {
+func NewPaymentIntentRequiresAction(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PaymentActionRequiredPayload, meta Metadata) (TypedEvent[PaymentActionRequiredPayload], error) {
 	if err := requireIDs(map[string]string{fieldPaymentID: payload.PaymentID, fieldTenantID: payload.TenantID, "action_type": payload.ActionType}); err != nil {
 		return TypedEvent[PaymentActionRequiredPayload]{}, err
 	}
+
 	return newTyped("payment_intent.requires_action.v1", eventID, aggregateID, "PaymentIntent", occurredAt, version, seq, payload, meta)
 }

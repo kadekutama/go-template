@@ -1,7 +1,6 @@
 package valueobject_test
 
 import (
-	"errors"
 	"testing"
 	"time"
 
@@ -34,26 +33,28 @@ func TestNewFxPair(t *testing.T) {
 			base:           "",
 			quote:          "USD",
 			expectedResult: valueobject.FxPair{},
-			expectedError:  errors.New("fx: pair requires base and quote codes"),
+			expectedError:  valueobject.ErrFxPairRequiresBaseAndQuoteCodes,
 		},
 		{
 			name:           "empty quote",
 			base:           "EUR",
 			quote:          "",
 			expectedResult: valueobject.FxPair{},
-			expectedError:  errors.New("fx: pair requires base and quote codes"),
+			expectedError:  valueobject.ErrFxPairRequiresBaseAndQuoteCodes,
 		},
 		{
 			name:           "identical assets",
 			base:           "USD",
 			quote:          "USD",
 			expectedResult: valueobject.FxPair{},
-			expectedError:  errors.New("fx: pair base and quote must differ"),
+			expectedError:  valueobject.ErrFxPairBaseAndQuoteMustDiffer,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := valueobject.NewFxPair(tc.base, tc.quote)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -66,6 +67,7 @@ func TestFxRateValidate(t *testing.T) {
 
 	pair, err := valueobject.NewFxPair("EUR", "USD")
 	assert.NoError(t, err)
+
 	now := time.Date(2026, 9, 14, 0, 0, 0, 0, time.UTC)
 
 	baseRate := valueobject.FxRate{
@@ -95,95 +97,107 @@ func TestFxRateValidate(t *testing.T) {
 			rate: func() valueobject.FxRate {
 				r := baseRate
 				r.ID = ""
+
 				return r
 			}(),
-			expectedError: errors.New("fx: FX_RATE_ID_REQUIRED: rate id is required"),
+			expectedError: valueobject.ErrFxFXRATEIDREQUIREDRateIDIsRequired,
 		},
 		{
 			name: "missing pair",
 			rate: func() valueobject.FxRate {
 				r := baseRate
 				r.Pair = valueobject.FxPair{}
+
 				return r
 			}(),
-			expectedError: errors.New("fx: FX_PAIR_REQUIRED: rate requires a base/quote pair"),
+			expectedError: valueobject.ErrFxFXPAIRREQUIREDRateRequiresABaseQuotePair,
 		},
 		{
 			name: "zero numerator",
 			rate: func() valueobject.FxRate {
 				r := baseRate
 				r.Numerator = 0
+
 				return r
 			}(),
-			expectedError: errors.New("fx: FX_RATE_INVALID: numerator and denominator must be positive"),
+			expectedError: valueobject.ErrFxFXRATEINVALIDNumeratorAndDenominatorMustBePositive,
 		},
 		{
 			name: "negative numerator",
 			rate: func() valueobject.FxRate {
 				r := baseRate
 				r.Numerator = -10
+
 				return r
 			}(),
-			expectedError: errors.New("fx: FX_RATE_INVALID: numerator and denominator must be positive"),
+			expectedError: valueobject.ErrFxFXRATEINVALIDNumeratorAndDenominatorMustBePositive,
 		},
 		{
 			name: "zero denominator",
 			rate: func() valueobject.FxRate {
 				r := baseRate
 				r.Denominator = 0
+
 				return r
 			}(),
-			expectedError: errors.New("fx: FX_RATE_INVALID: numerator and denominator must be positive"),
+			expectedError: valueobject.ErrFxFXRATEINVALIDNumeratorAndDenominatorMustBePositive,
 		},
 		{
 			name: "negative denominator",
 			rate: func() valueobject.FxRate {
 				r := baseRate
 				r.Denominator = -10
+
 				return r
 			}(),
-			expectedError: errors.New("fx: FX_RATE_INVALID: numerator and denominator must be positive"),
+			expectedError: valueobject.ErrFxFXRATEINVALIDNumeratorAndDenominatorMustBePositive,
 		},
 		{
 			name: "missing source",
 			rate: func() valueobject.FxRate {
 				r := baseRate
 				r.Source = ""
+
 				return r
 			}(),
-			expectedError: errors.New("fx: FX_SOURCE_REQUIRED: rate source is required"),
+			expectedError: valueobject.ErrFxFXSOURCEREQUIREDRateSourceIsRequired,
 		},
 		{
 			name: "missing quoted at",
 			rate: func() valueobject.FxRate {
 				r := baseRate
 				r.QuotedAt = time.Time{}
+
 				return r
 			}(),
-			expectedError: errors.New("fx: FX_QUOTED_AT_REQUIRED: quote time is required"),
+			expectedError: valueobject.ErrFxFXQUOTEDATREQUIREDQuoteTimeIsRequired,
 		},
 		{
 			name: "zero ttl",
 			rate: func() valueobject.FxRate {
 				r := baseRate
 				r.TTL = 0
+
 				return r
 			}(),
-			expectedError: errors.New("fx: FX_TTL_REQUIRED: rate TTL must be positive"),
+			expectedError: valueobject.ErrFxFXTTLREQUIREDRateTTLMustBePositive,
 		},
 		{
 			name: "negative ttl",
 			rate: func() valueobject.FxRate {
 				r := baseRate
 				r.TTL = -time.Minute
+
 				return r
 			}(),
-			expectedError: errors.New("fx: FX_TTL_REQUIRED: rate TTL must be positive"),
+			expectedError: valueobject.ErrFxFXTTLREQUIREDRateTTLMustBePositive,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.rate.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -241,6 +255,8 @@ func TestFxRateIsStale(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := tc.rate.IsStale(tc.at)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})

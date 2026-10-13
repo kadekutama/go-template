@@ -59,7 +59,7 @@ type MockReportGenerator_GenerateReport_Call struct {
 // GenerateReport is a helper method to define mock.On call
 //   - ctx context.Context
 //   - req port.ReportRequest
-func (_e *MockReportGenerator_Expecter) GenerateReport(ctx interface{}, req interface{}) *MockReportGenerator_GenerateReport_Call {
+func (_e *MockReportGenerator_Expecter) GenerateReport(ctx any, req any) *MockReportGenerator_GenerateReport_Call {
 	return &MockReportGenerator_GenerateReport_Call{Call: _e.mock.On("GenerateReport", ctx, req)}
 }
 

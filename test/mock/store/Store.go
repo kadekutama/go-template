@@ -49,7 +49,7 @@ type MockStore_Delete_Call struct {
 // Delete is a helper method to define mock.On call
 //   - ctx context.Context
 //   - key string
-func (_e *MockStore_Expecter) Delete(ctx interface{}, key interface{}) *MockStore_Delete_Call {
+func (_e *MockStore_Expecter) Delete(ctx any, key any) *MockStore_Delete_Call {
 	return &MockStore_Delete_Call{Call: _e.mock.On("Delete", ctx, key)}
 }
 
@@ -108,7 +108,7 @@ type MockStore_Get_Call struct {
 // Get is a helper method to define mock.On call
 //   - ctx context.Context
 //   - key string
-func (_e *MockStore_Expecter) Get(ctx interface{}, key interface{}) *MockStore_Get_Call {
+func (_e *MockStore_Expecter) Get(ctx any, key any) *MockStore_Get_Call {
 	return &MockStore_Get_Call{Call: _e.mock.On("Get", ctx, key)}
 }
 
@@ -157,7 +157,7 @@ type MockStore_Set_Call struct {
 //   - key string
 //   - value []byte
 //   - ttl time.Duration
-func (_e *MockStore_Expecter) Set(ctx interface{}, key interface{}, value interface{}, ttl interface{}) *MockStore_Set_Call {
+func (_e *MockStore_Expecter) Set(ctx any, key any, value any, ttl any) *MockStore_Set_Call {
 	return &MockStore_Set_Call{Call: _e.mock.On("Set", ctx, key, value, ttl)}
 }
 

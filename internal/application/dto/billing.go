@@ -27,5 +27,6 @@ func ToBillingExport(lines []service.DailyUsage) BillingExportDTO {
 		})
 		dto.Total += line.Quantity
 	}
+
 	return dto
 }

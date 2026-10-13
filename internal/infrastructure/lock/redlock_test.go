@@ -24,6 +24,7 @@ import (
 func newMockValkeyStore(t *testing.T) *mocklock.MockValkeyStore {
 	t.Helper()
 	store := mocklock.NewMockValkeyStore(t)
+
 	var data sync.Map
 
 	store.EXPECT().Get(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, key string) ([]byte, error) {
@@ -31,9 +32,11 @@ func newMockValkeyStore(t *testing.T) *mocklock.MockValkeyStore {
 		if !ok {
 			return nil, valkey.ErrMiss
 		}
+
 		value := val.([]byte)
 		out := make([]byte, len(value))
 		copy(out, value)
+
 		return out, nil
 	}).Maybe()
 
@@ -41,11 +44,13 @@ func newMockValkeyStore(t *testing.T) *mocklock.MockValkeyStore {
 		out := make([]byte, len(value))
 		copy(out, value)
 		data.Store(key, out)
+
 		return nil
 	}).Maybe()
 
 	store.EXPECT().Delete(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, key string) error {
 		data.Delete(key)
+
 		return nil
 	}).Maybe()
 
@@ -53,6 +58,7 @@ func newMockValkeyStore(t *testing.T) *mocklock.MockValkeyStore {
 		out := make([]byte, len(value))
 		copy(out, value)
 		_, loaded := data.LoadOrStore(key, out)
+
 		return !loaded, nil
 	}).Maybe()
 
@@ -73,6 +79,8 @@ func TestNewRedlock(t *testing.T) {
 		{
 			name: "client provided",
 			params: func(t *testing.T) lock.RedlockParams {
+				t.Helper()
+
 				return lock.RedlockParams{
 					Client: newMockValkeyStore(t),
 				}
@@ -82,7 +90,9 @@ func TestNewRedlock(t *testing.T) {
 		},
 		{
 			name: "nil client rejected",
-			params: func(_ *testing.T) lock.RedlockParams {
+			params: func(t *testing.T) lock.RedlockParams {
+				t.Helper()
+
 				return lock.RedlockParams{
 					Client: nil,
 				}
@@ -94,6 +104,7 @@ func TestNewRedlock(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			redlock, err := lock.NewRedlock(tc.params(t))
 			assert.ErrorIs(t, err, tc.expectedError)
 			assert.Equal(t, tc.expectedResult, redlock != nil)
@@ -101,7 +112,7 @@ func TestNewRedlock(t *testing.T) {
 	}
 }
 
-func TestRedlockAcquire(t *testing.T) {
+func TestRedlockAcquireOutcomes(t *testing.T) {
 	t.Parallel()
 
 	type testCase struct {
@@ -119,12 +130,15 @@ func TestRedlockAcquire(t *testing.T) {
 	testCases := []testCase{
 		{
 			name: "nil receiver rejected",
-			r: func(_ *testing.T) *lock.Redlock {
+			r: func(t *testing.T) *lock.Redlock {
+				t.Helper()
+
 				return nil
 			},
 			ctx: context.Background(),
 			tenant: func() valueobject.TenantID {
 				t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000001")
+
 				return t
 			}(),
 			key:            "recon",
@@ -135,12 +149,15 @@ func TestRedlockAcquire(t *testing.T) {
 		},
 		{
 			name: "uninitialized internal client rejected",
-			r: func(_ *testing.T) *lock.Redlock {
+			r: func(t *testing.T) *lock.Redlock {
+				t.Helper()
+
 				return &lock.Redlock{}
 			},
 			ctx: context.Background(),
 			tenant: func() valueobject.TenantID {
 				t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000001")
+
 				return t
 			}(),
 			key:            "recon",
@@ -152,12 +169,15 @@ func TestRedlockAcquire(t *testing.T) {
 		{
 			name: "successful acquire",
 			r: func(t *testing.T) *lock.Redlock {
+				t.Helper()
 				r, _ := lock.NewRedlock(lock.RedlockParams{Client: newMockValkeyStore(t)})
+
 				return r
 			},
 			ctx: context.Background(),
 			tenant: func() valueobject.TenantID {
 				t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000001")
+
 				return t
 			}(),
 			key:            "recon",
@@ -169,12 +189,15 @@ func TestRedlockAcquire(t *testing.T) {
 		{
 			name: "already held lock returns ErrLockHeld",
 			r: func(t *testing.T) *lock.Redlock {
+				t.Helper()
 				r, _ := lock.NewRedlock(lock.RedlockParams{Client: newMockValkeyStore(t)})
+
 				return r
 			},
 			ctx: context.Background(),
 			tenant: func() valueobject.TenantID {
 				t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000001")
+
 				return t
 			}(),
 			key:            "recon",
@@ -184,14 +207,91 @@ func TestRedlockAcquire(t *testing.T) {
 			expectedError:  lock.ErrLockHeld,
 		},
 		{
+			name: "canceled context aborts",
+			r: func(t *testing.T) *lock.Redlock {
+				t.Helper()
+				r, _ := lock.NewRedlock(lock.RedlockParams{Client: newMockValkeyStore(t)})
+
+				return r
+			},
+			ctx: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+
+				return ctx
+			}(),
+			tenant: func() valueobject.TenantID {
+				t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000001")
+
+				return t
+			}(),
+			key:            "recon",
+			ttl:            time.Minute,
+			preAcquire:     false,
+			expectedResult: false,
+			expectedError:  context.Canceled,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			r := tc.r(t)
+			if tc.preAcquire && r != nil {
+				_, err := r.Acquire(context.Background(), tc.tenant, tc.key, tc.ttl)
+				require.NoError(t, err)
+			}
+
+			if r == nil {
+				lease, err := r.Acquire(tc.ctx, tc.tenant, tc.key, tc.ttl)
+				assert.ErrorIs(t, err, tc.expectedError)
+				assert.Nil(t, lease)
+
+				return
+			}
+
+			lease, err := r.Acquire(tc.ctx, tc.tenant, tc.key, tc.ttl)
+			if tc.expectedError != nil {
+				assert.ErrorIs(t, err, tc.expectedError)
+				assert.Nil(t, lease)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.expectedResult, lease != nil)
+		})
+	}
+}
+func TestRedlockAcquireValidation(t *testing.T) {
+	t.Parallel()
+
+	type testCase struct {
+		name           string
+		r              func(t *testing.T) *lock.Redlock
+		ctx            context.Context
+		tenant         valueobject.TenantID
+		key            string
+		ttl            time.Duration
+		preAcquire     bool
+		expectedResult bool
+		expectedError  error
+	}
+
+	testCases := []testCase{
+		{
 			name: "empty key rejected",
 			r: func(t *testing.T) *lock.Redlock {
+				t.Helper()
 				r, _ := lock.NewRedlock(lock.RedlockParams{Client: newMockValkeyStore(t)})
+
 				return r
 			},
 			ctx: context.Background(),
 			tenant: func() valueobject.TenantID {
 				t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000001")
+
 				return t
 			}(),
 			key:            "",
@@ -203,12 +303,15 @@ func TestRedlockAcquire(t *testing.T) {
 		{
 			name: "whitespace key rejected",
 			r: func(t *testing.T) *lock.Redlock {
+				t.Helper()
 				r, _ := lock.NewRedlock(lock.RedlockParams{Client: newMockValkeyStore(t)})
+
 				return r
 			},
 			ctx: context.Background(),
 			tenant: func() valueobject.TenantID {
 				t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000001")
+
 				return t
 			}(),
 			key:            "   ",
@@ -220,12 +323,15 @@ func TestRedlockAcquire(t *testing.T) {
 		{
 			name: "colon in key rejected",
 			r: func(t *testing.T) *lock.Redlock {
+				t.Helper()
 				r, _ := lock.NewRedlock(lock.RedlockParams{Client: newMockValkeyStore(t)})
+
 				return r
 			},
 			ctx: context.Background(),
 			tenant: func() valueobject.TenantID {
 				t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000001")
+
 				return t
 			}(),
 			key:            "a:b",
@@ -237,12 +343,15 @@ func TestRedlockAcquire(t *testing.T) {
 		{
 			name: "key too long rejected",
 			r: func(t *testing.T) *lock.Redlock {
+				t.Helper()
 				r, _ := lock.NewRedlock(lock.RedlockParams{Client: newMockValkeyStore(t)})
+
 				return r
 			},
 			ctx: context.Background(),
 			tenant: func() valueobject.TenantID {
 				t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000001")
+
 				return t
 			}(),
 			key:            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -254,7 +363,9 @@ func TestRedlockAcquire(t *testing.T) {
 		{
 			name: "empty tenant rejected",
 			r: func(t *testing.T) *lock.Redlock {
+				t.Helper()
 				r, _ := lock.NewRedlock(lock.RedlockParams{Client: newMockValkeyStore(t)})
+
 				return r
 			},
 			ctx:            context.Background(),
@@ -268,7 +379,9 @@ func TestRedlockAcquire(t *testing.T) {
 		{
 			name: "colon in tenant rejected",
 			r: func(t *testing.T) *lock.Redlock {
+				t.Helper()
 				r, _ := lock.NewRedlock(lock.RedlockParams{Client: newMockValkeyStore(t)})
+
 				return r
 			},
 			ctx:            context.Background(),
@@ -282,12 +395,15 @@ func TestRedlockAcquire(t *testing.T) {
 		{
 			name: "zero ttl rejected",
 			r: func(t *testing.T) *lock.Redlock {
+				t.Helper()
 				r, _ := lock.NewRedlock(lock.RedlockParams{Client: newMockValkeyStore(t)})
+
 				return r
 			},
 			ctx: context.Background(),
 			tenant: func() valueobject.TenantID {
 				t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000001")
+
 				return t
 			}(),
 			key:            "recon-zero-ttl",
@@ -296,31 +412,12 @@ func TestRedlockAcquire(t *testing.T) {
 			expectedResult: false,
 			expectedError:  lock.ErrTTLPositive,
 		},
-		{
-			name: "canceled context aborts",
-			r: func(t *testing.T) *lock.Redlock {
-				r, _ := lock.NewRedlock(lock.RedlockParams{Client: newMockValkeyStore(t)})
-				return r
-			},
-			ctx: func() context.Context {
-				ctx, cancel := context.WithCancel(context.Background())
-				cancel()
-				return ctx
-			}(),
-			tenant: func() valueobject.TenantID {
-				t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000001")
-				return t
-			}(),
-			key:            "recon",
-			ttl:            time.Minute,
-			preAcquire:     false,
-			expectedResult: false,
-			expectedError:  context.Canceled,
-		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			r := tc.r(t)
 			if tc.preAcquire && r != nil {
 				_, err := r.Acquire(context.Background(), tc.tenant, tc.key, tc.ttl)
@@ -331,6 +428,7 @@ func TestRedlockAcquire(t *testing.T) {
 				lease, err := r.Acquire(tc.ctx, tc.tenant, tc.key, tc.ttl)
 				assert.ErrorIs(t, err, tc.expectedError)
 				assert.Nil(t, lease)
+
 				return
 			}
 
@@ -338,8 +436,10 @@ func TestRedlockAcquire(t *testing.T) {
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
 				assert.Nil(t, lease)
+
 				return
 			}
+
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedResult, lease != nil)
 		})
@@ -375,6 +475,7 @@ func TestRedlockLeaseRelease(t *testing.T) {
 				r, _ := lock.NewRedlock(lock.RedlockParams{Client: store})
 				tenant, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000003")
 				lease, _ := r.Acquire(context.Background(), tenant, "job", time.Minute)
+
 				return lease
 			},
 			ctx:           context.Background(),
@@ -388,6 +489,7 @@ func TestRedlockLeaseRelease(t *testing.T) {
 				r, _ := lock.NewRedlock(lock.RedlockParams{Client: store})
 				tenant, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000003")
 				lease, _ := r.Acquire(context.Background(), tenant, "job", time.Minute)
+
 				return lease
 			},
 			ctx:           context.Background(),
@@ -401,6 +503,7 @@ func TestRedlockLeaseRelease(t *testing.T) {
 				r, _ := lock.NewRedlock(lock.RedlockParams{Client: store})
 				tenant, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000003")
 				lease, _ := r.Acquire(context.Background(), tenant, "job", time.Minute)
+
 				return lease
 			},
 			ctx: context.Background(),
@@ -416,6 +519,7 @@ func TestRedlockLeaseRelease(t *testing.T) {
 				r, _ := lock.NewRedlock(lock.RedlockParams{Client: store})
 				tenant, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000003")
 				lease, _ := r.Acquire(context.Background(), tenant, "job", time.Minute)
+
 				return lease
 			},
 			ctx: context.Background(),
@@ -431,11 +535,13 @@ func TestRedlockLeaseRelease(t *testing.T) {
 				r, _ := lock.NewRedlock(lock.RedlockParams{Client: store})
 				tenant, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000003")
 				lease, _ := r.Acquire(context.Background(), tenant, "job", time.Minute)
+
 				return lease
 			},
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			}(),
 			mutateStore:   nil,
@@ -446,6 +552,7 @@ func TestRedlockLeaseRelease(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			store := newMockValkeyStore(t)
 			lease := tc.lease(store)
 
@@ -455,14 +562,17 @@ func TestRedlockLeaseRelease(t *testing.T) {
 
 			if lease == nil {
 				assert.ErrorIs(t, tc.expectedError, lock.ErrLeaseNotInit)
+
 				return
 			}
 
 			err := lease.Release(tc.ctx)
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
+
 				return
 			}
+
 			require.NoError(t, err)
 
 			if tc.repeatRelease {
@@ -501,6 +611,7 @@ func TestRedlockLeaseRefresh(t *testing.T) {
 				r, _ := lock.NewRedlock(lock.RedlockParams{Client: store})
 				tenant, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000004")
 				lease, _ := r.Acquire(context.Background(), tenant, "job", time.Minute)
+
 				return lease
 			},
 			ctx:           context.Background(),
@@ -514,6 +625,7 @@ func TestRedlockLeaseRefresh(t *testing.T) {
 				r, _ := lock.NewRedlock(lock.RedlockParams{Client: store})
 				tenant, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000004")
 				lease, _ := r.Acquire(context.Background(), tenant, "job", time.Minute)
+
 				return lease
 			},
 			ctx:           context.Background(),
@@ -527,6 +639,7 @@ func TestRedlockLeaseRefresh(t *testing.T) {
 				r, _ := lock.NewRedlock(lock.RedlockParams{Client: store})
 				tenant, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000004")
 				lease, _ := r.Acquire(context.Background(), tenant, "job", time.Minute)
+
 				return lease
 			},
 			ctx:           context.Background(),
@@ -540,6 +653,7 @@ func TestRedlockLeaseRefresh(t *testing.T) {
 				r, _ := lock.NewRedlock(lock.RedlockParams{Client: store})
 				tenant, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000004")
 				lease, _ := r.Acquire(context.Background(), tenant, "job", time.Minute)
+
 				return lease
 			},
 			ctx: context.Background(),
@@ -555,11 +669,13 @@ func TestRedlockLeaseRefresh(t *testing.T) {
 				r, _ := lock.NewRedlock(lock.RedlockParams{Client: store})
 				tenant, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000004")
 				lease, _ := r.Acquire(context.Background(), tenant, "job", time.Minute)
+
 				return lease
 			},
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			}(),
 			ttl:           time.Minute,
@@ -570,6 +686,7 @@ func TestRedlockLeaseRefresh(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			store := newMockValkeyStore(t)
 			lease := tc.lease(store)
 
@@ -579,6 +696,7 @@ func TestRedlockLeaseRefresh(t *testing.T) {
 
 			if lease == nil {
 				assert.ErrorIs(t, tc.expectedError, lock.ErrLeaseNotInit)
+
 				return
 			}
 
@@ -589,14 +707,16 @@ func TestRedlockLeaseRefresh(t *testing.T) {
 				} else {
 					assert.EqualError(t, err, tc.expectedError.Error())
 				}
+
 				return
 			}
+
 			require.NoError(t, err)
 		})
 	}
 }
 
-func TestWithLock(t *testing.T) {
+func TestWithLockLifecycle(t *testing.T) {
 	t.Parallel()
 
 	type testCase struct {
@@ -616,7 +736,7 @@ func TestWithLock(t *testing.T) {
 		{
 			name: "runs fn and releases",
 			ctx:  context.Background(),
-			params: func(locker *mockapplication.MockDistributedLock, state map[string]bool) lock.GuardParams {
+			params: func(locker *mockapplication.MockDistributedLock, _ map[string]bool) lock.GuardParams {
 				return lock.GuardParams{
 					Locker:          locker,
 					RefreshInterval: 5 * time.Millisecond,
@@ -624,6 +744,7 @@ func TestWithLock(t *testing.T) {
 			},
 			tenant: func() valueobject.TenantID {
 				t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
+
 				return t
 			}(),
 			key: "recon",
@@ -632,6 +753,7 @@ func TestWithLock(t *testing.T) {
 				return nil
 			},
 			lockerSetup: func(t *testing.T, locker *mockapplication.MockDistributedLock, _ map[string]bool) {
+				t.Helper()
 				lease := mockapplication.NewMockLock(t)
 				tenant, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
 				locker.EXPECT().Acquire(mock.Anything, tenant, "recon", time.Minute).Return(lease, nil)
@@ -640,6 +762,201 @@ func TestWithLock(t *testing.T) {
 			expectedError: nil,
 			assertPost:    nil,
 		},
+		{
+			name: "renews while fn runs",
+			ctx:  context.Background(),
+			params: func(locker *mockapplication.MockDistributedLock, _ map[string]bool) lock.GuardParams {
+				return lock.GuardParams{
+					Locker:          locker,
+					RefreshInterval: 5 * time.Millisecond,
+				}
+			},
+			tenant: func() valueobject.TenantID {
+				t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
+
+				return t
+			}(),
+			key: "long-recon",
+			ttl: 30 * time.Second,
+			fn: func(ctx context.Context) error {
+				time.Sleep(40 * time.Millisecond)
+
+				return ctx.Err()
+			},
+			lockerSetup: func(t *testing.T, locker *mockapplication.MockDistributedLock, state map[string]bool) {
+				t.Helper()
+				lease := mockapplication.NewMockLock(t)
+				tenant, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
+				locker.EXPECT().Acquire(mock.Anything, tenant, "long-recon", 30*time.Second).Return(lease, nil)
+
+				var count atomic.Int64
+
+				lease.EXPECT().Refresh(mock.Anything, 30*time.Second).RunAndReturn(func(context.Context, time.Duration) error {
+					if count.Add(1) >= 3 {
+						state["refreshed_enough"] = true
+					}
+
+					return nil
+				}).Maybe()
+				lease.EXPECT().Release(mock.Anything).Return(nil).Maybe()
+			},
+			expectedError: nil,
+			assertPost: func(t *testing.T, state map[string]bool) {
+				t.Helper()
+				assert.True(t, state["refreshed_enough"])
+			},
+		},
+		{
+			name: "released hook fires and lease is freed",
+			ctx:  context.Background(),
+			params: func(locker *mockapplication.MockDistributedLock, state map[string]bool) lock.GuardParams {
+				return lock.GuardParams{
+					Locker:          locker,
+					RefreshInterval: 5 * time.Millisecond,
+					OnReleased: func(context.Context, valueobject.TenantID, string) {
+						state["released"] = true
+					},
+				}
+			},
+			tenant: func() valueobject.TenantID {
+				t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
+
+				return t
+			}(),
+			key: "hook-recon",
+			ttl: time.Minute,
+			fn: func(context.Context) error {
+				return nil
+			},
+			lockerSetup: func(t *testing.T, locker *mockapplication.MockDistributedLock, _ map[string]bool) {
+				t.Helper()
+				lease := mockapplication.NewMockLock(t)
+				tenant, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
+				locker.EXPECT().Acquire(mock.Anything, tenant, "hook-recon", time.Minute).Return(lease, nil)
+				lease.EXPECT().Release(mock.Anything).Return(nil)
+			},
+			expectedError: nil,
+			assertPost: func(t *testing.T, state map[string]bool) {
+				t.Helper()
+				assert.True(t, state["released"])
+			},
+		},
+		{
+			name: "caller cancellation still releases the lease",
+			ctx: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+
+				return ctx
+			}(),
+			params: func(locker *mockapplication.MockDistributedLock, _ map[string]bool) lock.GuardParams {
+				return lock.GuardParams{
+					Locker:          locker,
+					RefreshInterval: 5 * time.Millisecond,
+				}
+			},
+			tenant: func() valueobject.TenantID {
+				t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
+
+				return t
+			}(),
+			key: "cancel-recon",
+			ttl: time.Minute,
+			fn: func(context.Context) error {
+				return nil
+			},
+			lockerSetup: func(t *testing.T, locker *mockapplication.MockDistributedLock, _ map[string]bool) {
+				t.Helper()
+				lease := mockapplication.NewMockLock(t)
+				tenant, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
+				locker.EXPECT().Acquire(mock.Anything, tenant, "cancel-recon", time.Minute).Return(lease, nil)
+				lease.EXPECT().Release(mock.Anything).Return(nil)
+			},
+			expectedError: nil,
+			assertPost:    nil,
+		},
+		{
+			name: "fn completes while renewal interval is active without context error",
+			ctx:  context.Background(),
+			params: func(locker *mockapplication.MockDistributedLock, _ map[string]bool) lock.GuardParams {
+				return lock.GuardParams{
+					Locker:          locker,
+					RefreshInterval: time.Millisecond,
+				}
+			},
+			tenant: func() valueobject.TenantID {
+				t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
+
+				return t
+			}(),
+			key: "racing-renew",
+			ttl: time.Second,
+			fn: func(_ context.Context) error {
+				time.Sleep(2 * time.Millisecond)
+
+				return nil
+			},
+			lockerSetup: func(t *testing.T, locker *mockapplication.MockDistributedLock, _ map[string]bool) {
+				t.Helper()
+				lease := mockapplication.NewMockLock(t)
+				tenant, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
+				locker.EXPECT().Acquire(mock.Anything, tenant, "racing-renew", time.Second).Return(lease, nil)
+				lease.EXPECT().Refresh(mock.Anything, time.Second).Return(nil).Maybe()
+				lease.EXPECT().Release(mock.Anything).Return(nil)
+			},
+			expectedError: nil,
+			assertPost:    nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			locker := mockapplication.NewMockDistributedLock(t)
+
+			state := make(map[string]bool)
+			if tc.lockerSetup != nil {
+				tc.lockerSetup(t, locker, state)
+			}
+
+			guardParams := tc.params(locker, state)
+
+			err := lock.WithLock(tc.ctx, guardParams, tc.tenant, tc.key, tc.ttl, tc.fn)
+			if tc.expectedError != nil {
+				if errors.Is(tc.expectedError, lock.ErrLockHeld) || errors.Is(tc.expectedError, lock.ErrLockLost) {
+					assert.ErrorIs(t, err, tc.expectedError)
+				} else {
+					assert.EqualError(t, err, tc.expectedError.Error())
+				}
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tc.assertPost != nil {
+				tc.assertPost(t, state)
+			}
+		})
+	}
+}
+func TestWithLockFailureModes(t *testing.T) {
+	t.Parallel()
+
+	type testCase struct {
+		name          string
+		ctx           context.Context
+		params        func(locker *mockapplication.MockDistributedLock, state map[string]bool) lock.GuardParams
+		tenant        valueobject.TenantID
+		key           string
+		ttl           time.Duration
+		fn            func(ctx context.Context) error
+		lockerSetup   func(t *testing.T, locker *mockapplication.MockDistributedLock, state map[string]bool)
+		expectedError error
+		assertPost    func(t *testing.T, state map[string]bool)
+	}
+
+	testCases := []testCase{
 		{
 			name: "contention surfaces held and fires hook",
 			ctx:  context.Background(),
@@ -654,6 +971,7 @@ func TestWithLock(t *testing.T) {
 			},
 			tenant: func() valueobject.TenantID {
 				t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
+
 				return t
 			}(),
 			key: "recon",
@@ -662,11 +980,14 @@ func TestWithLock(t *testing.T) {
 				return nil
 			},
 			lockerSetup: func(t *testing.T, locker *mockapplication.MockDistributedLock, _ map[string]bool) {
+				t.Helper()
+
 				tenant, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
 				locker.EXPECT().Acquire(mock.Anything, tenant, "recon", time.Minute).Return(nil, lock.ErrLockHeld)
 			},
 			expectedError: lock.ErrLockHeld,
 			assertPost: func(t *testing.T, state map[string]bool) {
+				t.Helper()
 				assert.True(t, state["contended"])
 			},
 		},
@@ -684,6 +1005,7 @@ func TestWithLock(t *testing.T) {
 			},
 			tenant: func() valueobject.TenantID {
 				t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
+
 				return t
 			}(),
 			key: "recon",
@@ -692,55 +1014,21 @@ func TestWithLock(t *testing.T) {
 				return nil
 			},
 			lockerSetup: func(t *testing.T, locker *mockapplication.MockDistributedLock, _ map[string]bool) {
+				t.Helper()
+
 				tenant, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
-				locker.EXPECT().Acquire(mock.Anything, tenant, "recon", time.Minute).Return(nil, errors.New("valkey down"))
+				locker.EXPECT().Acquire(mock.Anything, tenant, "recon", time.Minute).Return(nil, lock.ErrValkeyDown)
 			},
-			expectedError: errors.New("valkey down"),
+			expectedError: lock.ErrValkeyDown,
 			assertPost: func(t *testing.T, state map[string]bool) {
+				t.Helper()
 				assert.False(t, state["contended"])
-			},
-		},
-		{
-			name: "renews while fn runs",
-			ctx:  context.Background(),
-			params: func(locker *mockapplication.MockDistributedLock, state map[string]bool) lock.GuardParams {
-				return lock.GuardParams{
-					Locker:          locker,
-					RefreshInterval: 5 * time.Millisecond,
-				}
-			},
-			tenant: func() valueobject.TenantID {
-				t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
-				return t
-			}(),
-			key: "long-recon",
-			ttl: 30 * time.Second,
-			fn: func(ctx context.Context) error {
-				time.Sleep(40 * time.Millisecond)
-				return ctx.Err()
-			},
-			lockerSetup: func(t *testing.T, locker *mockapplication.MockDistributedLock, state map[string]bool) {
-				lease := mockapplication.NewMockLock(t)
-				tenant, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
-				locker.EXPECT().Acquire(mock.Anything, tenant, "long-recon", 30*time.Second).Return(lease, nil)
-				var count atomic.Int64
-				lease.EXPECT().Refresh(mock.Anything, 30*time.Second).RunAndReturn(func(context.Context, time.Duration) error {
-					if count.Add(1) >= 3 {
-						state["refreshed_enough"] = true
-					}
-					return nil
-				}).Maybe()
-				lease.EXPECT().Release(mock.Anything).Return(nil).Maybe()
-			},
-			expectedError: nil,
-			assertPost: func(t *testing.T, state map[string]bool) {
-				assert.True(t, state["refreshed_enough"])
 			},
 		},
 		{
 			name: "lost lease cancels fn and surfaces lock lost",
 			ctx:  context.Background(),
-			params: func(locker *mockapplication.MockDistributedLock, state map[string]bool) lock.GuardParams {
+			params: func(locker *mockapplication.MockDistributedLock, _ map[string]bool) lock.GuardParams {
 				return lock.GuardParams{
 					Locker:          locker,
 					RefreshInterval: 5 * time.Millisecond,
@@ -748,15 +1036,18 @@ func TestWithLock(t *testing.T) {
 			},
 			tenant: func() valueobject.TenantID {
 				t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
+
 				return t
 			}(),
 			key: "lost-recon",
 			ttl: 30 * time.Second,
 			fn: func(ctx context.Context) error {
 				<-ctx.Done()
+
 				return ctx.Err()
 			},
 			lockerSetup: func(t *testing.T, locker *mockapplication.MockDistributedLock, _ map[string]bool) {
+				t.Helper()
 				lease := mockapplication.NewMockLock(t)
 				tenant, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
 				locker.EXPECT().Acquire(mock.Anything, tenant, "lost-recon", 30*time.Second).Return(lease, nil)
@@ -769,7 +1060,7 @@ func TestWithLock(t *testing.T) {
 		{
 			name: "fn error wins over renewal error",
 			ctx:  context.Background(),
-			params: func(locker *mockapplication.MockDistributedLock, state map[string]bool) lock.GuardParams {
+			params: func(locker *mockapplication.MockDistributedLock, _ map[string]bool) lock.GuardParams {
 				return lock.GuardParams{
 					Locker:          locker,
 					RefreshInterval: 1 * time.Millisecond,
@@ -777,87 +1068,78 @@ func TestWithLock(t *testing.T) {
 			},
 			tenant: func() valueobject.TenantID {
 				t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
+
 				return t
 			}(),
 			key: "diverged-recon",
 			ttl: 30 * time.Second,
 			fn: func(context.Context) error {
 				time.Sleep(20 * time.Millisecond)
-				return errors.New("payment posted but reconciliation diverged")
+
+				return lock.ErrPaymentPostedButReconciliationDiverged
 			},
 			lockerSetup: func(t *testing.T, locker *mockapplication.MockDistributedLock, _ map[string]bool) {
+				t.Helper()
 				lease := mockapplication.NewMockLock(t)
 				tenant, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
 				locker.EXPECT().Acquire(mock.Anything, tenant, "diverged-recon", 30*time.Second).Return(lease, nil)
 				lease.EXPECT().Refresh(mock.Anything, 30*time.Second).Return(lock.ErrLockLost).Maybe()
 				lease.EXPECT().Release(mock.Anything).Return(nil).Maybe()
 			},
-			expectedError: errors.New("payment posted but reconciliation diverged"),
+			expectedError: lock.ErrPaymentPostedButReconciliationDiverged,
 			assertPost:    nil,
 		},
-		{
-			name: "released hook fires and lease is freed",
-			ctx:  context.Background(),
-			params: func(locker *mockapplication.MockDistributedLock, state map[string]bool) lock.GuardParams {
-				return lock.GuardParams{
-					Locker:          locker,
-					RefreshInterval: 5 * time.Millisecond,
-					OnReleased: func(context.Context, valueobject.TenantID, string) {
-						state["released"] = true
-					},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			locker := mockapplication.NewMockDistributedLock(t)
+
+			state := make(map[string]bool)
+			if tc.lockerSetup != nil {
+				tc.lockerSetup(t, locker, state)
+			}
+
+			guardParams := tc.params(locker, state)
+
+			err := lock.WithLock(tc.ctx, guardParams, tc.tenant, tc.key, tc.ttl, tc.fn)
+			if tc.expectedError != nil {
+				if errors.Is(tc.expectedError, lock.ErrLockHeld) || errors.Is(tc.expectedError, lock.ErrLockLost) {
+					assert.ErrorIs(t, err, tc.expectedError)
+				} else {
+					assert.EqualError(t, err, tc.expectedError.Error())
 				}
-			},
-			tenant: func() valueobject.TenantID {
-				t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
-				return t
-			}(),
-			key: "hook-recon",
-			ttl: time.Minute,
-			fn: func(context.Context) error {
-				return nil
-			},
-			lockerSetup: func(t *testing.T, locker *mockapplication.MockDistributedLock, _ map[string]bool) {
-				lease := mockapplication.NewMockLock(t)
-				tenant, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
-				locker.EXPECT().Acquire(mock.Anything, tenant, "hook-recon", time.Minute).Return(lease, nil)
-				lease.EXPECT().Release(mock.Anything).Return(nil)
-			},
-			expectedError: nil,
-			assertPost: func(t *testing.T, state map[string]bool) {
-				assert.True(t, state["released"])
-			},
-		},
-		{
-			name: "caller cancellation still releases the lease",
-			ctx: func() context.Context {
-				ctx, cancel := context.WithCancel(context.Background())
-				cancel()
-				return ctx
-			}(),
-			params: func(locker *mockapplication.MockDistributedLock, state map[string]bool) lock.GuardParams {
-				return lock.GuardParams{
-					Locker:          locker,
-					RefreshInterval: 5 * time.Millisecond,
-				}
-			},
-			tenant: func() valueobject.TenantID {
-				t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
-				return t
-			}(),
-			key: "cancel-recon",
-			ttl: time.Minute,
-			fn: func(context.Context) error {
-				return nil
-			},
-			lockerSetup: func(t *testing.T, locker *mockapplication.MockDistributedLock, _ map[string]bool) {
-				lease := mockapplication.NewMockLock(t)
-				tenant, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
-				locker.EXPECT().Acquire(mock.Anything, tenant, "cancel-recon", time.Minute).Return(lease, nil)
-				lease.EXPECT().Release(mock.Anything).Return(nil)
-			},
-			expectedError: nil,
-			assertPost:    nil,
-		},
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			if tc.assertPost != nil {
+				tc.assertPost(t, state)
+			}
+		})
+	}
+}
+
+func TestWithLockValidation(t *testing.T) {
+	t.Parallel()
+
+	type testCase struct {
+		name          string
+		ctx           context.Context
+		params        func(locker *mockapplication.MockDistributedLock, state map[string]bool) lock.GuardParams
+		tenant        valueobject.TenantID
+		key           string
+		ttl           time.Duration
+		fn            func(ctx context.Context) error
+		lockerSetup   func(t *testing.T, locker *mockapplication.MockDistributedLock, state map[string]bool)
+		expectedError error
+		assertPost    func(t *testing.T, state map[string]bool)
+	}
+
+	testCases := []testCase{
 		{
 			name: "nil locker rejected",
 			ctx:  context.Background(),
@@ -869,6 +1151,7 @@ func TestWithLock(t *testing.T) {
 			},
 			tenant: func() valueobject.TenantID {
 				t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
+
 				return t
 			}(),
 			key: "recon",
@@ -891,6 +1174,7 @@ func TestWithLock(t *testing.T) {
 			},
 			tenant: func() valueobject.TenantID {
 				t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
+
 				return t
 			}(),
 			key:           "recon",
@@ -900,46 +1184,20 @@ func TestWithLock(t *testing.T) {
 			expectedError: lock.ErrFnRequired,
 			assertPost:    nil,
 		},
-		{
-			name: "fn completes while renewal interval is active without context error",
-			ctx:  context.Background(),
-			params: func(locker *mockapplication.MockDistributedLock, state map[string]bool) lock.GuardParams {
-				return lock.GuardParams{
-					Locker:          locker,
-					RefreshInterval: time.Millisecond,
-				}
-			},
-			tenant: func() valueobject.TenantID {
-				t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
-				return t
-			}(),
-			key: "racing-renew",
-			ttl: time.Second,
-			fn: func(_ context.Context) error {
-				time.Sleep(2 * time.Millisecond)
-				return nil
-			},
-			lockerSetup: func(t *testing.T, locker *mockapplication.MockDistributedLock, _ map[string]bool) {
-				lease := mockapplication.NewMockLock(t)
-				tenant, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000002")
-				locker.EXPECT().Acquire(mock.Anything, tenant, "racing-renew", time.Second).Return(lease, nil)
-				lease.EXPECT().Refresh(mock.Anything, time.Second).Return(nil).Maybe()
-				lease.EXPECT().Release(mock.Anything).Return(nil)
-			},
-			expectedError: nil,
-			assertPost:    nil,
-		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			locker := mockapplication.NewMockDistributedLock(t)
+
 			state := make(map[string]bool)
 			if tc.lockerSetup != nil {
 				tc.lockerSetup(t, locker, state)
 			}
 
 			guardParams := tc.params(locker, state)
+
 			err := lock.WithLock(tc.ctx, guardParams, tc.tenant, tc.key, tc.ttl, tc.fn)
 			if tc.expectedError != nil {
 				if errors.Is(tc.expectedError, lock.ErrLockHeld) || errors.Is(tc.expectedError, lock.ErrLockLost) {
@@ -947,9 +1205,12 @@ func TestWithLock(t *testing.T) {
 				} else {
 					assert.EqualError(t, err, tc.expectedError.Error())
 				}
+
 				return
 			}
+
 			require.NoError(t, err)
+
 			if tc.assertPost != nil {
 				tc.assertPost(t, state)
 			}
@@ -974,11 +1235,12 @@ func TestWithLockRenewalPanicContained(t *testing.T) {
 
 	err := lock.WithLock(context.Background(), guardParams, tenant, "panic-renewal", time.Second, func(ctx context.Context) error {
 		<-ctx.Done()
+
 		return ctx.Err()
 	})
 	require.Error(t, err)
 
-	var contained safe.Panic
+	var contained safe.PanicError
 	require.ErrorAs(t, err, &contained)
 	assert.Contains(t, contained.Value, "store exploded mid-refresh")
 }

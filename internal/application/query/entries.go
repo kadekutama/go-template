@@ -41,10 +41,12 @@ func (s *EntriesService) Execute(ctx context.Context, query port.EntriesQuery) (
 	if err := validateEntriesQuery(query); err != nil {
 		return port.EntriesPage{}, err
 	}
+
 	entries, next, err := s.entries.FindByAccount(ctx, query.TenantID, query.AccountID, query.Cursor, query.Limit)
 	if err != nil {
 		return port.EntriesPage{}, err
 	}
+
 	return port.EntriesPage{Entries: entries, NextCursor: next}, nil
 }
 
@@ -53,11 +55,14 @@ func validateEntriesQuery(query port.EntriesQuery) error {
 	if strings.TrimSpace(query.TenantID.String()) == "" {
 		return entity.NewError("TENANT_REQUIRED", "tenant id is required")
 	}
+
 	if strings.TrimSpace(query.AccountID.String()) == "" {
 		return entity.NewError("ENTRIES_ACCOUNT_REQUIRED", "entries require an account id")
 	}
+
 	if query.Limit < entriesMinLimit || query.Limit > entriesMaxLimit {
 		return entity.NewError("INVALID_EXPORT_LIMIT", "export limit must be between 1 and 500")
 	}
+
 	return nil
 }

@@ -69,8 +69,11 @@ func TestTenantNameValid(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := specification.TenantNameValid().Evaluate(tc.ctx, tc.candidate)
 			assert.Equal(t, tc.expectedPassed, result.Passed())
+
 			if tc.expectedPassed {
 				assert.Empty(t, result.Violations)
 			} else {
@@ -154,8 +157,11 @@ func TestTenantRegionAllowed(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := specification.TenantRegionAllowed(tc.allowed).Evaluate(tc.ctx, tc.candidate)
 			assert.Equal(t, tc.expectedPassed, result.Passed())
+
 			if tc.expectedPassed {
 				assert.Empty(t, result.Violations)
 			} else {
@@ -234,8 +240,11 @@ func TestTenantSettingsValid(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := specification.TenantSettingsValid().Evaluate(tc.ctx, tc.candidate)
 			assert.Equal(t, tc.expectedPassed, result.Passed())
+
 			if tc.expectedPassed {
 				assert.Empty(t, result.Violations)
 			} else {

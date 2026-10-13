@@ -49,7 +49,7 @@ type MockLock_Refresh_Call struct {
 // Refresh is a helper method to define mock.On call
 //   - ctx context.Context
 //   - ttl time.Duration
-func (_e *MockLock_Expecter) Refresh(ctx interface{}, ttl interface{}) *MockLock_Refresh_Call {
+func (_e *MockLock_Expecter) Refresh(ctx any, ttl any) *MockLock_Refresh_Call {
 	return &MockLock_Refresh_Call{Call: _e.mock.On("Refresh", ctx, ttl)}
 }
 
@@ -95,7 +95,7 @@ type MockLock_Release_Call struct {
 
 // Release is a helper method to define mock.On call
 //   - ctx context.Context
-func (_e *MockLock_Expecter) Release(ctx interface{}) *MockLock_Release_Call {
+func (_e *MockLock_Expecter) Release(ctx any) *MockLock_Release_Call {
 	return &MockLock_Release_Call{Call: _e.mock.On("Release", ctx)}
 }
 

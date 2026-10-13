@@ -15,13 +15,17 @@ import (
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
 )
 
-var opsAt = time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
+func opsAt() time.Time {
+	return time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
+}
 
 func newReconService(t *testing.T, uow port.UnitOfWork, store command.ReconStore, authz port.Authorizer) *command.ReconService {
+	t.Helper()
+
 	return command.NewReconService(command.ReconServiceParams{
 		UoW:               uow,
 		Runs:              store,
-		Clock:             newMockClock(t, tfrAt),
+		Clock:             newMockClock(t, tfrAt()),
 		IDs:               newMockIDGenerator(t, tfrTestIDs(40)...),
 		Authz:             authz,
 		SoDThresholdMinor: 10000,
@@ -31,8 +35,8 @@ func newReconService(t *testing.T, uow port.UnitOfWork, store command.ReconStore
 func reconLine(id, ref string, amount int64) entity.ExternalStatementLine {
 	return entity.ExternalStatementLine{
 		LineID: id, SourceAccount: "bank-acct", Reference: ref, AmountMinor: amount,
-		AssetCode: "USD", EffectiveAt: opsAt, Hash: "hash-" + id, ParserVersion: "csv-v1",
-		RawLineage: "line:" + id, CoverageStart: opsAt.Add(-24 * time.Hour), CoverageEnd: opsAt,
+		AssetCode: "USD", EffectiveAt: opsAt(), Hash: "hash-" + id, ParserVersion: "csv-v1",
+		RawLineage: "line:" + id, CoverageStart: opsAt().Add(-24 * time.Hour), CoverageEnd: opsAt(),
 	}
 }
 
@@ -43,8 +47,8 @@ func TestReconTrigger(t *testing.T) {
 		TenantID:       tfrTenant,
 		LedgerID:       tfrLedger,
 		Source:         "bank-csv",
-		WindowStart:    opsAt.Add(-24 * time.Hour),
-		WindowEnd:      opsAt,
+		WindowStart:    opsAt().Add(-24 * time.Hour),
+		WindowEnd:      opsAt(),
 		IdempotencyKey: "key-run-1",
 		Actor:          "u-1",
 	}
@@ -83,6 +87,7 @@ func TestReconTrigger(t *testing.T) {
 			req: func() port.ReconRunRequest {
 				r := baseReq
 				r.TenantID = ""
+
 				return r
 			}(),
 			preload:        func(_ port.UnitOfWork) {},
@@ -95,6 +100,7 @@ func TestReconTrigger(t *testing.T) {
 			req: func() port.ReconRunRequest {
 				r := baseReq
 				r.Actor = ""
+
 				return r
 			}(),
 			preload:        func(_ port.UnitOfWork) {},
@@ -107,6 +113,7 @@ func TestReconTrigger(t *testing.T) {
 			req: func() port.ReconRunRequest {
 				r := baseReq
 				r.IdempotencyKey = ""
+
 				return r
 			}(),
 			preload:        func(_ port.UnitOfWork) {},
@@ -126,17 +133,21 @@ func TestReconTrigger(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t)
 			store := newMockReconStore(t)
+
 			authz := newMockAuthorizer(t)
 			if tc.denied {
 				setAuthzDenied(authz, tc.req.Actor+"|recon.trigger|ledger/"+string(tc.req.LedgerID))
 			}
+
 			svc := newReconService(t, uow, store, authz)
 			tc.preload(uow)
 
 			res, err := svc.TriggerReconRun(context.Background(), tc.req)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, tc.expectedStatus, res.Status)
 				assert.Contains(t, outboxTypes(uow), command.EventReconRunStarted)
@@ -187,6 +198,7 @@ func TestReconExecuteRun(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t)
 			store := newMockReconStore(t)
 			authz := newMockAuthorizer(t)
@@ -204,7 +216,7 @@ func TestReconExecuteRun(t *testing.T) {
 
 			res, err := svc.ExecuteRun(context.Background(), tfrTenant, tc.runID, command.MatchInput{
 				Ledger: []service.LedgerFact{
-					{PostingID: "p-1", Reference: "ref-1", AmountMinor: 5000, AssetCode: "USD", EffectiveAt: opsAt},
+					{PostingID: "p-1", Reference: "ref-1", AmountMinor: 5000, AssetCode: "USD", EffectiveAt: opsAt()},
 				},
 				External: []entity.ExternalStatementLine{
 					reconLine("l-1", "ref-1", 5000),
@@ -217,6 +229,7 @@ func TestReconExecuteRun(t *testing.T) {
 				},
 			})
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, command.ReconRunCompleted, res.Status)
 				store.AssertNumberOfCalls(t, "CreateBreaks", 1)
@@ -275,6 +288,7 @@ func TestBreakResolveAndAcknowledge(t *testing.T) {
 			req: func() port.BreakResolutionRequest {
 				r := baseReq
 				r.TenantID = ""
+
 				return r
 			}(),
 			acknowledge:   false,
@@ -288,6 +302,7 @@ func TestBreakResolveAndAcknowledge(t *testing.T) {
 			req: func() port.BreakResolutionRequest {
 				r := baseReq
 				r.BreakID = ""
+
 				return r
 			}(),
 			acknowledge:   false,
@@ -301,6 +316,7 @@ func TestBreakResolveAndAcknowledge(t *testing.T) {
 			req: func() port.BreakResolutionRequest {
 				r := baseReq
 				r.Actor = ""
+
 				return r
 			}(),
 			acknowledge:   false,
@@ -314,6 +330,7 @@ func TestBreakResolveAndAcknowledge(t *testing.T) {
 			req: func() port.BreakResolutionRequest {
 				r := baseReq
 				r.IdempotencyKey = ""
+
 				return r
 			}(),
 			acknowledge:   false,
@@ -336,6 +353,7 @@ func TestBreakResolveAndAcknowledge(t *testing.T) {
 			req: func() port.BreakResolutionRequest {
 				r := baseReq
 				r.Approver = r.Actor
+
 				return r
 			}(),
 			acknowledge:   false,
@@ -357,12 +375,15 @@ func TestBreakResolveAndAcknowledge(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t)
 			store := newMockReconStore(t)
+
 			authz := newMockAuthorizer(t)
 			if tc.denied {
 				setAuthzDenied(authz, tc.req.Actor+"|recon.resolve|recon/"+tc.req.BreakID)
 			}
+
 			svc := newReconService(t, uow, store, authz)
 
 			if tc.seedBreak {
@@ -392,9 +413,11 @@ func TestBreakResolveAndAcknowledge(t *testing.T) {
 			}
 
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				stored, findErr := store.FindBreak(context.Background(), tc.req.TenantID, tc.req.BreakID)
 				require.NoError(t, findErr)
+
 				if tc.acknowledge {
 					assert.Equal(t, valueobject.BreakAcknowledged, stored.Status)
 					assert.Contains(t, outboxTypes(uow), command.EventReconBreakAcknowledged)

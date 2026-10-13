@@ -25,11 +25,11 @@ func (_m *MockEventOutbox) EXPECT() *MockEventOutbox_Expecter {
 
 // Append provides a mock function with given fields: ctx, facts
 func (_m *MockEventOutbox) Append(ctx context.Context, facts ...port.OutboxFact) error {
-	_va := make([]interface{}, len(facts))
+	_va := make([]any, len(facts))
 	for _i := range facts {
 		_va[_i] = facts[_i]
 	}
-	var _ca []interface{}
+	var _ca []any
 	_ca = append(_ca, ctx)
 	_ca = append(_ca, _va...)
 	ret := _m.Called(_ca...)
@@ -56,9 +56,9 @@ type MockEventOutbox_Append_Call struct {
 // Append is a helper method to define mock.On call
 //   - ctx context.Context
 //   - facts ...port.OutboxFact
-func (_e *MockEventOutbox_Expecter) Append(ctx interface{}, facts ...interface{}) *MockEventOutbox_Append_Call {
+func (_e *MockEventOutbox_Expecter) Append(ctx any, facts ...any) *MockEventOutbox_Append_Call {
 	return &MockEventOutbox_Append_Call{Call: _e.mock.On("Append",
-		append([]interface{}{ctx}, facts...)...)}
+		append([]any{ctx}, facts...)...)}
 }
 
 func (_c *MockEventOutbox_Append_Call) Run(run func(ctx context.Context, facts ...port.OutboxFact)) *MockEventOutbox_Append_Call {

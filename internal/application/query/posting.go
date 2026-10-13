@@ -1,7 +1,8 @@
-// Package query owns the core read use cases: strong posting and balance
+package query
+
+// The core read use cases below are strong posting and balance
 // reads plus cursor-paged entry lists. Queries never perform business side
 // effects; spend decisions use these strong reads, never cached figures.
-package query
 
 import (
 	"context"
@@ -36,5 +37,6 @@ func (s *PostingQueryService) Execute(ctx context.Context, query port.GetPosting
 	if err != nil {
 		return port.PostingView{}, err
 	}
+
 	return port.PostingView{Posting: posting}, nil
 }

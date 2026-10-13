@@ -106,14 +106,18 @@ func (r *Runner) Start(ctx context.Context, tenantID, kind, sagaID string, steps
 	if strings.TrimSpace(sagaID) == "" {
 		return SagaRecord{}, entity.NewError("SAGA_ID_REQUIRED", "saga id is required")
 	}
+
 	if len(steps) == 0 {
 		return SagaRecord{}, entity.NewError("SAGA_STEPS_REQUIRED", "saga requires at least one step")
 	}
+
 	existing, err := r.store.FindSaga(ctx, tenantID, sagaID)
 	if err == nil {
 		return existing, nil
 	}
+
 	now := r.clock.Now().UTC()
+
 	record := SagaRecord{
 		ID: sagaID, TenantID: tenantID, Kind: kind, State: SagaRunning,
 		CreatedAt: now, UpdatedAt: now,
@@ -121,9 +125,11 @@ func (r *Runner) Start(ctx context.Context, tenantID, kind, sagaID string, steps
 	for _, step := range steps {
 		record.Steps = append(record.Steps, StepRecord{Name: step.Name, State: StepPending, UpdatedAt: now})
 	}
+
 	if err := r.store.CreateSaga(ctx, record); err != nil {
 		return SagaRecord{}, err
 	}
+
 	return r.drive(ctx, record, steps)
 }
 
@@ -134,9 +140,11 @@ func (r *Runner) Resume(ctx context.Context, tenantID, sagaID string, steps []St
 	if err != nil {
 		return SagaRecord{}, err
 	}
+
 	if record.State == SagaCompleted || record.State == SagaCompensated {
 		return record, nil
 	}
+
 	return r.drive(ctx, record, steps)
 }
 
@@ -148,31 +156,39 @@ func (r *Runner) drive(ctx context.Context, record SagaRecord, steps []Step) (Sa
 	for _, step := range steps {
 		byName[step.Name] = step
 	}
+
 	for i := range record.Steps {
 		if err := ctx.Err(); err != nil {
 			return record, err
 		}
+
 		if record.Steps[i].State == StepCompleted || record.Steps[i].State == StepCompensated || record.Steps[i].State == StepSkipped {
 			continue
 		}
+
 		step, ok := byName[record.Steps[i].Name]
 		if !ok {
 			return r.fail(ctx, record, i, "SAGA_STEP_UNKNOWN", "saga step is not defined")
 		}
+
 		if err := r.runStep(ctx, &record, i, step); err != nil {
 			// Parent cancellation abandons without compensating (crash):
 			// attempt timeouts arrive as step errors with a live parent.
 			if ctx.Err() != nil {
 				return record, ctx.Err()
 			}
+
 			return r.compensate(ctx, record, steps, i, err)
 		}
 	}
+
 	record.State = SagaCompleted
+
 	record.UpdatedAt = r.clock.Now().UTC()
 	if err := r.store.UpdateSaga(ctx, record); err != nil {
 		return record, err
 	}
+
 	return record, nil
 }
 
@@ -182,38 +198,51 @@ func (r *Runner) drive(ctx context.Context, record SagaRecord, steps []Step) (Sa
 // continues later).
 func (r *Runner) runStep(ctx context.Context, record *SagaRecord, index int, step Step) error {
 	maxAttempts := max(step.MaxAttempts, 1)
+
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+
 		record.Steps[index].State = StepRunning
 		record.Steps[index].Attempts++
+
 		record.UpdatedAt = r.clock.Now().UTC()
 		if err := r.store.UpdateSaga(ctx, *record); err != nil {
 			return err
 		}
+
 		attemptCtx := ctx
+
 		cancel := func() {}
 		if step.Timeout > 0 {
 			attemptCtx, cancel = context.WithTimeout(ctx, step.Timeout)
 		}
+
 		runErr := step.Run(attemptCtx)
+
 		cancel()
+
 		if runErr == nil {
 			record.Steps[index].State = StepCompleted
+
 			record.Steps[index].UpdatedAt = r.clock.Now().UTC()
 			if err := r.store.UpdateSaga(ctx, *record); err != nil {
 				return err
 			}
+
 			return nil
 		}
+
 		record.Steps[index].ErrorCode = errorCodeOf(runErr)
 		if record.Steps[index].Attempts >= maxAttempts {
 			record.Steps[index].State = StepFailed
+
 			record.UpdatedAt = r.clock.Now().UTC()
 			if err := r.store.UpdateSaga(ctx, *record); err != nil {
 				return err
 			}
+
 			return runErr
 		}
 	}
@@ -224,19 +253,21 @@ func (r *Runner) fail(ctx context.Context, record SagaRecord, index int, code, m
 	record.Steps[index].State = StepFailed
 	record.Steps[index].ErrorCode = code
 	record.State = SagaFailed
+
 	record.UpdatedAt = r.clock.Now().UTC()
 	if err := r.store.UpdateSaga(ctx, record); err != nil {
 		return record, err
 	}
+
 	return record, entity.NewError(code, message)
 }
 
 // errorCodeOf extracts the stable code for step failure records,
 // unwrapping joined/wrapped domain errors.
 func errorCodeOf(err error) string {
-	var domainErr *entity.Error
-	if errors.As(err, &domainErr) {
+	if domainErr, ok := errors.AsType[*entity.Error](err); ok {
 		return domainErr.Code
 	}
+
 	return "STEP_FAILED"
 }

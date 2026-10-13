@@ -2,7 +2,6 @@ package rls_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -28,7 +27,7 @@ func TestWithTenantRejectsBlank(t *testing.T) {
 			name:          "blank tenant rejected",
 			ctx:           context.Background(),
 			tenant:        "",
-			expectedError: errors.New("rls: tenant is required"),
+			expectedError: rls.ErrRlsTenantIsRequired,
 		},
 		{
 			name:          "tenant stored",
@@ -40,6 +39,8 @@ func TestWithTenantRejectsBlank(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			ctx, err := rls.WithTenant(tc.ctx, tc.tenant)
 			if tc.expectedError != nil {
 				require.Error(t, err)
@@ -72,7 +73,7 @@ func TestTenantFromContextFailsClosed(t *testing.T) {
 			name:           "bare context fails",
 			ctx:            context.Background(),
 			expectedResult: "",
-			expectedError:  errors.New("rls: tenant missing from context"),
+			expectedError:  rls.ErrRlsTenantMissingFromContext,
 		},
 		{
 			name: "stored tenant resolves",
@@ -81,6 +82,7 @@ func TestTenantFromContextFailsClosed(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
+
 				return c
 			}(),
 			expectedResult: "10000000-0000-4000-8000-000000000001",
@@ -90,8 +92,11 @@ func TestTenantFromContextFailsClosed(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := rls.TenantFromContext(tc.ctx)
 			assert.Equal(t, tc.expectedResult, actualResult)
+
 			if tc.expectedError != nil {
 				require.Error(t, err)
 				assert.Equal(t, tc.expectedError.Error(), err.Error())
@@ -121,6 +126,7 @@ func TestResolveTenantAgreement(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
+
 				return c
 			}(),
 			arg:            "",
@@ -141,6 +147,7 @@ func TestResolveTenantAgreement(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
+
 				return c
 			}(),
 			arg:            "10000000-0000-4000-8000-000000000001",
@@ -154,25 +161,29 @@ func TestResolveTenantAgreement(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
+
 				return c
 			}(),
 			arg:            "tnt-test-09",
 			expectedResult: "",
-			expectedError:  errors.New("rls: context tenant and argument tenant disagree"),
+			expectedError:  rls.ErrRlsContextTenantAndArgumentTenantDisagree,
 		},
 		{
 			name:           "both absent fails",
 			ctx:            context.Background(),
 			arg:            "",
 			expectedResult: "",
-			expectedError:  errors.New("rls: tenant is required"),
+			expectedError:  rls.ErrRlsTenantIsRequired,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := rls.ResolveTenant(tc.ctx, tc.arg)
 			assert.Equal(t, tc.expectedResult, actualResult)
+
 			if tc.expectedError != nil {
 				require.Error(t, err)
 				assert.Equal(t, tc.expectedError.Error(), err.Error())
@@ -200,19 +211,21 @@ func TestApplyTenantGuards(t *testing.T) {
 			ctx:           context.Background(),
 			db:            nil,
 			tenant:        "",
-			expectedError: errors.New("rls: tenant is required"),
+			expectedError: rls.ErrRlsTenantIsRequired,
 		},
 		{
 			name:          "nil DB fails before SQL",
 			ctx:           context.Background(),
 			db:            nil,
 			tenant:        "10000000-0000-4000-8000-000000000001",
-			expectedError: errors.New("rls: DB is required"),
+			expectedError: rls.ErrRlsDBIsRequired,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := rls.ApplyTenant(tc.ctx, tc.db, tc.tenant)
 			require.Error(t, err)
 			assert.Equal(t, tc.expectedError.Error(), err.Error())

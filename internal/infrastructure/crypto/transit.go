@@ -19,9 +19,9 @@ import (
 // the implementation: TransitKEK calls OpenBao Transit (AES-256-GCM) over
 // HTTP in production, and tests supply a test-local double from *_test.go.
 type KeyEncryptionKey interface {
-	WrapDEK(ctx context.Context, dek []byte) (wrapped []byte, keyID string, err error)
-	UnwrapDEK(ctx context.Context, keyID string, wrapped []byte) (dek []byte, err error)
-	RewrapDEK(ctx context.Context, keyID string, wrapped []byte) (newWrapped []byte, err error)
+	WrapDEK(ctx context.Context, dek []byte) ([]byte, string, error)
+	UnwrapDEK(ctx context.Context, keyID string, wrapped []byte) ([]byte, error)
+	RewrapDEK(ctx context.Context, keyID string, wrapped []byte) ([]byte, error)
 	DestroyKey(ctx context.Context, keyID string) error
 }
 
@@ -61,6 +61,7 @@ func (k *TransitKEK) WrapDEK(ctx context.Context, dek []byte) ([]byte, string, e
 	if k == nil || k.http == nil {
 		return nil, "", ErrNotInitialized
 	}
+
 	if err := ctx.Err(); err != nil {
 		return nil, "", err
 	}
@@ -92,7 +93,7 @@ func (k *TransitKEK) WrapDEK(ctx context.Context, dek []byte) ([]byte, string, e
 		} `json:"data"`
 	}
 
-	if body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20)); err != nil {
+	if body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<httpMaxBodyShift)); err != nil {
 		return nil, "", fmt.Errorf("crypto: transit wrap body: %w", err)
 	} else if err := jsonparser.Unmarshal(body, &out); err != nil {
 		return nil, "", fmt.Errorf("crypto: transit wrap decode: %w", err)
@@ -112,6 +113,7 @@ func (k *TransitKEK) UnwrapDEK(ctx context.Context, keyID string, wrapped []byte
 	if k == nil || k.http == nil {
 		return nil, ErrNotInitialized
 	}
+
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -143,7 +145,7 @@ func (k *TransitKEK) UnwrapDEK(ctx context.Context, keyID string, wrapped []byte
 		} `json:"data"`
 	}
 
-	if body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20)); err != nil {
+	if body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<httpMaxBodyShift)); err != nil {
 		return nil, fmt.Errorf("crypto: transit unwrap body: %w", err)
 	} else if err := jsonparser.Unmarshal(body, &out); err != nil {
 		return nil, fmt.Errorf("crypto: transit unwrap decode: %w", err)
@@ -166,6 +168,7 @@ func (k *TransitKEK) RewrapDEK(ctx context.Context, keyID string, wrapped []byte
 	if k == nil || k.http == nil {
 		return nil, ErrNotInitialized
 	}
+
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -205,10 +208,11 @@ func (k *TransitKEK) RewrapDEK(ctx context.Context, keyID string, wrapped []byte
 		} `json:"data"`
 	}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<httpMaxBodyShift))
 	if err != nil {
 		return nil, fmt.Errorf("crypto: transit rewrap body: %w", err)
 	}
+
 	if err := jsonparser.Unmarshal(body, &out); err != nil {
 		return nil, fmt.Errorf("crypto: transit rewrap decode: %w", err)
 	}
@@ -234,7 +238,9 @@ func (k *TransitKEK) DestroyKey(ctx context.Context, keyID string) error {
 }
 
 // sealWithKey seals plaintext with key + random nonce under AAD.
-func sealWithKey(key, plaintext, aad []byte) (nonce, sealed []byte, err error) {
+func sealWithKey(key, plaintext, aad []byte) ([]byte, []byte, error) {
+	var nonce []byte
+
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, nil, err

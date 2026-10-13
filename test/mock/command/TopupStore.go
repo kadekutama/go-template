@@ -51,7 +51,7 @@ type MockTopupStore_CreateTopup_Call struct {
 // CreateTopup is a helper method to define mock.On call
 //   - ctx context.Context
 //   - record command.TopupRecord
-func (_e *MockTopupStore_Expecter) CreateTopup(ctx interface{}, record interface{}) *MockTopupStore_CreateTopup_Call {
+func (_e *MockTopupStore_Expecter) CreateTopup(ctx any, record any) *MockTopupStore_CreateTopup_Call {
 	return &MockTopupStore_CreateTopup_Call{Call: _e.mock.On("CreateTopup", ctx, record)}
 }
 
@@ -109,7 +109,7 @@ type MockTopupStore_FindTopup_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - id string
-func (_e *MockTopupStore_Expecter) FindTopup(ctx interface{}, tenant interface{}, id interface{}) *MockTopupStore_FindTopup_Call {
+func (_e *MockTopupStore_Expecter) FindTopup(ctx any, tenant any, id any) *MockTopupStore_FindTopup_Call {
 	return &MockTopupStore_FindTopup_Call{Call: _e.mock.On("FindTopup", ctx, tenant, id)}
 }
 
@@ -169,7 +169,7 @@ type MockTopupStore_ListTopups_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - limit int
-func (_e *MockTopupStore_Expecter) ListTopups(ctx interface{}, tenant interface{}, limit interface{}) *MockTopupStore_ListTopups_Call {
+func (_e *MockTopupStore_Expecter) ListTopups(ctx any, tenant any, limit any) *MockTopupStore_ListTopups_Call {
 	return &MockTopupStore_ListTopups_Call{Call: _e.mock.On("ListTopups", ctx, tenant, limit)}
 }
 
@@ -216,7 +216,7 @@ type MockTopupStore_UpdateTopup_Call struct {
 // UpdateTopup is a helper method to define mock.On call
 //   - ctx context.Context
 //   - record command.TopupRecord
-func (_e *MockTopupStore_Expecter) UpdateTopup(ctx interface{}, record interface{}) *MockTopupStore_UpdateTopup_Call {
+func (_e *MockTopupStore_Expecter) UpdateTopup(ctx any, record any) *MockTopupStore_UpdateTopup_Call {
 	return &MockTopupStore_UpdateTopup_Call{Call: _e.mock.On("UpdateTopup", ctx, record)}
 }
 

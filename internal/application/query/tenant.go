@@ -33,6 +33,7 @@ func (s *TenantQueryService) GetTenant(ctx context.Context, query port.TenantQue
 	if err != nil {
 		return port.TenantResult{}, err
 	}
+
 	return port.TenantResult{Tenant: tenant}, nil
 }
 

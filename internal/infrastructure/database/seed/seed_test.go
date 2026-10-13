@@ -2,7 +2,6 @@ package seed_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,30 +31,36 @@ func newMockStores(t *testing.T) (seed.Stores, *mapState) {
 	ml := mockseed.NewMockLedgerStore(t)
 	ml.EXPECT().Exists(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, id string) (bool, error) {
 		_, ok := state.ledgers[id]
+
 		return ok, nil
 	}).Maybe()
 	ml.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, s seed.LedgerSeed) error {
 		state.ledgers[s.ID] = s
+
 		return nil
 	}).Maybe()
 
 	ma := mockseed.NewMockAccountStore(t)
 	ma.EXPECT().Exists(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, id string) (bool, error) {
 		_, ok := state.accounts[id]
+
 		return ok, nil
 	}).Maybe()
 	ma.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, s seed.AccountSeed) error {
 		state.accounts[s.ID] = s
+
 		return nil
 	}).Maybe()
 
 	mp := mockseed.NewMockPostingStore(t)
 	mp.EXPECT().Exists(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, id string) (bool, error) {
 		_, ok := state.postings[id]
+
 		return ok, nil
 	}).Maybe()
 	mp.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, s seed.PostingSeed) error {
 		state.postings[s.ID] = s
+
 		return nil
 	}).Maybe()
 
@@ -87,6 +92,8 @@ func TestDevPlanShape(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			plan := seed.DevPlan()
 			assert.Len(t, plan.Ledgers, tc.expectedLedgers)
 			assert.Len(t, plan.Accounts, tc.expectedAccounts)
@@ -147,11 +154,13 @@ func TestApplyIdempotent(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			ctx := context.Background()
 			plan := seed.DevPlan()
 			stores, mem := newMockStores(t)
 
-			for i := 0; i < tc.runs; i++ {
+			for range tc.runs {
 				require.NoError(t, seed.Apply(ctx, plan, stores))
 				assert.Len(t, mem.ledgers, tc.expectedLedgers)
 				assert.Len(t, mem.accounts, tc.expectedAccounts)
@@ -178,7 +187,7 @@ func TestApplyRequiresStores(t *testing.T) {
 			ctx:           context.Background(),
 			plan:          seed.DevPlan(),
 			stores:        seed.Stores{},
-			expectedError: errors.New("seed: ledger, account, and posting stores are required"),
+			expectedError: seed.ErrSeedLedgerAccountAndPostingStoresAreRequired,
 		},
 		{
 			name: "partial stores rejected",
@@ -187,12 +196,14 @@ func TestApplyRequiresStores(t *testing.T) {
 			stores: seed.Stores{
 				Ledgers: mockseed.NewMockLedgerStore(t),
 			},
-			expectedError: errors.New("seed: ledger, account, and posting stores are required"),
+			expectedError: seed.ErrSeedLedgerAccountAndPostingStoresAreRequired,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := seed.Apply(tc.ctx, tc.plan, tc.stores)
 			require.Error(t, err)
 			assert.Equal(t, tc.expectedError.Error(), err.Error())
@@ -219,6 +230,8 @@ func TestSeedMatchesFixtureIDs(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			plan := seed.DevPlan()
 
 			assert.Equal(t, tc.expectedTenantID, plan.Tenant.TenantID)

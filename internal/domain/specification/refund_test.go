@@ -57,8 +57,11 @@ func TestRefundWindowValid(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			res := specification.RefundWindowValid().Evaluate(tc.ctx, tc.window)
 			assert.Equal(t, tc.expectedPassed, res.Passed())
+
 			if tc.expectedViolationCode != "" {
 				assert.NotEmpty(t, res.Violations)
 				assert.Equal(t, tc.expectedViolationCode, res.Violations[0].Code)
@@ -131,8 +134,11 @@ func TestRefundAmountValid(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			res := specification.RefundAmountValid().Evaluate(tc.ctx, tc.amounts)
 			assert.Equal(t, tc.expectedPassed, res.Passed())
+
 			if tc.expectedViolationCode != "" {
 				assert.NotEmpty(t, res.Violations)
 				assert.Equal(t, tc.expectedViolationCode, res.Violations[0].Code)

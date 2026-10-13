@@ -68,6 +68,7 @@ func TestTransferQueryServiceGetTransfer(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			transfers := mockcommand.NewMockTransferStore(t)
 			transfers.EXPECT().
 				FindTransfer(mock.Anything, tc.query.TenantID, tc.query.TransferID).
@@ -146,11 +147,13 @@ func TestTransferQueryServiceGetBatchStatus(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			transfers := mockcommand.NewMockTransferStore(t)
 			transfers.EXPECT().
 				FindBatch(mock.Anything, tc.query.TenantID, tc.query.BatchID).
 				Return(tc.programmedBatch, tc.programmedBatchErr).
 				Once()
+
 			if tc.programmedBatchErr == nil {
 				transfers.EXPECT().
 					ListBatchItems(mock.Anything, tc.query.TenantID, tc.query.BatchID).
@@ -195,6 +198,7 @@ func TestTransactionQueryDelegation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			posting := mockapplication.NewMockGetPosting(t)
 			posting.EXPECT().
 				Execute(mock.Anything, port.GetPostingQuery{TenantID: valueobject.TenantID("t-1"), PostingID: tc.postingID}).
@@ -300,11 +304,12 @@ func TestTransactionQueryGetStatement(t *testing.T) {
 			from:       from,
 			to:         to,
 			setupQuery: func(q *mockapplication.MockPostingQuery) {
-				for i := 0; i < 20; i++ {
+				for i := range 20 {
 					cursor := ""
 					if i > 0 {
 						cursor = fmt.Sprintf("cursor-%d", i)
 					}
+
 					next := fmt.Sprintf("cursor-%d", i+1)
 					q.EXPECT().
 						Search(mock.Anything, port.PostingFilter{
@@ -326,6 +331,7 @@ func TestTransactionQueryGetStatement(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			postingQuery := mockapplication.NewMockPostingQuery(t)
 			tc.setupQuery(postingQuery)
 
@@ -343,8 +349,9 @@ func TestTransactionQueryGetStatement(t *testing.T) {
 
 			stmt, err := svc.GetStatement(context.Background(), tc.tenant, tc.ledger, tc.accountID, tc.from, tc.to)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
-				assert.Equal(t, tc.expectedCount, len(stmt.Entries))
+				assert.Len(t, stmt.Entries, tc.expectedCount)
 				assert.Equal(t, tc.account.ID, stmt.Account.ID)
 			}
 		})

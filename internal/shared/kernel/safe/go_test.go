@@ -28,8 +28,10 @@ func (l *testLogger) Info(context.Context, string, ...any)  {}
 func (l *testLogger) Warn(context.Context, string, ...any)  {}
 func (l *testLogger) Error(_ context.Context, msg string, args ...any) {
 	call := errCall{msg: msg, args: args}
+
 	for {
 		old := l.errCalls.Load()
+
 		var next []errCall
 		if old != nil {
 			next = make([]errCall, len(*old)+1)
@@ -38,10 +40,12 @@ func (l *testLogger) Error(_ context.Context, msg string, args ...any) {
 		} else {
 			next = []errCall{call}
 		}
+
 		if l.errCalls.CompareAndSwap(old, &next) {
 			break
 		}
 	}
+
 	if l.errChan != nil {
 		select {
 		case l.errChan <- struct{}{}:
@@ -49,40 +53,48 @@ func (l *testLogger) Error(_ context.Context, msg string, args ...any) {
 		}
 	}
 }
+func (l *testLogger) Panic(_ context.Context, msg string, _ ...any) { panic(msg) }
+func (l *testLogger) Fatal(context.Context, string, ...any)         {}
+func (l *testLogger) With(...any) log.Logger                        { return l }
+
 func (l *testLogger) calls() []errCall {
 	old := l.errCalls.Load()
 	if old == nil {
 		return nil
 	}
+
 	out := make([]errCall, len(*old))
 	copy(out, *old)
+
 	return out
 }
-func (l *testLogger) Panic(_ context.Context, msg string, _ ...any) { panic(msg) }
-func (l *testLogger) Fatal(context.Context, string, ...any)         {}
-func (l *testLogger) With(...any) log.Logger                        { return l }
-
 func assertPanicLogged(t *testing.T, logger *testLogger) {
 	t.Helper()
+
 	calls := logger.calls()
 	if len(calls) != 1 {
 		t.Fatalf("expected 1 error log, got %d", len(calls))
 	}
+
 	call := calls[0]
 	if call.msg != "recovered panic in goroutine" {
 		t.Errorf("unexpected log msg: %s", call.msg)
 	}
+
 	hasErrField, hasMetadataField := false, false
+
 	for _, arg := range call.args {
 		if f, ok := arg.(log.Field); ok {
 			if f.Key == log.FieldError {
 				hasErrField = true
 			}
+
 			if f.Key == log.FieldMetadata {
 				hasMetadataField = true
 			}
 		}
 	}
+
 	if !hasErrField || !hasMetadataField {
 		t.Errorf("expected FieldError and FieldMetadata in log args, got %v", call.args)
 	}
@@ -95,8 +107,9 @@ func TestGoRecoversPanicAndReports(t *testing.T) {
 	defer cancel()
 
 	logger := &testLogger{}
-	reported := make(chan Panic, 1)
-	Go(ctx, logger, func(p Panic) { reported <- p }, func(context.Context) {
+	reported := make(chan PanicError, 1)
+
+	Go(ctx, logger, func(p PanicError) { reported <- p }, func(context.Context) {
 		panic("boom-test")
 	})
 
@@ -105,6 +118,7 @@ func TestGoRecoversPanicAndReports(t *testing.T) {
 		if p.Value != "boom-test" {
 			t.Errorf("unexpected panic value: %v", p.Value)
 		}
+
 		if !strings.Contains(string(p.Stack), "boom-test") && len(p.Stack) == 0 {
 			t.Error("expected non-empty stack trace")
 		}
@@ -122,9 +136,10 @@ func TestGoSilentOnSuccess(t *testing.T) {
 	defer cancel()
 
 	logger := &testLogger{}
-	reported := make(chan Panic, 1)
+	reported := make(chan PanicError, 1)
 	done := make(chan struct{})
-	Go(ctx, logger, func(p Panic) { reported <- p }, func(context.Context) {
+
+	Go(ctx, logger, func(p PanicError) { reported <- p }, func(context.Context) {
 		close(done)
 	})
 
@@ -151,21 +166,21 @@ func TestPanicError(t *testing.T) {
 
 	type testCase struct {
 		name           string
-		p              Panic
+		p              PanicError
 		expectedResult string
 	}
 
 	testCases := []testCase{
 		{
 			name: "string panic value",
-			p: Panic{
+			p: PanicError{
 				Value: "something went wrong",
 			},
 			expectedResult: "safe: recovered panic: something went wrong",
 		},
 		{
 			name: "integer panic value",
-			p: Panic{
+			p: PanicError{
 				Value: 404,
 			},
 			expectedResult: "safe: recovered panic: 404",
@@ -174,6 +189,7 @@ func TestPanicError(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Equal(t, tc.expectedResult, tc.p.Error())
 		})
 	}
@@ -184,7 +200,7 @@ func TestGoWithNilOnPanic(t *testing.T) {
 
 	logged := make(chan struct{}, 1)
 	logger := &testLogger{errChan: logged}
-	Go(context.Background(), logger, nil, func(ctx context.Context) {
+	Go(context.Background(), logger, nil, func(_ context.Context) {
 		panic("panic without handler")
 	})
 
@@ -204,8 +220,9 @@ func TestGoWithNilOnPanic(t *testing.T) {
 func TestGoWithNilLogger(t *testing.T) {
 	t.Parallel()
 
-	reported := make(chan Panic, 1)
-	Go(context.Background(), nil, func(p Panic) { reported <- p }, func(context.Context) {
+	reported := make(chan PanicError, 1)
+
+	Go(context.Background(), nil, func(p PanicError) { reported <- p }, func(context.Context) {
 		panic("panic without logger")
 	})
 
@@ -224,7 +241,9 @@ func TestGoWithNilFn(t *testing.T) {
 
 	logger := &testLogger{}
 	called := false
-	Go(context.Background(), logger, func(Panic) { called = true }, nil)
+
+	Go(context.Background(), logger, func(PanicError) { called = true }, nil)
+
 	if called {
 		t.Error("onPanic should not be called when fn is nil")
 	}

@@ -81,12 +81,16 @@ func TestNewOtterCache(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			cache, err := local.NewOtterCache(tc.params)
 			if tc.expectedError != nil {
 				assert.Error(t, err)
 				assert.Nil(t, cache)
+
 				return
 			}
+
 			require.NoError(t, err)
 			require.NotNil(t, cache)
 			assert.Equal(t, tc.expectedWeight, cache.MaximumWeight())
@@ -115,6 +119,7 @@ func TestOtterCacheGet(t *testing.T) {
 				val := []byte(`{"minor":100}`)
 				_ = c.Set(context.Background(), "balance:t1:a1:USD", val, time.Minute)
 				val[0] = 'X' // caller mutation should not affect cached data
+
 				return c
 			},
 			ctx:            context.Background(),
@@ -137,6 +142,7 @@ func TestOtterCacheGet(t *testing.T) {
 			cache: func() *local.OtterCache {
 				c := mustStore(t)
 				_ = c.Set(context.Background(), "negative-marker", nil, time.Minute)
+
 				return c
 			},
 			ctx:            context.Background(),
@@ -152,7 +158,7 @@ func TestOtterCacheGet(t *testing.T) {
 			ctx:            context.Background(),
 			key:            "",
 			expectedResult: nil,
-			expectedError:  errors.New("otter: key is required"),
+			expectedError:  local.ErrOtterKeyIsRequired,
 		},
 		{
 			name: "uninitialized receiver returns error",
@@ -162,13 +168,16 @@ func TestOtterCacheGet(t *testing.T) {
 			ctx:            context.Background(),
 			key:            "any-key",
 			expectedResult: nil,
-			expectedError:  errors.New("otter: cache is not initialized"),
+			expectedError:  local.ErrOtterCacheIsNotInitialized,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			c := tc.cache()
+
 			actualResult, err := c.Get(tc.ctx, tc.key)
 			if tc.expectedError != nil {
 				if errors.Is(tc.expectedError, store.ErrMiss) {
@@ -176,9 +185,12 @@ func TestOtterCacheGet(t *testing.T) {
 				} else {
 					assert.EqualError(t, err, tc.expectedError.Error())
 				}
+
 				assert.Nil(t, actualResult)
+
 				return
 			}
+
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -230,7 +242,7 @@ func TestOtterCacheSet(t *testing.T) {
 			key:           "",
 			value:         []byte(`{"minor":100}`),
 			ttl:           time.Minute,
-			expectedError: errors.New("otter: key is required"),
+			expectedError: local.ErrOtterKeyIsRequired,
 		},
 		{
 			name: "zero ttl rejected",
@@ -241,7 +253,7 @@ func TestOtterCacheSet(t *testing.T) {
 			key:           "k",
 			value:         []byte(`v`),
 			ttl:           0,
-			expectedError: errors.New("otter: ttl must be positive"),
+			expectedError: local.ErrOtterTTLMustBePositive,
 		},
 		{
 			name: "negative ttl rejected",
@@ -252,7 +264,7 @@ func TestOtterCacheSet(t *testing.T) {
 			key:           "k",
 			value:         []byte(`v`),
 			ttl:           -time.Second,
-			expectedError: errors.New("otter: ttl must be positive"),
+			expectedError: local.ErrOtterTTLMustBePositive,
 		},
 		{
 			name: "uninitialized receiver returns error",
@@ -263,18 +275,23 @@ func TestOtterCacheSet(t *testing.T) {
 			key:           "k",
 			value:         []byte(`v`),
 			ttl:           time.Minute,
-			expectedError: errors.New("otter: cache is not initialized"),
+			expectedError: local.ErrOtterCacheIsNotInitialized,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			c := tc.cache()
+
 			err := c.Set(tc.ctx, tc.key, tc.value, tc.ttl)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
+
 				return
 			}
+
 			require.NoError(t, err)
 
 			// Verify synchronous visibility
@@ -302,6 +319,7 @@ func TestOtterCacheDelete(t *testing.T) {
 			cache: func() *local.OtterCache {
 				c := mustStore(t)
 				_ = c.Set(context.Background(), "del-key", []byte(`data`), time.Minute)
+
 				return c
 			},
 			ctx:           context.Background(),
@@ -324,7 +342,7 @@ func TestOtterCacheDelete(t *testing.T) {
 			},
 			ctx:           context.Background(),
 			key:           "",
-			expectedError: errors.New("otter: key is required"),
+			expectedError: local.ErrOtterKeyIsRequired,
 		},
 		{
 			name: "uninitialized receiver returns error",
@@ -333,18 +351,23 @@ func TestOtterCacheDelete(t *testing.T) {
 			},
 			ctx:           context.Background(),
 			key:           "any-key",
-			expectedError: errors.New("otter: cache is not initialized"),
+			expectedError: local.ErrOtterCacheIsNotInitialized,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			c := tc.cache()
+
 			err := c.Delete(tc.ctx, tc.key)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
+
 				return
 			}
+
 			require.NoError(t, err)
 
 			// After deletion, Get should report a miss
@@ -393,6 +416,7 @@ func TestOtterCacheExpiry(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			cache := mustStore(t)
 			require.NoError(t, cache.Set(tc.ctx, tc.key, tc.value, tc.ttl))
 
@@ -404,8 +428,10 @@ func TestOtterCacheExpiry(t *testing.T) {
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
 				assert.Nil(t, actualResult)
+
 				return
 			}
+
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -428,6 +454,7 @@ func TestOtterCacheClose(t *testing.T) {
 			cache: func() *local.OtterCache {
 				c := mustStore(t)
 				_ = c.Set(context.Background(), "k", []byte(`v`), time.Minute)
+
 				return c
 			},
 			expectedError: nil,
@@ -445,12 +472,17 @@ func TestOtterCacheClose(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			c := tc.cache()
+
 			err := c.Close()
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
+
 				return
 			}
+
 			require.NoError(t, err)
 
 			// Idempotent second close

@@ -1,7 +1,6 @@
 package redpanda_test
 
 import (
-	"errors"
 	"testing"
 	"time"
 
@@ -16,7 +15,7 @@ func TestNewClient(t *testing.T) {
 
 	type testCase struct {
 		name          string
-		params        redpanda.RedpandaParams
+		params        redpanda.Params
 		expectedSeeds []string
 		expectedTLS   bool
 		expectedSASL  bool
@@ -26,7 +25,7 @@ func TestNewClient(t *testing.T) {
 	testCases := []testCase{
 		{
 			name: "single seed",
-			params: redpanda.RedpandaParams{
+			params: redpanda.Params{
 				Seeds:           []string{"redpanda-1:9092"},
 				DialTimeout:     5 * time.Second,
 				MetadataTimeout: 5 * time.Second,
@@ -38,7 +37,7 @@ func TestNewClient(t *testing.T) {
 		},
 		{
 			name: "blank seeds filtered",
-			params: redpanda.RedpandaParams{
+			params: redpanda.Params{
 				Seeds:           []string{"  ", "redpanda-1:9092", ""},
 				DialTimeout:     5 * time.Second,
 				MetadataTimeout: 5 * time.Second,
@@ -50,7 +49,7 @@ func TestNewClient(t *testing.T) {
 		},
 		{
 			name: "tls and sasl flags enabled",
-			params: redpanda.RedpandaParams{
+			params: redpanda.Params{
 				Seeds:           []string{"redpanda-1:9092"},
 				UseTLS:          true,
 				SASLUser:        "app",
@@ -65,7 +64,7 @@ func TestNewClient(t *testing.T) {
 		},
 		{
 			name: "tls only without sasl",
-			params: redpanda.RedpandaParams{
+			params: redpanda.Params{
 				Seeds:           []string{"redpanda-1:9092"},
 				UseTLS:          true,
 				DialTimeout:     5 * time.Second,
@@ -78,7 +77,7 @@ func TestNewClient(t *testing.T) {
 		},
 		{
 			name: "no seeds rejected",
-			params: redpanda.RedpandaParams{
+			params: redpanda.Params{
 				Seeds:           nil,
 				DialTimeout:     5 * time.Second,
 				MetadataTimeout: 5 * time.Second,
@@ -86,11 +85,11 @@ func TestNewClient(t *testing.T) {
 			expectedSeeds: nil,
 			expectedTLS:   false,
 			expectedSASL:  false,
-			expectedError: errors.New("redpanda: at least one seed is required"),
+			expectedError: redpanda.ErrRedpandaAtLeastOneSeedIsRequired,
 		},
 		{
 			name: "all blank rejected",
-			params: redpanda.RedpandaParams{
+			params: redpanda.Params{
 				Seeds:           []string{"", "  "},
 				DialTimeout:     5 * time.Second,
 				MetadataTimeout: 5 * time.Second,
@@ -98,11 +97,11 @@ func TestNewClient(t *testing.T) {
 			expectedSeeds: nil,
 			expectedTLS:   false,
 			expectedSASL:  false,
-			expectedError: errors.New("redpanda: at least one seed is required"),
+			expectedError: redpanda.ErrRedpandaAtLeastOneSeedIsRequired,
 		},
 		{
 			name: "negative dial timeout rejected",
-			params: redpanda.RedpandaParams{
+			params: redpanda.Params{
 				Seeds:           []string{"redpanda-1:9092"},
 				DialTimeout:     -time.Second,
 				MetadataTimeout: 5 * time.Second,
@@ -110,11 +109,11 @@ func TestNewClient(t *testing.T) {
 			expectedSeeds: nil,
 			expectedTLS:   false,
 			expectedSASL:  false,
-			expectedError: errors.New("redpanda: invalid params (1 violation(s)): DialTimeout: rule \"gt\" on value -1s"),
+			expectedError: redpanda.ErrRedpandaInvalidParams1ViolationSDialTimeoutRuleGtOnValue1,
 		},
 		{
 			name: "missing dial timeout rejected",
-			params: redpanda.RedpandaParams{
+			params: redpanda.Params{
 				Seeds:           []string{"redpanda-1:9092"},
 				DialTimeout:     0,
 				MetadataTimeout: 5 * time.Second,
@@ -122,11 +121,11 @@ func TestNewClient(t *testing.T) {
 			expectedSeeds: nil,
 			expectedTLS:   false,
 			expectedSASL:  false,
-			expectedError: errors.New("redpanda: invalid params (1 violation(s)): DialTimeout: rule \"required\" on value 0s"),
+			expectedError: redpanda.ErrRedpandaInvalidParams1ViolationSDialTimeoutRuleRequiredOn,
 		},
 		{
 			name: "missing metadata timeout rejected",
-			params: redpanda.RedpandaParams{
+			params: redpanda.Params{
 				Seeds:           []string{"redpanda-1:9092"},
 				DialTimeout:     5 * time.Second,
 				MetadataTimeout: 0,
@@ -134,16 +133,19 @@ func TestNewClient(t *testing.T) {
 			expectedSeeds: nil,
 			expectedTLS:   false,
 			expectedSASL:  false,
-			expectedError: errors.New("redpanda: invalid params (1 violation(s)): MetadataTimeout: rule \"required\" on value 0s"),
+			expectedError: redpanda.ErrRedpandaInvalidParams1ViolationSMetadataTimeoutRuleRequir,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			client, err := redpanda.NewClient(tc.params)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
 				assert.Nil(t, client)
+
 				return
 			}
 
@@ -179,6 +181,7 @@ func TestClientNilSafety(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Equal(t, tc.expectedSeeds, tc.client.Seeds())
 			assert.Equal(t, tc.expectedTLS, tc.client.UsesTLS())
 			assert.Equal(t, tc.expectedSASL, tc.client.HasSASL())

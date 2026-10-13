@@ -2,7 +2,6 @@ package command_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -19,7 +18,9 @@ import (
 	mockcommand "github.com/kadekutama/go-template/test/mock/command"
 )
 
-var tenantFixedTime = time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC)
+func tenantFixedTime() time.Time {
+	return time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC)
+}
 
 type tenantTestFixture struct {
 	uow     *mockapplication.MockUnitOfWork
@@ -53,7 +54,7 @@ func newTenantFixture(t *testing.T) *tenantTestFixture {
 	tx.EXPECT().Outbox().Return(outbox).Maybe()
 	tx.EXPECT().Cursor().Return("cursor-3").Maybe()
 
-	clock.EXPECT().Now().Return(tenantFixedTime).Maybe()
+	clock.EXPECT().Now().Return(tenantFixedTime()).Maybe()
 	ids.EXPECT().NewID().Return("event-1").Maybe()
 
 	svc, err := command.NewTenantService(command.TenantServiceParams{
@@ -101,7 +102,7 @@ func provisionTestTenant() port.ProvisionTenantRequest {
 	}
 }
 
-func TestTenantProvision(t *testing.T) {
+func TestTenantProvisionOutcomes(t *testing.T) {
 	t.Parallel()
 
 	baseReq := provisionTestTenant()
@@ -132,8 +133,8 @@ func TestTenantProvision(t *testing.T) {
 					Status:    entity.TenantActive,
 					Region:    "us-east",
 					Settings:  tenantSettings(),
-					CreatedAt: tenantFixedTime,
-					UpdatedAt: tenantFixedTime,
+					CreatedAt: tenantFixedTime(),
+					UpdatedAt: tenantFixedTime(),
 					Version:   1,
 				}, nil).Once()
 				f.outbox.EXPECT().Append(mock.Anything, mock.MatchedBy(func(fact port.OutboxFact) bool {
@@ -149,8 +150,8 @@ func TestTenantProvision(t *testing.T) {
 					Status:    entity.TenantActive,
 					Region:    "us-east",
 					Settings:  tenantSettings(),
-					CreatedAt: tenantFixedTime,
-					UpdatedAt: tenantFixedTime,
+					CreatedAt: tenantFixedTime(),
+					UpdatedAt: tenantFixedTime(),
 					Version:   1,
 				},
 				Cursor: "cursor-3",
@@ -162,6 +163,7 @@ func TestTenantProvision(t *testing.T) {
 			req:  baseReq,
 			setupMocks: func(f *tenantTestFixture) {
 				f.authz.EXPECT().Authorize(mock.Anything, mock.Anything, "tenant.provision", "platform/tenants").Return(nil).Once()
+
 				replayResult := port.TenantResult{
 					Tenant: entity.TenantData{
 						ID:        "t-100",
@@ -170,8 +172,8 @@ func TestTenantProvision(t *testing.T) {
 						Status:    entity.TenantActive,
 						Region:    "us-east",
 						Settings:  tenantSettings(),
-						CreatedAt: tenantFixedTime,
-						UpdatedAt: tenantFixedTime,
+						CreatedAt: tenantFixedTime(),
+						UpdatedAt: tenantFixedTime(),
 						Version:   1,
 					},
 					Cursor: "cursor-3",
@@ -191,8 +193,8 @@ func TestTenantProvision(t *testing.T) {
 					Status:    entity.TenantActive,
 					Region:    "us-east",
 					Settings:  tenantSettings(),
-					CreatedAt: tenantFixedTime,
-					UpdatedAt: tenantFixedTime,
+					CreatedAt: tenantFixedTime(),
+					UpdatedAt: tenantFixedTime(),
 					Version:   1,
 				},
 				Cursor: "cursor-3",
@@ -213,10 +215,84 @@ func TestTenantProvision(t *testing.T) {
 			expectedError:  entity.NewError("IDEMPOTENCY_RECORD_INVALID", "stored idempotency response is corrupt"),
 		},
 		{
+			name: "taken alias resolves with suffix",
+			req: func() port.ProvisionTenantRequest {
+				r := baseReq
+				r.IdempotencyKey = "key-2"
+				r.Name = "Acme."
+
+				return r
+			}(),
+			setupMocks: func(f *tenantTestFixture) {
+				f.authz.EXPECT().Authorize(mock.Anything, mock.Anything, "tenant.provision", "platform/tenants").Return(nil).Once()
+				f.idem.EXPECT().Reserve(mock.Anything, mock.Anything).Return(port.ReserveOutcome{}, nil).Once()
+				f.store.EXPECT().ListNames(mock.Anything).Return([]string{}, nil).Once()
+				f.store.EXPECT().ListAliases(mock.Anything).Return([]string{"acme"}, nil).Once()
+				f.store.EXPECT().Create(mock.Anything, mock.MatchedBy(func(td entity.TenantData) bool {
+					return td.Alias == "acme-2"
+				})).Return(entity.TenantData{
+					ID:        "t-101",
+					Name:      "Acme.",
+					Alias:     "acme-2",
+					Status:    entity.TenantActive,
+					Region:    "us-east",
+					Settings:  tenantSettings(),
+					CreatedAt: tenantFixedTime(),
+					UpdatedAt: tenantFixedTime(),
+					Version:   1,
+				}, nil).Once()
+				f.outbox.EXPECT().Append(mock.Anything, mock.Anything).Return(nil).Once()
+				f.idem.EXPECT().Complete(mock.Anything, "key-2", mock.Anything).Return(nil).Once()
+			},
+			expectedResult: port.TenantResult{
+				Tenant: entity.TenantData{
+					ID:        "t-101",
+					Name:      "Acme.",
+					Alias:     "acme-2",
+					Status:    entity.TenantActive,
+					Region:    "us-east",
+					Settings:  tenantSettings(),
+					CreatedAt: tenantFixedTime(),
+					UpdatedAt: tenantFixedTime(),
+					Version:   1,
+				},
+				Cursor: "cursor-3",
+			},
+			expectedError: nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			fixture := newTenantFixture(t)
+			tc.setupMocks(fixture)
+			actualResult, err := fixture.service.ProvisionTenant(context.Background(), tc.req)
+			assert.Equal(t, tc.expectedError, err)
+			assert.Equal(t, tc.expectedResult, actualResult)
+		})
+	}
+}
+func TestTenantProvisionValidation(t *testing.T) {
+	t.Parallel()
+
+	baseReq := provisionTestTenant()
+
+	type testCase struct {
+		name           string
+		req            port.ProvisionTenantRequest
+		setupMocks     func(f *tenantTestFixture)
+		expectedResult port.TenantResult
+		expectedError  error
+	}
+
+	testCases := []testCase{
+		{
 			name: "taken name fails without persisting",
 			req: func() port.ProvisionTenantRequest {
 				r := baseReq
 				r.IdempotencyKey = "key-2"
+
 				return r
 			}(),
 			setupMocks: func(f *tenantTestFixture) {
@@ -235,6 +311,7 @@ func TestTenantProvision(t *testing.T) {
 				r.Region = "antarctica"
 				r.Name = "other"
 				r.IdempotencyKey = "key-2"
+
 				return r
 			}(),
 			setupMocks: func(f *tenantTestFixture) {
@@ -251,6 +328,7 @@ func TestTenantProvision(t *testing.T) {
 			req: func() port.ProvisionTenantRequest {
 				r := baseReq
 				r.Name = ""
+
 				return r
 			}(),
 			setupMocks:     func(_ *tenantTestFixture) {},
@@ -262,6 +340,7 @@ func TestTenantProvision(t *testing.T) {
 			req: func() port.ProvisionTenantRequest {
 				r := baseReq
 				r.Region = ""
+
 				return r
 			}(),
 			setupMocks: func(f *tenantTestFixture) {
@@ -278,6 +357,7 @@ func TestTenantProvision(t *testing.T) {
 			req: func() port.ProvisionTenantRequest {
 				r := baseReq
 				r.Actor = ""
+
 				return r
 			}(),
 			setupMocks:     func(_ *tenantTestFixture) {},
@@ -289,6 +369,7 @@ func TestTenantProvision(t *testing.T) {
 			req: func() port.ProvisionTenantRequest {
 				r := baseReq
 				r.IdempotencyKey = ""
+
 				return r
 			}(),
 			setupMocks:     func(_ *tenantTestFixture) {},
@@ -311,61 +392,18 @@ func TestTenantProvision(t *testing.T) {
 			req: func() port.ProvisionTenantRequest {
 				r := baseReq
 				r.Alias = "INVALID_ALIAS!"
+
 				return r
 			}(),
 			setupMocks:     func(_ *tenantTestFixture) {},
 			expectedResult: port.TenantResult{},
 			expectedError:  entity.NewError("TENANT_ALIAS_INVALID", "tenant alias must be lowercase alphanumeric with hyphens"),
 		},
-		{
-			name: "taken alias resolves with suffix",
-			req: func() port.ProvisionTenantRequest {
-				r := baseReq
-				r.IdempotencyKey = "key-2"
-				r.Name = "Acme."
-				return r
-			}(),
-			setupMocks: func(f *tenantTestFixture) {
-				f.authz.EXPECT().Authorize(mock.Anything, mock.Anything, "tenant.provision", "platform/tenants").Return(nil).Once()
-				f.idem.EXPECT().Reserve(mock.Anything, mock.Anything).Return(port.ReserveOutcome{}, nil).Once()
-				f.store.EXPECT().ListNames(mock.Anything).Return([]string{}, nil).Once()
-				f.store.EXPECT().ListAliases(mock.Anything).Return([]string{"acme"}, nil).Once()
-				f.store.EXPECT().Create(mock.Anything, mock.MatchedBy(func(td entity.TenantData) bool {
-					return td.Alias == "acme-2"
-				})).Return(entity.TenantData{
-					ID:        "t-101",
-					Name:      "Acme.",
-					Alias:     "acme-2",
-					Status:    entity.TenantActive,
-					Region:    "us-east",
-					Settings:  tenantSettings(),
-					CreatedAt: tenantFixedTime,
-					UpdatedAt: tenantFixedTime,
-					Version:   1,
-				}, nil).Once()
-				f.outbox.EXPECT().Append(mock.Anything, mock.Anything).Return(nil).Once()
-				f.idem.EXPECT().Complete(mock.Anything, "key-2", mock.Anything).Return(nil).Once()
-			},
-			expectedResult: port.TenantResult{
-				Tenant: entity.TenantData{
-					ID:        "t-101",
-					Name:      "Acme.",
-					Alias:     "acme-2",
-					Status:    entity.TenantActive,
-					Region:    "us-east",
-					Settings:  tenantSettings(),
-					CreatedAt: tenantFixedTime,
-					UpdatedAt: tenantFixedTime,
-					Version:   1,
-				},
-				Cursor: "cursor-3",
-			},
-			expectedError: nil,
-		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			fixture := newTenantFixture(t)
 			tc.setupMocks(fixture)
 			actualResult, err := fixture.service.ProvisionTenant(context.Background(), tc.req)
@@ -386,8 +424,8 @@ func TestTenantSettingsUpdate(t *testing.T) {
 		Status:    entity.TenantActive,
 		Region:    "us-east",
 		Settings:  tenantSettings(),
-		CreatedAt: tenantFixedTime,
-		UpdatedAt: tenantFixedTime,
+		CreatedAt: tenantFixedTime(),
+		UpdatedAt: tenantFixedTime(),
 		Version:   1,
 	}
 
@@ -431,6 +469,7 @@ func TestTenantSettingsUpdate(t *testing.T) {
 			req:  baseReq,
 			setupMocks: func(f *tenantTestFixture) {
 				f.authz.EXPECT().Authorize(mock.Anything, mock.Anything, "tenant.update", "tenant/"+targetTenantID.String()).Return(nil).Once()
+
 				replayResult := port.TenantResult{
 					Tenant: baseTenant,
 					Cursor: "cursor-3",
@@ -453,6 +492,7 @@ func TestTenantSettingsUpdate(t *testing.T) {
 			req: func() port.UpdateTenantSettingsRequest {
 				r := baseReq
 				r.ExpectedVersion = 99
+
 				return r
 			}(),
 			setupMocks: func(f *tenantTestFixture) {
@@ -471,6 +511,7 @@ func TestTenantSettingsUpdate(t *testing.T) {
 			req: func() port.UpdateTenantSettingsRequest {
 				r := baseReq
 				r.TenantID = "20000000-0000-4000-8000-000000000002"
+
 				return r
 			}(),
 			setupMocks: func(f *tenantTestFixture) {
@@ -489,6 +530,7 @@ func TestTenantSettingsUpdate(t *testing.T) {
 			req: func() port.UpdateTenantSettingsRequest {
 				r := baseReq
 				r.TenantID = ""
+
 				return r
 			}(),
 			setupMocks:     func(_ *tenantTestFixture) {},
@@ -500,6 +542,7 @@ func TestTenantSettingsUpdate(t *testing.T) {
 			req: func() port.UpdateTenantSettingsRequest {
 				r := baseReq
 				r.Actor = ""
+
 				return r
 			}(),
 			setupMocks:     func(_ *tenantTestFixture) {},
@@ -511,6 +554,7 @@ func TestTenantSettingsUpdate(t *testing.T) {
 			req: func() port.UpdateTenantSettingsRequest {
 				r := baseReq
 				r.ExpectedVersion = 0
+
 				return r
 			}(),
 			setupMocks:     func(_ *tenantTestFixture) {},
@@ -522,6 +566,7 @@ func TestTenantSettingsUpdate(t *testing.T) {
 			req: func() port.UpdateTenantSettingsRequest {
 				r := baseReq
 				r.IdempotencyKey = ""
+
 				return r
 			}(),
 			setupMocks:     func(_ *tenantTestFixture) {},
@@ -543,6 +588,7 @@ func TestTenantSettingsUpdate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			fixture := newTenantFixture(t)
 			tc.setupMocks(fixture)
 			actualResult, err := fixture.service.UpdateTenantSettings(context.Background(), tc.req)
@@ -590,104 +636,117 @@ func TestNewTenantService(t *testing.T) {
 			params: func() command.TenantServiceParams {
 				p := baseParams
 				p.UoW = nil
+
 				return p
 			}(),
-			expectedError: errors.New("tenant: uow is required"),
+			expectedError: command.ErrTenantUowIsRequired,
 		},
 		{
 			name: "missing tenant store rejected",
 			params: func() command.TenantServiceParams {
 				p := baseParams
 				p.Tenants = nil
+
 				return p
 			}(),
-			expectedError: errors.New("tenant: tenant store is required"),
+			expectedError: command.ErrTenantTenantStoreIsRequired,
 		},
 		{
 			name: "missing clock rejected",
 			params: func() command.TenantServiceParams {
 				p := baseParams
 				p.Clock = nil
+
 				return p
 			}(),
-			expectedError: errors.New("tenant: clock is required"),
+			expectedError: command.ErrTenantClockIsRequired,
 		},
 		{
 			name: "missing ids rejected",
 			params: func() command.TenantServiceParams {
 				p := baseParams
 				p.IDs = nil
+
 				return p
 			}(),
-			expectedError: errors.New("tenant: id generator is required"),
+			expectedError: command.ErrTenantIDGeneratorIsRequired,
 		},
 		{
 			name: "missing authz rejected",
 			params: func() command.TenantServiceParams {
 				p := baseParams
 				p.Authz = nil
+
 				return p
 			}(),
-			expectedError: errors.New("tenant: authorizer is required"),
+			expectedError: command.ErrTenantAuthorizerIsRequired,
 		},
 		{
 			name: "empty regions rejected",
 			params: func() command.TenantServiceParams {
 				p := baseParams
 				p.Regions = nil
+
 				return p
 			}(),
-			expectedError: errors.New("tenant: regions are required"),
+			expectedError: command.ErrTenantRegionsAreRequired,
 		},
 		{
 			name: "empty default assets rejected",
 			params: func() command.TenantServiceParams {
 				p := baseParams
 				p.DefaultAssets = nil
+
 				return p
 			}(),
-			expectedError: errors.New("tenant: default assets are required"),
+			expectedError: command.ErrTenantDefaultAssetsAreRequired,
 		},
 		{
 			name: "zero max assets rejected",
 			params: func() command.TenantServiceParams {
 				p := baseParams
 				p.MaxAssets = 0
+
 				return p
 			}(),
-			expectedError: errors.New("tenant: max assets must be positive"),
+			expectedError: command.ErrTenantMaxAssetsMustBePositive,
 		},
 		{
 			name: "negative max assets rejected",
 			params: func() command.TenantServiceParams {
 				p := baseParams
 				p.MaxAssets = -1
+
 				return p
 			}(),
-			expectedError: errors.New("tenant: max assets must be positive"),
+			expectedError: command.ErrTenantMaxAssetsMustBePositive,
 		},
 		{
 			name: "missing platform tenant id rejected",
 			params: func() command.TenantServiceParams {
 				p := baseParams
 				p.PlatformTenantID = ""
+
 				return p
 			}(),
-			expectedError: errors.New("tenant: platform tenant id is required"),
+			expectedError: command.ErrTenantPlatformTenantIDIsRequired,
 		},
 		{
 			name: "invalid platform tenant id rejected",
 			params: func() command.TenantServiceParams {
 				p := baseParams
 				p.PlatformTenantID = "invalid-uuid"
+
 				return p
 			}(),
-			expectedError: errors.New("tenant: invalid platform tenant id: ids: invalid tenant id"),
+			expectedError: command.ErrTenantInvalidPlatformTenantIDIDsInvalidTenantID,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			svc, err := command.NewTenantService(tc.params)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())

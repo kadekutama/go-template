@@ -2,7 +2,6 @@ package workflow_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -45,6 +44,7 @@ func TestSagaResumeUnknownStepFails(t *testing.T) {
 			Run: func(context.Context) error {
 				effects.apply("u2:a")
 				cancel()
+
 				return nil
 			},
 		},
@@ -57,6 +57,7 @@ func TestSagaResumeUnknownStepFails(t *testing.T) {
 	})
 	assert.Equal(t, entity.NewError("SAGA_STEP_UNKNOWN", "saga step is not defined"), err)
 	assert.Equal(t, workflow.SagaFailed, resumed.State)
+
 	_ = started
 }
 
@@ -64,17 +65,22 @@ func TestCompensationHelpers(t *testing.T) {
 	t.Parallel()
 
 	t.Run("no compensation is a no-op", func(t *testing.T) {
+		t.Parallel()
 		assert.NoError(t, workflow.NoCompensation(context.Background()))
 	})
 
 	t.Run("compensation failure wraps cause", func(t *testing.T) {
-		cause := errors.New("disk gone")
+		t.Parallel()
+
+		cause := workflow.ErrDiskGone
 		wrapped := workflow.CompensationFailed("settle", cause)
 		assert.Contains(t, wrapped.Error(), "settle")
 		assert.Contains(t, wrapped.Error(), "disk gone")
 	})
 
 	t.Run("domain cause passes through unwrapped", func(t *testing.T) {
+		t.Parallel()
+
 		cause := entity.NewError("HOLD_FAILED", "hold failed")
 		assert.Equal(t, cause, workflow.CompensationFailed("settle", cause))
 	})

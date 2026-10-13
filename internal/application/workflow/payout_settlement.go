@@ -20,8 +20,8 @@ type PayoutSettlementActions struct {
 // partial ledger state.
 func PayoutSettlementSteps(actions PayoutSettlementActions) []Step {
 	return []Step{
-		{Name: "submit-payout", MaxAttempts: 3, Timeout: 10 * time.Second, Run: actions.SubmitPayout, Compensate: actions.HoldForFailure},
-		{Name: "settle-payout", MaxAttempts: 5, Timeout: 30 * time.Second, Run: actions.SettlePayout, Compensate: actions.MarkUnsettled},
-		{Name: StepNotify, MaxAttempts: 5, Timeout: 10 * time.Second, Run: actions.Notify},
+		{Name: "submit-payout", MaxAttempts: maxAttempts3, Timeout: timeout10 * time.Second, Run: actions.SubmitPayout, Compensate: actions.HoldForFailure},
+		{Name: "settle-payout", MaxAttempts: maxAttempts5, Timeout: timeout30 * time.Second, Run: actions.SettlePayout, Compensate: actions.MarkUnsettled},
+		{Name: StepNotify, MaxAttempts: maxAttempts5, Timeout: timeout10 * time.Second, Run: actions.Notify},
 	}
 }

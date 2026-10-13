@@ -25,10 +25,43 @@ type AppError struct {
 	HTTPStatus int
 }
 
+// New builds an *AppError. Unknown codes fail: every code must be registered
+// by its owning layer (see codes.go and later epics).
+func New(code Code, message string, opts ...Option) (*AppError, error) {
+	ptr := registry.Load()
+	if ptr == nil {
+		return nil, fmt.Errorf("apperror: unregistered code %q: %w", code, ErrApperrorUnregisteredCode)
+	}
+
+	status, ok := (*ptr)[code]
+	if !ok {
+		return nil, fmt.Errorf("apperror: unregistered code %q: %w", code, ErrApperrorUnregisteredCode)
+	}
+
+	err := &AppError{Code: code, Message: message, HTTPStatus: status}
+	for _, opt := range opts {
+		opt(err)
+	}
+
+	return err, nil
+}
+
+// MustNew is New for call sites that hold a code constant proven registered by
+// tests (e.g. package-level error helpers). It panics on unknown codes.
+func MustNew(code Code, message string, opts ...Option) *AppError {
+	err, newErr := New(code, message, opts...)
+	if newErr != nil {
+		panic(newErr)
+	}
+
+	return err
+}
+
 func (e *AppError) Error() string {
 	if e.Cause != nil {
 		return fmt.Sprintf("%s: %s: %v", e.Code, e.Message, e.Cause)
 	}
+
 	return fmt.Sprintf("%s: %s", e.Code, e.Message)
 }
 
@@ -55,10 +88,12 @@ func Register(codes map[Code]int) {
 
 	for {
 		oldPtr := registry.Load()
+
 		var oldMap map[Code]int
 		if oldPtr != nil {
 			oldMap = *oldPtr
 		}
+
 		for code := range codes {
 			if _, dup := oldMap[code]; dup {
 				panic(fmt.Sprintf("apperror: duplicate code %q", code))
@@ -91,38 +126,6 @@ func WithCause(cause error) Option {
 // WithHTTPStatus overrides the registry default for this instance.
 func WithHTTPStatus(status int) Option {
 	return func(e *AppError) { e.HTTPStatus = status }
-}
-
-// New builds an *AppError. Unknown codes fail: every code must be registered
-// by its owning layer (see codes.go and later epics).
-func New(code Code, message string, opts ...Option) (*AppError, error) {
-	ptr := registry.Load()
-	if ptr == nil {
-		return nil, fmt.Errorf("apperror: unregistered code %q", code)
-	}
-
-	status, ok := (*ptr)[code]
-	if !ok {
-		return nil, fmt.Errorf("apperror: unregistered code %q", code)
-	}
-
-	err := &AppError{Code: code, Message: message, HTTPStatus: status}
-	for _, opt := range opts {
-		opt(err)
-	}
-
-	return err, nil
-}
-
-// MustNew is New for call sites that hold a code constant proven registered by
-// tests (e.g. package-level error helpers). It panics on unknown codes.
-func MustNew(code Code, message string, opts ...Option) *AppError {
-	err, newErr := New(code, message, opts...)
-	if newErr != nil {
-		panic(newErr)
-	}
-
-	return err
 }
 
 // HTTPStatusFor reports the registry default for code, or 500 when unknown.

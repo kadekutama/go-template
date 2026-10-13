@@ -37,6 +37,7 @@ func OpenHold(p OpenHoldParams) (Hold, error) {
 	if err := data.Validate(); err != nil {
 		return Hold{}, err
 	}
+
 	return Hold{data: data}, nil
 }
 
@@ -45,11 +46,6 @@ func (h *Hold) Record() entity.HoldData { return h.data }
 
 // State returns the current hold state.
 func (h *Hold) State() string { return h.data.State }
-
-func (h *Hold) touch(at time.Time) {
-	h.data.Version++
-	h.data.UpdatedAt = at.UTC()
-}
 
 // Capture moves ACTIVE→CAPTURED. Repeating capture on CAPTURED is idempotent;
 // capture after expiry or from RELEASED/EXPIRED fails.
@@ -61,11 +57,14 @@ func (h *Hold) Capture(at time.Time) error {
 	default:
 		return entity.Errorf("HOLD_STATE_CONFLICT", "cannot capture hold in state %s", h.data.State)
 	}
+
 	if !at.UTC().Before(h.data.ExpiresAt) {
 		return entity.NewError("HOLD_EXPIRED", "hold has expired")
 	}
+
 	h.data.State = entity.HoldCaptured
 	h.touch(at)
+
 	return nil
 }
 
@@ -79,8 +78,10 @@ func (h *Hold) Release(at time.Time) error {
 	default:
 		return entity.Errorf("HOLD_STATE_CONFLICT", "cannot release hold in state %s", h.data.State)
 	}
+
 	h.data.State = entity.HoldReleased
 	h.touch(at)
+
 	return nil
 }
 
@@ -94,10 +95,17 @@ func (h *Hold) Expire(at time.Time) error {
 	default:
 		return entity.Errorf("HOLD_STATE_CONFLICT", "cannot expire hold in state %s", h.data.State)
 	}
+
 	if at.UTC().Before(h.data.ExpiresAt) {
 		return entity.NewError("HOLD_NOT_EXPIRED", "hold has not expired yet")
 	}
+
 	h.data.State = entity.HoldExpired
 	h.touch(at)
+
 	return nil
+}
+func (h *Hold) touch(at time.Time) {
+	h.data.Version++
+	h.data.UpdatedAt = at.UTC()
 }

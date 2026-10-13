@@ -1,7 +1,7 @@
 package valueobject_test
 
 import (
-	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -60,18 +60,20 @@ func TestParseDisputeStatus(t *testing.T) {
 			name:           "invalid status",
 			s:              "PENDING",
 			expectedResult: valueobject.DisputeStatus(""),
-			expectedError:  errors.New(`dispute: invalid status "PENDING"`),
+			expectedError:  fmt.Errorf("dispute: invalid status %q: %w", "PENDING", valueobject.ErrDisputeInvalidStatus),
 		},
 		{
 			name:           "empty status",
 			s:              "",
 			expectedResult: valueobject.DisputeStatus(""),
-			expectedError:  errors.New(`dispute: invalid status ""`),
+			expectedError:  fmt.Errorf("dispute: invalid status %q: %w", "", valueobject.ErrDisputeInvalidStatus),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := valueobject.ParseDisputeStatus(tc.s)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -160,6 +162,8 @@ func TestCanTransitionDispute(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := valueobject.CanTransitionDispute(tc.from, tc.to)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})

@@ -37,6 +37,7 @@ func (l *CSVLoader) Load() ([]PolicyRule, []GroupingRule, error) {
 
 	reader := csv.NewReader(file)
 	reader.FieldsPerRecord = -1
+
 	rows, err := reader.ReadAll()
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: parse", ErrPolicyInvalid)

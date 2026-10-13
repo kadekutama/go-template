@@ -8,17 +8,17 @@
 package deps
 
 import (
+	// Blank imports pin SPEC §2 modules until real code imports them; see package doc.
 	_ "github.com/99designs/gqlgen/graphql"
-	_ "github.com/casbin/casbin/v2"
+	_ "github.com/casbin/casbin/v3"
 	_ "github.com/dgraph-io/ristretto/v2"
-	_ "github.com/go-co-op/gocron"
+	_ "github.com/go-co-op/gocron/v2"
 	_ "github.com/golang-jwt/jwt/v5"
 	_ "github.com/labstack/echo/v5"
 	_ "github.com/nats-io/nats.go"
 	_ "github.com/open-feature/go-sdk/openfeature"
 	_ "github.com/pressly/goose/v3"
 	_ "github.com/redis/go-redis/v9"
-	_ "github.com/stretchr/testify/assert"
 	_ "golang.org/x/oauth2"
 	_ "google.golang.org/grpc"
 	_ "google.golang.org/protobuf/proto"

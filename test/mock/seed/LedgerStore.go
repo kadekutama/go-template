@@ -49,7 +49,7 @@ type MockLedgerStore_Create_Call struct {
 // Create is a helper method to define mock.On call
 //   - ctx context.Context
 //   - ledger seed.LedgerSeed
-func (_e *MockLedgerStore_Expecter) Create(ctx interface{}, ledger interface{}) *MockLedgerStore_Create_Call {
+func (_e *MockLedgerStore_Expecter) Create(ctx any, ledger any) *MockLedgerStore_Create_Call {
 	return &MockLedgerStore_Create_Call{Call: _e.mock.On("Create", ctx, ledger)}
 }
 
@@ -106,7 +106,7 @@ type MockLedgerStore_Exists_Call struct {
 // Exists is a helper method to define mock.On call
 //   - ctx context.Context
 //   - id string
-func (_e *MockLedgerStore_Expecter) Exists(ctx interface{}, id interface{}) *MockLedgerStore_Exists_Call {
+func (_e *MockLedgerStore_Expecter) Exists(ctx any, id any) *MockLedgerStore_Exists_Call {
 	return &MockLedgerStore_Exists_Call{Call: _e.mock.On("Exists", ctx, id)}
 }
 

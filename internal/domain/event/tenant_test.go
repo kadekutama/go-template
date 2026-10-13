@@ -1,7 +1,7 @@
 package event_test
 
 import (
-	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -15,7 +15,7 @@ func TestNewTenantUpdated(t *testing.T) {
 	t.Parallel()
 
 	at := time.Date(2026, 9, 14, 0, 0, 0, 0, time.UTC)
-	meta := event.EventMetadata{TenantID: "t-1", LedgerID: "l-1"}
+	meta := event.Metadata{TenantID: "t-1", LedgerID: "l-1"}
 	basePayload := event.TenantUpdatedPayload{
 		TenantID:  "t-1",
 		Name:      "Acme",
@@ -32,7 +32,7 @@ func TestNewTenantUpdated(t *testing.T) {
 		version       int64
 		seq           int64
 		payload       event.TenantUpdatedPayload
-		meta          event.EventMetadata
+		meta          event.Metadata
 		expectedError error
 	}
 
@@ -58,10 +58,11 @@ func TestNewTenantUpdated(t *testing.T) {
 			payload: func() event.TenantUpdatedPayload {
 				p := basePayload
 				p.TenantID = ""
+
 				return p
 			}(),
 			meta:          meta,
-			expectedError: errors.New("event: tenant_id is required"),
+			expectedError: fmt.Errorf("event: %s is required: %w", "tenant_id", event.ErrEventNameIsRequired),
 		},
 		{
 			name:          "empty event id",
@@ -72,7 +73,7 @@ func TestNewTenantUpdated(t *testing.T) {
 			seq:           1,
 			payload:       basePayload,
 			meta:          meta,
-			expectedError: errors.New("event: event_id is required"),
+			expectedError: event.ErrEventEventIDIsRequired,
 		},
 		{
 			name:          "zero occurred at",
@@ -83,14 +84,17 @@ func TestNewTenantUpdated(t *testing.T) {
 			seq:           1,
 			payload:       basePayload,
 			meta:          meta,
-			expectedError: errors.New("event: occurred_at is required"),
+			expectedError: event.ErrEventOccurredAtIsRequired,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			evt, err := event.NewTenantUpdated(tc.eventID, tc.aggregateID, tc.occurredAt, tc.version, tc.seq, tc.payload, tc.meta)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, "tenant.updated.v1", evt.EventType())
 				assert.Equal(t, tc.aggregateID, evt.AggregateID())
@@ -104,7 +108,7 @@ func TestNewTenantSuspended(t *testing.T) {
 	t.Parallel()
 
 	at := time.Date(2026, 9, 14, 0, 0, 0, 0, time.UTC)
-	meta := event.EventMetadata{TenantID: "t-1", LedgerID: "l-1"}
+	meta := event.Metadata{TenantID: "t-1", LedgerID: "l-1"}
 	basePayload := event.TenantSuspendedPayload{
 		TenantID:    "t-1",
 		Reason:      "compliance review",
@@ -119,7 +123,7 @@ func TestNewTenantSuspended(t *testing.T) {
 		version       int64
 		seq           int64
 		payload       event.TenantSuspendedPayload
-		meta          event.EventMetadata
+		meta          event.Metadata
 		expectedError error
 	}
 
@@ -145,10 +149,11 @@ func TestNewTenantSuspended(t *testing.T) {
 			payload: func() event.TenantSuspendedPayload {
 				p := basePayload
 				p.TenantID = ""
+
 				return p
 			}(),
 			meta:          meta,
-			expectedError: errors.New("event: tenant_id is required"),
+			expectedError: fmt.Errorf("event: %s is required: %w", "tenant_id", event.ErrEventNameIsRequired),
 		},
 		{
 			name:        "empty reason",
@@ -160,10 +165,11 @@ func TestNewTenantSuspended(t *testing.T) {
 			payload: func() event.TenantSuspendedPayload {
 				p := basePayload
 				p.Reason = ""
+
 				return p
 			}(),
 			meta:          meta,
-			expectedError: errors.New("event: reason is required"),
+			expectedError: event.ErrEventReasonIsRequired,
 		},
 		{
 			name:        "whitespace reason",
@@ -175,17 +181,21 @@ func TestNewTenantSuspended(t *testing.T) {
 			payload: func() event.TenantSuspendedPayload {
 				p := basePayload
 				p.Reason = "   "
+
 				return p
 			}(),
 			meta:          meta,
-			expectedError: errors.New("event: reason is required"),
+			expectedError: event.ErrEventReasonIsRequired,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			evt, err := event.NewTenantSuspended(tc.eventID, tc.aggregateID, tc.occurredAt, tc.version, tc.seq, tc.payload, tc.meta)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, "tenant.suspended.v1", evt.EventType())
 				assert.Equal(t, tc.aggregateID, evt.AggregateID())
@@ -199,7 +209,7 @@ func TestNewTenantReactivated(t *testing.T) {
 	t.Parallel()
 
 	at := time.Date(2026, 9, 14, 0, 0, 0, 0, time.UTC)
-	meta := event.EventMetadata{TenantID: "t-1", LedgerID: "l-1"}
+	meta := event.Metadata{TenantID: "t-1", LedgerID: "l-1"}
 	basePayload := event.TenantReactivatedPayload{
 		TenantID:      "t-1",
 		ReactivatedBy: "u-1",
@@ -213,7 +223,7 @@ func TestNewTenantReactivated(t *testing.T) {
 		version       int64
 		seq           int64
 		payload       event.TenantReactivatedPayload
-		meta          event.EventMetadata
+		meta          event.Metadata
 		expectedError error
 	}
 
@@ -239,17 +249,21 @@ func TestNewTenantReactivated(t *testing.T) {
 			payload: func() event.TenantReactivatedPayload {
 				p := basePayload
 				p.TenantID = ""
+
 				return p
 			}(),
 			meta:          meta,
-			expectedError: errors.New("event: tenant_id is required"),
+			expectedError: fmt.Errorf("event: %s is required: %w", "tenant_id", event.ErrEventNameIsRequired),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			evt, err := event.NewTenantReactivated(tc.eventID, tc.aggregateID, tc.occurredAt, tc.version, tc.seq, tc.payload, tc.meta)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, "tenant.reactivated.v1", evt.EventType())
 				assert.Equal(t, tc.aggregateID, evt.AggregateID())
@@ -263,7 +277,7 @@ func TestNewTenantClosed(t *testing.T) {
 	t.Parallel()
 
 	at := time.Date(2026, 9, 14, 0, 0, 0, 0, time.UTC)
-	meta := event.EventMetadata{TenantID: "t-1", LedgerID: "l-1"}
+	meta := event.Metadata{TenantID: "t-1", LedgerID: "l-1"}
 	basePayload := event.TenantClosedPayload{
 		TenantID: "t-1",
 		Reason:   "voluntary closure",
@@ -278,7 +292,7 @@ func TestNewTenantClosed(t *testing.T) {
 		version       int64
 		seq           int64
 		payload       event.TenantClosedPayload
-		meta          event.EventMetadata
+		meta          event.Metadata
 		expectedError error
 	}
 
@@ -304,10 +318,11 @@ func TestNewTenantClosed(t *testing.T) {
 			payload: func() event.TenantClosedPayload {
 				p := basePayload
 				p.TenantID = ""
+
 				return p
 			}(),
 			meta:          meta,
-			expectedError: errors.New("event: tenant_id is required"),
+			expectedError: fmt.Errorf("event: %s is required: %w", "tenant_id", event.ErrEventNameIsRequired),
 		},
 		{
 			name:        "empty reason",
@@ -319,10 +334,11 @@ func TestNewTenantClosed(t *testing.T) {
 			payload: func() event.TenantClosedPayload {
 				p := basePayload
 				p.Reason = ""
+
 				return p
 			}(),
 			meta:          meta,
-			expectedError: errors.New("event: reason is required"),
+			expectedError: event.ErrEventReasonIsRequired,
 		},
 		{
 			name:        "whitespace reason",
@@ -334,17 +350,21 @@ func TestNewTenantClosed(t *testing.T) {
 			payload: func() event.TenantClosedPayload {
 				p := basePayload
 				p.Reason = "   "
+
 				return p
 			}(),
 			meta:          meta,
-			expectedError: errors.New("event: reason is required"),
+			expectedError: event.ErrEventReasonIsRequired,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			evt, err := event.NewTenantClosed(tc.eventID, tc.aggregateID, tc.occurredAt, tc.version, tc.seq, tc.payload, tc.meta)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, "tenant.closed.v1", evt.EventType())
 				assert.Equal(t, tc.aggregateID, evt.AggregateID())

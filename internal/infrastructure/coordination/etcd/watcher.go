@@ -53,13 +53,13 @@ type watcher struct {
 // NewWatcher builds a Watcher over an initialized client.
 func NewWatcher(params WatcherParams) (Watcher, error) {
 	if params.Client == nil || params.Client.inner == nil {
-		return nil, fmt.Errorf("etcd: watcher requires an initialized client")
+		return nil, ErrEtcdWatcherRequiresAnInitializedClient
 	}
 
 	return &watcher{
 		client: params.Client,
 		logger: params.Logger,
-		errCh:  make(chan error, 4),
+		errCh:  make(chan error, watchErrChanSize),
 	}, nil
 }
 
@@ -69,15 +69,15 @@ func NewWatcher(params WatcherParams) (Watcher, error) {
 // nil once the stream is established; stream errors surface on Err.
 func (w *watcher) WatchPrefix(ctx context.Context, prefix string, onChange WatchHandler) error {
 	if w == nil || w.client == nil || w.client.inner == nil {
-		return fmt.Errorf("etcd: watcher is not initialized")
+		return ErrEtcdWatcherIsNotInitialized
 	}
 
 	if strings.TrimSpace(prefix) == "" {
-		return fmt.Errorf("etcd: watch prefix must not be blank")
+		return ErrEtcdWatchPrefixMustNotBeBlank
 	}
 
 	if onChange == nil {
-		return fmt.Errorf("etcd: watch handler is required")
+		return ErrEtcdWatchHandlerIsRequired
 	}
 
 	resp, err := w.client.inner.Get(ctx, prefix, clientv3.WithPrefix())
@@ -86,27 +86,16 @@ func (w *watcher) WatchPrefix(ctx context.Context, prefix string, onChange Watch
 	}
 
 	for _, kv := range resp.Kvs {
-		cached := make([]byte, len(kv.Value))
-		copy(cached, kv.Value)
-		w.cache.Store(string(kv.Key), cached)
+		cached := make([]byte, len(kv.GetValue()))
+		copy(cached, kv.GetValue())
+		w.cache.Store(string(kv.GetKey()), cached)
 	}
 
-	stream := w.client.inner.Watch(ctx, prefix, clientv3.WithPrefix(), clientv3.WithRev(resp.Header.Revision))
+	stream := w.client.inner.Watch(ctx, prefix, clientv3.WithPrefix(), clientv3.WithRev(resp.Header.GetRevision()))
 
 	w.spawn(ctx, prefix, stream, onChange)
 
 	return nil
-}
-
-// spawn serves the stream under safe.Go: a handler panic is recovered,
-// logged with stack via the watcher's logger, and reported on Err. Recovery
-// is containment, never completion: owners must re-establish the watch.
-func (w *watcher) spawn(ctx context.Context, prefix string, stream clientv3.WatchChan, onChange WatchHandler) {
-	safe.Go(ctx, w.logger, func(p safe.Panic) {
-		w.report(fmt.Errorf("etcd: watcher panic for %s: %w", prefix, p))
-	}, func(ctx context.Context) {
-		w.serve(ctx, prefix, stream, onChange)
-	})
 }
 
 // Cached returns the last-seen value for key.
@@ -140,6 +129,17 @@ func (w *watcher) Err() <-chan error {
 	return w.errCh
 }
 
+// spawn serves the stream under safe.Go: a handler panic is recovered,
+// logged with stack via the watcher's logger, and reported on Err. Recovery
+// is containment, never completion: owners must re-establish the watch.
+func (w *watcher) spawn(ctx context.Context, prefix string, stream clientv3.WatchChan, onChange WatchHandler) {
+	safe.Go(ctx, w.logger, func(p safe.PanicError) {
+		w.report(fmt.Errorf("etcd: watcher panic for %s: %w", prefix, p))
+	}, func(ctx context.Context) {
+		w.serve(ctx, prefix, stream, onChange)
+	})
+}
+
 // report records a stream failure without blocking the serving goroutine.
 func (w *watcher) report(err error) {
 	select {
@@ -158,7 +158,7 @@ func (w *watcher) serve(ctx context.Context, prefix string, stream clientv3.Watc
 		case resp, ok := <-stream:
 			if !ok {
 				if ctx.Err() == nil {
-					w.report(fmt.Errorf("etcd: watch stream closed for %s", prefix))
+					w.report(fmt.Errorf("etcd: watch stream closed for %s: %w", prefix, ErrEtcdWatchStreamClosedFor))
 				}
 
 				return
@@ -166,25 +166,26 @@ func (w *watcher) serve(ctx context.Context, prefix string, stream clientv3.Watc
 
 			if resp.Err() != nil {
 				w.report(fmt.Errorf("etcd: watch stream failed for %s: %w", prefix, resp.Err()))
+
 				return
 			}
 
 			for _, event := range resp.Events {
-				if event.Kv == nil {
+				if event.GetKv() == nil {
 					continue
 				}
 
-				key := string(event.Kv.Key)
+				key := string(event.GetKv().GetKey())
 
 				if event.IsCreate() || event.IsModify() {
-					copied := make([]byte, len(event.Kv.Value))
-					copy(copied, event.Kv.Value)
+					copied := make([]byte, len(event.GetKv().GetValue()))
+					copy(copied, event.GetKv().GetValue())
 					w.cache.Store(key, copied)
 				} else {
 					w.cache.Delete(key)
 				}
 
-				onChange(event.Kv.Key, event.Kv.Value)
+				onChange(event.GetKv().GetKey(), event.GetKv().GetValue())
 			}
 		}
 	}

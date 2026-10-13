@@ -26,6 +26,7 @@ func ToPostingDTO(posting entity.PostingData, cursor string) PostingDTO {
 	for _, entry := range posting.Entries {
 		entries = append(entries, ToEntryDTO(entry))
 	}
+
 	return PostingDTO{
 		ID:          posting.ID.String(),
 		TenantID:    posting.TenantID.String(),

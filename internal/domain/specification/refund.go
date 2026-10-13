@@ -33,6 +33,7 @@ func RefundWindowValid() Specification[RefundWindow] {
 				Code: "REFUND_WINDOW_EXPIRED", Message: "refund window inputs invalid",
 			}}}
 		}
+
 		if w.Now.Sub(w.OriginalPostedAt) > w.Window {
 			return SpecResult{Violations: []Violation{{
 				Code: "REFUND_WINDOW_EXPIRED", Message: "refund outside policy window",
@@ -41,6 +42,7 @@ func RefundWindowValid() Specification[RefundWindow] {
 				},
 			}}}
 		}
+
 		return SpecResult{}
 	})
 }
@@ -65,13 +67,16 @@ func RefundAmountValid() Specification[RefundAmounts] {
 		if r.OriginalMinor < 0 || r.PreviousRefundsMinor < 0 || r.RequestedMinor < 0 {
 			return fail("negative input")
 		}
+
 		if r.PreviousRefundsMinor > r.OriginalMinor {
 			return fail("previous refunds exceed original")
 		}
+
 		remaining := r.OriginalMinor - r.PreviousRefundsMinor
 		if r.RequestedMinor > remaining {
 			return fail("requested exceeds remainder")
 		}
+
 		return SpecResult{}
 	})
 }

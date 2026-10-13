@@ -68,10 +68,12 @@ func (s *PeriodService) OpenPeriod(ctx context.Context, req port.PeriodRequest) 
 	if err := validatePeriodOpen(req); err != nil {
 		return err
 	}
+
 	subject := port.Subject{ID: req.Actor, TenantID: req.TenantID}
 	if err := RequireAuthz(ctx, s.authz, subject, "period.open", "ledger/"+string(req.LedgerID)); err != nil {
 		return err
 	}
+
 	now := s.clock.Now().UTC()
 	rec := port.IdempotencyRecord{
 		Key:         periodKey(req.PeriodID, "open"),
@@ -79,14 +81,17 @@ func (s *PeriodService) OpenPeriod(ctx context.Context, req port.PeriodRequest) 
 		TenantID:    req.TenantID,
 	}
 	_ = now
+
 	return s.uow.Do(ctx, func(ctx context.Context, tx port.Tx) error {
 		outcome, err := tx.Idempotency().Reserve(ctx, rec)
 		if err != nil {
 			return err
 		}
+
 		if outcome.Replay {
 			return nil
 		}
+
 		if err := s.periods.SavePeriod(ctx, entity.PeriodData{
 			ID: req.PeriodID, TenantID: req.TenantID, LedgerID: req.LedgerID,
 			Start: req.Start, End: req.End, Timezone: req.Timezone,
@@ -94,12 +99,14 @@ func (s *PeriodService) OpenPeriod(ctx context.Context, req port.PeriodRequest) 
 		}); err != nil {
 			return err
 		}
+
 		if err := tx.Outbox().Append(ctx, port.OutboxFact{
 			TenantID: req.TenantID, LedgerID: req.LedgerID, EventType: EventPeriodOpened,
 			AggregateID: string(req.PeriodID), Payload: periodPayload(string(req.PeriodID), entity.PeriodOpen), OccurredAt: s.clock.Now().UTC(),
 		}); err != nil {
 			return err
 		}
+
 		return tx.Idempotency().Complete(ctx, rec.Key, []byte(`{"period_id":"`+string(req.PeriodID)+`"}`))
 	})
 }
@@ -110,48 +117,58 @@ func (s *PeriodService) ClosePeriod(ctx context.Context, req port.PeriodRequest)
 	if err := validatePeriodScope(req); err != nil {
 		return err
 	}
+
 	subject := port.Subject{ID: req.Actor, TenantID: req.TenantID}
 	if err := RequireAuthz(ctx, s.authz, subject, "period.close", "ledger/"+string(req.LedgerID)); err != nil {
 		return err
 	}
+
 	now := s.clock.Now().UTC()
 	rec := port.IdempotencyRecord{
 		Key:         periodKey(req.PeriodID, "close"),
 		Fingerprint: Fingerprint(string(req.PeriodID), "close"),
 		TenantID:    req.TenantID,
 	}
+
 	return s.uow.Do(ctx, func(ctx context.Context, tx port.Tx) error {
 		outcome, err := tx.Idempotency().Reserve(ctx, rec)
 		if err != nil {
 			return err
 		}
+
 		if outcome.Replay {
 			return nil
 		}
+
 		period, err := s.periods.FindPeriod(ctx, string(req.TenantID), string(req.LedgerID), string(req.PeriodID))
 		if err != nil {
 			return err
 		}
+
 		openBreaks, err := s.breaks.CountOpenBreaks(ctx, req.TenantID, req.LedgerID)
 		if err != nil {
 			return err
 		}
+
 		if failures := service.ValidateClose(service.CloseInput{
 			Period: period, UnresolvedWorkflowCount: req.UnresolvedWorkflows, OpenBreakCount: openBreaks,
 			SubledgerDeltas: req.SubledgerDeltas, FXRevalued: req.FXRevalued,
 		}); len(failures) > 0 {
 			return errors.Join(failures...)
 		}
+
 		period.Status = entity.PeriodClosed
 		if err := s.periods.SavePeriod(ctx, period); err != nil {
 			return err
 		}
+
 		if err := tx.Outbox().Append(ctx, port.OutboxFact{
 			TenantID: req.TenantID, LedgerID: req.LedgerID, EventType: EventPeriodClosed,
 			AggregateID: string(req.PeriodID), Payload: periodPayload(string(req.PeriodID), entity.PeriodClosed), OccurredAt: now,
 		}); err != nil {
 			return err
 		}
+
 		return tx.Idempotency().Complete(ctx, rec.Key, []byte(`{"period_id":"`+string(req.PeriodID)+`"}`))
 	})
 }
@@ -161,44 +178,54 @@ func (s *PeriodService) ReopenPeriod(ctx context.Context, req port.PeriodRequest
 	if err := validatePeriodScope(req); err != nil {
 		return err
 	}
+
 	subject := port.Subject{ID: req.Actor, TenantID: req.TenantID}
 	if err := RequireAuthz(ctx, s.authz, subject, "period.reopen", "ledger/"+string(req.LedgerID)); err != nil {
 		return err
 	}
+
 	if err := service.ValidateReopen(req.Actor, req.Approver, "reopen "+string(req.PeriodID)); err != nil {
 		return err
 	}
+
 	now := s.clock.Now().UTC()
 	rec := port.IdempotencyRecord{
 		Key:         periodKey(req.PeriodID, "reopen"),
 		Fingerprint: Fingerprint(string(req.PeriodID), "reopen", req.Approver),
 		TenantID:    req.TenantID,
 	}
+
 	return s.uow.Do(ctx, func(ctx context.Context, tx port.Tx) error {
 		outcome, err := tx.Idempotency().Reserve(ctx, rec)
 		if err != nil {
 			return err
 		}
+
 		if outcome.Replay {
 			return nil
 		}
+
 		period, err := s.periods.FindPeriod(ctx, string(req.TenantID), string(req.LedgerID), string(req.PeriodID))
 		if err != nil {
 			return err
 		}
+
 		if period.Status != entity.PeriodClosed {
 			return entity.NewError("PERIOD_STATE_INVALID", "only closed periods can reopen")
 		}
+
 		period.Status = entity.PeriodOpen
 		if err := s.periods.SavePeriod(ctx, period); err != nil {
 			return err
 		}
+
 		if err := tx.Outbox().Append(ctx, port.OutboxFact{
 			TenantID: req.TenantID, LedgerID: req.LedgerID, EventType: EventPeriodReopened,
 			AggregateID: string(req.PeriodID), Payload: periodPayload(string(req.PeriodID), entity.PeriodOpen), OccurredAt: now,
 		}); err != nil {
 			return err
 		}
+
 		return tx.Idempotency().Complete(ctx, rec.Key, []byte(`{"period_id":"`+string(req.PeriodID)+`"}`))
 	})
 }
@@ -208,12 +235,15 @@ func validatePeriodOpen(req port.PeriodRequest) error {
 	if err := validatePeriodScope(req); err != nil {
 		return err
 	}
+
 	if req.Start.IsZero() || req.End.IsZero() || !req.Start.Before(req.End) {
 		return entity.NewError("PERIOD_BOUNDS_INVALID", "period start must precede end")
 	}
+
 	if strings.TrimSpace(req.Timezone) == "" {
 		return entity.NewError("PERIOD_TIMEZONE_REQUIRED", "accounting timezone is required")
 	}
+
 	return nil
 }
 
@@ -222,15 +252,19 @@ func validatePeriodScope(req port.PeriodRequest) error {
 	if strings.TrimSpace(req.TenantID.String()) == "" {
 		return entity.NewError("TENANT_REQUIRED", "tenant id is required")
 	}
+
 	if strings.TrimSpace(req.LedgerID.String()) == "" {
 		return entity.NewError("LEDGER_REQUIRED", "ledger id is required")
 	}
+
 	if strings.TrimSpace(req.PeriodID.String()) == "" {
 		return entity.NewError("PERIOD_ID_REQUIRED", "period id is required")
 	}
+
 	if strings.TrimSpace(req.Actor) == "" {
 		return entity.NewError("ACTOR_REQUIRED", "period actor is required")
 	}
+
 	return nil
 }
 
@@ -242,5 +276,6 @@ func periodKey(id valueobject.PeriodID, action string) string {
 // periodPayload builds the §3.8-shaped fact payload: id plus status.
 func periodPayload(id, status string) []byte {
 	encoded, _ := jsonparser.Marshal(map[string]string{payloadIDKey: id, payloadStatusKey: status})
+
 	return encoded
 }

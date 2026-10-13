@@ -14,10 +14,10 @@ import (
 	"github.com/kadekutama/go-template/internal/shared/kernel/validate"
 )
 
-// PublisherParams carries publisher configuration (Parameter Object pattern). NKeySeed
+// Params carries publisher configuration (Parameter Object pattern). NKeySeed
 // (nkeys) and UseTLS are validated at construction and applied on dial;
 // production requires both, local/dev may run plaintext.
-type PublisherParams struct {
+type Params struct {
 	URL            string        `validate:"required"`
 	NKeySeed       string        `validate:"-"`
 	UseTLS         bool          `validate:"-"`
@@ -46,14 +46,14 @@ type Publisher struct {
 // NewPublisher validates the URL, TLS flag, timeouts, and nkey seed, then dials within
 // the connect timeout. Misconfiguration and unreachable brokers both fail
 // here, before the process serves anything.
-func NewPublisher(params PublisherParams) (*Publisher, error) {
+func NewPublisher(params Params) (*Publisher, error) {
 	if err := validate.Struct("nats", "params", params); err != nil {
 		return nil, err
 	}
 
 	trimmed := strings.TrimSpace(params.URL)
 	if trimmed == "" {
-		return nil, fmt.Errorf("nats: url is required")
+		return nil, ErrNatsURLIsRequired
 	}
 
 	options := []natsgo.Option{
@@ -105,7 +105,7 @@ func nkeyAuth(seed string) (natsgo.Option, error) {
 	}
 
 	if !nkeys.IsValidPublicUserKey(public) {
-		return nil, fmt.Errorf("nats: seed is not a user nkey")
+		return nil, ErrNatsSeedIsNotAUserNkey
 	}
 
 	sign := func(nonce []byte) ([]byte, error) {
@@ -128,11 +128,11 @@ func nkeyAuth(seed string) (natsgo.Option, error) {
 // email/SMS notification (that port is Notifier, E10).
 func (m *Publisher) PublishEvent(ctx context.Context, tenant, eventType string, payload []byte) error {
 	if m == nil {
-		return fmt.Errorf("nats: publisher is not initialized")
+		return ErrNatsPublisherIsNotInitialized
 	}
 
 	if payload == nil {
-		return fmt.Errorf("nats: payload is required")
+		return ErrNatsPayloadIsRequired
 	}
 
 	subject, err := EventSubject(tenant, eventType)
@@ -146,15 +146,15 @@ func (m *Publisher) PublishEvent(ctx context.Context, tenant, eventType string, 
 // Publish emits one ephemeral delta.
 func (m *Publisher) Publish(ctx context.Context, subject string, payload []byte) error {
 	if m == nil || m.conn == nil {
-		return fmt.Errorf("nats: publisher is not initialized")
+		return ErrNatsPublisherIsNotInitialized
 	}
 
 	if strings.TrimSpace(subject) == "" {
-		return fmt.Errorf("nats: subject is required")
+		return ErrNatsSubjectIsRequired
 	}
 
 	if payload == nil {
-		return fmt.Errorf("nats: payload is required")
+		return ErrNatsPayloadIsRequired
 	}
 
 	if err := ctx.Err(); err != nil {

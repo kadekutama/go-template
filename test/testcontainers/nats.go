@@ -28,13 +28,11 @@ func StartNATS(t *testing.T) (*NATSHandle, error) {
 	defer cancel()
 
 	req := tc.GenericContainerRequest{
-		ContainerRequest: tc.ContainerRequest{
-			Image:        NATSImage,
-			ExposedPorts: []string{"4222/tcp"},
-			Cmd:          []string{"-js"},
-			WaitingFor:   wait.ForLog("Server is ready"),
-		},
-		Started: true,
+		Image:        NATSImage,
+		ExposedPorts: []string{"4222/tcp"},
+		Cmd:          []string{"-js"},
+		WaitingFor:   wait.ForLog("Server is ready"),
+		Started:      true,
 	}
 
 	container, err := tc.GenericContainer(ctx, req)
@@ -43,6 +41,7 @@ func StartNATS(t *testing.T) (*NATSHandle, error) {
 	}
 
 	h := &NATSHandle{container: container}
+
 	t.Cleanup(func() {
 		_ = h.Terminate(context.Background())
 	})
@@ -50,12 +49,14 @@ func StartNATS(t *testing.T) (*NATSHandle, error) {
 	mapped, err := container.MappedPort(ctx, "4222")
 	if err != nil {
 		_ = h.Terminate(context.Background())
+
 		return nil, fmt.Errorf("map nats port: %w", err)
 	}
 
 	host, err := container.Host(ctx)
 	if err != nil {
 		_ = h.Terminate(context.Background())
+
 		return nil, fmt.Errorf("nats host: %w", err)
 	}
 

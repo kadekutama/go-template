@@ -1,7 +1,7 @@
 package valueobject_test
 
 import (
-	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -42,54 +42,56 @@ func TestValidateDescriptor(t *testing.T) {
 			name:          "empty descriptor",
 			s:             "",
 			network:       "visa",
-			expectedError: errors.New("descriptor: value is required"),
+			expectedError: valueobject.ErrDescriptorValueIsRequired,
 		},
 		{
 			name:          "exceeds 22 characters",
 			s:             "12345678901234567890123",
 			network:       "visa",
-			expectedError: errors.New("descriptor: INVALID_DESCRIPTOR exceeds 22 characters"),
+			expectedError: valueobject.ErrDescriptorINVALIDDESCRIPTORExceeds22Characters,
 		},
 		{
 			name:          "control character null",
 			s:             "ACME\x00CORP",
 			network:       "visa",
-			expectedError: errors.New("descriptor: INVALID_DESCRIPTOR control character"),
+			expectedError: valueobject.ErrDescriptorINVALIDDESCRIPTORControlCharacter,
 		},
 		{
 			name:          "control character newline",
 			s:             "ACME\nCORP",
 			network:       "visa",
-			expectedError: errors.New("descriptor: INVALID_DESCRIPTOR control character"),
+			expectedError: valueobject.ErrDescriptorINVALIDDESCRIPTORControlCharacter,
 		},
 		{
 			name:          "control character del",
 			s:             "ACME\x7fCORP",
 			network:       "visa",
-			expectedError: errors.New("descriptor: INVALID_DESCRIPTOR control character"),
+			expectedError: valueobject.ErrDescriptorINVALIDDESCRIPTORControlCharacter,
 		},
 		{
 			name:          "illegal symbol exclamation",
 			s:             "ACME! CORP",
 			network:       "visa",
-			expectedError: errors.New(`descriptor: INVALID_DESCRIPTOR illegal character '!'`),
+			expectedError: fmt.Errorf("descriptor: INVALID_DESCRIPTOR illegal character %q: %w", '!', valueobject.ErrDescriptorINVALIDDESCRIPTORIllegalCharacter),
 		},
 		{
 			name:          "illegal symbol at",
 			s:             "ACME@CORP",
 			network:       "visa",
-			expectedError: errors.New(`descriptor: INVALID_DESCRIPTOR illegal character '@'`),
+			expectedError: fmt.Errorf("descriptor: INVALID_DESCRIPTOR illegal character %q: %w", '@', valueobject.ErrDescriptorINVALIDDESCRIPTORIllegalCharacter),
 		},
 		{
 			name:          "empty network",
 			s:             "ACME CORP",
 			network:       "",
-			expectedError: errors.New("descriptor: network is required"),
+			expectedError: valueobject.ErrDescriptorNetworkIsRequired,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := valueobject.ValidateDescriptor(tc.s, tc.network)
 			assert.Equal(t, tc.expectedError, err)
 		})

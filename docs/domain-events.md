@@ -57,10 +57,10 @@ type DomainEvent interface {
     Payload() any
     
     // Metadata returns correlation/causation info
-    Metadata() EventMetadata
+    Metadata() Metadata
 }
 
-type EventMetadata struct {
+type Metadata struct {
     // TenantID for multi-tenancy isolation
     TenantID string `json:"tenant_id"`
 
@@ -94,7 +94,7 @@ type BaseEvent struct {
     AggregateVer     int64         `json:"aggregate_version"`
     SequenceValue    int64         `json:"sequence"`
     PayloadData      any           `json:"payload"`
-    Meta             EventMetadata `json:"metadata"`
+    Meta             Metadata `json:"metadata"`
 }
 
 func (e BaseEvent) EventID() string          { return e.IDValue }
@@ -105,7 +105,7 @@ func (e BaseEvent) OccurredAt() time.Time    { return e.OccurredAtValue }
 func (e BaseEvent) AggregateVersion() int64  { return e.AggregateVer }
 func (e BaseEvent) Sequence() int64          { return e.SequenceValue }
 func (e BaseEvent) Payload() any             { return e.PayloadData }
-func (e BaseEvent) Metadata() EventMetadata  { return e.Meta }
+func (e BaseEvent) Metadata() Metadata  { return e.Meta }
 ```
 
 The earlier field/method name collisions were invalid Go. Implementations must

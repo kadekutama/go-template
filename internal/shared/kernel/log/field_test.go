@@ -1,7 +1,6 @@
 package log_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -15,7 +14,8 @@ func TestFieldConstructors(t *testing.T) {
 	type dummyMeta struct {
 		ID int
 	}
-	sampleErr := errors.New("sample error")
+
+	sampleErr := log.ErrSampleError
 
 	type testCase struct {
 		name          string
@@ -65,6 +65,7 @@ func TestFieldConstructors(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Equal(t, tc.expectedKey, tc.field.Key)
 			assert.Equal(t, tc.expectedValue, tc.field.Value)
 		})

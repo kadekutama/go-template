@@ -79,11 +79,6 @@ func NewProvider(params OAuthParams) (*Provider, error) {
 	}, nil
 }
 
-// now returns the current UTC time through the injected clock.
-func (p *Provider) now() time.Time {
-	return p.clock.Now().UTC()
-}
-
 // AuthURL starts one login handshake for provider.
 func (p *Provider) AuthURL(ctx context.Context, tenant valueobject.TenantID, provider, redirectURL string) (appport.OAuthSession, error) {
 	if p == nil || p.http == nil || p.kv == nil || p.clock == nil {
@@ -194,6 +189,11 @@ func (p *Provider) Exchange(ctx context.Context, tenant valueobject.TenantID, pr
 	return p.fetchIdentity(ctx, provider, tenant, cfg.UserInfoURL, accessToken)
 }
 
+// now returns the current UTC time through the injected clock.
+func (p *Provider) now() time.Time {
+	return p.clock.Now().UTC()
+}
+
 // consumeSession loads and deletes one handshake atomically-from-the-caller's
 // view: the delete makes a replayed state fail closed on the next use.
 func (p *Provider) consumeSession(ctx context.Context, tenant valueobject.TenantID, provider, state string) (session, error) {
@@ -268,7 +268,7 @@ func (p *Provider) exchangeCode(ctx context.Context, cfg ProviderConfig, code, r
 
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<httpMaxBodyShift))
 	if err != nil {
 		return "", fmt.Errorf("%w: token body", ErrProviderFailure)
 	}
@@ -310,7 +310,7 @@ func (p *Provider) fetchIdentity(ctx context.Context, provider string, tenant va
 	}
 
 	var payload userInfoResponse
-	if body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20)); err != nil {
+	if body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<httpMaxBodyShift)); err != nil {
 		return appport.OAuthIdentity{}, fmt.Errorf("%w: userinfo body", ErrProviderFailure)
 	} else if err := jsonparser.Unmarshal(body, &payload); err != nil {
 		return appport.OAuthIdentity{}, fmt.Errorf("%w: userinfo decode", ErrProviderFailure)

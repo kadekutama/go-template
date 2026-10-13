@@ -18,6 +18,7 @@ func Fingerprint(parts ...string) string {
 	for _, part := range parts {
 		_, _ = fmt.Fprintf(sum, "%d:%s;", len(part), part)
 	}
+
 	return hex.EncodeToString(sum.Sum(nil))
 }
 
@@ -29,12 +30,15 @@ func MapParts(prefix string, m map[string]string) []string {
 	for k := range m {
 		keys = append(keys, k)
 	}
+
 	sort.Strings(keys)
 	parts := make([]string, 0, 2*len(keys)+1)
+
 	parts = append(parts, prefix)
 	for _, k := range keys {
 		parts = append(parts, k, m[k])
 	}
+
 	return parts
 }
 
@@ -43,20 +47,26 @@ func MapParts(prefix string, m map[string]string) []string {
 // fingerprint conflict returns the store error without executing. When
 // execute fails, the lease stays open so a later identical submission may
 // still run; only completed fingerprints replay.
-func RunIdempotent(ctx context.Context, store port.IdempotencyStore, rec port.IdempotencyRecord, execute func(ctx context.Context) ([]byte, error)) (response []byte, replayed bool, err error) {
+func RunIdempotent(ctx context.Context, store port.IdempotencyStore, rec port.IdempotencyRecord, execute func(ctx context.Context) ([]byte, error)) ([]byte, bool, error) {
+	var response []byte
+
 	outcome, err := store.Reserve(ctx, rec)
 	if err != nil {
 		return nil, false, err
 	}
+
 	if outcome.Replay {
 		return outcome.Response, true, nil
 	}
+
 	response, err = execute(ctx)
 	if err != nil {
 		return nil, false, err
 	}
+
 	if err := store.Complete(ctx, rec.Key, response); err != nil {
 		return nil, false, err
 	}
+
 	return response, false, nil
 }

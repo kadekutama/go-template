@@ -17,6 +17,7 @@ func testEURUSDRate(at time.Time) valueobject.FxRate {
 	if err != nil {
 		panic(err)
 	}
+
 	return valueobject.FxRate{
 		ID:          "EURUSD-1",
 		Pair:        pair,
@@ -76,6 +77,7 @@ func TestConsolidateBalances(t *testing.T) {
 				pair, _ := valueobject.NewFxPair("USD", "EUR")
 				rate := testEURUSDRate(at)
 				rate.Pair = pair
+
 				return service.ConsolidationRequest{
 					BaseAsset: "USD",
 					Children: []service.ChildBalance{
@@ -94,6 +96,7 @@ func TestConsolidateBalances(t *testing.T) {
 			name: "stale rate rejected",
 			req: func() service.ConsolidationRequest {
 				rate := testEURUSDRate(at.Add(-3 * time.Hour))
+
 				return service.ConsolidationRequest{
 					BaseAsset: "USD",
 					Children: []service.ChildBalance{
@@ -221,6 +224,8 @@ func TestConsolidateBalances(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.ConsolidateBalances(tc.req)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -279,6 +284,8 @@ func TestValidateTransferGrant(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := service.ValidateTransferGrant(tc.grants, tc.childTenantID)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -336,6 +343,8 @@ func TestHasTransferGrant(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := service.HasTransferGrant(tc.grants, tc.childTenantID)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -393,6 +402,8 @@ func TestValidateReadGrant(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := service.ValidateReadGrant(tc.grants, tc.childTenantID)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -450,6 +461,8 @@ func TestHasReadGrant(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := service.HasReadGrant(tc.grants, tc.childTenantID)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})

@@ -49,7 +49,7 @@ type MockExpiringStore_Delete_Call struct {
 // Delete is a helper method to define mock.On call
 //   - ctx context.Context
 //   - key string
-func (_e *MockExpiringStore_Expecter) Delete(ctx interface{}, key interface{}) *MockExpiringStore_Delete_Call {
+func (_e *MockExpiringStore_Expecter) Delete(ctx any, key any) *MockExpiringStore_Delete_Call {
 	return &MockExpiringStore_Delete_Call{Call: _e.mock.On("Delete", ctx, key)}
 }
 
@@ -108,7 +108,7 @@ type MockExpiringStore_Get_Call struct {
 // Get is a helper method to define mock.On call
 //   - ctx context.Context
 //   - key string
-func (_e *MockExpiringStore_Expecter) Get(ctx interface{}, key interface{}) *MockExpiringStore_Get_Call {
+func (_e *MockExpiringStore_Expecter) Get(ctx any, key any) *MockExpiringStore_Get_Call {
 	return &MockExpiringStore_Get_Call{Call: _e.mock.On("Get", ctx, key)}
 }
 
@@ -157,7 +157,7 @@ type MockExpiringStore_Set_Call struct {
 //   - key string
 //   - value []byte
 //   - ttl time.Duration
-func (_e *MockExpiringStore_Expecter) Set(ctx interface{}, key interface{}, value interface{}, ttl interface{}) *MockExpiringStore_Set_Call {
+func (_e *MockExpiringStore_Expecter) Set(ctx any, key any, value any, ttl any) *MockExpiringStore_Set_Call {
 	return &MockExpiringStore_Set_Call{Call: _e.mock.On("Set", ctx, key, value, ttl)}
 }
 
@@ -214,7 +214,7 @@ type MockExpiringStore_TTL_Call struct {
 // TTL is a helper method to define mock.On call
 //   - ctx context.Context
 //   - key string
-func (_e *MockExpiringStore_Expecter) TTL(ctx interface{}, key interface{}) *MockExpiringStore_TTL_Call {
+func (_e *MockExpiringStore_Expecter) TTL(ctx any, key any) *MockExpiringStore_TTL_Call {
 	return &MockExpiringStore_TTL_Call{Call: _e.mock.On("TTL", ctx, key)}
 }
 

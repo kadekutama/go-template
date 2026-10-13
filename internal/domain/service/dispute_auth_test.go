@@ -37,6 +37,7 @@ func TestOpenDispute(t *testing.T) {
 			Policy:            policy,
 		}
 		mut(&req)
+
 		return req
 	}
 	noop := func(*service.OpenDisputeRequest) {}
@@ -123,6 +124,8 @@ func TestOpenDispute(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.OpenDispute(tc.req)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -163,6 +166,7 @@ func TestMarkEvidenceDue(t *testing.T) {
 			expectedResult: func() entity.Dispute {
 				d := open
 				d.Status = valueobject.DisputeEvidenceDue
+
 				return d
 			}(),
 			expectedError: nil,
@@ -172,11 +176,13 @@ func TestMarkEvidenceDue(t *testing.T) {
 			d: func() entity.Dispute {
 				d := open
 				d.Status = valueobject.DisputeEvidenceDue
+
 				return d
 			}(),
 			expectedResult: func() entity.Dispute {
 				d := open
 				d.Status = valueobject.DisputeEvidenceDue
+
 				return d
 			}(),
 			expectedError: &entity.Error{Code: "DISPUTE_STATUS_INVALID", Message: "dispute cannot await evidence in its current status"},
@@ -185,6 +191,8 @@ func TestMarkEvidenceDue(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.MarkEvidenceDue(tc.d)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -227,6 +235,7 @@ func TestSubmitEvidence(t *testing.T) {
 			expectedResult: func() entity.Dispute {
 				d := open
 				d.Status = valueobject.DisputeUnderReview
+
 				return d
 			}(),
 			expectedError: nil,
@@ -243,12 +252,14 @@ func TestSubmitEvidence(t *testing.T) {
 			d: func() entity.Dispute {
 				d := open
 				d.Status = valueobject.DisputeUnderReview
+
 				return d
 			}(),
 			at: now,
 			expectedResult: func() entity.Dispute {
 				d := open
 				d.Status = valueobject.DisputeUnderReview
+
 				return d
 			}(),
 			expectedError: &entity.Error{Code: "DISPUTE_STATUS_INVALID", Message: "dispute cannot accept evidence in its current status"},
@@ -257,6 +268,8 @@ func TestSubmitEvidence(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.SubmitEvidence(tc.d, tc.at)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -310,6 +323,7 @@ func TestRepresentmentAllowed(t *testing.T) {
 			d: func() entity.Dispute {
 				d := open
 				d.RepresentStage = 2
+
 				return d
 			}(),
 			policy:        policy,
@@ -321,6 +335,7 @@ func TestRepresentmentAllowed(t *testing.T) {
 			policy: func() service.NetworkPolicy {
 				p := policy
 				p.Version = "v2025.1"
+
 				return p
 			}(),
 			expectedError: &entity.Error{Code: "DISPUTE_POLICY_MISMATCH", Message: "representment requires the dispute policy version"},
@@ -329,6 +344,8 @@ func TestRepresentmentAllowed(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := service.RepresentmentAllowed(tc.d, tc.policy)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -353,6 +370,7 @@ func TestCloseDispute(t *testing.T) {
 		RepresentStage:    0,
 		PolicyVersion:     "v2026.1",
 	}
+
 	type testCase struct {
 		name           string
 		d              entity.Dispute
@@ -367,12 +385,14 @@ func TestCloseDispute(t *testing.T) {
 			d: func() entity.Dispute {
 				d := open
 				d.Status = valueobject.DisputeUnderReview
+
 				return d
 			}(),
 			outcome: service.DisputeLost,
 			expectedResult: func() entity.Dispute {
 				d := open
 				d.Status = valueobject.DisputeLost
+
 				return d
 			}(),
 			expectedError: nil,
@@ -382,12 +402,14 @@ func TestCloseDispute(t *testing.T) {
 			d: func() entity.Dispute {
 				d := open
 				d.Status = valueobject.DisputeUnderReview
+
 				return d
 			}(),
 			outcome: service.DisputeWon,
 			expectedResult: func() entity.Dispute {
 				d := open
 				d.Status = valueobject.DisputeWon
+
 				return d
 			}(),
 			expectedError: nil,
@@ -397,12 +419,14 @@ func TestCloseDispute(t *testing.T) {
 			d: func() entity.Dispute {
 				d := open
 				d.Status = valueobject.DisputeUnderReview
+
 				return d
 			}(),
 			outcome: "MAYBE",
 			expectedResult: func() entity.Dispute {
 				d := open
 				d.Status = valueobject.DisputeUnderReview
+
 				return d
 			}(),
 			expectedError: &entity.Error{Code: "DISPUTE_OUTCOME_INVALID", Message: "dispute outcome must be WON or LOST"},
@@ -418,6 +442,8 @@ func TestCloseDispute(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.CloseDispute(tc.d, tc.outcome)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -457,11 +483,13 @@ func TestSealDispute(t *testing.T) {
 			d: func() entity.Dispute {
 				d := open
 				d.Status = valueobject.DisputeLost
+
 				return d
 			}(),
 			expectedResult: func() entity.Dispute {
 				d := open
 				d.Status = valueobject.DisputeClosed
+
 				return d
 			}(),
 			expectedError: nil,
@@ -476,6 +504,8 @@ func TestSealDispute(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.SealDispute(tc.d)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -513,6 +543,8 @@ func TestEarlyWarningRecommend(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := service.EarlyWarningRecommend(tc.refundCostMinor, tc.expectedDisputeCostMinor, tc.feeMinor)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -617,6 +649,8 @@ func TestAuthorize(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.Authorize(tc.id, tc.amountMinor, tc.holdID, tc.now, tc.expiryDays, tc.multipleCaptures)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -656,6 +690,7 @@ func TestCapture(t *testing.T) {
 				a := live
 				a.CapturedMinor = 6000
 				a.Status = valueobject.AuthPartiallyCaptured
+
 				return a
 			}(),
 			expectedError: nil,
@@ -668,6 +703,7 @@ func TestCapture(t *testing.T) {
 				a := live
 				a.CapturedMinor = 10000
 				a.Status = valueobject.AuthCaptured
+
 				return a
 			}(),
 			expectedError: nil,
@@ -678,6 +714,7 @@ func TestCapture(t *testing.T) {
 				a := live
 				a.CapturedMinor = 6000
 				a.Status = valueobject.AuthPartiallyCaptured
+
 				return a
 			}(),
 			amountMinor: 5000,
@@ -685,6 +722,7 @@ func TestCapture(t *testing.T) {
 				a := live
 				a.CapturedMinor = 6000
 				a.Status = valueobject.AuthPartiallyCaptured
+
 				return a
 			}(),
 			expectedError: &entity.Error{Code: "CAPTURE_EXCEEDS_AUTHORIZED", Message: "capture exceeds authorized amount; remaining=4000"},
@@ -695,6 +733,7 @@ func TestCapture(t *testing.T) {
 				a := live
 				a.CapturedMinor = 6000
 				a.Status = valueobject.AuthPartiallyCaptured
+
 				return a
 			}(),
 			amountMinor: 1000,
@@ -702,6 +741,7 @@ func TestCapture(t *testing.T) {
 				a := live
 				a.CapturedMinor = 6000
 				a.Status = valueobject.AuthPartiallyCaptured
+
 				return a
 			}(),
 			expectedError: &entity.Error{Code: "MULTIPLE_CAPTURES_FORBIDDEN", Message: "network forbids multiple partial captures"},
@@ -712,6 +752,7 @@ func TestCapture(t *testing.T) {
 				a := live
 				a.Status = valueobject.AuthRequiresAction
 				a.RequiresAction = true
+
 				return a
 			}(),
 			amountMinor: 100,
@@ -719,6 +760,7 @@ func TestCapture(t *testing.T) {
 				a := live
 				a.Status = valueobject.AuthRequiresAction
 				a.RequiresAction = true
+
 				return a
 			}(),
 			expectedError: &entity.Error{Code: "AUTH_NOT_CAPTURABLE", Message: "authorization cannot capture in its current status"},
@@ -734,6 +776,8 @@ func TestCapture(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.Capture(tc.a, tc.amountMinor)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -771,6 +815,7 @@ func TestSweepExpired(t *testing.T) {
 				func() service.Authorization {
 					a := live
 					a.ExpiresAt = now.Add(-time.Hour)
+
 					return a
 				}(),
 			},
@@ -780,6 +825,7 @@ func TestSweepExpired(t *testing.T) {
 					a := live
 					a.ExpiresAt = now.Add(-time.Hour)
 					a.Status = valueobject.AuthExpired
+
 					return a
 				}(),
 			},
@@ -792,6 +838,7 @@ func TestSweepExpired(t *testing.T) {
 					a := live
 					a.ExpiresAt = now.Add(-time.Hour)
 					a.Status = valueobject.AuthExpired
+
 					return a
 				}(),
 			},
@@ -801,6 +848,7 @@ func TestSweepExpired(t *testing.T) {
 					a := live
 					a.ExpiresAt = now.Add(-time.Hour)
 					a.Status = valueobject.AuthExpired
+
 					return a
 				}(),
 			},
@@ -817,6 +865,8 @@ func TestSweepExpired(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult1, actualResult2 := service.SweepExpired(tc.auths, tc.now)
 			assert.Equal(t, tc.expectedResult1, actualResult1)
 			assert.Equal(t, tc.expectedResult2, actualResult2)
@@ -854,6 +904,7 @@ func TestRequireAction(t *testing.T) {
 				a := live
 				a.Status = valueobject.AuthRequiresAction
 				a.RequiresAction = true
+
 				return a
 			}(),
 			expectedError: nil,
@@ -864,12 +915,14 @@ func TestRequireAction(t *testing.T) {
 				a := live
 				a.CapturedMinor = 6000
 				a.Status = valueobject.AuthPartiallyCaptured
+
 				return a
 			}(),
 			expectedResult: func() service.Authorization {
 				a := live
 				a.CapturedMinor = 6000
 				a.Status = valueobject.AuthPartiallyCaptured
+
 				return a
 			}(),
 			expectedError: &entity.Error{Code: "SCA_STATE_INVALID", Message: "challenge can start only from an authorized payment"},
@@ -878,6 +931,8 @@ func TestRequireAction(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.RequireAction(tc.a)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -915,6 +970,7 @@ func TestResolveAction(t *testing.T) {
 				a := live
 				a.Status = valueobject.AuthRequiresAction
 				a.RequiresAction = true
+
 				return a
 			}(),
 			succeeded:      true,
@@ -927,12 +983,14 @@ func TestResolveAction(t *testing.T) {
 				a := live
 				a.Status = valueobject.AuthRequiresAction
 				a.RequiresAction = true
+
 				return a
 			}(),
 			succeeded: false,
 			expectedResult: func() service.Authorization {
 				a := live
 				a.Status = valueobject.AuthVoided
+
 				return a
 			}(),
 			expectedError: nil,
@@ -948,6 +1006,8 @@ func TestResolveAction(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.ResolveAction(tc.a, tc.succeeded)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)

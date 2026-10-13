@@ -2,6 +2,7 @@ package command_test
 
 import (
 	"context"
+	"maps"
 	"testing"
 	"time"
 
@@ -14,8 +15,10 @@ import (
 )
 
 func newPeriodService(t *testing.T, uow port.UnitOfWork, periods command.PeriodStore, breaks command.ReconStore, authz port.Authorizer) *command.PeriodService {
+	t.Helper()
+
 	return command.NewPeriodService(command.PeriodServiceParams{
-		UoW: uow, Periods: periods, Breaks: breaks, Clock: newMockClock(t, tfrAt),
+		UoW: uow, Periods: periods, Breaks: breaks, Clock: newMockClock(t, tfrAt()),
 		IDs: newMockIDGenerator(t, tfrTestIDs(40)...), Authz: authz,
 	})
 }
@@ -23,7 +26,7 @@ func newPeriodService(t *testing.T, uow port.UnitOfWork, periods command.PeriodS
 func periodTestRequest() port.PeriodRequest {
 	return port.PeriodRequest{
 		TenantID: tfrTenant, LedgerID: tfrLedger, PeriodID: "2026-09",
-		Start: opsAt.Add(-30 * 24 * time.Hour), End: opsAt, Timezone: "UTC",
+		Start: opsAt().Add(-30 * 24 * time.Hour), End: opsAt(), Timezone: "UTC",
 		Approver: "u-2", Actor: "u-1",
 		UnresolvedWorkflows: 0, SubledgerDeltas: map[string]int64{}, FXRevalued: true,
 	}
@@ -53,6 +56,7 @@ func TestPeriodOpen(t *testing.T) {
 			req: func() port.PeriodRequest {
 				r := baseReq
 				r.TenantID = ""
+
 				return r
 			}(),
 			denied:        false,
@@ -63,6 +67,7 @@ func TestPeriodOpen(t *testing.T) {
 			req: func() port.PeriodRequest {
 				r := baseReq
 				r.LedgerID = ""
+
 				return r
 			}(),
 			denied:        false,
@@ -73,6 +78,7 @@ func TestPeriodOpen(t *testing.T) {
 			req: func() port.PeriodRequest {
 				r := baseReq
 				r.PeriodID = ""
+
 				return r
 			}(),
 			denied:        false,
@@ -83,6 +89,7 @@ func TestPeriodOpen(t *testing.T) {
 			req: func() port.PeriodRequest {
 				r := baseReq
 				r.Actor = ""
+
 				return r
 			}(),
 			denied:        false,
@@ -93,6 +100,7 @@ func TestPeriodOpen(t *testing.T) {
 			req: func() port.PeriodRequest {
 				r := baseReq
 				r.Start = time.Time{}
+
 				return r
 			}(),
 			denied:        false,
@@ -103,6 +111,7 @@ func TestPeriodOpen(t *testing.T) {
 			req: func() port.PeriodRequest {
 				r := baseReq
 				r.End = r.Start.Add(-time.Hour)
+
 				return r
 			}(),
 			denied:        false,
@@ -113,6 +122,7 @@ func TestPeriodOpen(t *testing.T) {
 			req: func() port.PeriodRequest {
 				r := baseReq
 				r.Timezone = ""
+
 				return r
 			}(),
 			denied:        false,
@@ -128,17 +138,21 @@ func TestPeriodOpen(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t)
 			periods := newMockPeriodStore(t)
 			breaks := newMockReconStore(t)
+
 			authz := newMockAuthorizer(t)
 			if tc.denied {
 				setAuthzDenied(authz, tc.req.Actor+"|period.open|ledger/"+string(tc.req.LedgerID))
 			}
+
 			svc := newPeriodService(t, uow, periods, breaks, authz)
 
 			err := svc.OpenPeriod(context.Background(), tc.req)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				replayErr := svc.OpenPeriod(context.Background(), tc.req)
 				assert.NoError(t, replayErr)
@@ -200,6 +214,7 @@ func TestPeriodClose(t *testing.T) {
 			req: func() port.PeriodRequest {
 				r := baseReq
 				r.SubledgerDeltas = map[string]int64{"sub-1": 100}
+
 				return r
 			}(),
 			preload: func(periods command.PeriodStore) {
@@ -217,6 +232,7 @@ func TestPeriodClose(t *testing.T) {
 				r := baseReq
 				r.UnresolvedWorkflows = 3
 				r.FXRevalued = false
+
 				return r
 			}(),
 			preload: func(periods command.PeriodStore) {
@@ -244,30 +260,39 @@ func TestPeriodClose(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t)
 			periods := newMockPeriodStore(t)
 			tc.preload(periods)
 			breaks := newMockReconStoreWithOpenBreaks(t, tc.openBreaks)
+
 			authz := newMockAuthorizer(t)
 			if tc.denied {
 				setAuthzDenied(authz, tc.req.Actor+"|period.close|ledger/"+string(tc.req.LedgerID))
 			}
+
 			svc := newPeriodService(t, uow, periods, breaks, authz)
 
 			err := svc.ClosePeriod(context.Background(), tc.req)
 			if tc.name == "dirty close reports every failing code" {
 				require.Error(t, err)
+
 				for _, code := range []string{"WORKFLOWS_PENDING", "BREAKS_OPEN", "FX_NOT_REVALUED"} {
 					assert.Contains(t, err.Error(), code)
 				}
+
 				return
 			}
+
 			if tc.expectedError != nil && (tc.name == "already closed period rejected" || tc.name == "unbalanced subledgers rejected") {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tc.expectedError.Error())
+
 				return
 			}
+
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				replayErr := svc.ClosePeriod(context.Background(), tc.req)
 				assert.NoError(t, replayErr)
@@ -317,6 +342,7 @@ func TestPeriodReopen(t *testing.T) {
 			req: func() port.PeriodRequest {
 				r := baseReq
 				r.Approver = r.Actor
+
 				return r
 			}(),
 			preload: func(periods command.PeriodStore) {
@@ -350,18 +376,23 @@ func TestPeriodReopen(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t)
 			periods := newMockPeriodStore(t)
 			tc.preload(periods)
+
 			breaks := newMockReconStore(t)
+
 			authz := newMockAuthorizer(t)
 			if tc.denied {
 				setAuthzDenied(authz, tc.req.Actor+"|period.reopen|ledger/"+string(tc.req.LedgerID))
 			}
+
 			svc := newPeriodService(t, uow, periods, breaks, authz)
 
 			err := svc.ReopenPeriod(context.Background(), tc.req)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				replayErr := svc.ReopenPeriod(context.Background(), tc.req)
 				assert.NoError(t, replayErr)
@@ -415,6 +446,7 @@ func TestReportGenerate(t *testing.T) {
 			req: func() port.ReportRequest {
 				r := baseReq
 				r.Template = "income-statement"
+
 				return r
 			}(),
 			preload:       func(_ port.UnitOfWork) {},
@@ -426,6 +458,7 @@ func TestReportGenerate(t *testing.T) {
 			req: func() port.ReportRequest {
 				r := baseReq
 				r.TenantID = ""
+
 				return r
 			}(),
 			preload:       func(_ port.UnitOfWork) {},
@@ -437,6 +470,7 @@ func TestReportGenerate(t *testing.T) {
 			req: func() port.ReportRequest {
 				r := baseReq
 				r.Template = "fortune-cookie"
+
 				return r
 			}(),
 			preload:       func(_ port.UnitOfWork) {},
@@ -448,6 +482,7 @@ func TestReportGenerate(t *testing.T) {
 			req: func() port.ReportRequest {
 				r := baseReq
 				r.Actor = ""
+
 				return r
 			}(),
 			preload:       func(_ port.UnitOfWork) {},
@@ -459,6 +494,7 @@ func TestReportGenerate(t *testing.T) {
 			req: func() port.ReportRequest {
 				r := baseReq
 				r.IdempotencyKey = ""
+
 				return r
 			}(),
 			preload:       func(_ port.UnitOfWork) {},
@@ -476,26 +512,33 @@ func TestReportGenerate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t)
 			reports := newMockReportStore(t)
 			storage := newMockObjectStorage(t)
+
 			tc.preload(uow)
+
 			authz := newMockAuthorizer(t)
 			if tc.denied {
 				setAuthzDenied(authz, tc.req.Actor+"|report.generate|tenant/"+string(tc.req.TenantID))
 			}
+
 			svc := command.NewReportService(command.ReportServiceParams{
-				UoW: uow, Reports: reports, Storage: storage, Clock: newMockClock(t, tfrAt),
+				UoW: uow, Reports: reports, Storage: storage, Clock: newMockClock(t, tfrAt()),
 				IDs: newMockIDGenerator(t, tfrTestIDs(40)...), Authz: authz,
 			})
 			actualResult, err := svc.GenerateReport(context.Background(), tc.req)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError != nil {
 				return
 			}
+
 			assert.Equal(t, command.ReportReady, actualResult.Status)
 			assert.Contains(t, actualResult.SignedURL, "https://cdn.example/")
 			assert.Contains(t, outboxTypes(uow), command.EventReportGenerated)
+
 			stored, findErr := reports.FindReport(context.Background(), tfrTenant, actualResult.ReportID)
 			require.NoError(t, findErr)
 			assert.Equal(t, tc.req.Template, stored.Template)
@@ -535,10 +578,11 @@ func TestReportStatusAndListTemplates(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			reports := newMockReportStore(t)
 			storage := newMockObjectStorage(t)
 			svc := command.NewReportService(command.ReportServiceParams{
-				UoW: newMockUOW(t), Reports: reports, Storage: storage, Clock: newMockClock(t, tfrAt),
+				UoW: newMockUOW(t), Reports: reports, Storage: storage, Clock: newMockClock(t, tfrAt()),
 				IDs: newMockIDGenerator(t, tfrTestIDs(40)...), Authz: newMockAuthorizer(t),
 			})
 
@@ -554,6 +598,7 @@ func TestReportStatusAndListTemplates(t *testing.T) {
 
 			res, err := svc.ReportStatus(context.Background(), tfrTenant, tc.reportID)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, tc.reportID, res.ReportID)
 				assert.Equal(t, command.ReportReady, res.Status)
@@ -564,7 +609,7 @@ func TestReportStatusAndListTemplates(t *testing.T) {
 	// Verify ListTemplates returns all known report templates
 	svc := command.NewReportService(command.ReportServiceParams{})
 	templates := svc.ListTemplates()
-	assert.Equal(t, command.ReportTemplates, templates)
+	assert.Equal(t, command.ReportTemplates(), templates)
 }
 
 func TestComplianceRecordScreeningDecision(t *testing.T) {
@@ -598,6 +643,7 @@ func TestComplianceRecordScreeningDecision(t *testing.T) {
 			req: func() port.ScreeningRequest {
 				r := baseReq
 				r.TenantID = ""
+
 				return r
 			}(),
 			denied:        false,
@@ -608,6 +654,7 @@ func TestComplianceRecordScreeningDecision(t *testing.T) {
 			req: func() port.ScreeningRequest {
 				r := baseReq
 				r.SubjectID = ""
+
 				return r
 			}(),
 			denied:        false,
@@ -618,6 +665,7 @@ func TestComplianceRecordScreeningDecision(t *testing.T) {
 			req: func() port.ScreeningRequest {
 				r := baseReq
 				r.Decision = ""
+
 				return r
 			}(),
 			denied:        false,
@@ -628,6 +676,7 @@ func TestComplianceRecordScreeningDecision(t *testing.T) {
 			req: func() port.ScreeningRequest {
 				r := baseReq
 				r.Actor = ""
+
 				return r
 			}(),
 			denied:        false,
@@ -638,6 +687,7 @@ func TestComplianceRecordScreeningDecision(t *testing.T) {
 			req: func() port.ScreeningRequest {
 				r := baseReq
 				r.IdempotencyKey = ""
+
 				return r
 			}(),
 			denied:        false,
@@ -653,20 +703,24 @@ func TestComplianceRecordScreeningDecision(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t)
 			store := newMockComplianceStore(t)
 			storage := newMockObjectStorage(t)
+
 			authz := newMockAuthorizer(t)
 			if tc.denied {
 				setAuthzDenied(authz, tc.req.Actor+"|compliance.review|tenant/"+string(tc.req.TenantID))
 			}
+
 			svc := command.NewComplianceService(command.ComplianceServiceParams{
-				UoW: uow, Reviews: store, Storage: storage, Clock: newMockClock(t, tfrAt),
+				UoW: uow, Reviews: store, Storage: storage, Clock: newMockClock(t, tfrAt()),
 				IDs: newMockIDGenerator(t, tfrTestIDs(40)...), Authz: authz,
 			})
 
 			err := svc.RecordScreeningDecision(context.Background(), tc.req)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				replayErr := svc.RecordScreeningDecision(context.Background(), tc.req)
 				assert.NoError(t, replayErr)
@@ -710,6 +764,7 @@ func TestComplianceExportRegulatoryReport(t *testing.T) {
 			req: func() port.RegulatoryExportRequest {
 				r := baseReq
 				r.TenantID = ""
+
 				return r
 			}(),
 			denied:        false,
@@ -720,6 +775,7 @@ func TestComplianceExportRegulatoryReport(t *testing.T) {
 			req: func() port.RegulatoryExportRequest {
 				r := baseReq
 				r.Actor = ""
+
 				return r
 			}(),
 			denied:        false,
@@ -730,6 +786,7 @@ func TestComplianceExportRegulatoryReport(t *testing.T) {
 			req: func() port.RegulatoryExportRequest {
 				r := baseReq
 				r.IdempotencyKey = ""
+
 				return r
 			}(),
 			denied:        false,
@@ -740,6 +797,7 @@ func TestComplianceExportRegulatoryReport(t *testing.T) {
 			req: func() port.RegulatoryExportRequest {
 				r := baseReq
 				r.ReportType = "FORM_ZZZ"
+
 				return r
 			}(),
 			denied:        false,
@@ -750,11 +808,10 @@ func TestComplianceExportRegulatoryReport(t *testing.T) {
 			req: func() port.RegulatoryExportRequest {
 				r := baseReq
 				fields := make(map[string]string, len(baseReq.Fields))
-				for k, v := range baseReq.Fields {
-					fields[k] = v
-				}
+				maps.Copy(fields, baseReq.Fields)
 				delete(fields, "period_start")
 				r.Fields = fields
+
 				return r
 			}(),
 			denied:        false,
@@ -770,22 +827,27 @@ func TestComplianceExportRegulatoryReport(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t)
 			store := newMockComplianceStore(t)
 			storage := newMockObjectStorage(t)
+
 			authz := newMockAuthorizer(t)
 			if tc.denied {
 				setAuthzDenied(authz, tc.req.Actor+"|compliance.export|tenant/"+string(tc.req.TenantID))
 			}
+
 			svc := command.NewComplianceService(command.ComplianceServiceParams{
-				UoW: uow, Reviews: store, Storage: storage, Clock: newMockClock(t, tfrAt),
+				UoW: uow, Reviews: store, Storage: storage, Clock: newMockClock(t, tfrAt()),
 				IDs: newMockIDGenerator(t, tfrTestIDs(40)...), Authz: authz,
 			})
 
 			result, err := svc.ExportRegulatoryReport(context.Background(), tc.req)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, command.ReportReady, result.Status)
+
 				replayResult, replayErr := svc.ExportRegulatoryReport(context.Background(), tc.req)
 				assert.NoError(t, replayErr)
 				assert.Equal(t, result.ReportID, replayResult.ReportID)

@@ -36,8 +36,8 @@ func Struct(scope, label string, params any) error {
 			parts = append(parts, fmt.Sprintf("%s: rule %q on value %v", fe.Field(), fe.Tag(), fe.Value()))
 		}
 
-		return fmt.Errorf("%s: invalid %s (%d violation(s)): %s",
-			scope, label, len(parts), strings.Join(parts, "; "))
+		return fmt.Errorf("%s: invalid %s (%d violation(s)): %s: %w",
+			scope, label, len(parts), strings.Join(parts, "; "), ErrValidateViolation)
 	}
 
 	return nil

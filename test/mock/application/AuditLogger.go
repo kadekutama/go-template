@@ -49,7 +49,7 @@ type MockAuditLogger_Record_Call struct {
 // Record is a helper method to define mock.On call
 //   - ctx context.Context
 //   - entry port.AuditEntry
-func (_e *MockAuditLogger_Expecter) Record(ctx interface{}, entry interface{}) *MockAuditLogger_Record_Call {
+func (_e *MockAuditLogger_Expecter) Record(ctx any, entry any) *MockAuditLogger_Record_Call {
 	return &MockAuditLogger_Record_Call{Call: _e.mock.On("Record", ctx, entry)}
 }
 

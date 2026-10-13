@@ -1,7 +1,6 @@
 package tracing
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 )
@@ -26,24 +25,30 @@ type Config struct {
 // Validate ensures all required configuration values are present and well-formed.
 func (c Config) Validate() error {
 	if strings.TrimSpace(c.ServiceName) == "" {
-		return errors.New("tracing: ServiceName is required")
+		return ErrTracingServiceNameIsRequired
 	}
+
 	if strings.TrimSpace(c.ServiceVersion) == "" {
-		return errors.New("tracing: ServiceVersion is required")
+		return ErrTracingServiceVersionIsRequired
 	}
+
 	if c.SampleRatio <= 0 || c.SampleRatio > 1 {
-		return fmt.Errorf("tracing: SampleRatio %v out of (0,1]", c.SampleRatio)
+		return fmt.Errorf("tracing: SampleRatio %v out of (0,1]: %w", c.SampleRatio, ErrTracingSampleRatioOutOf01)
 	}
+
 	if len(c.ExcludedRoutes) == 0 {
-		return errors.New("tracing: ExcludedRoutes is required")
+		return ErrTracingExcludedRoutesIsRequired
 	}
+
 	for _, r := range c.ExcludedRoutes {
 		if strings.TrimSpace(r) == "" {
-			return errors.New("tracing: excluded route must not be blank")
+			return ErrTracingExcludedRouteMustNotBeBlank
 		}
 	}
+
 	if strings.TrimSpace(c.OTLPEndpoint) == "" && strings.EqualFold(c.Env, "production") {
-		return errors.New("tracing: production requires OTLPEndpoint (refusing silent no-op)")
+		return ErrTracingProductionRequiresOTLPEndpointRefusingSilentNoOp
 	}
+
 	return nil
 }

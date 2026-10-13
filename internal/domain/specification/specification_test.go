@@ -27,11 +27,11 @@ const (
 )
 
 func passSpec() specification.Specification[string] {
-	return specification.NewFuncSpec[string]("PASS", "passes", func(_ context.Context, _ string) bool { return true })
+	return specification.NewFuncSpec("PASS", "passes", func(_ context.Context, _ string) bool { return true })
 }
 
 func failSpec(code string) specification.Specification[string] {
-	return specification.NewFuncSpec[string](code, "fails "+code, func(_ context.Context, _ string) bool { return false })
+	return specification.NewFuncSpec(code, "fails "+code, func(_ context.Context, _ string) bool { return false })
 }
 
 func violationCodes(res specification.SpecResult) []string {
@@ -39,6 +39,7 @@ func violationCodes(res specification.SpecResult) []string {
 	for _, v := range res.Violations {
 		out = append(out, v.Code)
 	}
+
 	return out
 }
 
@@ -62,7 +63,7 @@ func TestAll(t *testing.T) {
 		{
 			name:                   "every child passes",
 			ctx:                    context.Background(),
-			spec:                   specification.All[string](passSpec(), passSpec()),
+			spec:                   specification.All(passSpec(), passSpec()),
 			candidate:              "c",
 			expectedPassed:         true,
 			expectedViolationCodes: nil,
@@ -70,7 +71,7 @@ func TestAll(t *testing.T) {
 		{
 			name:                   "aggregates every violation in order",
 			ctx:                    context.Background(),
-			spec:                   specification.All[string](passSpec(), failSpec(testCodeEA), failSpec(testCodeEB)),
+			spec:                   specification.All(passSpec(), failSpec(testCodeEA), failSpec(testCodeEB)),
 			candidate:              "c",
 			expectedPassed:         false,
 			expectedViolationCodes: []string{testCodeEA, testCodeEB},
@@ -87,10 +88,13 @@ func TestAll(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			res := tc.spec.Evaluate(tc.ctx, tc.candidate)
 			if tc.expectedPassed != res.Passed() {
 				t.Fatalf("expected passed %v, got %v", tc.expectedPassed, res.Passed())
 			}
+
 			if !equalCodes(violationCodes(res), tc.expectedViolationCodes) {
 				t.Fatalf("expected violation codes %v, got %v", tc.expectedViolationCodes, violationCodes(res))
 			}
@@ -114,7 +118,7 @@ func TestAny(t *testing.T) {
 		{
 			name:                   "short-circuits on first pass",
 			ctx:                    context.Background(),
-			spec:                   specification.Any[string](failSpec("E_A"), failSpec("E_B"), passSpec()),
+			spec:                   specification.Any(failSpec("E_A"), failSpec("E_B"), passSpec()),
 			candidate:              "c",
 			expectedPassed:         true,
 			expectedViolationCodes: nil,
@@ -122,7 +126,7 @@ func TestAny(t *testing.T) {
 		{
 			name:                   "aggregates when all fail",
 			ctx:                    context.Background(),
-			spec:                   specification.Any[string](failSpec("E_A"), failSpec("E_B")),
+			spec:                   specification.Any(failSpec("E_A"), failSpec("E_B")),
 			candidate:              "c",
 			expectedPassed:         false,
 			expectedViolationCodes: []string{"E_A", "E_B"},
@@ -139,10 +143,13 @@ func TestAny(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			res := tc.spec.Evaluate(tc.ctx, tc.candidate)
 			if tc.expectedPassed != res.Passed() {
 				t.Fatalf("expected passed %v, got %v", tc.expectedPassed, res.Passed())
 			}
+
 			if !equalCodes(violationCodes(res), tc.expectedViolationCodes) {
 				t.Fatalf("expected violation codes %v, got %v", tc.expectedViolationCodes, violationCodes(res))
 			}
@@ -168,7 +175,7 @@ func TestNot(t *testing.T) {
 		{
 			name:                   "inverts failing child to pass",
 			ctx:                    context.Background(),
-			spec:                   specification.Not[string](failSpec("E_X"), explicit),
+			spec:                   specification.Not(failSpec("E_X"), explicit),
 			candidate:              "c",
 			expectedPassed:         true,
 			expectedViolationCodes: nil,
@@ -176,7 +183,7 @@ func TestNot(t *testing.T) {
 		{
 			name:                   "inverts passing child to fail",
 			ctx:                    context.Background(),
-			spec:                   specification.Not[string](passSpec(), explicit),
+			spec:                   specification.Not(passSpec(), explicit),
 			candidate:              "c",
 			expectedPassed:         false,
 			expectedViolationCodes: []string{"NOT_OK"},
@@ -185,10 +192,13 @@ func TestNot(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			res := tc.spec.Evaluate(tc.ctx, tc.candidate)
 			if tc.expectedPassed != res.Passed() {
 				t.Fatalf("expected passed %v, got %v", tc.expectedPassed, res.Passed())
 			}
+
 			if !equalCodes(violationCodes(res), tc.expectedViolationCodes) {
 				t.Fatalf("expected violation codes %v, got %v", tc.expectedViolationCodes, violationCodes(res))
 			}
@@ -199,7 +209,7 @@ func TestNot(t *testing.T) {
 func TestNilSafety(t *testing.T) {
 	t.Parallel()
 
-	nilSafe := specification.NewFuncSpec[*string]("NIL_SAFE", "nil rejected", func(_ context.Context, s *string) bool {
+	nilSafe := specification.NewFuncSpec("NIL_SAFE", "nil rejected", func(_ context.Context, s *string) bool {
 		return s != nil && *s != ""
 	})
 
@@ -252,7 +262,7 @@ func TestNilSafety(t *testing.T) {
 			name: "All with nil candidate fails without panic",
 			ctx:  context.Background(),
 			eval: func(ctx context.Context) specification.SpecResult {
-				return specification.All[*string](nilSafe).Evaluate(ctx, nil)
+				return specification.All(nilSafe).Evaluate(ctx, nil)
 			},
 			expectedPassed:         false,
 			expectedViolationCodes: []string{"NIL_SAFE"},
@@ -261,15 +271,19 @@ func TestNilSafety(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			defer func() {
 				if r := recover(); r != nil {
 					t.Fatalf("unexpected panic: %v", r)
 				}
 			}()
+
 			res := tc.eval(tc.ctx)
 			if tc.expectedPassed != res.Passed() {
 				t.Fatalf("expected passed %v, got %v", tc.expectedPassed, res.Passed())
 			}
+
 			if !equalCodes(violationCodes(res), tc.expectedViolationCodes) {
 				t.Fatalf("expected violation codes %v, got %v", tc.expectedViolationCodes, violationCodes(res))
 			}
@@ -279,27 +293,34 @@ func TestNilSafety(t *testing.T) {
 
 func TestConcurrentReuseIsRaceSafe(t *testing.T) {
 	t.Parallel()
+
 	ctx := context.Background()
-	shared := specification.All[string](passSpec(), failSpec("E_A"), failSpec("E_B"))
-	const workers = 8
-	const iters = 50
+	shared := specification.All(passSpec(), failSpec("E_A"), failSpec("E_B"))
+
+	const (
+		workers = 8
+		iters   = 50
+	)
+
 	var wg sync.WaitGroup
+
 	errs := make(chan string, workers*iters)
-	for w := 0; w < workers; w++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for i := 0; i < iters; i++ {
+	for range workers {
+		wg.Go(func() {
+			for range iters {
 				res := shared.Evaluate(ctx, "c")
 				if res.Passed() || !equalCodes(violationCodes(res), []string{testCodeEA, testCodeEB}) {
 					errs <- "inconsistent concurrent evaluation"
+
 					return
 				}
 			}
-		}()
+		})
 	}
+
 	wg.Wait()
 	close(errs)
+
 	for e := range errs {
 		t.Fatal(e)
 	}
@@ -307,18 +328,22 @@ func TestConcurrentReuseIsRaceSafe(t *testing.T) {
 
 func TestViolationDetailsAreCopied(t *testing.T) {
 	t.Parallel()
+
 	ctx := context.Background()
 	details := map[string]string{"field": testFieldAmount}
-	withDetails := specification.Not[string](
+	withDetails := specification.Not(
 		passSpec(),
 		specification.Violation{Code: "D", Message: "m", Details: details},
 	)
+
 	res := withDetails.Evaluate(ctx, "c")
 	if res.Passed() || res.Violations[0].Details["field"] != testFieldAmount {
 		t.Fatalf("expected copied details, got %+v", res)
 	}
+
 	details["field"] = "mutated"
 	res.Violations[0].Details["field"] = "mutated-again"
+
 	res2 := withDetails.Evaluate(ctx, "c")
 	if res2.Violations[0].Details["field"] != testFieldAmount {
 		t.Fatalf("violation details aliased across evaluations: %+v", res2)

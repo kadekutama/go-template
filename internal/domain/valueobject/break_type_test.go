@@ -1,7 +1,7 @@
 package valueobject_test
 
 import (
-	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -54,30 +54,32 @@ func TestParseBreakType(t *testing.T) {
 			name:           "invalid type",
 			s:              "UNKNOWN",
 			expectedResult: valueobject.BreakType(""),
-			expectedError:  errors.New(`reconciliation: invalid break type "UNKNOWN"`),
+			expectedError:  fmt.Errorf("reconciliation: invalid break type %q: %w", "UNKNOWN", valueobject.ErrReconciliationInvalidBreakType),
 		},
 		{
 			name:           "empty type",
 			s:              "",
 			expectedResult: valueobject.BreakType(""),
-			expectedError:  errors.New(`reconciliation: invalid break type ""`),
+			expectedError:  fmt.Errorf("reconciliation: invalid break type %q: %w", "", valueobject.ErrReconciliationInvalidBreakType),
 		},
 		{
 			name:           "lowercase rejected",
 			s:              "duplicate",
 			expectedResult: valueobject.BreakType(""),
-			expectedError:  errors.New(`reconciliation: invalid break type "duplicate"`),
+			expectedError:  fmt.Errorf("reconciliation: invalid break type %q: %w", "duplicate", valueobject.ErrReconciliationInvalidBreakType),
 		},
 		{
 			name:           "whitespace type",
 			s:              "   ",
 			expectedResult: valueobject.BreakType(""),
-			expectedError:  errors.New(`reconciliation: invalid break type "   "`),
+			expectedError:  fmt.Errorf("reconciliation: invalid break type %q: %w", "   ", valueobject.ErrReconciliationInvalidBreakType),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := valueobject.ParseBreakType(tc.s)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)

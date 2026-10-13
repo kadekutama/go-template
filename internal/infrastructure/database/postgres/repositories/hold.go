@@ -26,7 +26,7 @@ type HoldRepository struct {
 // NewHoldRepository builds the adapter; DB must be non-nil.
 func NewHoldRepository(params HoldRepositoryParams) (*HoldRepository, error) {
 	if params.DB == nil {
-		return nil, fmt.Errorf("postgres: hold repository needs DB")
+		return nil, ErrPostgresHoldRepositoryNeedsDB
 	}
 
 	return &HoldRepository{db: params.DB}, nil
@@ -63,7 +63,7 @@ func (r *HoldRepository) FindByID(
 	id valueobject.HoldID,
 ) (entity.HoldData, error) {
 	if tenant.String() == "" {
-		return entity.HoldData{}, fmt.Errorf("postgres: tenant is required")
+		return entity.HoldData{}, ErrPostgresTenantIsRequired
 	}
 
 	if err := scopeTenant(ctx, r.db, tenant); err != nil {
@@ -91,7 +91,7 @@ func (r *HoldRepository) FindActiveByAccount(
 	account valueobject.AccountID,
 ) ([]entity.HoldData, error) {
 	if tenant.String() == "" {
-		return nil, fmt.Errorf("postgres: tenant is required")
+		return nil, ErrPostgresTenantIsRequired
 	}
 
 	if err := scopeTenant(ctx, r.db, tenant); err != nil {

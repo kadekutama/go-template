@@ -5,6 +5,15 @@ permissions:
   - action: read
     resource: "*"
     effect: allow
+  - action: read
+    resource: "*.env"
+    effect: ask
+  - action: read
+    resource: "*.env.*"
+    effect: ask
+  - action: read
+    resource: "*.env.example"
+    effect: allow
   - action: glob
     resource: "*"
     effect: allow
@@ -38,6 +47,36 @@ permissions:
   - action: shell
     resource: "python3 tasks/scripts/test_check_tasks.py*"
     effect: ask
+  - action: shell
+    resource: "make*"
+    effect: ask
+  - action: shell
+    resource: "pwd*"
+    effect: ask
+  - action: shell
+    resource: "ls*"
+    effect: ask
+  - action: shell
+    resource: "find*"
+    effect: ask
+  - action: shell
+    resource: "head*"
+    effect: ask
+  - action: shell
+    resource: "tail*"
+    effect: ask
+  - action: shell
+    resource: "cat*"
+    effect: ask
+  - action: shell
+    resource: "wc*"
+    effect: ask
+  - action: shell
+    resource: "file*"
+    effect: ask
+  - action: shell
+    resource: "stat*"
+    effect: ask
   - action: subagent
     resource: "*"
     effect: deny
@@ -64,9 +103,20 @@ For each reviewed task, persist one report at `tasks/reviews/<TASK-ID>.md`. Use 
 1. Read the packet: confirm `Review Requirement` is `self` or `independent`.
 2. Confirm `tasks/reviews/<TASK-ID>.md` appears as a whole path token under the packet's `**Owns:**`.
 3. Confirm the task claim is active and covers the report path.
-4. Write the report, then re-read the file to confirm it saved completely.
+4. If steps 1–3 pass, immediately invoke this harness's file-edit tool to create
+   the full template report if absent. If it already exists, first read it and
+   preserve its history: use the edit operation to append new finding cards with
+   unique IDs in `## Findings` and dated review/adjudication entries under
+   `## Resolution Notes` as applicable. Make only the smallest section-local
+   edit; never replace or truncate the report or another role's entries.
+   Do not stop at offering report text in chat or ask separately in chat for
+   approval; the harness's configured permission and any interactive approval
+   it requires gate this exact operation. After the tool succeeds, re-read the
+   report with the available file-read tool and confirm the saved contents. If
+   the tool is unavailable, the request is denied, or the approval target differs
+   from this report, stop and state that exact failure; never claim persistence.
 5. You cannot edit handoffs (tool permissions forbid it): output the exact markdown lines the task owner must add under the handoff's `## Code Review` section, so `--sdd` passes once they apply them.
-6. Only if step 1, 2, or 3 fails: complete the review in your response, quote the failed check with the file and line proving it (for example the packet lines showing no `Review Requirement`, the claim status line showing it is released, or the `Owns:` stanza without the path), state persistence was blocked, and name the packet or claim change that would unblock it.
+6. If step 1, 2, or 3 fails, do not invoke any write tool; complete the review in your response, quote the failed check with the file and line proving it (for example the packet lines showing no `Review Requirement`, the claim status line showing it is released, or the `Owns:` stanza without the path), state persistence was blocked, and name the packet or claim change that would unblock it. If step 4 fails after authorization passed, report the exact tool or approval failure and do not claim persistence; do not misstate it as an SDD authorization failure.
 
 Do not create an unclaimed file. An optional epic-level index may link task reports; do not duplicate their findings. Where the review path is not yet authorized and the claim permits writing the task evidence file, the `## Code Review` fallback below applies; otherwise it falls under step 6.
 
@@ -85,10 +135,22 @@ Check each applicable area. This is a coverage order, not an automatic severity 
 1. **Plan and contract fidelity:** Verify packet requirements and scenario IDs, allowed change surface, API/schema compatibility, and generated-code freshness where applicable.
 2. **Correctness and regressions:** Trace behavior through relevant surrounding code. Check state transitions, idempotency, ordering, failure handling, and applicable boundary cases, such as nil, empty, zero, negative, maximum values, and overflow.
 3. **Ledger correctness:** If financial behavior is touched, check `docs/ledger-core.md` and applicable accepted ADRs, including balanced postings per currency, positive minor-unit entries, immutability, tenant/ledger scope, holds versus postings, and workflow states versus Posting states.
-4. **Architecture and Go practices:** Check dependency direction, stdlib-only domain imports, narrow consumer-owned ports, CQRS boundaries, fx wiring where applicable, and the repository’s Go conventions. Treat SOLID as a design test, not a reason to require an interface for every type.
+4. **Architecture and Go practices:** Read `docs/architecture/clean-architecture-guide.md` and `docs/development/go-conventions.md` for the affected layers. Check dependency direction, stdlib-only domain imports, narrow consumer-owned ports, CQRS boundaries, private service dependencies and the `*Params` constructor pattern, fx wiring where applicable, Go error/context/validation idioms, and the repository's 64-byte/register-ABI receiver guidance plus semantic overrides for mutation, locks/atomics, and service identity. Treat SOLID as a design test, not a reason to require an interface for every type; any finding must cite a concrete dependency or behavior failure, not say only “violates SOLID.”
 5. **Reliability and security:** Where relevant, inspect concurrency, resource ownership, context cancellation, timeouts, bounded retries and idempotency, panic boundaries, authorization, tenant identity, validation, injection, and secrets handling. Apply OWASP Top 10:2025 considerations to relevant changes.
-6. **Tests:** Evaluate whether tests prove behavior and important failure cases—not whether they maximize coverage percentage. Follow `AGENTS.md` test conventions where applicable: locally scoped `testCase`, signature-matching fields, multi-line cases, parent `t.Parallel()`, and no obsolete `tc := tc` or parallel subtests.
+ 6. **Tests:** Evaluate whether tests prove behavior and important failure cases—not whether they maximize coverage percentage. Apply `AGENTS.md`'s Unit Test Structure and Scoping Policy and `docs/development/go-conventions.md`: locally scoped `testCase`, exact signature-matching fields (not `input`/`want`), no one-use variants outside the table, multiline entries, `t.Parallel()` first in each safe parent and each independent/safe table subtest, `t.Cleanup` for parent resources used by parallel children, use of the range value in `t.Run`, and no obsolete `tc := tc` under Go 1.27. Verify mutable fixtures and external resources are isolated; accept sequential subtests only with a concrete shared-state/order reason. Check applicable zero/negative/overflow/invalid-transition/stale cases. For every changed unit-test function in the diff, inspect the function under test's declaration, identify its return arity, and verify one assertion per returned value in each table case, with all behavior assertions inside the matching table subtest. A `(result, error)` signature gets two assertions; five returned values get five. Compare aggregate returns as one value and flag extra, duplicate, field-by-field, implementation-detail, or out-of-loop assertions. Report a violation with the exact test path/function and rule; do not substitute generic “test style” criticism.
 7. **SDD and documentation:** Check task, claim, handoff, and evidence state and relevant docs. ADRs are expected for architectural decisions or deviations, not automatically for every task.
+8. **Configuration and primitive reuse:** When a diff introduces or changes a deployment/runtime setting, trace it through `internal/infrastructure/config/config.go`, `config/config.yaml`, `config/schemas/config.json`, and relevant loader/schema-alignment tests. Flag a Go constant only when the packet shows the value is runtime-configurable; distinguish fixed domain/protocol invariants. Before alleging duplicate clocks, time sources, errors, validators, or wrappers, search for existing repository implementations and compare semantics. Prefer the correct existing layer primitive (`kernel.Clock`/`port.Clock`, domain `entity.Error`, or `apperror.AppError`; see `internal/shared/kernel/clock.go`, `internal/application/port/clock.go`, `internal/domain/entity/errors.go`, and `internal/shared/kernel/error/app_error.go`); do not treat distinct domain/application error roles as duplication. Cite both implementations and the duplicate behavior in any finding.
+
+For the test audit, enumerate every changed test function by path/name and record its target signature, return arity, assertion count/placement result, and any packet-authorized exception. Do not sample selected tests or leave the user to identify obvious convention violations; explicitly record no violation for each test that passes the audit.
+
+## Modernization diagnostics
+
+- Review Go changes against the complete golangci-lint `modernize` suite and
+  gopls Hint-level diagnostics. Verify the lint configuration does not disable
+  analyzers or filter findings to obtain a clean result.
+- Report actionable modernization findings within the reviewed task's change
+  surface. Record and coordinate diagnostics owned by another task without
+  recommending edits to unowned files.
 
 ## Review rules
 
@@ -101,7 +163,46 @@ Check each applicable area. This is a coverage order, not an automatic severity 
   - **Medium:** a real but bounded issue or meaningful verification gap.
   - **Low:** non-blocking issue with limited impact.
 - Prefer a few high-confidence findings over many weak ones. Recommend the smallest targeted fix; do not suggest broad rewrites.
+- For the repository-specific checks above, never infer a violation from naming or a constant alone: trace the task requirement, runtime source, layer, and existing helper first. Findings must identify the violated rule and concrete path/effect; otherwise record no finding.
 - In review-only mode, inspect durable verification evidence and run relevant checks only if feasible. Do not run commands that modify source files. Never claim a command passed unless its result is available or you ran it.
+
+## Read-only shell inspection policy
+
+- Prefer the dedicated file, glob, and grep tools. When shell inspection is
+  necessary, you may request approval for standalone `pwd`, `ls`, `find`,
+  `head`, `tail`, `cat`, `wc`, `file`, or `stat` commands.
+- Use one inspection command per shell invocation. Do not chain commands with
+  `&&`, `||`, or `;`; do not use pipelines, redirection, command/process
+  substitution, or mutating flags such as `find -delete`/`-exec` or `sed -i`.
+  An Ask rule does not make a composed or mutating command safe; inspect the
+  full command text before requesting approval.
+- Do not use shell commands to read `.env`/`.env.*` files without the owner's
+  separate, explicit authorization. These inspection commands remain
+  approval-gated; all other shell commands stay denied except the separately
+  listed Git/task-validator and safe Makefile commands.
+
+## Makefile command policy
+
+- You may request approval to run any target from the repository-root Makefile.
+  Before asking, inspect the target recipe, prerequisites, and invoked scripts;
+  never assume a target is safe from its name. Use only `make <target>` against
+  the repository Makefile, not `-f`/`-C` or injected variable overrides.
+- Run a target only if its complete recipe is inspection/verification-only and
+  does not write/delete project files, alter persistent database/service/
+  deployment state, install dependencies, or otherwise change external state.
+  Temporary test output and tool caches are acceptable. Targets such as `fmt`,
+  `verify` (which depends on `fmt`), `generate`/`generate-mocks`, `clean`,
+  `setup`/`deps`, `build-all`, `migrate-up`/`migrate-down`/`migrate-create`,
+  `db-seed`/`db-reset`, `dev-up`/`dev-down`, and `docker-build` are not safe in
+  review-only mode. `migrate-lint` starts a Docker dev database; `test-integration`
+  and `test-all` start test containers. Do not run those or other targets that
+  start containers or alter persistent external state without an explicit owner
+  scope/role decision. Inspect `migrate-status`, `validate-config`, `dev-logs`,
+  and all other script-backed targets before classifying them.
+- Every Makefile command remains approval-gated. If the requested target has
+  disallowed side effects, do not run it; identify the target and its recipe
+  effects and ask the owner to choose a safe alternative or explicitly change
+  the review scope. Do not write outside the authorized review report.
 
 ## Output
 
@@ -151,7 +252,7 @@ List what you could not check and the specific evidence or environment needed to
 Start with none. After authorized fixes, append dated notes per the fix-mode rule below; preserve earlier findings and notes.
 
 ## Adjudication rounds
-When re-invoked after the implementer has replied, read the `### Implementer reply` entries in `## Resolution Notes` first. For each contested finding, either withdraw it (record the misunderstanding or error with reason) or hold it with a rebuttal grounded in the packet or normative sources; you may reject an implementer contest that does not stand. Quote reply text rather than editing it. Update only `## Resolution Notes` — plus Verdict and Final Review Status to match the adjudicated state — never edit `## Findings`, never edit the handoff. If the repository owner explicitly overrules a held finding with recorded rationale, record it as ACCEPTED by owner and move on.
+When re-invoked after the implementer has replied, read the `### Implementer reply` entries in `## Resolution Notes` first. For each contested finding, either withdraw it (record the misunderstanding or error with reason) or hold it with a rebuttal grounded in the packet or normative sources; you may reject an implementer contest that does not stand. Quote reply text rather than editing it. Append a dated `### Reviewer adjudication` entry to the end of `## Resolution Notes`; do not replace prior notes or the report. Update only `## Resolution Notes` — plus Verdict and Final Review Status to match the adjudicated state — never edit `## Findings`, never edit the handoff. If the repository owner explicitly overrules a held finding with recorded rationale, append that decision and record it as ACCEPTED by owner.
 
 ## Authorized fix mode only
 

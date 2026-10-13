@@ -63,7 +63,7 @@ type MockPaymentProcessor_Charge_Call struct {
 // Charge is a helper method to define mock.On call
 //   - ctx context.Context
 //   - req port.ChargeRequest
-func (_e *MockPaymentProcessor_Expecter) Charge(ctx interface{}, req interface{}) *MockPaymentProcessor_Charge_Call {
+func (_e *MockPaymentProcessor_Expecter) Charge(ctx any, req any) *MockPaymentProcessor_Charge_Call {
 	return &MockPaymentProcessor_Charge_Call{Call: _e.mock.On("Charge", ctx, req)}
 }
 
@@ -120,7 +120,7 @@ type MockPaymentProcessor_CompleteChallenge_Call struct {
 // CompleteChallenge is a helper method to define mock.On call
 //   - ctx context.Context
 //   - completion port.ChallengeCompletion
-func (_e *MockPaymentProcessor_Expecter) CompleteChallenge(ctx interface{}, completion interface{}) *MockPaymentProcessor_CompleteChallenge_Call {
+func (_e *MockPaymentProcessor_Expecter) CompleteChallenge(ctx any, completion any) *MockPaymentProcessor_CompleteChallenge_Call {
 	return &MockPaymentProcessor_CompleteChallenge_Call{Call: _e.mock.On("CompleteChallenge", ctx, completion)}
 }
 
@@ -179,7 +179,7 @@ type MockPaymentProcessor_GetStatus_Call struct {
 //   - tenant valueobject.TenantID
 //   - idempotencyKey string
 //   - timeout time.Duration
-func (_e *MockPaymentProcessor_Expecter) GetStatus(ctx interface{}, tenant interface{}, idempotencyKey interface{}, timeout interface{}) *MockPaymentProcessor_GetStatus_Call {
+func (_e *MockPaymentProcessor_Expecter) GetStatus(ctx any, tenant any, idempotencyKey any, timeout any) *MockPaymentProcessor_GetStatus_Call {
 	return &MockPaymentProcessor_GetStatus_Call{Call: _e.mock.On("GetStatus", ctx, tenant, idempotencyKey, timeout)}
 }
 
@@ -236,7 +236,7 @@ type MockPaymentProcessor_RefundCharge_Call struct {
 // RefundCharge is a helper method to define mock.On call
 //   - ctx context.Context
 //   - req port.RefundChargeRequest
-func (_e *MockPaymentProcessor_Expecter) RefundCharge(ctx interface{}, req interface{}) *MockPaymentProcessor_RefundCharge_Call {
+func (_e *MockPaymentProcessor_Expecter) RefundCharge(ctx any, req any) *MockPaymentProcessor_RefundCharge_Call {
 	return &MockPaymentProcessor_RefundCharge_Call{Call: _e.mock.On("RefundCharge", ctx, req)}
 }
 

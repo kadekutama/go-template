@@ -59,7 +59,7 @@ type MockAccountUseCases_CloseAccount_Call struct {
 // CloseAccount is a helper method to define mock.On call
 //   - ctx context.Context
 //   - req port.AccountLifecycleRequest
-func (_e *MockAccountUseCases_Expecter) CloseAccount(ctx interface{}, req interface{}) *MockAccountUseCases_CloseAccount_Call {
+func (_e *MockAccountUseCases_Expecter) CloseAccount(ctx any, req any) *MockAccountUseCases_CloseAccount_Call {
 	return &MockAccountUseCases_CloseAccount_Call{Call: _e.mock.On("CloseAccount", ctx, req)}
 }
 
@@ -116,7 +116,7 @@ type MockAccountUseCases_FreezeAccount_Call struct {
 // FreezeAccount is a helper method to define mock.On call
 //   - ctx context.Context
 //   - req port.AccountLifecycleRequest
-func (_e *MockAccountUseCases_Expecter) FreezeAccount(ctx interface{}, req interface{}) *MockAccountUseCases_FreezeAccount_Call {
+func (_e *MockAccountUseCases_Expecter) FreezeAccount(ctx any, req any) *MockAccountUseCases_FreezeAccount_Call {
 	return &MockAccountUseCases_FreezeAccount_Call{Call: _e.mock.On("FreezeAccount", ctx, req)}
 }
 
@@ -173,7 +173,7 @@ type MockAccountUseCases_GetAccount_Call struct {
 // GetAccount is a helper method to define mock.On call
 //   - ctx context.Context
 //   - query port.AccountQuery
-func (_e *MockAccountUseCases_Expecter) GetAccount(ctx interface{}, query interface{}) *MockAccountUseCases_GetAccount_Call {
+func (_e *MockAccountUseCases_Expecter) GetAccount(ctx any, query any) *MockAccountUseCases_GetAccount_Call {
 	return &MockAccountUseCases_GetAccount_Call{Call: _e.mock.On("GetAccount", ctx, query)}
 }
 
@@ -230,7 +230,7 @@ type MockAccountUseCases_ListAccounts_Call struct {
 // ListAccounts is a helper method to define mock.On call
 //   - ctx context.Context
 //   - query port.AccountListQuery
-func (_e *MockAccountUseCases_Expecter) ListAccounts(ctx interface{}, query interface{}) *MockAccountUseCases_ListAccounts_Call {
+func (_e *MockAccountUseCases_Expecter) ListAccounts(ctx any, query any) *MockAccountUseCases_ListAccounts_Call {
 	return &MockAccountUseCases_ListAccounts_Call{Call: _e.mock.On("ListAccounts", ctx, query)}
 }
 
@@ -287,7 +287,7 @@ type MockAccountUseCases_OpenAccount_Call struct {
 // OpenAccount is a helper method to define mock.On call
 //   - ctx context.Context
 //   - req port.OpenAccountRequest
-func (_e *MockAccountUseCases_Expecter) OpenAccount(ctx interface{}, req interface{}) *MockAccountUseCases_OpenAccount_Call {
+func (_e *MockAccountUseCases_Expecter) OpenAccount(ctx any, req any) *MockAccountUseCases_OpenAccount_Call {
 	return &MockAccountUseCases_OpenAccount_Call{Call: _e.mock.On("OpenAccount", ctx, req)}
 }
 
@@ -344,7 +344,7 @@ type MockAccountUseCases_UnfreezeAccount_Call struct {
 // UnfreezeAccount is a helper method to define mock.On call
 //   - ctx context.Context
 //   - req port.AccountLifecycleRequest
-func (_e *MockAccountUseCases_Expecter) UnfreezeAccount(ctx interface{}, req interface{}) *MockAccountUseCases_UnfreezeAccount_Call {
+func (_e *MockAccountUseCases_Expecter) UnfreezeAccount(ctx any, req any) *MockAccountUseCases_UnfreezeAccount_Call {
 	return &MockAccountUseCases_UnfreezeAccount_Call{Call: _e.mock.On("UnfreezeAccount", ctx, req)}
 }
 
@@ -401,7 +401,7 @@ type MockAccountUseCases_UpdateAccount_Call struct {
 // UpdateAccount is a helper method to define mock.On call
 //   - ctx context.Context
 //   - req port.UpdateAccountRequest
-func (_e *MockAccountUseCases_Expecter) UpdateAccount(ctx interface{}, req interface{}) *MockAccountUseCases_UpdateAccount_Call {
+func (_e *MockAccountUseCases_Expecter) UpdateAccount(ctx any, req any) *MockAccountUseCases_UpdateAccount_Call {
 	return &MockAccountUseCases_UpdateAccount_Call{Call: _e.mock.On("UpdateAccount", ctx, req)}
 }
 

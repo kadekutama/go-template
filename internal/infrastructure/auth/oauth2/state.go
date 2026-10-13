@@ -23,7 +23,7 @@ func signState(secret []byte, tenant, provider, nonce string, exp time.Time) str
 // verifyState checks HMAC, tenant/provider binding, and expiry via clock.
 func verifyState(secret []byte, state, wantTenant, wantProvider string, now time.Time) error {
 	parts := strings.Split(state, ".")
-	if len(parts) != 2 {
+	if len(parts) != stateParts2 {
 		return ErrStateInvalid
 	}
 
@@ -45,7 +45,7 @@ func verifyState(secret []byte, state, wantTenant, wantProvider string, now time
 	}
 
 	fields := strings.Split(string(rawPayload), "|")
-	if len(fields) != 4 {
+	if len(fields) != stateFields4 {
 		return ErrStateInvalid
 	}
 

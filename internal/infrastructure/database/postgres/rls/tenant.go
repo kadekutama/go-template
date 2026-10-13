@@ -20,7 +20,7 @@ const SettingName = "app.current_tenant"
 // WithTenant stores the tenant in context. Blank IDs are rejected.
 func WithTenant(ctx context.Context, tenant valueobject.TenantID) (context.Context, error) {
 	if tenant.String() == "" {
-		return nil, fmt.Errorf("rls: tenant is required")
+		return nil, ErrRlsTenantIsRequired
 	}
 
 	return context.WithValue(ctx, tenantKey{}, tenant), nil
@@ -30,7 +30,7 @@ func WithTenant(ctx context.Context, tenant valueobject.TenantID) (context.Conte
 func TenantFromContext(ctx context.Context) (valueobject.TenantID, error) {
 	tenant, ok := ctx.Value(tenantKey{}).(valueobject.TenantID)
 	if !ok || tenant.String() == "" {
-		return "", fmt.Errorf("rls: tenant missing from context")
+		return "", ErrRlsTenantMissingFromContext
 	}
 
 	return tenant, nil
@@ -49,9 +49,9 @@ func ResolveTenant(ctx context.Context, arg valueobject.TenantID) (valueobject.T
 	case ctxErr == nil && fromCtx == arg:
 		return fromCtx, nil
 	case ctxErr == nil:
-		return "", fmt.Errorf("rls: context tenant and argument tenant disagree")
+		return "", ErrRlsContextTenantAndArgumentTenantDisagree
 	default:
-		return "", fmt.Errorf("rls: tenant is required")
+		return "", ErrRlsTenantIsRequired
 	}
 }
 
@@ -59,11 +59,11 @@ func ResolveTenant(ctx context.Context, arg valueobject.TenantID) (valueobject.T
 // It must run inside the repository transaction before any user-table access.
 func ApplyTenant(ctx context.Context, db *gorm.DB, tenant valueobject.TenantID) error {
 	if tenant.String() == "" {
-		return fmt.Errorf("rls: tenant is required")
+		return ErrRlsTenantIsRequired
 	}
 
 	if db == nil {
-		return fmt.Errorf("rls: DB is required")
+		return ErrRlsDBIsRequired
 	}
 
 	if err := db.WithContext(ctx).Exec("SELECT set_config(?, ?, true)", SettingName, tenant.String()).Error; err != nil {

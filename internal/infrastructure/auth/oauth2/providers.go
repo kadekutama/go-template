@@ -33,7 +33,7 @@ func (p OAuthParams) Validate() error {
 		return ErrConfigRequired
 	}
 
-	if len(p.StateSecret) < 32 {
+	if len(p.StateSecret) < minStateSecretLen {
 		return ErrConfigRequired
 	}
 

@@ -11,8 +11,8 @@ import (
 	"github.com/kadekutama/go-template/internal/shared/kernel/validate"
 )
 
-// JWTParams carries constructor dependencies (Parameter Object pattern).
-type JWTParams struct {
+// Params carries constructor dependencies (Parameter Object pattern).
+type Params struct {
 	Issuer        string        `validate:"required,max=256"`
 	Audience      string        `validate:"required,max=256"`
 	AccessTTL     time.Duration `validate:"required,gt=0"`
@@ -24,7 +24,7 @@ type JWTParams struct {
 
 // Issuer mints and verifies RS256 access tokens. Verification consults the
 // key provider so rotation is transparent behind key IDs. Refresh rotation
-// lives in ReceiptStore (durable PostgreSQL receipts); JWTParams.RefreshTTL
+// lives in ReceiptStore (durable PostgreSQL receipts); Params.RefreshTTL
 // carries the paired TTL so wiring passes one value to both.
 type Issuer struct {
 	issuer        string
@@ -40,7 +40,7 @@ type Issuer struct {
 var _ appport.TokenIssuer = (*Issuer)(nil)
 
 // NewIssuer builds the JWT adapter; Keys and Clock must be non-nil.
-func NewIssuer(params JWTParams) (*Issuer, error) {
+func NewIssuer(params Params) (*Issuer, error) {
 	if params.Keys == nil {
 		return nil, ErrKeyRequired
 	}
@@ -62,18 +62,6 @@ func NewIssuer(params JWTParams) (*Issuer, error) {
 		keys:          params.Keys,
 		clock:         params.Clock,
 	}, nil
-}
-
-// now returns the current UTC time through the injected clock.
-func (s *Issuer) now() time.Time {
-	return s.clock.Now().UTC()
-}
-
-// tokenClaims are the JWT private claims for access tokens.
-type tokenClaims struct {
-	jwt.RegisteredClaims
-	TenantID string   `json:"tenant_id"`
-	Scopes   []string `json:"scopes"`
 }
 
 // Issue mints one RS256 access token for claims with the active key.
@@ -114,4 +102,17 @@ func (s *Issuer) Issue(ctx context.Context, claims appport.TokenClaims) (string,
 	}
 
 	return signed, nil
+}
+
+// now returns the current UTC time through the injected clock.
+func (s *Issuer) now() time.Time {
+	return s.clock.Now().UTC()
+}
+
+// tokenClaims are the JWT private claims for access tokens.
+type tokenClaims struct {
+	jwt.RegisteredClaims
+
+	TenantID string   `json:"tenant_id"`
+	Scopes   []string `json:"scopes"`
 }

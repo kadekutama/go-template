@@ -34,14 +34,12 @@ func startService(t *testing.T, image, port string, env map[string]string, cmd [
 	defer cancel()
 
 	req := tc.GenericContainerRequest{
-		ContainerRequest: tc.ContainerRequest{
-			Image:        image,
-			ExposedPorts: []string{port + "/tcp"},
-			Env:          env,
-			Cmd:          cmd,
-			WaitingFor:   wait.ForListeningPort(port + "/tcp"),
-		},
-		Started: true,
+		Image:        image,
+		ExposedPorts: []string{port + "/tcp"},
+		Env:          env,
+		Cmd:          cmd,
+		WaitingFor:   wait.ForListeningPort(port + "/tcp"),
+		Started:      true,
 	}
 
 	container, err := tc.GenericContainer(ctx, req)
@@ -50,6 +48,7 @@ func startService(t *testing.T, image, port string, env map[string]string, cmd [
 	}
 
 	h := &ServiceHandle{container: container}
+
 	t.Cleanup(func() {
 		_ = h.Terminate(context.Background())
 	})
@@ -57,12 +56,14 @@ func startService(t *testing.T, image, port string, env map[string]string, cmd [
 	mapped, err := container.MappedPort(ctx, port)
 	if err != nil {
 		_ = h.Terminate(context.Background())
+
 		return nil, fmt.Errorf("map %s port: %w", image, err)
 	}
 
 	host, err := container.Host(ctx)
 	if err != nil {
 		_ = h.Terminate(context.Background())
+
 		return nil, fmt.Errorf("%s host: %w", image, err)
 	}
 
@@ -76,7 +77,7 @@ func startService(t *testing.T, image, port string, env map[string]string, cmd [
 func StartUnleash(t *testing.T) (*ServiceHandle, error) {
 	t.Helper()
 
-	return startService(t, UnleashImage, "4242", map[string]string{ //nolint:gosec // E07-T09: non-production test placeholder.
+	return startService(t, UnleashImage, "4242", map[string]string{
 		"DATABASE_URL": "postgres://unleash:unleash@localhost/unleash?sslmode=disable",
 	}, nil)
 }

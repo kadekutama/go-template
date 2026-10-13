@@ -22,14 +22,14 @@ func TestNewManagerValidation(t *testing.T) {
 
 	type testCase struct {
 		name          string
-		params        apikey.APIKeyParams
+		params        apikey.Params
 		expectedError error
 	}
 
 	testCases := []testCase{
 		{
 			name: "missing clock rejected",
-			params: func() apikey.APIKeyParams {
+			params: func() apikey.Params {
 				db, err := gorm.Open(gormpostgres.Open("postgres://127.0.0.1:1/apikey_unit?sslmode=disable"), &gorm.Config{
 					SkipDefaultTransaction: true,
 					DisableAutomaticPing:   true,
@@ -38,20 +38,20 @@ func TestNewManagerValidation(t *testing.T) {
 					panic(err)
 				}
 
-				return apikey.APIKeyParams{DB: db, Clock: nil}
+				return apikey.Params{DB: db, Clock: nil}
 			}(),
 			expectedError: apikey.ErrClockRequired,
 		},
 		{
 			name: "missing db rejected",
-			params: func() apikey.APIKeyParams {
-				return apikey.APIKeyParams{DB: nil, Clock: clk}
+			params: func() apikey.Params {
+				return apikey.Params{DB: nil, Clock: clk}
 			}(),
 			expectedError: apikey.ErrConfigRequired,
 		},
 		{
 			name: "missing hasher rejected",
-			params: func() apikey.APIKeyParams {
+			params: func() apikey.Params {
 				db, err := gorm.Open(gormpostgres.Open("postgres://127.0.0.1:1/apikey_unit?sslmode=disable"), &gorm.Config{
 					SkipDefaultTransaction: true,
 					DisableAutomaticPing:   true,
@@ -60,13 +60,13 @@ func TestNewManagerValidation(t *testing.T) {
 					panic(err)
 				}
 
-				return apikey.APIKeyParams{DB: db, Clock: clk, Hasher: apikey.Hasher{}}
+				return apikey.Params{DB: db, Clock: clk, Hasher: apikey.Hasher{}}
 			}(),
 			expectedError: apikey.ErrConfigRequired,
 		},
 		{
 			name: "zero rotation window rejected",
-			params: func() apikey.APIKeyParams {
+			params: func() apikey.Params {
 				db, err := gorm.Open(gormpostgres.Open("postgres://127.0.0.1:1/apikey_unit?sslmode=disable"), &gorm.Config{
 					SkipDefaultTransaction: true,
 					DisableAutomaticPing:   true,
@@ -80,7 +80,7 @@ func TestNewManagerValidation(t *testing.T) {
 					panic(err)
 				}
 
-				return apikey.APIKeyParams{DB: db, Clock: clk, Hasher: hasher, RotationWindow: 0}
+				return apikey.Params{DB: db, Clock: clk, Hasher: hasher, RotationWindow: 0}
 			}(),
 			expectedError: apikey.ErrConfigRequired,
 		},
@@ -88,6 +88,8 @@ func TestNewManagerValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			_, err := apikey.NewManager(tc.params)
 			assert.ErrorIs(t, err, tc.expectedError)
 		})
@@ -133,12 +135,15 @@ func TestHasherRoundTrip(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			hasher, err := apikey.NewHasher(testHasherParams())
 			require.NoError(t, err)
 
 			sealed, err := hasher.Hash(tc.secret)
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
+
 				return
 			}
 
@@ -176,6 +181,7 @@ func TestNewHasherValidation(t *testing.T) {
 			params: func() apikey.HasherParams {
 				p := valid
 				p.Time = 0
+
 				return p
 			}(),
 			expectedError: apikey.ErrConfigRequired,
@@ -185,6 +191,7 @@ func TestNewHasherValidation(t *testing.T) {
 			params: func() apikey.HasherParams {
 				p := valid
 				p.Memory = 1024
+
 				return p
 			}(),
 			expectedError: apikey.ErrConfigRequired,
@@ -194,6 +201,7 @@ func TestNewHasherValidation(t *testing.T) {
 			params: func() apikey.HasherParams {
 				p := valid
 				p.Threads = 0
+
 				return p
 			}(),
 			expectedError: apikey.ErrConfigRequired,
@@ -204,6 +212,7 @@ func TestNewHasherValidation(t *testing.T) {
 				p := valid
 				p.Time = 2
 				p.Memory = 32 * 1024
+
 				return p
 			}(),
 			expectedError: nil,
@@ -212,9 +221,12 @@ func TestNewHasherValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			hasher, err := apikey.NewHasher(tc.params)
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
+
 				return
 			}
 
@@ -259,6 +271,7 @@ func TestHasScope(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Equal(t, tc.expectedScope, apikey.HasScope(key, tc.scope))
 		})
 	}
@@ -270,7 +283,7 @@ func TestManagerRequiresDB(t *testing.T) {
 	clk := mockapplication.NewMockClock(t)
 	clk.EXPECT().Now().Return(time.Date(2026, 9, 23, 0, 0, 0, 0, time.UTC)).Maybe()
 
-	manager, err := apikey.NewManager(apikey.APIKeyParams{DB: nil, Clock: clk})
+	manager, err := apikey.NewManager(apikey.Params{DB: nil, Clock: clk})
 	require.ErrorIs(t, err, apikey.ErrConfigRequired)
 	assert.Nil(t, manager)
 }

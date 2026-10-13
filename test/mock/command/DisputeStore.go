@@ -51,7 +51,7 @@ type MockDisputeStore_CreateDispute_Call struct {
 // CreateDispute is a helper method to define mock.On call
 //   - ctx context.Context
 //   - dispute entity.Dispute
-func (_e *MockDisputeStore_Expecter) CreateDispute(ctx interface{}, dispute interface{}) *MockDisputeStore_CreateDispute_Call {
+func (_e *MockDisputeStore_Expecter) CreateDispute(ctx any, dispute any) *MockDisputeStore_CreateDispute_Call {
 	return &MockDisputeStore_CreateDispute_Call{Call: _e.mock.On("CreateDispute", ctx, dispute)}
 }
 
@@ -108,7 +108,7 @@ type MockDisputeStore_FindDispute_Call struct {
 // FindDispute is a helper method to define mock.On call
 //   - ctx context.Context
 //   - id string
-func (_e *MockDisputeStore_Expecter) FindDispute(ctx interface{}, id interface{}) *MockDisputeStore_FindDispute_Call {
+func (_e *MockDisputeStore_Expecter) FindDispute(ctx any, id any) *MockDisputeStore_FindDispute_Call {
 	return &MockDisputeStore_FindDispute_Call{Call: _e.mock.On("FindDispute", ctx, id)}
 }
 
@@ -178,7 +178,7 @@ type MockDisputeStore_ListDisputes_Call struct {
 //   - to time.Time
 //   - cursor string
 //   - limit int
-func (_e *MockDisputeStore_Expecter) ListDisputes(ctx interface{}, status interface{}, from interface{}, to interface{}, cursor interface{}, limit interface{}) *MockDisputeStore_ListDisputes_Call {
+func (_e *MockDisputeStore_Expecter) ListDisputes(ctx any, status any, from any, to any, cursor any, limit any) *MockDisputeStore_ListDisputes_Call {
 	return &MockDisputeStore_ListDisputes_Call{Call: _e.mock.On("ListDisputes", ctx, status, from, to, cursor, limit)}
 }
 
@@ -225,7 +225,7 @@ type MockDisputeStore_UpdateDispute_Call struct {
 // UpdateDispute is a helper method to define mock.On call
 //   - ctx context.Context
 //   - dispute entity.Dispute
-func (_e *MockDisputeStore_Expecter) UpdateDispute(ctx interface{}, dispute interface{}) *MockDisputeStore_UpdateDispute_Call {
+func (_e *MockDisputeStore_Expecter) UpdateDispute(ctx any, dispute any) *MockDisputeStore_UpdateDispute_Call {
 	return &MockDisputeStore_UpdateDispute_Call{Call: _e.mock.On("UpdateDispute", ctx, dispute)}
 }
 

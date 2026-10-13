@@ -39,6 +39,7 @@ func TestReconciliationRunValidate(t *testing.T) {
 			run: func() entity.ReconciliationRun {
 				r := baseRun
 				r.RunID = ""
+
 				return r
 			}(),
 			expectedError: entity.NewError("RUN_ID_REQUIRED", "reconciliation run id is required"),
@@ -48,6 +49,7 @@ func TestReconciliationRunValidate(t *testing.T) {
 			run: func() entity.ReconciliationRun {
 				r := baseRun
 				r.RunID = "   "
+
 				return r
 			}(),
 			expectedError: entity.NewError("RUN_ID_REQUIRED", "reconciliation run id is required"),
@@ -57,6 +59,7 @@ func TestReconciliationRunValidate(t *testing.T) {
 			run: func() entity.ReconciliationRun {
 				r := baseRun
 				r.TenantID = ""
+
 				return r
 			}(),
 			expectedError: entity.NewError("TENANT_REQUIRED", "tenant id is required"),
@@ -66,6 +69,7 @@ func TestReconciliationRunValidate(t *testing.T) {
 			run: func() entity.ReconciliationRun {
 				r := baseRun
 				r.TenantID = "   "
+
 				return r
 			}(),
 			expectedError: entity.NewError("TENANT_REQUIRED", "tenant id is required"),
@@ -75,6 +79,7 @@ func TestReconciliationRunValidate(t *testing.T) {
 			run: func() entity.ReconciliationRun {
 				r := baseRun
 				r.LedgerID = ""
+
 				return r
 			}(),
 			expectedError: entity.NewError("LEDGER_REQUIRED", "ledger id is required"),
@@ -84,6 +89,7 @@ func TestReconciliationRunValidate(t *testing.T) {
 			run: func() entity.ReconciliationRun {
 				r := baseRun
 				r.LedgerID = "   "
+
 				return r
 			}(),
 			expectedError: entity.NewError("LEDGER_REQUIRED", "ledger id is required"),
@@ -93,6 +99,7 @@ func TestReconciliationRunValidate(t *testing.T) {
 			run: func() entity.ReconciliationRun {
 				r := baseRun
 				r.RuleVersion = ""
+
 				return r
 			}(),
 			expectedError: entity.NewError("RULE_VERSION_REQUIRED", "match rule version is required"),
@@ -102,6 +109,7 @@ func TestReconciliationRunValidate(t *testing.T) {
 			run: func() entity.ReconciliationRun {
 				r := baseRun
 				r.RuleVersion = "   "
+
 				return r
 			}(),
 			expectedError: entity.NewError("RULE_VERSION_REQUIRED", "match rule version is required"),
@@ -111,6 +119,7 @@ func TestReconciliationRunValidate(t *testing.T) {
 			run: func() entity.ReconciliationRun {
 				r := baseRun
 				r.StartedAt = time.Time{}
+
 				return r
 			}(),
 			expectedError: entity.NewError("RUN_START_REQUIRED", "run start time is required"),
@@ -119,6 +128,8 @@ func TestReconciliationRunValidate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.run.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -161,6 +172,7 @@ func TestExternalStatementLineValidate(t *testing.T) {
 			line: func() entity.ExternalStatementLine {
 				l := baseLine
 				l.LineID = ""
+
 				return l
 			}(),
 			expectedError: entity.NewError("SNAPSHOT_IDENTITY_REQUIRED", "external line id is required"),
@@ -170,6 +182,7 @@ func TestExternalStatementLineValidate(t *testing.T) {
 			line: func() entity.ExternalStatementLine {
 				l := baseLine
 				l.LineID = "   "
+
 				return l
 			}(),
 			expectedError: entity.NewError("SNAPSHOT_IDENTITY_REQUIRED", "external line id is required"),
@@ -179,6 +192,7 @@ func TestExternalStatementLineValidate(t *testing.T) {
 			line: func() entity.ExternalStatementLine {
 				l := baseLine
 				l.SourceAccount = ""
+
 				return l
 			}(),
 			expectedError: entity.NewError("SNAPSHOT_IDENTITY_REQUIRED", "external line source account is required"),
@@ -188,6 +202,7 @@ func TestExternalStatementLineValidate(t *testing.T) {
 			line: func() entity.ExternalStatementLine {
 				l := baseLine
 				l.SourceAccount = "   "
+
 				return l
 			}(),
 			expectedError: entity.NewError("SNAPSHOT_IDENTITY_REQUIRED", "external line source account is required"),
@@ -197,6 +212,7 @@ func TestExternalStatementLineValidate(t *testing.T) {
 			line: func() entity.ExternalStatementLine {
 				l := baseLine
 				l.Hash = ""
+
 				return l
 			}(),
 			expectedError: entity.NewError("SNAPSHOT_IDENTITY_REQUIRED", "external line hash is required"),
@@ -206,6 +222,7 @@ func TestExternalStatementLineValidate(t *testing.T) {
 			line: func() entity.ExternalStatementLine {
 				l := baseLine
 				l.Hash = "   "
+
 				return l
 			}(),
 			expectedError: entity.NewError("SNAPSHOT_IDENTITY_REQUIRED", "external line hash is required"),
@@ -215,6 +232,7 @@ func TestExternalStatementLineValidate(t *testing.T) {
 			line: func() entity.ExternalStatementLine {
 				l := baseLine
 				l.ParserVersion = ""
+
 				return l
 			}(),
 			expectedError: entity.NewError("SNAPSHOT_IDENTITY_REQUIRED", "external line parser version is required"),
@@ -224,6 +242,7 @@ func TestExternalStatementLineValidate(t *testing.T) {
 			line: func() entity.ExternalStatementLine {
 				l := baseLine
 				l.ParserVersion = "   "
+
 				return l
 			}(),
 			expectedError: entity.NewError("SNAPSHOT_IDENTITY_REQUIRED", "external line parser version is required"),
@@ -233,6 +252,7 @@ func TestExternalStatementLineValidate(t *testing.T) {
 			line: func() entity.ExternalStatementLine {
 				l := baseLine
 				l.RawLineage = ""
+
 				return l
 			}(),
 			expectedError: entity.NewError("SNAPSHOT_IDENTITY_REQUIRED", "external line raw lineage is required"),
@@ -242,6 +262,7 @@ func TestExternalStatementLineValidate(t *testing.T) {
 			line: func() entity.ExternalStatementLine {
 				l := baseLine
 				l.RawLineage = "   "
+
 				return l
 			}(),
 			expectedError: entity.NewError("SNAPSHOT_IDENTITY_REQUIRED", "external line raw lineage is required"),
@@ -251,6 +272,7 @@ func TestExternalStatementLineValidate(t *testing.T) {
 			line: func() entity.ExternalStatementLine {
 				l := baseLine
 				l.CoverageStart = time.Time{}
+
 				return l
 			}(),
 			expectedError: entity.NewError("SNAPSHOT_IDENTITY_REQUIRED", "external line coverage interval is required"),
@@ -260,6 +282,7 @@ func TestExternalStatementLineValidate(t *testing.T) {
 			line: func() entity.ExternalStatementLine {
 				l := baseLine
 				l.CoverageEnd = time.Time{}
+
 				return l
 			}(),
 			expectedError: entity.NewError("SNAPSHOT_IDENTITY_REQUIRED", "external line coverage interval is required"),
@@ -269,6 +292,7 @@ func TestExternalStatementLineValidate(t *testing.T) {
 			line: func() entity.ExternalStatementLine {
 				l := baseLine
 				l.CoverageEnd = l.CoverageStart
+
 				return l
 			}(),
 			expectedError: entity.NewError("SNAPSHOT_IDENTITY_REQUIRED", "coverage start must precede end"),
@@ -279,6 +303,7 @@ func TestExternalStatementLineValidate(t *testing.T) {
 				l := baseLine
 				l.CoverageStart = baseEnd
 				l.CoverageEnd = baseStart
+
 				return l
 			}(),
 			expectedError: entity.NewError("SNAPSHOT_IDENTITY_REQUIRED", "coverage start must precede end"),
@@ -287,6 +312,8 @@ func TestExternalStatementLineValidate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.line.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})

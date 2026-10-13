@@ -1,7 +1,7 @@
 package valueobject_test
 
 import (
-	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -54,18 +54,20 @@ func TestParsePayoutStatus(t *testing.T) {
 			name:           "unknown status",
 			s:              "REJECTED",
 			expectedResult: valueobject.PayoutStatus(""),
-			expectedError:  errors.New(`payout: invalid status "REJECTED"`),
+			expectedError:  fmt.Errorf("payout: invalid status %q: %w", "REJECTED", valueobject.ErrPayoutInvalidStatus),
 		},
 		{
 			name:           "empty status",
 			s:              "",
 			expectedResult: valueobject.PayoutStatus(""),
-			expectedError:  errors.New(`payout: invalid status ""`),
+			expectedError:  fmt.Errorf("payout: invalid status %q: %w", "", valueobject.ErrPayoutInvalidStatus),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := valueobject.ParsePayoutStatus(tc.s)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -154,6 +156,8 @@ func TestPayoutCanTransition(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := valueobject.CanTransition(tc.from, tc.to)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -199,6 +203,8 @@ func TestCanCancelPayout(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := valueobject.CanCancel(tc.s)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})

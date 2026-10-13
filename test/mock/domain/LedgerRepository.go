@@ -61,7 +61,7 @@ type MockLedgerRepository_Create_Call struct {
 // Create is a helper method to define mock.On call
 //   - ctx context.Context
 //   - ledger entity.Ledger
-func (_e *MockLedgerRepository_Expecter) Create(ctx interface{}, ledger interface{}) *MockLedgerRepository_Create_Call {
+func (_e *MockLedgerRepository_Expecter) Create(ctx any, ledger any) *MockLedgerRepository_Create_Call {
 	return &MockLedgerRepository_Create_Call{Call: _e.mock.On("Create", ctx, ledger)}
 }
 
@@ -119,7 +119,7 @@ type MockLedgerRepository_FindByID_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - id valueobject.LedgerID
-func (_e *MockLedgerRepository_Expecter) FindByID(ctx interface{}, tenant interface{}, id interface{}) *MockLedgerRepository_FindByID_Call {
+func (_e *MockLedgerRepository_Expecter) FindByID(ctx any, tenant any, id any) *MockLedgerRepository_FindByID_Call {
 	return &MockLedgerRepository_FindByID_Call{Call: _e.mock.On("FindByID", ctx, tenant, id)}
 }
 
@@ -178,7 +178,7 @@ type MockLedgerRepository_ListByTenant_Call struct {
 // ListByTenant is a helper method to define mock.On call
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
-func (_e *MockLedgerRepository_Expecter) ListByTenant(ctx interface{}, tenant interface{}) *MockLedgerRepository_ListByTenant_Call {
+func (_e *MockLedgerRepository_Expecter) ListByTenant(ctx any, tenant any) *MockLedgerRepository_ListByTenant_Call {
 	return &MockLedgerRepository_ListByTenant_Call{Call: _e.mock.On("ListByTenant", ctx, tenant)}
 }
 

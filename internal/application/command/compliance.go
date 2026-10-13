@@ -82,42 +82,52 @@ func (s *ComplianceService) RecordScreeningDecision(ctx context.Context, req por
 	if strings.TrimSpace(req.TenantID.String()) == "" {
 		return entity.NewError("TENANT_REQUIRED", "tenant id is required")
 	}
+
 	if strings.TrimSpace(req.SubjectID) == "" {
 		return entity.NewError("SCREENING_SUBJECT_REQUIRED", "screening subject is required")
 	}
+
 	if strings.TrimSpace(req.Decision) == "" {
 		return entity.NewError("SCREENING_DECISION_REQUIRED", "screening decision is required")
 	}
+
 	if strings.TrimSpace(req.Actor) == "" {
 		return entity.NewError("ACTOR_REQUIRED", "compliance actor is required")
 	}
+
 	if strings.TrimSpace(req.IdempotencyKey) == "" {
 		return entity.NewError("IDEMPOTENCY_KEY_REQUIRED", "compliance requires an idempotency key")
 	}
+
 	subject := port.Subject{ID: req.Actor, TenantID: req.TenantID}
 	if err := RequireAuthz(ctx, s.authz, subject, "compliance.review", "tenant/"+string(req.TenantID)); err != nil {
 		return err
 	}
+
 	now := s.clock.Now().UTC()
 	rec := port.IdempotencyRecord{
 		Key:         req.IdempotencyKey,
 		Fingerprint: Fingerprint(req.IdempotencyKey, string(req.TenantID), req.SubjectID, req.Decision),
 		TenantID:    req.TenantID,
 	}
+
 	return s.uow.Do(ctx, func(ctx context.Context, tx port.Tx) error {
 		outcome, err := tx.Idempotency().Reserve(ctx, rec)
 		if err != nil {
 			return err
 		}
+
 		if outcome.Replay {
 			return nil
 		}
+
 		if err := s.reviews.RecordDecision(ctx, ScreeningDecision{
 			ID: s.ids.NewID(), TenantID: req.TenantID, SubjectID: req.SubjectID,
 			Decision: req.Decision, Note: req.Note, Actor: req.Actor, CreatedAt: now,
 		}); err != nil {
 			return err
 		}
+
 		return tx.Idempotency().Complete(ctx, rec.Key, []byte(`{"subject":"`+req.SubjectID+`"}`))
 	})
 }
@@ -129,44 +139,56 @@ func (s *ComplianceService) ExportRegulatoryReport(ctx context.Context, req port
 	if strings.TrimSpace(req.TenantID.String()) == "" {
 		return port.ReportResult{}, entity.NewError("TENANT_REQUIRED", "tenant id is required")
 	}
+
 	if strings.TrimSpace(req.Actor) == "" {
 		return port.ReportResult{}, entity.NewError("ACTOR_REQUIRED", "compliance actor is required")
 	}
+
 	if strings.TrimSpace(req.IdempotencyKey) == "" {
 		return port.ReportResult{}, entity.NewError("IDEMPOTENCY_KEY_REQUIRED", "compliance requires an idempotency key")
 	}
+
 	reportType := service.ReportType(req.ReportType)
+
 	fields, err := service.ReportFields(reportType)
 	if err != nil {
 		return port.ReportResult{}, err
 	}
+
 	if err := service.ValidateReport(reportType, req.Fields); err != nil {
 		return port.ReportResult{}, err
 	}
+
 	subject := port.Subject{ID: req.Actor, TenantID: req.TenantID}
 	if err := RequireAuthz(ctx, s.authz, subject, "compliance.export", "tenant/"+string(req.TenantID)); err != nil {
 		return port.ReportResult{}, err
 	}
+
 	body, err := renderRegulatoryCSV(fields, req.Fields)
 	if err != nil {
 		return port.ReportResult{}, err
 	}
+
 	exportID := s.ids.NewID()
 	now := s.clock.Now().UTC()
+
 	key := "regulatory/" + string(req.TenantID) + "/" + exportID + ".csv"
 	if err := s.storage.Put(ctx, req.TenantID, key, port.StoredObject{Content: body, ContentType: "text/csv"}); err != nil {
 		return port.ReportResult{}, err
 	}
+
 	signed, err := s.storage.SignedURL(ctx, req.TenantID, key, time.Hour)
 	if err != nil {
 		return port.ReportResult{}, err
 	}
+
 	rec := port.IdempotencyRecord{
 		Key: req.IdempotencyKey,
 		Fingerprint: Fingerprint(append([]string{req.IdempotencyKey, string(req.TenantID), req.ReportType},
 			MapParts("fields", req.Fields)...)...),
 		TenantID: req.TenantID,
 	}
+
 	return stageReport(ctx, s.uow, rec, req.TenantID, exportID, req.ReportType, now,
 		func(ctx context.Context) error {
 			return s.reviews.SaveExport(ctx, RegulatoryExport{
@@ -183,14 +205,19 @@ func renderRegulatoryCSV(header []string, values map[string]string) ([]byte, err
 	for _, name := range header {
 		row = append(row, values[name])
 	}
+
 	var buf strings.Builder
+
 	writer := csv.NewWriter(&buf)
 	if err := writer.Write(header); err != nil {
 		return nil, err
 	}
+
 	if err := writer.Write(row); err != nil {
 		return nil, err
 	}
+
 	writer.Flush()
+
 	return []byte(buf.String()), writer.Error()
 }

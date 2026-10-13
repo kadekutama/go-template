@@ -39,23 +39,26 @@ type TenantTransitionParams struct {
 // TenantSuspendParams carries the suspension reason.
 type TenantSuspendParams struct {
 	TenantTransitionParams
+
 	Reason string
 }
 
 // TenantCloseParams carries the closure reason.
 type TenantCloseParams struct {
 	TenantTransitionParams
+
 	Reason string
 }
 
 // TenantUpdateSettingsParams carries replacement settings.
 type TenantUpdateSettingsParams struct {
 	TenantTransitionParams
+
 	Settings entity.TenantSettings
 }
 
-func tenantMeta(t *Tenant, tr TenantTransitionParams, ledgerID valueobject.LedgerID) event.EventMetadata {
-	return event.EventMetadata{
+func tenantMeta(t *Tenant, tr TenantTransitionParams, ledgerID valueobject.LedgerID) event.Metadata {
+	return event.Metadata{
 		TenantID:      t.data.ID.String(),
 		LedgerID:      ledgerID.String(),
 		CausationID:   tr.EventID,
@@ -72,20 +75,25 @@ func OpenTenant(p OpenTenantParams) (Tenant, error) {
 			return Tenant{}, entity.NewError("TENANT_ID_INVALID", "tenant id is invalid")
 		}
 	}
+
 	if p.LedgerID.String() != "" {
 		if _, err := valueobject.ParseLedgerID(p.LedgerID.String()); err != nil {
 			return Tenant{}, entity.NewError("LEDGER_ID_INVALID", "ledger id is invalid")
 		}
 	}
+
 	if p.OpenedBy.String() == "" {
 		return Tenant{}, entity.NewError("OPENED_BY_REQUIRED", "opened by user id is required")
 	}
+
 	if strings.TrimSpace(p.EventID) == "" {
 		return Tenant{}, entity.NewError("EVENT_ID_REQUIRED", "event id is required")
 	}
+
 	if p.OccurredAt.IsZero() {
 		return Tenant{}, entity.NewError("OCCURRED_AT_REQUIRED", "occurred at time is required")
 	}
+
 	data := entity.TenantData{
 		ID:        p.ID,
 		Name:      p.Name,
@@ -99,7 +107,9 @@ func OpenTenant(p OpenTenantParams) (Tenant, error) {
 	if err := data.Validate(); err != nil {
 		return Tenant{}, err
 	}
+
 	t := Tenant{data: data}
+
 	if p.ID.String() != "" && p.LedgerID.String() != "" {
 		evt, err := event.NewTenantCreated(p.EventID, p.ID.String(), p.OccurredAt, 1, 0,
 			event.TenantCreatedPayload{
@@ -110,13 +120,15 @@ func OpenTenant(p OpenTenantParams) (Tenant, error) {
 				BaseAssetCode: string(p.Settings.DefaultCurrency),
 				CreatedAt:     p.OccurredAt.UTC(),
 			},
-			event.EventMetadata{TenantID: p.ID.String(), LedgerID: p.LedgerID.String(),
+			event.Metadata{TenantID: p.ID.String(), LedgerID: p.LedgerID.String(),
 				CausationID: p.EventID, CorrelationID: p.EventID, UserID: p.OpenedBy.String()})
 		if err != nil {
 			return Tenant{}, err
 		}
+
 		t.append(evt)
 	}
+
 	return t, nil
 }
 
@@ -126,10 +138,13 @@ func (t *Tenant) AssignID(id valueobject.TenantID, ledgerID valueobject.LedgerID
 	if t.data.ID.String() != "" {
 		return entity.NewError("TENANT_ID_IMMUTABLE", "tenant id is already assigned")
 	}
+
 	if _, err := valueobject.ParseTenantID(id.String()); err != nil {
 		return entity.NewError("TENANT_ID_INVALID", "tenant id is invalid")
 	}
+
 	t.data.ID = id
+
 	evt, err := event.NewTenantCreated(eventID, id.String(), occurredAt, t.data.Version, int64(len(t.events)),
 		event.TenantCreatedPayload{
 			TenantID:      id.String(),
@@ -139,12 +154,14 @@ func (t *Tenant) AssignID(id valueobject.TenantID, ledgerID valueobject.LedgerID
 			BaseAssetCode: string(t.data.Settings.DefaultCurrency),
 			CreatedAt:     occurredAt.UTC(),
 		},
-		event.EventMetadata{TenantID: id.String(), LedgerID: ledgerID.String(),
+		event.Metadata{TenantID: id.String(), LedgerID: ledgerID.String(),
 			CausationID: eventID, CorrelationID: eventID, UserID: openedBy.String()})
 	if err != nil {
 		return err
 	}
+
 	t.append(evt)
+
 	return nil
 }
 
@@ -153,6 +170,7 @@ func (t *Tenant) Record() entity.TenantData {
 	out := t.data
 	out.Settings.EnabledFeatures = slices.Clone(t.data.Settings.EnabledFeatures)
 	out.Settings.EnabledPaymentMethods = slices.Clone(t.data.Settings.EnabledPaymentMethods)
+
 	return out
 }
 
@@ -160,45 +178,42 @@ func (t *Tenant) Record() entity.TenantData {
 func (t *Tenant) UncommittedEvents() []event.DomainEvent {
 	out := make([]event.DomainEvent, len(t.events))
 	copy(out, t.events)
+
 	return out
 }
 
 // ClearEvents drains the uncommitted buffer after persistence.
 func (t *Tenant) ClearEvents() { t.events = nil }
 
-func (t *Tenant) append(ev event.DomainEvent) {
-	t.events = append(t.events, ev)
-}
-
-func (t *Tenant) requireOpen() error {
-	if t.data.Status == entity.TenantClosed {
-		return entity.NewError("TENANT_CLOSED", "tenant is closed")
-	}
-	return nil
-}
-
 // Suspend moves ACTIVE→SUSPENDED and records tenant.suspended.v1.
 func (t *Tenant) Suspend(p TenantSuspendParams, ledgerID valueobject.LedgerID) error {
 	if err := t.requireOpen(); err != nil {
 		return err
 	}
+
 	if t.data.Status == entity.TenantSuspended {
 		return entity.NewError("TENANT_ALREADY_SUSPENDED", "tenant is already suspended")
 	}
+
 	trimmedReason := strings.TrimSpace(p.Reason)
 	if trimmedReason == "" {
 		return entity.NewError("TENANT_REASON_REQUIRED", "suspend reason is required")
 	}
+
 	if ledgerID.String() == "" {
 		return entity.NewError("LEDGER_REQUIRED", "ledger id is required")
 	}
+
 	if strings.TrimSpace(p.EventID) == "" {
 		return entity.NewError("EVENT_ID_REQUIRED", "event id is required")
 	}
+
 	if p.OccurredAt.IsZero() {
 		return entity.NewError("OCCURRED_AT_REQUIRED", "occurred at time is required")
 	}
+
 	newVersion := t.data.Version + 1
+
 	evt, err := event.NewTenantSuspended(p.EventID, t.data.ID.String(), p.OccurredAt,
 		newVersion, int64(len(t.events)),
 		event.TenantSuspendedPayload{TenantID: t.data.ID.String(), Reason: trimmedReason, SuspendedBy: p.Actor.String()},
@@ -206,10 +221,12 @@ func (t *Tenant) Suspend(p TenantSuspendParams, ledgerID valueobject.LedgerID) e
 	if err != nil {
 		return err
 	}
+
 	t.data.Status = entity.TenantSuspended
 	t.data.Version = newVersion
 	t.data.UpdatedAt = p.OccurredAt.UTC()
 	t.append(evt)
+
 	return nil
 }
 
@@ -218,19 +235,25 @@ func (t *Tenant) Reactivate(p TenantTransitionParams, ledgerID valueobject.Ledge
 	if err := t.requireOpen(); err != nil {
 		return err
 	}
+
 	if t.data.Status != entity.TenantSuspended {
 		return entity.NewError("TENANT_NOT_SUSPENDED", "tenant is not suspended")
 	}
+
 	if ledgerID.String() == "" {
 		return entity.NewError("LEDGER_REQUIRED", "ledger id is required")
 	}
+
 	if strings.TrimSpace(p.EventID) == "" {
 		return entity.NewError("EVENT_ID_REQUIRED", "event id is required")
 	}
+
 	if p.OccurredAt.IsZero() {
 		return entity.NewError("OCCURRED_AT_REQUIRED", "occurred at time is required")
 	}
+
 	newVersion := t.data.Version + 1
+
 	evt, err := event.NewTenantReactivated(p.EventID, t.data.ID.String(), p.OccurredAt,
 		newVersion, int64(len(t.events)),
 		event.TenantReactivatedPayload{TenantID: t.data.ID.String(), ReactivatedBy: p.Actor.String()},
@@ -238,10 +261,12 @@ func (t *Tenant) Reactivate(p TenantTransitionParams, ledgerID valueobject.Ledge
 	if err != nil {
 		return err
 	}
+
 	t.data.Status = entity.TenantActive
 	t.data.Version = newVersion
 	t.data.UpdatedAt = p.OccurredAt.UTC()
 	t.append(evt)
+
 	return nil
 }
 
@@ -250,20 +275,26 @@ func (t *Tenant) Close(p TenantCloseParams, ledgerID valueobject.LedgerID) error
 	if err := t.requireOpen(); err != nil {
 		return err
 	}
+
 	trimmedReason := strings.TrimSpace(p.Reason)
 	if trimmedReason == "" {
 		return entity.NewError("TENANT_REASON_REQUIRED", "close reason is required")
 	}
+
 	if ledgerID.String() == "" {
 		return entity.NewError("LEDGER_REQUIRED", "ledger id is required")
 	}
+
 	if strings.TrimSpace(p.EventID) == "" {
 		return entity.NewError("EVENT_ID_REQUIRED", "event id is required")
 	}
+
 	if p.OccurredAt.IsZero() {
 		return entity.NewError("OCCURRED_AT_REQUIRED", "occurred at time is required")
 	}
+
 	newVersion := t.data.Version + 1
+
 	evt, err := event.NewTenantClosed(p.EventID, t.data.ID.String(), p.OccurredAt,
 		newVersion, int64(len(t.events)),
 		event.TenantClosedPayload{TenantID: t.data.ID.String(), Reason: trimmedReason, ClosedBy: p.Actor.String()},
@@ -271,10 +302,12 @@ func (t *Tenant) Close(p TenantCloseParams, ledgerID valueobject.LedgerID) error
 	if err != nil {
 		return err
 	}
+
 	t.data.Status = entity.TenantClosed
 	t.data.Version = newVersion
 	t.data.UpdatedAt = p.OccurredAt.UTC()
 	t.append(evt)
+
 	return nil
 }
 
@@ -284,20 +317,26 @@ func (t *Tenant) UpdateSettings(p TenantUpdateSettingsParams, ledgerID valueobje
 	if err := t.requireOpen(); err != nil {
 		return err
 	}
+
 	if err := p.Settings.Validate(); err != nil {
 		return err
 	}
+
 	if ledgerID.String() == "" {
 		return entity.NewError("LEDGER_REQUIRED", "ledger id is required")
 	}
+
 	if strings.TrimSpace(p.EventID) == "" {
 		return entity.NewError("EVENT_ID_REQUIRED", "event id is required")
 	}
+
 	if p.OccurredAt.IsZero() {
 		return entity.NewError("OCCURRED_AT_REQUIRED", "occurred at time is required")
 	}
+
 	cloned := cloneTenantSettings(p.Settings)
 	newVersion := t.data.Version + 1
+
 	evt, err := event.NewTenantUpdated(p.EventID, t.data.ID.String(), p.OccurredAt,
 		newVersion, int64(len(t.events)),
 		event.TenantUpdatedPayload{TenantID: t.data.ID.String(), Name: t.data.Name, Region: t.data.Region, Settings: cloneTenantSettings(cloned), UpdatedBy: p.Actor.String()},
@@ -305,10 +344,24 @@ func (t *Tenant) UpdateSettings(p TenantUpdateSettingsParams, ledgerID valueobje
 	if err != nil {
 		return err
 	}
+
 	t.data.Settings = cloned
 	t.data.Version = newVersion
 	t.data.UpdatedAt = p.OccurredAt.UTC()
 	t.append(evt)
+
+	return nil
+}
+
+func (t *Tenant) append(ev event.DomainEvent) {
+	t.events = append(t.events, ev)
+}
+
+func (t *Tenant) requireOpen() error {
+	if t.data.Status == entity.TenantClosed {
+		return entity.NewError("TENANT_CLOSED", "tenant is closed")
+	}
+
 	return nil
 }
 
@@ -316,5 +369,6 @@ func cloneTenantSettings(s entity.TenantSettings) entity.TenantSettings {
 	out := s
 	out.EnabledFeatures = slices.Clone(s.EnabledFeatures)
 	out.EnabledPaymentMethods = slices.Clone(s.EnabledPaymentMethods)
+
 	return out
 }

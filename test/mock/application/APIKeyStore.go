@@ -66,7 +66,7 @@ type MockAPIKeyStore_Create_Call struct {
 //   - name string
 //   - scopes []string
 //   - ttl time.Duration
-func (_e *MockAPIKeyStore_Expecter) Create(ctx interface{}, tenant interface{}, name interface{}, scopes interface{}, ttl interface{}) *MockAPIKeyStore_Create_Call {
+func (_e *MockAPIKeyStore_Expecter) Create(ctx any, tenant any, name any, scopes any, ttl any) *MockAPIKeyStore_Create_Call {
 	return &MockAPIKeyStore_Create_Call{Call: _e.mock.On("Create", ctx, tenant, name, scopes, ttl)}
 }
 
@@ -114,7 +114,7 @@ type MockAPIKeyStore_Revoke_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - id string
-func (_e *MockAPIKeyStore_Expecter) Revoke(ctx interface{}, tenant interface{}, id interface{}) *MockAPIKeyStore_Revoke_Call {
+func (_e *MockAPIKeyStore_Expecter) Revoke(ctx any, tenant any, id any) *MockAPIKeyStore_Revoke_Call {
 	return &MockAPIKeyStore_Revoke_Call{Call: _e.mock.On("Revoke", ctx, tenant, id)}
 }
 
@@ -171,7 +171,7 @@ type MockAPIKeyStore_Verify_Call struct {
 // Verify is a helper method to define mock.On call
 //   - ctx context.Context
 //   - plaintext string
-func (_e *MockAPIKeyStore_Expecter) Verify(ctx interface{}, plaintext interface{}) *MockAPIKeyStore_Verify_Call {
+func (_e *MockAPIKeyStore_Expecter) Verify(ctx any, plaintext any) *MockAPIKeyStore_Verify_Call {
 	return &MockAPIKeyStore_Verify_Call{Call: _e.mock.On("Verify", ctx, plaintext)}
 }
 

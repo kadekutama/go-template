@@ -1,7 +1,6 @@
 package postgres_test
 
 import (
-	"errors"
 	"testing"
 	"time"
 
@@ -30,6 +29,8 @@ func TestOpenRequiresDSN(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			db, err := postgres.Open(postgres.Config{
 				DSN:             tc.dsn,
 				MaxOpen:         25,
@@ -73,47 +74,55 @@ func TestConfigValidate(t *testing.T) {
 			cfg: func() postgres.Config {
 				c := baseCfg
 				c.DSN = ""
+
 				return c
 			}(),
-			expectedError: errors.New("postgres: DSN is required"),
+			expectedError: postgres.ErrPostgresDSNIsRequired,
 		},
 		{
 			name: "non-positive max open",
 			cfg: func() postgres.Config {
 				c := baseCfg
 				c.MaxOpen = 0
+
 				return c
 			}(),
-			expectedError: errors.New("postgres: MaxOpen must be positive"),
+			expectedError: postgres.ErrPostgresMaxOpenMustBePositive,
 		},
 		{
 			name: "non-positive max idle",
 			cfg: func() postgres.Config {
 				c := baseCfg
 				c.MaxIdle = 0
+
 				return c
 			}(),
-			expectedError: errors.New("postgres: MaxIdle must be positive"),
+			expectedError: postgres.ErrPostgresMaxIdleMustBePositive,
 		},
 		{
 			name: "non-positive conn max lifetime",
 			cfg: func() postgres.Config {
 				c := baseCfg
 				c.ConnMaxLifetime = 0
+
 				return c
 			}(),
-			expectedError: errors.New("postgres: ConnMaxLifetime must be positive"),
+			expectedError: postgres.ErrPostgresConnMaxLifetimeMustBePositive,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.cfg.Validate()
 			if tc.expectedError != nil {
 				require.Error(t, err)
 				assert.EqualError(t, err, tc.expectedError.Error())
+
 				return
 			}
+
 			require.NoError(t, err)
 		})
 	}

@@ -1,8 +1,6 @@
 package postgres
 
 import (
-	"fmt"
-
 	"gorm.io/gorm"
 )
 
@@ -22,7 +20,7 @@ type PoolsParams struct {
 // NewPools builds the pool set; Primary must be non-nil (Replica optional).
 func NewPools(params PoolsParams) (*Pools, error) {
 	if params.Primary == nil {
-		return nil, fmt.Errorf("postgres: replica pools need a primary")
+		return nil, ErrPostgresReplicaPoolsNeedAPrimary
 	}
 
 	return &Pools{Primary: params.Primary, Replica: params.Replica}, nil
@@ -54,11 +52,11 @@ type SelectorParams struct {
 // NewSelector builds the router; Pools must be non-nil, LagBound positive.
 func NewSelector(params SelectorParams) (*Selector, error) {
 	if params.Pools == nil {
-		return nil, fmt.Errorf("postgres: selector needs pools")
+		return nil, ErrPostgresSelectorNeedsPools
 	}
 
 	if params.LagBound <= 0 {
-		return nil, fmt.Errorf("postgres: lag bound must be positive")
+		return nil, ErrPostgresLagBoundMustBePositive
 	}
 
 	return &Selector{pools: params.Pools, lagBound: params.LagBound, source: params.Source}, nil

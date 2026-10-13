@@ -23,7 +23,7 @@ func ParseAuthStatus(s string) (AuthStatus, error) {
 	case AuthAuthorized, AuthPartiallyCaptured, AuthCaptured, AuthVoided, AuthExpired, AuthRequiresAction:
 		return AuthStatus(s), nil
 	default:
-		return "", fmt.Errorf("auth: invalid status %q", s)
+		return "", fmt.Errorf("auth: invalid status %q: %w", s, ErrAuthInvalidStatus)
 	}
 }
 
@@ -38,6 +38,8 @@ func CanTransitionAuth(from, to AuthStatus) bool {
 		return to == AuthPartiallyCaptured || to == AuthCaptured || to == AuthExpired || to == AuthVoided
 	case AuthRequiresAction:
 		return to == AuthAuthorized || to == AuthVoided
+	case AuthCaptured, AuthVoided, AuthExpired:
+		return false
 	default:
 		return false
 	}

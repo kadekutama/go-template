@@ -1,7 +1,6 @@
 package event
 
 import (
-	"errors"
 	"time"
 )
 
@@ -16,13 +15,15 @@ type PayoutCreatedPayload struct {
 }
 
 // NewPayoutCreated builds payout.created.v1.
-func NewPayoutCreated(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PayoutCreatedPayload, meta EventMetadata) (TypedEvent[PayoutCreatedPayload], error) {
+func NewPayoutCreated(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PayoutCreatedPayload, meta Metadata) (TypedEvent[PayoutCreatedPayload], error) {
 	if err := requireIDs(map[string]string{fieldPayoutID: payload.PayoutID, fieldTenantID: payload.TenantID, fieldAccountID: payload.AccountID}); err != nil {
 		return TypedEvent[PayoutCreatedPayload]{}, err
 	}
+
 	if payload.AmountMinor <= 0 {
-		return TypedEvent[PayoutCreatedPayload]{}, errors.New("event: amount_minor must be positive")
+		return TypedEvent[PayoutCreatedPayload]{}, ErrEventAmountMinorMustBePositive
 	}
+
 	return newTyped("payout.created.v1", eventID, aggregateID, "Payout", occurredAt, version, seq, payload, meta)
 }
 
@@ -34,10 +35,11 @@ type PayoutPendingPayload struct {
 }
 
 // NewPayoutPending builds payout.pending.v1.
-func NewPayoutPending(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PayoutPendingPayload, meta EventMetadata) (TypedEvent[PayoutPendingPayload], error) {
+func NewPayoutPending(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PayoutPendingPayload, meta Metadata) (TypedEvent[PayoutPendingPayload], error) {
 	if err := requireIDs(map[string]string{fieldPayoutID: payload.PayoutID, fieldTenantID: payload.TenantID}); err != nil {
 		return TypedEvent[PayoutPendingPayload]{}, err
 	}
+
 	return newTyped("payout.pending.v1", eventID, aggregateID, "Payout", occurredAt, version, seq, payload, meta)
 }
 
@@ -49,10 +51,11 @@ type PayoutPaidPayload struct {
 }
 
 // NewPayoutPaid builds payout.paid.v1.
-func NewPayoutPaid(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PayoutPaidPayload, meta EventMetadata) (TypedEvent[PayoutPaidPayload], error) {
+func NewPayoutPaid(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PayoutPaidPayload, meta Metadata) (TypedEvent[PayoutPaidPayload], error) {
 	if err := requireIDs(map[string]string{fieldPayoutID: payload.PayoutID, fieldTenantID: payload.TenantID, fieldPostingID: payload.PostingID}); err != nil {
 		return TypedEvent[PayoutPaidPayload]{}, err
 	}
+
 	return newTyped("payout.paid.v1", eventID, aggregateID, "Payout", occurredAt, version, seq, payload, meta)
 }
 
@@ -65,9 +68,10 @@ type PayoutFailedPayload struct {
 }
 
 // NewPayoutFailed builds payout.failed.v1.
-func NewPayoutFailed(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PayoutFailedPayload, meta EventMetadata) (TypedEvent[PayoutFailedPayload], error) {
+func NewPayoutFailed(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PayoutFailedPayload, meta Metadata) (TypedEvent[PayoutFailedPayload], error) {
 	if err := requireIDs(map[string]string{fieldPayoutID: payload.PayoutID, fieldTenantID: payload.TenantID, fieldCode: payload.Code}); err != nil {
 		return TypedEvent[PayoutFailedPayload]{}, err
 	}
+
 	return newTyped("payout.failed.v1", eventID, aggregateID, "Payout", occurredAt, version, seq, payload, meta)
 }

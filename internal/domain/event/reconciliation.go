@@ -13,10 +13,11 @@ type ReconciliationRunStartedPayload struct {
 }
 
 // NewReconciliationRunStarted builds reconciliation.run.started.v1.
-func NewReconciliationRunStarted(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload ReconciliationRunStartedPayload, meta EventMetadata) (TypedEvent[ReconciliationRunStartedPayload], error) {
+func NewReconciliationRunStarted(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload ReconciliationRunStartedPayload, meta Metadata) (TypedEvent[ReconciliationRunStartedPayload], error) {
 	if err := requireIDs(map[string]string{fieldRunID: payload.RunID, fieldTenantID: payload.TenantID}); err != nil {
 		return TypedEvent[ReconciliationRunStartedPayload]{}, err
 	}
+
 	return newTyped("reconciliation.run.started.v1", eventID, aggregateID, "ReconciliationRun", occurredAt, version, seq, payload, meta)
 }
 
@@ -29,10 +30,11 @@ type ReconciliationRunCompletedPayload struct {
 }
 
 // NewReconciliationRunCompleted builds reconciliation.run.completed.v1.
-func NewReconciliationRunCompleted(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload ReconciliationRunCompletedPayload, meta EventMetadata) (TypedEvent[ReconciliationRunCompletedPayload], error) {
+func NewReconciliationRunCompleted(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload ReconciliationRunCompletedPayload, meta Metadata) (TypedEvent[ReconciliationRunCompletedPayload], error) {
 	if err := requireIDs(map[string]string{fieldRunID: payload.RunID, fieldTenantID: payload.TenantID}); err != nil {
 		return TypedEvent[ReconciliationRunCompletedPayload]{}, err
 	}
+
 	return newTyped("reconciliation.run.completed.v1", eventID, aggregateID, "ReconciliationRun", occurredAt, version, seq, payload, meta)
 }
 
@@ -45,10 +47,11 @@ type ReconciliationBreakFoundPayload struct {
 }
 
 // NewReconciliationBreakFound builds reconciliation.break.found.v1.
-func NewReconciliationBreakFound(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload ReconciliationBreakFoundPayload, meta EventMetadata) (TypedEvent[ReconciliationBreakFoundPayload], error) {
+func NewReconciliationBreakFound(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload ReconciliationBreakFoundPayload, meta Metadata) (TypedEvent[ReconciliationBreakFoundPayload], error) {
 	if err := requireIDs(map[string]string{fieldBreakID: payload.BreakID, fieldTenantID: payload.TenantID, fieldRunID: payload.RunID}); err != nil {
 		return TypedEvent[ReconciliationBreakFoundPayload]{}, err
 	}
+
 	return newTyped("reconciliation.break.found.v1", eventID, aggregateID, "ReconciliationBreak", occurredAt, version, seq, payload, meta)
 }
 
@@ -61,10 +64,11 @@ type ReconciliationBreakResolvedPayload struct {
 }
 
 // NewReconciliationBreakResolved builds reconciliation.break.resolved.v1.
-func NewReconciliationBreakResolved(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload ReconciliationBreakResolvedPayload, meta EventMetadata) (TypedEvent[ReconciliationBreakResolvedPayload], error) {
+func NewReconciliationBreakResolved(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload ReconciliationBreakResolvedPayload, meta Metadata) (TypedEvent[ReconciliationBreakResolvedPayload], error) {
 	if err := requireIDs(map[string]string{fieldBreakID: payload.BreakID, fieldTenantID: payload.TenantID}); err != nil {
 		return TypedEvent[ReconciliationBreakResolvedPayload]{}, err
 	}
+
 	return newTyped("reconciliation.break.resolved.v1", eventID, aggregateID, "ReconciliationBreak", occurredAt, version, seq, payload, meta)
 }
 
@@ -76,9 +80,10 @@ type ReconciliationBreakAcknowledgedPayload struct {
 }
 
 // NewReconciliationBreakAcknowledged builds reconciliation.break.acknowledged.v1.
-func NewReconciliationBreakAcknowledged(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload ReconciliationBreakAcknowledgedPayload, meta EventMetadata) (TypedEvent[ReconciliationBreakAcknowledgedPayload], error) {
+func NewReconciliationBreakAcknowledged(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload ReconciliationBreakAcknowledgedPayload, meta Metadata) (TypedEvent[ReconciliationBreakAcknowledgedPayload], error) {
 	if err := requireIDs(map[string]string{fieldBreakID: payload.BreakID, fieldTenantID: payload.TenantID}); err != nil {
 		return TypedEvent[ReconciliationBreakAcknowledgedPayload]{}, err
 	}
+
 	return newTyped("reconciliation.break.acknowledged.v1", eventID, aggregateID, "ReconciliationBreak", occurredAt, version, seq, payload, meta)
 }

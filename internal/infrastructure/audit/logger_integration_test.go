@@ -3,7 +3,6 @@ package audit_test
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"strconv"
 	"sync"
 	"testing"
@@ -63,7 +62,7 @@ func openAuditTx(t *testing.T) (*audit.Logger, *gorm.DB) {
 	clk := mockapplication.NewMockClock(t)
 	clk.EXPECT().Now().Return(time.Date(2026, 9, 23, 0, 0, 0, 0, time.UTC)).Maybe()
 
-	logger, err := audit.NewLogger(audit.AuditParams{
+	logger, err := audit.NewLogger(audit.Params{
 		DB:         gormDB,
 		SigningKey: []byte("0123456789abcdef0123456789abcdef"),
 		Clock:      clk,
@@ -86,6 +85,7 @@ func auditEntry() appport.AuditEntry {
 }
 
 func TestAuditDurableChain(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	type testCase struct {
@@ -104,6 +104,7 @@ func TestAuditDurableChain(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			logger := openAuditLogger(t)
 			ctx := context.Background()
 
@@ -127,6 +128,7 @@ func TestAuditDurableChain(t *testing.T) {
 }
 
 func TestAuditCheckpointTamperDetection(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	type testCase struct {
@@ -147,6 +149,7 @@ func TestAuditCheckpointTamperDetection(t *testing.T) {
 			name: "reordered chain detected via seq",
 			forge: func(root audit.SignedRoot) audit.SignedRoot {
 				root.Seq++
+
 				return root
 			},
 			expectedError: audit.ErrCheckpointInvalid,
@@ -155,6 +158,7 @@ func TestAuditCheckpointTamperDetection(t *testing.T) {
 			name: "tampered root detected",
 			forge: func(root audit.SignedRoot) audit.SignedRoot {
 				root.RootHash = "tampered-root"
+
 				return root
 			},
 			expectedError: audit.ErrCheckpointInvalid,
@@ -163,6 +167,7 @@ func TestAuditCheckpointTamperDetection(t *testing.T) {
 			name: "deleted entry detected via seq",
 			forge: func(root audit.SignedRoot) audit.SignedRoot {
 				root.Seq--
+
 				return root
 			},
 			expectedError: audit.ErrCheckpointInvalid,
@@ -171,6 +176,7 @@ func TestAuditCheckpointTamperDetection(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			logger := openAuditLogger(t)
 			ctx := context.Background()
 
@@ -186,6 +192,7 @@ func TestAuditCheckpointTamperDetection(t *testing.T) {
 			err = logger.VerifyCheckpoint(ctx, tc.forge(root))
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
+
 				return
 			}
 
@@ -195,6 +202,7 @@ func TestAuditCheckpointTamperDetection(t *testing.T) {
 }
 
 func TestRecordTxJoinsCallerTransaction(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	type testCase struct {
@@ -227,11 +235,13 @@ func TestRecordTxJoinsCallerTransaction(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			logger, gormDB := openAuditTx(t)
 			ctx := context.Background()
 
 			if tc.nilTx {
 				assert.ErrorIs(t, logger.RecordTx(ctx, nil, auditEntry()), audit.ErrConfigRequired)
+
 				return
 			}
 
@@ -253,6 +263,7 @@ func TestRecordTxJoinsCallerTransaction(t *testing.T) {
 }
 
 func TestAuditVerifySubMicrosecondTimestamps(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	type testCase struct {
@@ -273,6 +284,7 @@ func TestAuditVerifySubMicrosecondTimestamps(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			logger := openAuditLogger(t)
 			ctx := context.Background()
 
@@ -286,6 +298,7 @@ func TestAuditVerifySubMicrosecondTimestamps(t *testing.T) {
 }
 
 func TestAuditCheckpointSurvivesAppends(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	logger := openAuditLogger(t)
@@ -309,27 +322,34 @@ func TestAuditCheckpointSurvivesAppends(t *testing.T) {
 }
 
 func TestAuditConcurrentAppendsSerialize(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
-	const writers = 4
-	const perWriter = 3
+	const (
+		writers   = 4
+		perWriter = 3
+	)
 
 	logger := openAuditLogger(t)
 	ctx := context.Background()
 
 	var wg sync.WaitGroup
+
 	errCh := make(chan error, writers*perWriter)
 
-	for w := 0; w < writers; w++ {
+	for w := range writers {
 		wg.Add(1)
 		go func(w int) {
 			defer wg.Done()
-			for i := 0; i < perWriter; i++ {
+
+			for i := range perWriter {
 				entry := auditEntry()
 				entry.Action = "append"
+
 				entry.Resource = "w:" + strconv.Itoa(w) + "/i:" + strconv.Itoa(i)
 				if err := logger.Record(ctx, entry); err != nil {
 					errCh <- err
+
 					return
 				}
 			}
@@ -338,6 +358,7 @@ func TestAuditConcurrentAppendsSerialize(t *testing.T) {
 
 	wg.Wait()
 	close(errCh)
+
 	for err := range errCh {
 		assert.NoError(t, err)
 	}
@@ -362,6 +383,7 @@ func (f failingWORM) ArchiveCheckpoint(_ context.Context, _ audit.SignedRoot) er
 }
 
 func TestAuditCheckpointWormFailureSurfaced(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	logger, db := openAuditTx(t)
@@ -372,8 +394,8 @@ func TestAuditCheckpointWormFailureSurfaced(t *testing.T) {
 	clk := mockapplication.NewMockClock(t)
 	clk.EXPECT().Now().Return(time.Date(2026, 9, 23, 0, 0, 0, 0, time.UTC)).Maybe()
 
-	boom := errors.New("worm unavailable")
-	wormLogger, err := audit.NewLogger(audit.AuditParams{
+	boom := audit.ErrWormUnavailable
+	wormLogger, err := audit.NewLogger(audit.Params{
 		DB:         db,
 		SigningKey: []byte("0123456789abcdef0123456789abcdef"),
 		Clock:      clk,
@@ -389,6 +411,7 @@ func TestAuditCheckpointWormFailureSurfaced(t *testing.T) {
 }
 
 func TestAuditSwappedHashesDetected(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	logger, db := openAuditTx(t)

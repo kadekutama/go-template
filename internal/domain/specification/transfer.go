@@ -37,7 +37,7 @@ type Allocation struct {
 
 // TransferAmountPositive passes for strictly positive transfer amounts.
 func TransferAmountPositive() Specification[TransferCandidate] {
-	return NewFuncSpec[TransferCandidate]("INVALID_TRANSFER_AMOUNT", "transfer amount must be positive",
+	return NewFuncSpec("INVALID_TRANSFER_AMOUNT", "transfer amount must be positive",
 		func(_ context.Context, c TransferCandidate) bool { return c.Amount.IsPositive() })
 }
 
@@ -46,6 +46,7 @@ func TransferAmountPositive() Specification[TransferCandidate] {
 // figures are reported on failure.
 func SufficientFunds(snapshot BalanceSnapshot) Specification[valueobject.Money] {
 	available := snapshot.Available
+
 	return evalFunc[valueobject.Money](func(_ context.Context, spend valueobject.Money) SpecResult {
 		fail := func(code, message string) SpecResult {
 			return SpecResult{Violations: []Violation{{
@@ -60,13 +61,16 @@ func SufficientFunds(snapshot BalanceSnapshot) Specification[valueobject.Money] 
 		if spend.Asset() != available.Asset() {
 			return fail("CURRENCY_MISMATCH", "spend asset differs from balance asset")
 		}
+
 		cmp, err := available.Compare(spend)
 		if err != nil {
 			return fail("CURRENCY_MISMATCH", "spend asset differs from balance asset")
 		}
+
 		if cmp < 0 {
 			return fail("INSUFFICIENT_FUNDS", "available balance below spend amount")
 		}
+
 		return SpecResult{}
 	})
 }
@@ -90,9 +94,11 @@ func CaptureAmountValid() Specification[CaptureRequest] {
 		if r.AuthorizedMinor < 0 || r.CapturedTotalMinor < 0 || r.CaptureMinor < 0 {
 			return fail("negative input")
 		}
+
 		if r.CaptureMinor > r.AuthorizedMinor-r.CapturedTotalMinor {
 			return fail("total exceeds authorized")
 		}
+
 		return SpecResult{}
 	})
 }
@@ -100,15 +106,17 @@ func CaptureAmountValid() Specification[CaptureRequest] {
 // AllocationExact passes iff posted shares sum exactly to the source amount
 // (money-flow §2.13 construction rule alongside AllocateLargestRemainder).
 func AllocationExact() Specification[Allocation] {
-	return NewFuncSpec[Allocation]("UNBALANCED_TRANSACTION", "shares do not sum to source",
+	return NewFuncSpec("UNBALANCED_TRANSACTION", "shares do not sum to source",
 		func(_ context.Context, a Allocation) bool {
 			var sum int64
 			for _, s := range a.Shares {
 				if (s > 0 && sum > math.MaxInt64-s) || (s < 0 && sum < math.MinInt64-s) {
 					return false
 				}
+
 				sum += s
 			}
+
 			return len(a.Shares) > 0 && sum == a.Source
 		})
 }

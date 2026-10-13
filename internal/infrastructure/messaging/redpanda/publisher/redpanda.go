@@ -17,10 +17,10 @@ import (
 	"github.com/kadekutama/go-template/pkg/jsonparser"
 )
 
-// PublisherParams carries constructor dependencies (Parameter Object pattern).
+// Params carries constructor dependencies (Parameter Object pattern).
 // Topic is required (fail-fast, ADR-021); wiring passes the configured
 // registry's OutboxFactsTopic().
-type PublisherParams struct {
+type Params struct {
 	Broker redpanda.Broker
 	Topic  string
 	Logger log.Logger
@@ -38,14 +38,14 @@ type Publisher struct {
 var _ appport.EventPublisher = (*Publisher)(nil)
 
 // NewPublisher builds the relay; Broker must be non-nil.
-func NewPublisher(params PublisherParams) (*Publisher, error) {
+func NewPublisher(params Params) (*Publisher, error) {
 	if params.Broker == nil {
-		return nil, fmt.Errorf("publisher: broker is required")
+		return nil, ErrPublisherBrokerIsRequired
 	}
 
 	topic := strings.TrimSpace(params.Topic)
 	if topic == "" {
-		return nil, fmt.Errorf("publisher: topic is required")
+		return nil, ErrPublisherTopicIsRequired
 	}
 
 	return &Publisher{broker: params.Broker, topic: topic, logger: params.Logger}, nil
@@ -69,7 +69,7 @@ type envelope struct {
 // Unknown publish outcome is an error: the E07 poller row stays claimable.
 func (p *Publisher) Publish(ctx context.Context, facts ...appport.OutboxFact) error {
 	if p == nil || p.broker == nil {
-		return fmt.Errorf("publisher: not initialized")
+		return ErrPublisherNotInitialized
 	}
 
 	if len(facts) == 0 {
@@ -95,19 +95,19 @@ func (p *Publisher) publishOne(ctx context.Context, fact appport.OutboxFact) err
 	aggregate := strings.TrimSpace(fact.AggregateID)
 
 	if tenant == "" {
-		return fmt.Errorf("publisher: tenant is required")
+		return ErrPublisherTenantIsRequired
 	}
 
 	if eventType == "" {
-		return fmt.Errorf("publisher: event type is required")
+		return ErrPublisherEventTypeIsRequired
 	}
 
 	if aggregate == "" {
-		return fmt.Errorf("publisher: aggregate id is required")
+		return ErrPublisherAggregateIDIsRequired
 	}
 
 	if fact.Payload == nil {
-		return fmt.Errorf("publisher: payload is required")
+		return ErrPublisherPayloadIsRequired
 	}
 
 	occurred := fact.OccurredAt

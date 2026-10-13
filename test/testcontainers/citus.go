@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/network"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	// Blank import registers the pgx stdlib driver for readiness probes.
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -51,12 +53,12 @@ func StartCitus(t *testing.T, dbname string) (*CitusHandle, error) {
 		dbname = "ledger_citus_test"
 	}
 
-	//nolint:gosec // fixture uses ephemeral testcontainer credentials only, never production secrets.
 	h := &CitusHandle{
 		user:     "postgres",
 		password: "citus_test_pw",
 		dbname:   dbname,
 	}
+
 	t.Cleanup(func() { _ = h.Terminate(context.Background()) })
 
 	clusterNet, err := network.New(ctx)
@@ -95,24 +97,22 @@ func StartCitus(t *testing.T, dbname string) (*CitusHandle, error) {
 // network and waits until it accepts SQL connections.
 func startCitusNode(ctx context.Context, networkName, alias, dbname, user, password string) (tc.Container, string, string, error) {
 	req := tc.GenericContainerRequest{
-		ContainerRequest: tc.ContainerRequest{
-			Image:        CitusImage,
-			Hostname:     alias,
-			ExposedPorts: []string{"5432/tcp"},
-			Networks:     []string{networkName},
-			NetworkAliases: map[string][]string{
-				networkName: {alias},
-			},
-			Env: map[string]string{
-				"POSTGRES_USER":     user,
-				"POSTGRES_PASSWORD": password,
-				"POSTGRES_DB":       dbname,
-			},
-			WaitingFor: wait.ForSQL("5432/tcp", "pgx", func(host string, port mobyNetwork.Port) string {
-				return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
-					user, password, host, port.Port(), dbname)
-			}).WithStartupTimeout(citusStartupTimeout).WithPollInterval(time.Second),
+		Image:        CitusImage,
+		Hostname:     alias,
+		ExposedPorts: []string{"5432/tcp"},
+		Networks:     []string{networkName},
+		NetworkAliases: map[string][]string{
+			networkName: {alias},
 		},
+		Env: map[string]string{
+			"POSTGRES_USER":     user,
+			"POSTGRES_PASSWORD": password,
+			"POSTGRES_DB":       dbname,
+		},
+		WaitingFor: wait.ForSQL("5432/tcp", "pgx", func(host string, port mobyNetwork.Port) string {
+			return fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable",
+				user, password, net.JoinHostPort(host, port.Port()), dbname)
+		}).WithStartupTimeout(citusStartupTimeout).WithPollInterval(time.Second),
 		Started: true,
 	}
 
@@ -124,12 +124,14 @@ func startCitusNode(ctx context.Context, networkName, alias, dbname, user, passw
 	mapped, err := container.MappedPort(ctx, "5432")
 	if err != nil {
 		_ = container.Terminate(ctx)
+
 		return nil, "", "", fmt.Errorf("map citus node %s port: %w", alias, err)
 	}
 
 	host, err := container.Host(ctx)
 	if err != nil {
 		_ = container.Terminate(ctx)
+
 		return nil, "", "", fmt.Errorf("citus node %s host: %w", alias, err)
 	}
 
@@ -151,33 +153,15 @@ func execCitusSQL(ctx context.Context, dsn, stmt string, args ...any) error {
 	return nil
 }
 
-// enableCluster creates the citus extension on both nodes and registers the
-// worker on the coordinator.
-func (h *CitusHandle) enableCluster(ctx context.Context) error {
-	if err := execCitusSQL(ctx, h.WorkerDSN(), "CREATE EXTENSION IF NOT EXISTS citus"); err != nil {
-		return fmt.Errorf("enable worker citus extension: %w", err)
-	}
-
-	if err := execCitusSQL(ctx, h.ConnectionString(), "CREATE EXTENSION IF NOT EXISTS citus"); err != nil {
-		return fmt.Errorf("enable coordinator citus extension: %w", err)
-	}
-
-	if err := execCitusSQL(ctx, h.ConnectionString(), "SELECT citus_add_node('citus-worker', 5432)"); err != nil {
-		return fmt.Errorf("register citus worker: %w", err)
-	}
-
-	return nil
-}
-
 // ConnectionString returns the coordinator DSN (application endpoint).
 func (h *CitusHandle) ConnectionString() string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", h.user, h.password, h.host, h.port, h.dbname)
+	return fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable", h.user, h.password, net.JoinHostPort(h.host, h.port), h.dbname)
 }
 
 // WorkerDSN returns the direct worker DSN (fixture introspection only;
 // application traffic must use ConnectionString).
 func (h *CitusHandle) WorkerDSN() string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", h.user, h.password, h.workerHost, h.workerPort, h.dbname)
+	return fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable", h.user, h.password, net.JoinHostPort(h.workerHost, h.workerPort), h.dbname)
 }
 
 // Coordinator exposes the coordinator container for crash-recovery drills.
@@ -194,7 +178,7 @@ func (h *CitusHandle) Coordinator() tc.Container {
 // stale while the container itself is healthy.
 func (h *CitusHandle) Refresh(ctx context.Context) error {
 	if h == nil || h.coordinator == nil {
-		return fmt.Errorf("citus handle is not initialized")
+		return ErrCitusHandleIsNotInitialized
 	}
 
 	mapped, err := h.coordinator.MappedPort(ctx, "5432")
@@ -244,6 +228,24 @@ func (h *CitusHandle) Terminate(ctx context.Context) error {
 		if err := n.Remove(ctx); err != nil {
 			return fmt.Errorf("remove citus network: %w", err)
 		}
+	}
+
+	return nil
+}
+
+// enableCluster creates the citus extension on both nodes and registers the
+// worker on the coordinator.
+func (h *CitusHandle) enableCluster(ctx context.Context) error {
+	if err := execCitusSQL(ctx, h.WorkerDSN(), "CREATE EXTENSION IF NOT EXISTS citus"); err != nil {
+		return fmt.Errorf("enable worker citus extension: %w", err)
+	}
+
+	if err := execCitusSQL(ctx, h.ConnectionString(), "CREATE EXTENSION IF NOT EXISTS citus"); err != nil {
+		return fmt.Errorf("enable coordinator citus extension: %w", err)
+	}
+
+	if err := execCitusSQL(ctx, h.ConnectionString(), "SELECT citus_add_node('citus-worker', 5432)"); err != nil {
+		return fmt.Errorf("register citus worker: %w", err)
 	}
 
 	return nil

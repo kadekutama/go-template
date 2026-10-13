@@ -59,7 +59,7 @@ type MockDisputeUseCases_CloseDispute_Call struct {
 // CloseDispute is a helper method to define mock.On call
 //   - ctx context.Context
 //   - cmd port.CloseDisputeCommand
-func (_e *MockDisputeUseCases_Expecter) CloseDispute(ctx interface{}, cmd interface{}) *MockDisputeUseCases_CloseDispute_Call {
+func (_e *MockDisputeUseCases_Expecter) CloseDispute(ctx any, cmd any) *MockDisputeUseCases_CloseDispute_Call {
 	return &MockDisputeUseCases_CloseDispute_Call{Call: _e.mock.On("CloseDispute", ctx, cmd)}
 }
 
@@ -116,7 +116,7 @@ type MockDisputeUseCases_GetDispute_Call struct {
 // GetDispute is a helper method to define mock.On call
 //   - ctx context.Context
 //   - query port.DisputeQuery
-func (_e *MockDisputeUseCases_Expecter) GetDispute(ctx interface{}, query interface{}) *MockDisputeUseCases_GetDispute_Call {
+func (_e *MockDisputeUseCases_Expecter) GetDispute(ctx any, query any) *MockDisputeUseCases_GetDispute_Call {
 	return &MockDisputeUseCases_GetDispute_Call{Call: _e.mock.On("GetDispute", ctx, query)}
 }
 
@@ -173,7 +173,7 @@ type MockDisputeUseCases_ListDisputes_Call struct {
 // ListDisputes is a helper method to define mock.On call
 //   - ctx context.Context
 //   - filter port.DisputeListFilter
-func (_e *MockDisputeUseCases_Expecter) ListDisputes(ctx interface{}, filter interface{}) *MockDisputeUseCases_ListDisputes_Call {
+func (_e *MockDisputeUseCases_Expecter) ListDisputes(ctx any, filter any) *MockDisputeUseCases_ListDisputes_Call {
 	return &MockDisputeUseCases_ListDisputes_Call{Call: _e.mock.On("ListDisputes", ctx, filter)}
 }
 
@@ -230,7 +230,7 @@ type MockDisputeUseCases_OpenDispute_Call struct {
 // OpenDispute is a helper method to define mock.On call
 //   - ctx context.Context
 //   - cmd port.OpenDisputeCommand
-func (_e *MockDisputeUseCases_Expecter) OpenDispute(ctx interface{}, cmd interface{}) *MockDisputeUseCases_OpenDispute_Call {
+func (_e *MockDisputeUseCases_Expecter) OpenDispute(ctx any, cmd any) *MockDisputeUseCases_OpenDispute_Call {
 	return &MockDisputeUseCases_OpenDispute_Call{Call: _e.mock.On("OpenDispute", ctx, cmd)}
 }
 
@@ -287,7 +287,7 @@ type MockDisputeUseCases_RepresentDispute_Call struct {
 // RepresentDispute is a helper method to define mock.On call
 //   - ctx context.Context
 //   - cmd port.RepresentCommand
-func (_e *MockDisputeUseCases_Expecter) RepresentDispute(ctx interface{}, cmd interface{}) *MockDisputeUseCases_RepresentDispute_Call {
+func (_e *MockDisputeUseCases_Expecter) RepresentDispute(ctx any, cmd any) *MockDisputeUseCases_RepresentDispute_Call {
 	return &MockDisputeUseCases_RepresentDispute_Call{Call: _e.mock.On("RepresentDispute", ctx, cmd)}
 }
 
@@ -344,7 +344,7 @@ type MockDisputeUseCases_SubmitEvidence_Call struct {
 // SubmitEvidence is a helper method to define mock.On call
 //   - ctx context.Context
 //   - cmd port.EvidenceCommand
-func (_e *MockDisputeUseCases_Expecter) SubmitEvidence(ctx interface{}, cmd interface{}) *MockDisputeUseCases_SubmitEvidence_Call {
+func (_e *MockDisputeUseCases_Expecter) SubmitEvidence(ctx any, cmd any) *MockDisputeUseCases_SubmitEvidence_Call {
 	return &MockDisputeUseCases_SubmitEvidence_Call{Call: _e.mock.On("SubmitEvidence", ctx, cmd)}
 }
 

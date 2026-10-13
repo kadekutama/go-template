@@ -9,7 +9,6 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -49,11 +48,11 @@ func NewSigner(params SignerParams) (*Signer, error) {
 	}
 
 	if len(secrets) == 0 {
-		return nil, fmt.Errorf("webhook: at least one secret is required")
+		return nil, ErrWebhookAtLeastOneSecretIsRequired
 	}
 
 	if params.Tolerance <= 0 {
-		return nil, fmt.Errorf("webhook: tolerance must be positive")
+		return nil, ErrWebhookToleranceMustBePositive
 	}
 
 	return &Signer{secrets: secrets, tolerance: params.Tolerance}, nil
@@ -75,11 +74,11 @@ func (s *Signer) Sign(payload []byte, timestamp time.Time) string {
 // any value matching any secret verifies.
 func (s *Signer) Verify(payload []byte, timestamp time.Time, signature string) error {
 	if s == nil || len(s.secrets) == 0 {
-		return fmt.Errorf("webhook: signer is not initialized")
+		return ErrWebhookSignerIsNotInitialized
 	}
 
 	if payload == nil {
-		return fmt.Errorf("webhook: payload is required")
+		return ErrWebhookPayloadIsRequired
 	}
 
 	values, err := splitSignatures(signature)
@@ -88,13 +87,14 @@ func (s *Signer) Verify(payload []byte, timestamp time.Time, signature string) e
 	}
 
 	now := time.Now().UTC()
+
 	delta := now.Sub(timestamp.UTC())
 	if delta < 0 {
 		delta = -delta
 	}
 
 	if delta > s.tolerance {
-		return fmt.Errorf("webhook: timestamp outside tolerance")
+		return ErrWebhookTimestampOutsideTolerance
 	}
 
 	for _, secret := range s.secrets {
@@ -106,14 +106,14 @@ func (s *Signer) Verify(payload []byte, timestamp time.Time, signature string) e
 		}
 	}
 
-	return fmt.Errorf("webhook: signature mismatch")
+	return ErrWebhookSignatureMismatch
 }
 
 // splitSignatures parses one or more comma-separated v1= hex values.
 func splitSignatures(signature string) ([][]byte, error) {
 	trimmed := strings.TrimSpace(signature)
 	if trimmed == "" {
-		return nil, fmt.Errorf("webhook: signature is required")
+		return nil, ErrWebhookSignatureIsRequired
 	}
 
 	parts := strings.Split(trimmed, ",")
@@ -122,12 +122,12 @@ func splitSignatures(signature string) ([][]byte, error) {
 	for _, part := range parts {
 		hexPart, ok := strings.CutPrefix(strings.TrimSpace(part), "v1=")
 		if !ok || strings.TrimSpace(hexPart) == "" {
-			return nil, fmt.Errorf("webhook: signature values must start with 'v1='")
+			return nil, ErrWebhookSignatureValuesMustStartWithV1
 		}
 
 		sigBytes, err := hex.DecodeString(strings.TrimSpace(hexPart))
 		if err != nil {
-			return nil, fmt.Errorf("webhook: signature is not hex")
+			return nil, ErrWebhookSignatureIsNotHex
 		}
 
 		values = append(values, sigBytes)

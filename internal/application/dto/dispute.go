@@ -24,6 +24,7 @@ type DisputeDTO struct {
 // ToDisputeDTO maps one stored dispute plus read cursor and optional outcome.
 func ToDisputeDTO(result port.DisputeResult, outcome string) DisputeDTO {
 	dispute := result.Dispute
+
 	return DisputeDTO{
 		ID: dispute.ID, PaymentID: dispute.PaymentID, Network: dispute.Network,
 		AmountMinor: dispute.AmountMinor, Status: string(dispute.Status),

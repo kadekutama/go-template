@@ -21,8 +21,8 @@ type TransferActions struct {
 // never rests unannounced.
 func TransferSteps(actions TransferActions) []Step {
 	return []Step{
-		{Name: "reserve-funds", MaxAttempts: 3, Timeout: 10 * time.Second, Run: actions.ReserveFunds, Compensate: actions.ReleaseReservation},
-		{Name: "post-transfer", MaxAttempts: 3, Timeout: 10 * time.Second, Run: actions.PostTransfer, Compensate: actions.VoidPosting},
-		{Name: StepNotify, MaxAttempts: 5, Timeout: 10 * time.Second, Run: actions.Notify},
+		{Name: "reserve-funds", MaxAttempts: maxAttempts3, Timeout: timeout10 * time.Second, Run: actions.ReserveFunds, Compensate: actions.ReleaseReservation},
+		{Name: "post-transfer", MaxAttempts: maxAttempts3, Timeout: timeout10 * time.Second, Run: actions.PostTransfer, Compensate: actions.VoidPosting},
+		{Name: StepNotify, MaxAttempts: maxAttempts5, Timeout: timeout10 * time.Second, Run: actions.Notify},
 	}
 }

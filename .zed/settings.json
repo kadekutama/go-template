@@ -1,0 +1,11 @@
+{
+  "lsp": {
+    "gopls": {
+      "initialization_options": {
+        "analyses": {
+          "modernize": true
+        }
+      }
+    }
+  }
+}

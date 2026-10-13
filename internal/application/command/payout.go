@@ -134,10 +134,12 @@ func (s *PayoutService) CreatePayout(ctx context.Context, req port.PayoutRequest
 	if err := validatePayoutEnvelope(req); err != nil {
 		return port.PayoutResult{}, err
 	}
+
 	subject := port.Subject{ID: req.Actor, TenantID: req.TenantID}
 	if err := RequireAuthz(ctx, s.authz, subject, "payout.create", "ledger/"+string(req.LedgerID)); err != nil {
 		return port.PayoutResult{}, err
 	}
+
 	payoutID := s.ids.NewID()
 	now := s.clock.Now().UTC()
 	rec := port.IdempotencyRecord{
@@ -145,23 +147,30 @@ func (s *PayoutService) CreatePayout(ctx context.Context, req port.PayoutRequest
 		Fingerprint: Fingerprint(req.IdempotencyKey, string(req.TenantID), string(req.AccountID), int64ToString(req.AmountMinor), string(req.AssetCode), string(req.Method)),
 		TenantID:    req.TenantID,
 	}
+
 	var result port.PayoutResult
+
 	doErr := s.uow.Do(ctx, func(ctx context.Context, tx port.Tx) error {
 		outcome, err := tx.Idempotency().Reserve(ctx, rec)
 		if err != nil {
 			return err
 		}
+
 		if outcome.Replay {
 			decoded, err := decodePayoutResult(outcome.Response)
 			if err != nil {
 				return err
 			}
+
 			result = decoded
+
 			return nil
 		}
+
 		if err := s.checkEligibility(ctx, req); err != nil {
 			return err
 		}
+
 		if err := s.payouts.CreatePayout(ctx, PayoutRecord{
 			ID: payoutID, TenantID: req.TenantID, LedgerID: req.LedgerID, AccountID: req.AccountID,
 			AmountMinor: req.AmountMinor, AssetCode: req.AssetCode, Method: req.Method,
@@ -169,22 +178,27 @@ func (s *PayoutService) CreatePayout(ctx context.Context, req port.PayoutRequest
 		}); err != nil {
 			return err
 		}
+
 		result = port.PayoutResult{PayoutID: payoutID, Status: PayoutPending, Cursor: tx.Cursor()}
+
 		encoded, err := jsonparser.Marshal(result)
 		if err != nil {
 			return err
 		}
+
 		if err := tx.Outbox().Append(ctx, port.OutboxFact{
 			TenantID: req.TenantID, LedgerID: req.LedgerID, EventType: EventPayoutCreated,
 			AggregateID: payoutID, Payload: payoutPayload(payoutID, PayoutPending, ""), OccurredAt: now,
 		}); err != nil {
 			return err
 		}
+
 		return tx.Idempotency().Complete(ctx, rec.Key, encoded)
 	})
 	if doErr != nil {
 		return port.PayoutResult{}, doErr
 	}
+
 	return result, nil
 }
 
@@ -193,41 +207,53 @@ func (s *PayoutService) CancelPayout(ctx context.Context, query port.PaymentQuer
 	if strings.TrimSpace(query.Actor) == "" {
 		return port.PayoutResult{}, entity.NewError("ACTOR_REQUIRED", "payout actor is required")
 	}
+
 	subject := port.Subject{ID: query.Actor, TenantID: valueobject.TenantID(query.TenantID)}
 	if err := RequireAuthz(ctx, s.authz, subject, "payout.cancel", "payout/"+query.ID); err != nil {
 		return port.PayoutResult{}, err
 	}
+
 	rec := port.IdempotencyRecord{
 		Key:         "cancel:" + query.ID,
 		Fingerprint: Fingerprint("cancel", query.ID),
 		TenantID:    valueobject.TenantID(query.TenantID),
 	}
+
 	var result port.PayoutResult
+
 	err := s.uow.Do(ctx, func(ctx context.Context, tx port.Tx) error {
 		outcome, err := tx.Idempotency().Reserve(ctx, rec)
 		if err != nil {
 			return err
 		}
+
 		if outcome.Replay {
 			decoded, err := decodePayoutResult(outcome.Response)
 			if err != nil {
 				return err
 			}
+
 			result = decoded
+
 			return nil
 		}
+
 		record, err := s.payouts.FindPayout(ctx, valueobject.TenantID(query.TenantID), query.ID)
 		if err != nil {
 			return err
 		}
+
 		if record.Status != PayoutPending {
 			return entity.NewError("PAYOUT_STATE_INVALID", "only pending payouts can be canceled")
 		}
+
 		record.Status = PayoutCanceled
 		if err := s.payouts.UpdatePayout(ctx, record); err != nil {
 			return err
 		}
+
 		result = port.PayoutResult{PayoutID: record.ID, Status: PayoutCanceled, Cursor: tx.Cursor()}
+
 		encoded, err := jsonparser.Marshal(result)
 		if err != nil {
 			return err
@@ -239,6 +265,7 @@ func (s *PayoutService) CancelPayout(ctx context.Context, query port.PaymentQuer
 	if err != nil {
 		return port.PayoutResult{}, err
 	}
+
 	return result, nil
 }
 
@@ -248,6 +275,7 @@ func (s *PayoutService) GetPayout(ctx context.Context, query port.PaymentQuery) 
 	if err != nil {
 		return port.PayoutResult{}, err
 	}
+
 	return port.PayoutResult{PayoutID: record.ID, Status: record.Status}, nil
 }
 
@@ -256,14 +284,17 @@ func (s *PayoutService) ListPayouts(ctx context.Context, tenant valueobject.Tena
 	if err := validatePageLimit(limit); err != nil {
 		return nil, err
 	}
+
 	records, err := s.payouts.ListPayouts(ctx, tenant, limit)
 	if err != nil {
 		return nil, err
 	}
+
 	out := make([]port.PayoutResult, 0, len(records))
 	for _, record := range records {
 		out = append(out, port.PayoutResult{PayoutID: record.ID, Status: record.Status})
 	}
+
 	return out, nil
 }
 
@@ -278,41 +309,53 @@ func (s *PayoutService) UpdateSchedule(ctx context.Context, tenant valueobject.T
 	if err := RequireAuthz(ctx, s.authz, subject, "payout.schedule", "tenant/"+string(tenant)); err != nil {
 		return valueobject.PayoutPolicy{}, err
 	}
+
 	if err := policy.Validate(); err != nil {
 		return valueobject.PayoutPolicy{}, entity.NewError("PAYOUT_POLICY_INVALID", "payout policy is invalid")
 	}
+
 	rec := port.IdempotencyRecord{
 		Key:         key,
 		Fingerprint: Fingerprint(key, string(tenant), string(policy.AssetCode), policy.Version),
 		TenantID:    tenant,
 	}
+
 	var result valueobject.PayoutPolicy
+
 	err := s.uow.Do(ctx, func(ctx context.Context, tx port.Tx) error {
 		outcome, err := tx.Idempotency().Reserve(ctx, rec)
 		if err != nil {
 			return err
 		}
+
 		if outcome.Replay {
 			current, err := s.payouts.GetPolicy(ctx, tenant, policy.AssetCode)
 			if err != nil {
 				return err
 			}
+
 			result = current
+
 			return nil
 		}
+
 		if err := s.payouts.UpdatePolicy(ctx, policy); err != nil {
 			return err
 		}
+
 		result = policy
+
 		encoded, err := jsonparser.Marshal(map[string]string{"tenant": string(tenant), "asset": string(policy.AssetCode), "version": policy.Version})
 		if err != nil {
 			return err
 		}
+
 		return tx.Idempotency().Complete(ctx, rec.Key, encoded)
 	})
 	if err != nil {
 		return valueobject.PayoutPolicy{}, err
 	}
+
 	return result, nil
 }
 
@@ -324,12 +367,14 @@ func (s *PayoutService) checkEligibility(ctx context.Context, req port.PayoutReq
 	if err != nil {
 		return err
 	}
+
 	balance, err := s.balances.Execute(ctx, port.BalanceQuery{
 		TenantID: req.TenantID, LedgerID: req.LedgerID, AccountID: req.AccountID, AssetCode: req.AssetCode,
 	})
 	if err != nil {
 		return err
 	}
+
 	eligibility, err := service.EvaluateEligibility(service.EligibilityInput{
 		Policy: policy, AvailableMinor: balance.AvailableMinor, RequestedMinor: req.AmountMinor,
 		AssetCode: req.AssetCode, TenantAgeDays: req.TenantAgeDays,
@@ -338,14 +383,17 @@ func (s *PayoutService) checkEligibility(ctx context.Context, req port.PayoutReq
 	if err != nil {
 		return err
 	}
+
 	if !eligibility.Eligible {
 		return eligibility.BlockedError()
 	}
+
 	_, err = service.ValidateSubmission(service.PayoutSubmission{
 		MerchantAccount: req.AccountID, PayoutsPayable: s.transitAccount,
 		AmountMinor: req.AmountMinor, AssetCode: req.AssetCode, Method: req.Method,
 		Reference: service.PayoutReference{IdempotencyKey: req.IdempotencyKey},
 	})
+
 	return err
 }
 
@@ -354,30 +402,38 @@ func validatePayoutEnvelope(req port.PayoutRequest) error {
 	if strings.TrimSpace(req.TenantID.String()) == "" {
 		return entity.NewError("TENANT_REQUIRED", "tenant id is required")
 	}
+
 	if strings.TrimSpace(req.LedgerID.String()) == "" {
 		return entity.NewError("LEDGER_REQUIRED", "ledger id is required")
 	}
+
 	if strings.TrimSpace(req.AccountID.String()) == "" {
 		return entity.NewError("PAYOUT_ACCOUNT_REQUIRED", "payout requires an account id")
 	}
+
 	if req.AmountMinor <= 0 {
 		return entity.NewError("INVALID_PAYOUT_AMOUNT", "payout amount must be positive")
 	}
+
 	if strings.TrimSpace(string(req.AssetCode)) == "" {
 		return entity.NewError("PAYOUT_ASSET_REQUIRED", "payout requires an asset code")
 	}
+
 	if strings.TrimSpace(req.Actor) == "" {
 		return entity.NewError("ACTOR_REQUIRED", "payout actor is required")
 	}
+
 	if strings.TrimSpace(req.IdempotencyKey) == "" {
 		return entity.NewError("IDEMPOTENCY_KEY_REQUIRED", "payout requires an idempotency key")
 	}
+
 	return nil
 }
 
 // payoutPayload builds the §10-shaped webhook payload: id plus status.
 func payoutPayload(id, status, errorCode string) []byte {
 	encoded, _ := jsonparser.Marshal(map[string]string{payloadIDKey: id, payloadStatusKey: status, payloadErrorKey: errorCode})
+
 	return encoded
 }
 
@@ -387,9 +443,11 @@ func decodePayoutResult(response []byte) (port.PayoutResult, error) {
 	if err := jsonparser.Unmarshal(response, &result); err != nil {
 		return port.PayoutResult{}, entity.NewError("IDEMPOTENCY_RECORD_INVALID", "stored idempotency response is corrupt")
 	}
+
 	if result.PayoutID == "" {
 		return port.PayoutResult{}, entity.NewError("IDEMPOTENCY_RECORD_INVALID", "stored idempotency response is corrupt")
 	}
+
 	return result, nil
 }
 
@@ -433,10 +491,12 @@ func (s *TopupService) CreateTopup(ctx context.Context, req port.TopupRequest) (
 	}); err != nil {
 		return port.TopupResult{}, err
 	}
+
 	subject := port.Subject{ID: req.Actor, TenantID: req.TenantID}
 	if err := RequireAuthz(ctx, s.authz, subject, "topup.create", "ledger/"+string(req.LedgerID)); err != nil {
 		return port.TopupResult{}, err
 	}
+
 	topupID := s.ids.NewID()
 	now := s.clock.Now().UTC()
 	rec := port.IdempotencyRecord{
@@ -444,36 +504,46 @@ func (s *TopupService) CreateTopup(ctx context.Context, req port.TopupRequest) (
 		Fingerprint: Fingerprint(req.IdempotencyKey, string(req.TenantID), int64ToString(req.AmountMinor)),
 		TenantID:    req.TenantID,
 	}
+
 	var result port.TopupResult
+
 	err := s.uow.Do(ctx, func(ctx context.Context, tx port.Tx) error {
 		outcome, err := tx.Idempotency().Reserve(ctx, rec)
 		if err != nil {
 			return err
 		}
+
 		if outcome.Replay {
 			decoded, err := decodeTopupResult(outcome.Response)
 			if err != nil {
 				return err
 			}
+
 			result = decoded
+
 			return nil
 		}
+
 		if err := s.topups.CreateTopup(ctx, TopupRecord{
 			ID: topupID, TenantID: req.TenantID, LedgerID: req.LedgerID, AccountID: req.CreditAccount,
 			AmountMinor: req.AmountMinor, AssetCode: req.AssetCode, Status: TopupPending, CreatedAt: now,
 		}); err != nil {
 			return err
 		}
+
 		result = port.TopupResult{TopupID: topupID, Status: TopupPending, Cursor: tx.Cursor()}
+
 		encoded, err := jsonparser.Marshal(result)
 		if err != nil {
 			return err
 		}
+
 		return tx.Idempotency().Complete(ctx, rec.Key, encoded)
 	})
 	if err != nil {
 		return port.TopupResult{}, err
 	}
+
 	return result, nil
 }
 
@@ -483,17 +553,21 @@ func (s *TopupService) CancelTopup(ctx context.Context, tenant valueobject.Tenan
 	if err := RequireAuthz(ctx, s.authz, subject, "topup.cancel", "ledger/"+topupID); err != nil {
 		return port.TopupResult{}, err
 	}
+
 	record, err := s.topups.FindTopup(ctx, tenant, topupID)
 	if err != nil {
 		return port.TopupResult{}, err
 	}
+
 	if record.Status != TopupPending {
 		return port.TopupResult{}, entity.NewError("TOPUP_STATE_INVALID", "only pending top-ups can be canceled")
 	}
+
 	record.Status = TopupCanceled
 	if err := s.topups.UpdateTopup(ctx, record); err != nil {
 		return port.TopupResult{}, err
 	}
+
 	return port.TopupResult{TopupID: record.ID, Status: TopupCanceled}, nil
 }
 
@@ -503,6 +577,7 @@ func (s *TopupService) GetTopup(ctx context.Context, tenant valueobject.TenantID
 	if err != nil {
 		return port.TopupResult{}, err
 	}
+
 	return port.TopupResult{TopupID: record.ID, Status: record.Status}, nil
 }
 
@@ -511,14 +586,17 @@ func (s *TopupService) ListTopups(ctx context.Context, tenant valueobject.Tenant
 	if err := validatePageLimit(limit); err != nil {
 		return nil, err
 	}
+
 	records, err := s.topups.ListTopups(ctx, tenant, limit)
 	if err != nil {
 		return nil, err
 	}
+
 	out := make([]port.TopupResult, 0, len(records))
 	for _, record := range records {
 		out = append(out, port.TopupResult{TopupID: record.ID, Status: record.Status})
 	}
+
 	return out, nil
 }
 
@@ -633,8 +711,10 @@ func decodeTopupResult(response []byte) (port.TopupResult, error) {
 	if err := jsonparser.Unmarshal(response, &result); err != nil {
 		return port.TopupResult{}, entity.NewError("IDEMPOTENCY_RECORD_INVALID", "stored idempotency response is corrupt")
 	}
+
 	if result.TopupID == "" {
 		return port.TopupResult{}, entity.NewError("IDEMPOTENCY_RECORD_INVALID", "stored idempotency response is corrupt")
 	}
+
 	return result, nil
 }

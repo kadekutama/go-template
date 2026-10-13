@@ -1,8 +1,9 @@
-// Package command owns the core posting use case: the first vertical slice
+package command
+
+// The core posting use case below is the first vertical slice
 // from validated command to durably committed posting. Extended
 // bounded-context commands live in E06-T02–T05/T11; they compose the same
 // plumbing (shared authz/idempotency stages) and ports defined in E06-T01/T06/T12.
-package command
 
 import (
 	"context"
@@ -63,10 +64,12 @@ func (s *PostingService) Execute(ctx context.Context, cmd port.PostPostingComman
 	if err := validatePostingCommand(cmd); err != nil {
 		return port.PostingResult{}, err
 	}
+
 	subject := port.Subject{ID: cmd.Actor, TenantID: cmd.TenantID}
 	if err := RequireAuthz(ctx, s.authz, subject, "ledger.post", "ledger/"+string(cmd.LedgerID)); err != nil {
 		return port.PostingResult{}, err
 	}
+
 	eventID := s.ids.NewID()
 	now := s.clock.Now().UTC()
 	entries := BuildPostingEntries(cmd.Entries, "")
@@ -75,13 +78,16 @@ func (s *PostingService) Execute(ctx context.Context, cmd port.PostPostingComman
 		Fingerprint: fingerprintPostingCommand(cmd),
 		TenantID:    cmd.TenantID,
 	}
+
 	var result port.PostingResult
+
 	err := s.uow.Do(ctx, func(ctx context.Context, tx port.Tx) error {
 		return s.executeInTx(ctx, tx, cmd, rec, entries, eventID, now, &result)
 	})
 	if err != nil {
 		return port.PostingResult{}, err
 	}
+
 	return result, nil
 }
 
@@ -90,18 +96,23 @@ func (s *PostingService) executeInTx(ctx context.Context, tx port.Tx, cmd port.P
 	if err != nil {
 		return err
 	}
+
 	if outcome.Replay {
 		decoded, err := decodePostingResult(outcome.Response)
 		if err != nil {
 			return err
 		}
+
 		*result = decoded
+
 		return nil
 	}
+
 	accounts, err := s.loadAccounts(ctx, cmd)
 	if err != nil {
 		return err
 	}
+
 	posting, err := aggregate.ConstructPosting(aggregate.PostingParams{
 		ID:                "",
 		TenantID:          cmd.TenantID,
@@ -118,23 +129,28 @@ func (s *PostingService) executeInTx(ctx context.Context, tx port.Tx, cmd port.P
 	if err != nil {
 		return err
 	}
+
 	stored, err := tx.Postings().Commit(ctx, posting.Record())
 	if err != nil {
 		return err
 	}
+
 	if err := posting.AssignID(stored.ID, stored.Entries, eventID); err != nil {
 		return err
 	}
+
 	*result = port.PostingResult{
 		PostingID: stored.ID,
 		TenantID:  cmd.TenantID,
 		LedgerID:  cmd.LedgerID,
 		Cursor:    tx.Cursor(),
 	}
+
 	encoded, err := jsonparser.Marshal(*result)
 	if err != nil {
 		return err
 	}
+
 	if err := tx.Outbox().Append(ctx, port.OutboxFact{
 		TenantID:    cmd.TenantID,
 		LedgerID:    cmd.LedgerID,
@@ -145,6 +161,7 @@ func (s *PostingService) executeInTx(ctx context.Context, tx port.Tx, cmd port.P
 	}); err != nil {
 		return err
 	}
+
 	return tx.Idempotency().Complete(ctx, rec.Key, encoded)
 }
 
@@ -155,15 +172,19 @@ func validatePostingCommand(cmd port.PostPostingCommand) error {
 	if strings.TrimSpace(cmd.TenantID.String()) == "" {
 		return entity.NewError("TENANT_REQUIRED", "tenant id is required")
 	}
+
 	if strings.TrimSpace(cmd.LedgerID.String()) == "" {
 		return entity.NewError("LEDGER_REQUIRED", "ledger id is required")
 	}
+
 	if strings.TrimSpace(cmd.Actor) == "" {
 		return entity.NewError("ACTOR_REQUIRED", "posting actor is required")
 	}
+
 	if strings.TrimSpace(cmd.IdempotencyKey) == "" {
 		return entity.NewError("IDEMPOTENCY_KEY_REQUIRED", "posting requires an idempotency key")
 	}
+
 	return nil
 }
 
@@ -176,12 +197,15 @@ func (s *PostingService) loadAccounts(ctx context.Context, cmd port.PostPostingC
 		if _, ok := accounts[line.AccountID]; ok {
 			continue
 		}
+
 		account, err := s.accounts.FindByID(ctx, cmd.TenantID, line.AccountID)
 		if err != nil {
 			return nil, err
 		}
+
 		accounts[line.AccountID] = account
 	}
+
 	return accounts, nil
 }
 
@@ -191,13 +215,16 @@ func (s *PostingService) loadAccounts(ctx context.Context, cmd port.PostPostingC
 // E07-T01 — see the E06-T13 packet). Shared with transfer construction.
 func BuildPostingEntries(lines []port.NewEntry, postingID valueobject.PostingID, ids ...port.IDGenerator) []entity.Entry {
 	positions := make(map[valueobject.AccountID]int64, len(lines))
+
 	entries := make([]entity.Entry, 0, len(lines))
 	for _, line := range lines {
 		positions[line.AccountID]++
+
 		var entryID valueobject.EntryID
 		if len(ids) > 0 && ids[0] != nil {
 			entryID = valueobject.EntryID(ids[0].NewID())
 		}
+
 		entries = append(entries, entity.Entry{
 			ID:          entryID,
 			PostingID:   postingID,
@@ -208,16 +235,20 @@ func BuildPostingEntries(lines []port.NewEntry, postingID valueobject.PostingID,
 			AccountSeq:  positions[line.AccountID],
 		})
 	}
+
 	return entries
 }
 
 // fingerprintPostingCommand canonicalizes the command into a stable
 // fingerprint over key scope, operation, and every line.
 func fingerprintPostingCommand(cmd port.PostPostingCommand) string {
-	parts := []string{cmd.IdempotencyKey, string(cmd.TenantID), string(cmd.LedgerID), cmd.Operation, cmd.ExternalReference}
+	parts := make([]string, 0, postingFingerprintBaseParts+4*len(cmd.Entries))
+
+	parts = append(parts, cmd.IdempotencyKey, string(cmd.TenantID), string(cmd.LedgerID), cmd.Operation, cmd.ExternalReference)
 	for _, line := range cmd.Entries {
 		parts = append(parts, string(line.AccountID), string(line.Side), int64ToString(line.AmountMinor), string(line.AssetCode))
 	}
+
 	return Fingerprint(parts...)
 }
 
@@ -231,8 +262,10 @@ func decodePostingResult(response []byte) (port.PostingResult, error) {
 	if err := jsonparser.Unmarshal(response, &result); err != nil {
 		return port.PostingResult{}, entity.NewError("IDEMPOTENCY_RECORD_INVALID", "stored idempotency response is corrupt")
 	}
+
 	if result.PostingID.String() == "" {
 		return port.PostingResult{}, entity.NewError("IDEMPOTENCY_RECORD_INVALID", "stored idempotency response is corrupt")
 	}
+
 	return result, nil
 }

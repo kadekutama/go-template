@@ -88,6 +88,7 @@ func TestBelongsToSubLedger(t *testing.T) {
 			entry: func() entity.Entry {
 				e := usdEntry
 				e.AssetCode = testEUR
+
 				return e
 			}(),
 			accounts:       accounts,
@@ -98,6 +99,8 @@ func TestBelongsToSubLedger(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := service.BelongsToSubLedger(tc.entry, tc.accounts, tc.key)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -139,6 +142,8 @@ func TestSubLedgerKeyMatches(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := tc.key.Matches(tc.tenant, tc.ledger, tc.asset)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -197,6 +202,7 @@ func TestValidateOpeningBalance(t *testing.T) {
 			period: func() entity.PeriodData {
 				p := basePeriod
 				p.Status = entity.PeriodClosed
+
 				return p
 			}(),
 			lines:         baseLines,
@@ -219,6 +225,7 @@ func TestValidateOpeningBalance(t *testing.T) {
 			lines: func() []service.OpeningBalanceLine {
 				l := append([]service.OpeningBalanceLine(nil), baseLines...)
 				l[1].AmountMinor = 90
+
 				return l
 			}(),
 			ev:            baseEv,
@@ -237,6 +244,7 @@ func TestValidateOpeningBalance(t *testing.T) {
 			lines: func() []service.OpeningBalanceLine {
 				l := append([]service.OpeningBalanceLine(nil), baseLines...)
 				l[0].AmountMinor = 0
+
 				return l
 			}(),
 			ev:            baseEv,
@@ -248,6 +256,7 @@ func TestValidateOpeningBalance(t *testing.T) {
 			lines: func() []service.OpeningBalanceLine {
 				l := append([]service.OpeningBalanceLine(nil), baseLines...)
 				l[0].Side = "SIDEWAYS"
+
 				return l
 			}(),
 			ev:            baseEv,
@@ -257,6 +266,8 @@ func TestValidateOpeningBalance(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualError := service.ValidateOpeningBalance(tc.period, tc.lines, tc.ev)
 			assert.Equal(t, tc.expectedError, actualError)
 		})

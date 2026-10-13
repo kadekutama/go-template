@@ -3,10 +3,8 @@ package pagination
 import (
 	"encoding/base64"
 	"encoding/binary"
-	"errors"
 	"hash/crc32"
 	"math"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -35,12 +33,14 @@ func TestCursorEncode(t *testing.T) {
 		{
 			name:          "negative offset fails",
 			c:             Cursor{Offset: -1},
-			expectedError: errors.New("pagination: negative offset"),
+			expectedError: ErrPaginationNegativeOffset,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			token, err := tc.c.Encode()
 			if tc.expectedError != nil {
 				assert.Equal(t, tc.expectedError, err)
@@ -48,7 +48,7 @@ func TestCursorEncode(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotEmpty(t, token)
-				assert.False(t, strings.Contains(token, "120"))
+				assert.NotContains(t, token, "120")
 			}
 		})
 	}
@@ -78,16 +78,17 @@ func TestDecodeCursor(t *testing.T) {
 			name: "tampered checksum rejected",
 			token: func() string {
 				tok, _ := Cursor{Offset: 7}.Encode()
+
 				return tok[:len(tok)-2] + "AA"
 			}(),
 			expectedResult: Cursor{},
-			expectedError:  errors.New("pagination: cursor checksum mismatch"),
+			expectedError:  ErrPaginationCursorChecksumMismatch,
 		},
 		{
 			name:           "malformed non-base64 garbage rejected",
 			token:          "!!!",
 			expectedResult: Cursor{},
-			expectedError:  errors.New("pagination: malformed cursor"),
+			expectedError:  ErrPaginationMalformedCursor,
 		},
 		{
 			name: "overflow cursor offset rejected",
@@ -95,18 +96,22 @@ func TestDecodeCursor(t *testing.T) {
 				var payload [8]byte
 				binary.BigEndian.PutUint64(payload[:], math.MaxUint64)
 				sum := crc32.Checksum(payload[:], crc32.MakeTable(crc32.Castagnoli))
+
 				var raw [12]byte
 				copy(raw[:8], payload[:])
 				binary.BigEndian.PutUint32(raw[8:], sum)
+
 				return base64.RawURLEncoding.EncodeToString(raw[:])
 			}(),
 			expectedResult: Cursor{},
-			expectedError:  errors.New("pagination: cursor offset overflow"),
+			expectedError:  ErrPaginationCursorOffsetOverflow,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, err := DecodeCursor(tc.token)
 			if tc.expectedError != nil {
 				assert.Equal(t, tc.expectedError, err)
@@ -132,17 +137,17 @@ func TestPageRequestValidate(t *testing.T) {
 		{
 			name:          "excessive limit rejected",
 			r:             PageRequest{Limit: 9999, Offset: 0},
-			expectedError: errors.New("pagination: limit must be between 1 and 200"),
+			expectedError: ErrPaginationLimitMustBeBetween1And200,
 		},
 		{
 			name:          "zero limit rejected",
 			r:             PageRequest{Limit: 0, Offset: 0},
-			expectedError: errors.New("pagination: limit must be between 1 and 200"),
+			expectedError: ErrPaginationLimitMustBeBetween1And200,
 		},
 		{
 			name:          "negative offset rejected",
 			r:             PageRequest{Limit: 50, Offset: -5},
-			expectedError: errors.New("pagination: offset must be non-negative"),
+			expectedError: ErrPaginationOffsetMustBeNonNegative,
 		},
 		{
 			name:          "valid request accepted",
@@ -153,6 +158,8 @@ func TestPageRequestValidate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.r.Validate()
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
@@ -180,28 +187,28 @@ func TestParseLimitOffset(t *testing.T) {
 			limitStr:       "abc",
 			offsetStr:      "0",
 			expectedResult: PageRequest{},
-			expectedError:  errors.New("pagination: invalid limit integer"),
+			expectedError:  ErrPaginationInvalidLimitInteger,
 		},
 		{
 			name:           "empty limit rejected",
 			limitStr:       "",
 			offsetStr:      "0",
 			expectedResult: PageRequest{},
-			expectedError:  errors.New("pagination: limit is required"),
+			expectedError:  ErrPaginationLimitIsRequired,
 		},
 		{
 			name:           "empty offset rejected",
 			limitStr:       "25",
 			offsetStr:      "",
 			expectedResult: PageRequest{},
-			expectedError:  errors.New("pagination: offset is required"),
+			expectedError:  ErrPaginationOffsetIsRequired,
 		},
 		{
 			name:           "negative offset rejected",
 			limitStr:       "25",
 			offsetStr:      "-3",
 			expectedResult: PageRequest{},
-			expectedError:  errors.New("pagination: offset must be non-negative"),
+			expectedError:  ErrPaginationOffsetMustBeNonNegative,
 		},
 		{
 			name:           "valid numeric values parsed",
@@ -214,6 +221,8 @@ func TestParseLimitOffset(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := ParseLimitOffset(tc.limitStr, tc.offsetStr)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())

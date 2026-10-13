@@ -1,7 +1,7 @@
 package valueobject_test
 
 import (
-	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -48,18 +48,20 @@ func TestParseTopupStatus(t *testing.T) {
 			name:           "invalid status",
 			s:              "SETTLED",
 			expectedResult: valueobject.TopupStatus(""),
-			expectedError:  errors.New(`topup: invalid status "SETTLED"`),
+			expectedError:  fmt.Errorf("topup: invalid status %q: %w", "SETTLED", valueobject.ErrTopupInvalidStatus),
 		},
 		{
 			name:           "empty status",
 			s:              "",
 			expectedResult: valueobject.TopupStatus(""),
-			expectedError:  errors.New(`topup: invalid status ""`),
+			expectedError:  fmt.Errorf("topup: invalid status %q: %w", "", valueobject.ErrTopupInvalidStatus),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := valueobject.ParseTopupStatus(tc.s)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -124,6 +126,8 @@ func TestCanTransitionTopup(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := valueobject.CanTransitionTopup(tc.from, tc.to)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})

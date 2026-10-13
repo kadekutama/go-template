@@ -47,7 +47,7 @@ type MockKeyEncryptionKey_DestroyKey_Call struct {
 // DestroyKey is a helper method to define mock.On call
 //   - ctx context.Context
 //   - keyID string
-func (_e *MockKeyEncryptionKey_Expecter) DestroyKey(ctx interface{}, keyID interface{}) *MockKeyEncryptionKey_DestroyKey_Call {
+func (_e *MockKeyEncryptionKey_Expecter) DestroyKey(ctx any, keyID any) *MockKeyEncryptionKey_DestroyKey_Call {
 	return &MockKeyEncryptionKey_DestroyKey_Call{Call: _e.mock.On("DestroyKey", ctx, keyID)}
 }
 
@@ -107,7 +107,7 @@ type MockKeyEncryptionKey_RewrapDEK_Call struct {
 //   - ctx context.Context
 //   - keyID string
 //   - wrapped []byte
-func (_e *MockKeyEncryptionKey_Expecter) RewrapDEK(ctx interface{}, keyID interface{}, wrapped interface{}) *MockKeyEncryptionKey_RewrapDEK_Call {
+func (_e *MockKeyEncryptionKey_Expecter) RewrapDEK(ctx any, keyID any, wrapped any) *MockKeyEncryptionKey_RewrapDEK_Call {
 	return &MockKeyEncryptionKey_RewrapDEK_Call{Call: _e.mock.On("RewrapDEK", ctx, keyID, wrapped)}
 }
 
@@ -167,7 +167,7 @@ type MockKeyEncryptionKey_UnwrapDEK_Call struct {
 //   - ctx context.Context
 //   - keyID string
 //   - wrapped []byte
-func (_e *MockKeyEncryptionKey_Expecter) UnwrapDEK(ctx interface{}, keyID interface{}, wrapped interface{}) *MockKeyEncryptionKey_UnwrapDEK_Call {
+func (_e *MockKeyEncryptionKey_Expecter) UnwrapDEK(ctx any, keyID any, wrapped any) *MockKeyEncryptionKey_UnwrapDEK_Call {
 	return &MockKeyEncryptionKey_UnwrapDEK_Call{Call: _e.mock.On("UnwrapDEK", ctx, keyID, wrapped)}
 }
 
@@ -233,7 +233,7 @@ type MockKeyEncryptionKey_WrapDEK_Call struct {
 // WrapDEK is a helper method to define mock.On call
 //   - ctx context.Context
 //   - dek []byte
-func (_e *MockKeyEncryptionKey_Expecter) WrapDEK(ctx interface{}, dek interface{}) *MockKeyEncryptionKey_WrapDEK_Call {
+func (_e *MockKeyEncryptionKey_Expecter) WrapDEK(ctx any, dek any) *MockKeyEncryptionKey_WrapDEK_Call {
 	return &MockKeyEncryptionKey_WrapDEK_Call{Call: _e.mock.On("WrapDEK", ctx, dek)}
 }
 

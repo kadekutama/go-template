@@ -37,6 +37,7 @@ func ToBatchDTO(batch command.BatchRecord, items []command.BatchItem, succeeded,
 			Index: item.Index, TransferID: item.TransferID, Status: item.Status, ErrorCode: item.ErrorCode,
 		})
 	}
+
 	return BatchDTO{
 		ID: batch.ID, TenantID: batch.TenantID.String(), LedgerID: batch.LedgerID.String(),
 		State: batch.State, TotalItems: len(items), Succeeded: succeeded, Failed: failed,
@@ -52,6 +53,7 @@ func ToBatchStatusDTO(status port.BatchStatusResult) BatchDTO {
 			Index: item.Index, TransferID: item.TransferID, Status: item.Status, ErrorCode: item.ErrorCode,
 		})
 	}
+
 	return BatchDTO{
 		ID: status.BatchID, State: status.State, TotalItems: len(status.Items),
 		Succeeded: status.Succeeded, Failed: status.Failed, Items: members,

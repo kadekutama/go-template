@@ -3,6 +3,7 @@ package redpanda_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kadekutama/go-template/internal/infrastructure/messaging/redpanda"
+	"github.com/kadekutama/go-template/internal/shared/kernel/validate"
 )
 
 func TestNewProducer(t *testing.T) {
@@ -28,7 +30,7 @@ func TestNewProducer(t *testing.T) {
 				Seeds:       nil,
 				DialTimeout: 5 * time.Second,
 			},
-			expectedError: errors.New("redpanda: at least one seed is required"),
+			expectedError: redpanda.ErrRedpandaAtLeastOneSeedIsRequired,
 		},
 		{
 			name: "whitespace seeds rejected",
@@ -36,7 +38,7 @@ func TestNewProducer(t *testing.T) {
 				Seeds:       []string{"  ", ""},
 				DialTimeout: 5 * time.Second,
 			},
-			expectedError: errors.New("redpanda: at least one seed is required"),
+			expectedError: redpanda.ErrRedpandaAtLeastOneSeedIsRequired,
 		},
 		{
 			name: "unknown sasl mechanism rejected",
@@ -47,7 +49,7 @@ func TestNewProducer(t *testing.T) {
 				SASLMechanism: "oauthbearer",
 				DialTimeout:   5 * time.Second,
 			},
-			expectedError: errors.New(`redpanda: unknown sasl mechanism "oauthbearer"`),
+			expectedError: fmt.Errorf("redpanda: unknown sasl mechanism %q: %w", "oauthbearer", redpanda.ErrRedpandaUnknownSaslMechanism),
 		},
 		{
 			name: "missing sasl mechanism rejected when user is provided",
@@ -58,7 +60,7 @@ func TestNewProducer(t *testing.T) {
 				SASLMechanism: "",
 				DialTimeout:   5 * time.Second,
 			},
-			expectedError: errors.New("redpanda: sasl mechanism is required when sasl credentials are provided"),
+			expectedError: redpanda.ErrRedpandaSaslMechanismIsRequiredWhenSaslCredentialsAreProv,
 		},
 		{
 			name: "missing dial timeout rejected",
@@ -66,7 +68,7 @@ func TestNewProducer(t *testing.T) {
 				Seeds:       []string{"127.0.0.1:9092"},
 				DialTimeout: 0,
 			},
-			expectedError: errors.New(`redpanda: invalid producer params (1 violation(s)): DialTimeout: rule "required" on value 0s`),
+			expectedError: fmt.Errorf(`redpanda: invalid producer params (1 violation(s)): DialTimeout: rule "required" on value 0s: %w`, validate.ErrValidateViolation),
 		},
 		{
 			name: "negative dial timeout rejected",
@@ -74,7 +76,7 @@ func TestNewProducer(t *testing.T) {
 				Seeds:       []string{"127.0.0.1:9092"},
 				DialTimeout: -time.Second,
 			},
-			expectedError: errors.New(`redpanda: invalid producer params (1 violation(s)): DialTimeout: rule "gt" on value -1s`),
+			expectedError: fmt.Errorf(`redpanda: invalid producer params (1 violation(s)): DialTimeout: rule "gt" on value -1s: %w`, validate.ErrValidateViolation),
 		},
 		{
 			name: "negative buffer rejected",
@@ -83,12 +85,14 @@ func TestNewProducer(t *testing.T) {
 				DialTimeout:      5 * time.Second,
 				MaxBufferedBytes: -1,
 			},
-			expectedError: errors.New(`redpanda: invalid producer params (1 violation(s)): MaxBufferedBytes: rule "gt" on value -1`),
+			expectedError: fmt.Errorf(`redpanda: invalid producer params (1 violation(s)): MaxBufferedBytes: rule "gt" on value -1: %w`, validate.ErrValidateViolation),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			producer, err := redpanda.NewProducer(tc.params)
 			assert.EqualError(t, err, tc.expectedError.Error())
 			assert.Nil(t, producer)
@@ -121,7 +125,7 @@ func TestProducerPublishValidation(t *testing.T) {
 			key:           "k",
 			headers:       map[string]string{},
 			payload:       []byte(`{}`),
-			expectedError: errors.New("redpanda: producer is not initialized"),
+			expectedError: redpanda.ErrRedpandaProducerIsNotInitialized,
 		},
 		{
 			name: "blank topic rejected",
@@ -133,6 +137,7 @@ func TestProducerPublishValidation(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
+
 				return p
 			},
 			ctx:           context.Background(),
@@ -140,7 +145,7 @@ func TestProducerPublishValidation(t *testing.T) {
 			key:           "k",
 			headers:       map[string]string{},
 			payload:       []byte(`{}`),
-			expectedError: errors.New("redpanda: topic is required"),
+			expectedError: redpanda.ErrRedpandaTopicIsRequired,
 		},
 		{
 			name: "canceled context aborts",
@@ -152,11 +157,13 @@ func TestProducerPublishValidation(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
+
 				return p
 			},
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			}(),
 			topic:         "ledger.events.v1",
@@ -175,7 +182,9 @@ func TestProducerPublishValidation(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
+
 				_ = p.Close()
+
 				return p
 			},
 			ctx:           context.Background(),
@@ -183,12 +192,14 @@ func TestProducerPublishValidation(t *testing.T) {
 			key:           "k",
 			headers:       map[string]string{},
 			payload:       []byte(`{}`),
-			expectedError: errors.New("redpanda: publish ledger.events.v1: client closed"),
+			expectedError: redpanda.ErrRedpandaPublishLedgerEventsV1ClientClosed,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			producer := tc.producer()
 			if producer != nil {
 				defer func() { _ = producer.Close() }()
@@ -231,6 +242,7 @@ func TestProducerClose(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
+
 				return p
 			},
 			expectedError: nil,
@@ -239,12 +251,17 @@ func TestProducerClose(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			p := tc.producer()
+
 			err := p.Close()
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
+
 				return
 			}
+
 			require.NoError(t, err)
 		})
 	}

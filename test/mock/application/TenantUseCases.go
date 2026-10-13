@@ -61,7 +61,7 @@ type MockTenantUseCases_GetTenant_Call struct {
 // GetTenant is a helper method to define mock.On call
 //   - ctx context.Context
 //   - query port.TenantQuery
-func (_e *MockTenantUseCases_Expecter) GetTenant(ctx interface{}, query interface{}) *MockTenantUseCases_GetTenant_Call {
+func (_e *MockTenantUseCases_Expecter) GetTenant(ctx any, query any) *MockTenantUseCases_GetTenant_Call {
 	return &MockTenantUseCases_GetTenant_Call{Call: _e.mock.On("GetTenant", ctx, query)}
 }
 
@@ -119,7 +119,7 @@ type MockTenantUseCases_ListTenants_Call struct {
 
 // ListTenants is a helper method to define mock.On call
 //   - ctx context.Context
-func (_e *MockTenantUseCases_Expecter) ListTenants(ctx interface{}) *MockTenantUseCases_ListTenants_Call {
+func (_e *MockTenantUseCases_Expecter) ListTenants(ctx any) *MockTenantUseCases_ListTenants_Call {
 	return &MockTenantUseCases_ListTenants_Call{Call: _e.mock.On("ListTenants", ctx)}
 }
 
@@ -176,7 +176,7 @@ type MockTenantUseCases_ProvisionTenant_Call struct {
 // ProvisionTenant is a helper method to define mock.On call
 //   - ctx context.Context
 //   - req port.ProvisionTenantRequest
-func (_e *MockTenantUseCases_Expecter) ProvisionTenant(ctx interface{}, req interface{}) *MockTenantUseCases_ProvisionTenant_Call {
+func (_e *MockTenantUseCases_Expecter) ProvisionTenant(ctx any, req any) *MockTenantUseCases_ProvisionTenant_Call {
 	return &MockTenantUseCases_ProvisionTenant_Call{Call: _e.mock.On("ProvisionTenant", ctx, req)}
 }
 
@@ -233,7 +233,7 @@ type MockTenantUseCases_UpdateTenantSettings_Call struct {
 // UpdateTenantSettings is a helper method to define mock.On call
 //   - ctx context.Context
 //   - req port.UpdateTenantSettingsRequest
-func (_e *MockTenantUseCases_Expecter) UpdateTenantSettings(ctx interface{}, req interface{}) *MockTenantUseCases_UpdateTenantSettings_Call {
+func (_e *MockTenantUseCases_Expecter) UpdateTenantSettings(ctx any, req any) *MockTenantUseCases_UpdateTenantSettings_Call {
 	return &MockTenantUseCases_UpdateTenantSettings_Call{Call: _e.mock.On("UpdateTenantSettings", ctx, req)}
 }
 

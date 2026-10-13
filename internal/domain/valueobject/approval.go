@@ -22,7 +22,7 @@ func ParseBreakStatus(s string) (BreakStatus, error) {
 	case BreakOpen, BreakInReview, BreakResolved, BreakAcknowledged, BreakEscalated:
 		return BreakStatus(s), nil
 	default:
-		return "", fmt.Errorf("reconciliation: invalid break status %q", s)
+		return "", fmt.Errorf("reconciliation: invalid break status %q: %w", s, ErrReconciliationInvalidBreakStatus)
 	}
 }
 
@@ -43,7 +43,7 @@ func ParseResolutionAction(s string) (ResolutionAction, error) {
 	case ResolveAdjustLedger, ResolveExternalError, ResolveEscalate, ResolveAcknowledge:
 		return ResolutionAction(s), nil
 	default:
-		return "", fmt.Errorf("reconciliation: invalid resolution action %q", s)
+		return "", fmt.Errorf("reconciliation: invalid resolution action %q: %w", s, ErrReconciliationInvalidResolutionAction)
 	}
 }
 
@@ -58,6 +58,8 @@ func CanTransitionBreak(from BreakStatus, action ResolutionAction) bool {
 		return false
 	case BreakEscalated:
 		return action == ResolveAdjustLedger || action == ResolveExternalError
+	case BreakResolved:
+		return false
 	default:
 		return false
 	}

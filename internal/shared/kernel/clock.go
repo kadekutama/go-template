@@ -1,3 +1,4 @@
+// Package kernel provides the shared-kernel primitives (clock, pagination, resilience, shutdown) every layer may depend on.
 package kernel
 
 import "time"
@@ -30,10 +31,13 @@ func (c *FixedClock) Now() time.Time {
 	if len(c.times) == 0 {
 		return time.Time{}
 	}
+
 	if c.index >= len(c.times) {
 		return c.times[len(c.times)-1]
 	}
+
 	current := c.times[c.index]
 	c.index++
+
 	return current
 }

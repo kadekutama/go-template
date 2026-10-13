@@ -9,8 +9,8 @@ import (
 // newPublisherForFX adapts Params-object construction to fx resolution and
 // flushes + closes the connection on container stop, so SIGTERM drains
 // accepted deltas instead of dropping them. The owning binary provides
-// PublisherParams from validated application config.
-func newPublisherForFX(lc fx.Lifecycle, params PublisherParams) (*Publisher, error) {
+// Params from validated application config.
+func newPublisherForFX(lc fx.Lifecycle, params Params) (*Publisher, error) {
 	publisher, err := NewPublisher(params)
 	if err != nil {
 		return nil, err

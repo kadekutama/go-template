@@ -1,3 +1,4 @@
+// Package rbac enforces Casbin RBAC policies loaded from Postgres.
 package rbac
 
 import (
@@ -118,8 +119,10 @@ func (l *DBPolicyLoader) Load() ([]PolicyRule, []GroupingRule, error) {
 		return nil, nil, fmt.Errorf("%w: query policies: %s", ErrPolicyInvalid, err.Error())
 	}
 
-	var policies []PolicyRule
-	var grouping []GroupingRule
+	var (
+		policies []PolicyRule
+		grouping []GroupingRule
+	)
 
 	for _, r := range rules {
 		switch r.Ptype {

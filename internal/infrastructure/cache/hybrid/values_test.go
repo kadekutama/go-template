@@ -83,6 +83,7 @@ func TestHybridCacheValueKinds(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			engine, err := hybrid.New(hybrid.Params{
 				L1:            newMockCacheStore(t),
 				L1PopulateTTL: time.Minute,
@@ -150,6 +151,7 @@ func TestTypedCacheDelete(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			engine, err := hybrid.New(hybrid.Params{
 				L1:            newMockCacheStore(t),
 				L1PopulateTTL: time.Minute,
@@ -167,8 +169,10 @@ func TestTypedCacheDelete(t *testing.T) {
 			err = view.Delete(ctx, "k")
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
+
 				return
 			}
+
 			require.NoError(t, err)
 
 			_, err = view.Get(ctx, "k")
@@ -187,6 +191,7 @@ func TestTypedCacheCodecFailures(t *testing.T) {
 	t.Parallel()
 
 	t.Run("encode failure surfaces with key context", func(t *testing.T) {
+		t.Parallel()
 		engine, err := hybrid.New(hybrid.Params{
 			L1:            newMockCacheStore(t),
 			L1PopulateTTL: time.Minute,
@@ -202,6 +207,7 @@ func TestTypedCacheCodecFailures(t *testing.T) {
 	})
 
 	t.Run("decode failure surfaces with key context", func(t *testing.T) {
+		t.Parallel()
 		l1 := newMockCacheStore(t)
 		engine, err := hybrid.New(hybrid.Params{
 			L1:            l1,

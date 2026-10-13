@@ -61,7 +61,7 @@ type MockPeriodStore_FindPeriod_Call struct {
 //   - tenant string
 //   - ledger string
 //   - id string
-func (_e *MockPeriodStore_Expecter) FindPeriod(ctx interface{}, tenant interface{}, ledger interface{}, id interface{}) *MockPeriodStore_FindPeriod_Call {
+func (_e *MockPeriodStore_Expecter) FindPeriod(ctx any, tenant any, ledger any, id any) *MockPeriodStore_FindPeriod_Call {
 	return &MockPeriodStore_FindPeriod_Call{Call: _e.mock.On("FindPeriod", ctx, tenant, ledger, id)}
 }
 
@@ -122,7 +122,7 @@ type MockPeriodStore_ListPeriods_Call struct {
 //   - tenant string
 //   - ledger string
 //   - limit int
-func (_e *MockPeriodStore_Expecter) ListPeriods(ctx interface{}, tenant interface{}, ledger interface{}, limit interface{}) *MockPeriodStore_ListPeriods_Call {
+func (_e *MockPeriodStore_Expecter) ListPeriods(ctx any, tenant any, ledger any, limit any) *MockPeriodStore_ListPeriods_Call {
 	return &MockPeriodStore_ListPeriods_Call{Call: _e.mock.On("ListPeriods", ctx, tenant, ledger, limit)}
 }
 
@@ -169,7 +169,7 @@ type MockPeriodStore_SavePeriod_Call struct {
 // SavePeriod is a helper method to define mock.On call
 //   - ctx context.Context
 //   - period entity.PeriodData
-func (_e *MockPeriodStore_Expecter) SavePeriod(ctx interface{}, period interface{}) *MockPeriodStore_SavePeriod_Call {
+func (_e *MockPeriodStore_Expecter) SavePeriod(ctx any, period any) *MockPeriodStore_SavePeriod_Call {
 	return &MockPeriodStore_SavePeriod_Call{Call: _e.mock.On("SavePeriod", ctx, period)}
 }
 

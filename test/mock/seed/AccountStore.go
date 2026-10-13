@@ -49,7 +49,7 @@ type MockAccountStore_Create_Call struct {
 // Create is a helper method to define mock.On call
 //   - ctx context.Context
 //   - account seed.AccountSeed
-func (_e *MockAccountStore_Expecter) Create(ctx interface{}, account interface{}) *MockAccountStore_Create_Call {
+func (_e *MockAccountStore_Expecter) Create(ctx any, account any) *MockAccountStore_Create_Call {
 	return &MockAccountStore_Create_Call{Call: _e.mock.On("Create", ctx, account)}
 }
 
@@ -106,7 +106,7 @@ type MockAccountStore_Exists_Call struct {
 // Exists is a helper method to define mock.On call
 //   - ctx context.Context
 //   - id string
-func (_e *MockAccountStore_Expecter) Exists(ctx interface{}, id interface{}) *MockAccountStore_Exists_Call {
+func (_e *MockAccountStore_Expecter) Exists(ctx any, id any) *MockAccountStore_Exists_Call {
 	return &MockAccountStore_Exists_Call{Call: _e.mock.On("Exists", ctx, id)}
 }
 

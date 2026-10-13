@@ -85,10 +85,12 @@ func (s *SubscriptionService) Subscribe(ctx context.Context, tenant valueobject.
 	if err := validateSubscriptionEnvelope(tenant, template, cron, destination, actor, key); err != nil {
 		return Subscription{}, err
 	}
+
 	subject := port.Subject{ID: actor, TenantID: tenant}
 	if err := RequireAuthz(ctx, s.authz, subject, "report.subscribe", "tenant/"+string(tenant)); err != nil {
 		return Subscription{}, err
 	}
+
 	sub := Subscription{
 		ID: s.ids.NewID(), TenantID: tenant, Template: template,
 		Cron: cron, Destination: destination, CreatedAt: s.clock.Now().UTC(),
@@ -98,31 +100,39 @@ func (s *SubscriptionService) Subscribe(ctx context.Context, tenant valueobject.
 		Fingerprint: Fingerprint(key, string(tenant), template, cron, destination),
 		TenantID:    tenant,
 	}
+
 	err := s.uow.Do(ctx, func(ctx context.Context, tx port.Tx) error {
 		outcome, err := tx.Idempotency().Reserve(ctx, rec)
 		if err != nil {
 			return err
 		}
+
 		if outcome.Replay {
 			decoded, err := decodeSubscription(outcome.Response)
 			if err != nil {
 				return err
 			}
+
 			sub = decoded
+
 			return nil
 		}
+
 		if err := s.subscriptions.CreateSubscription(ctx, sub); err != nil {
 			return err
 		}
+
 		encoded, err := jsonparser.Marshal(sub)
 		if err != nil {
 			return err
 		}
+
 		return tx.Idempotency().Complete(ctx, rec.Key, encoded)
 	})
 	if err != nil {
 		return Subscription{}, err
 	}
+
 	return sub, nil
 }
 
@@ -132,6 +142,7 @@ func (s *SubscriptionService) Unsubscribe(ctx context.Context, tenant valueobjec
 	if err := RequireAuthz(ctx, s.authz, subject, "report.subscribe", "tenant/"+string(tenant)); err != nil {
 		return err
 	}
+
 	return s.subscriptions.DeleteSubscription(ctx, tenant, id)
 }
 
@@ -148,10 +159,12 @@ func (s *SubscriptionService) DeliverSubscription(ctx context.Context, tenant va
 	if err != nil {
 		return port.ReportResult{}, err
 	}
+
 	subject := port.Subject{ID: actor, TenantID: tenant}
 	if err := RequireAuthz(ctx, s.authz, subject, "report.generate", "tenant/"+string(tenant)); err != nil {
 		return port.ReportResult{}, err
 	}
+
 	result, err := s.reports.GenerateReport(ctx, port.ReportRequest{
 		TenantID: sub.TenantID, Template: sub.Template, Parameters: parameters,
 		Destination: sub.Destination, IdempotencyKey: runKey, Actor: actor,
@@ -159,10 +172,12 @@ func (s *SubscriptionService) DeliverSubscription(ctx context.Context, tenant va
 	if err != nil {
 		return port.ReportResult{}, err
 	}
+
 	sub.LastRun = now.UTC()
 	if err := s.subscriptions.UpdateSubscription(ctx, sub); err != nil {
 		return port.ReportResult{}, err
 	}
+
 	return result, nil
 }
 
@@ -172,21 +187,27 @@ func validateSubscriptionEnvelope(tenant valueobject.TenantID, template, cron, d
 	if strings.TrimSpace(tenant.String()) == "" {
 		return entity.NewError("TENANT_REQUIRED", "tenant id is required")
 	}
+
 	if !isReportTemplate(template) {
 		return entity.NewError("REPORT_TEMPLATE_UNKNOWN", "report template is unknown")
 	}
+
 	if strings.TrimSpace(cron) == "" {
 		return entity.NewError("SUBSCRIPTION_CRON_REQUIRED", "subscription cron is required")
 	}
+
 	if strings.TrimSpace(destination) == "" {
 		return entity.NewError("SUBSCRIPTION_DESTINATION_REQUIRED", "subscription destination is required")
 	}
+
 	if strings.TrimSpace(actor) == "" {
 		return entity.NewError("ACTOR_REQUIRED", "subscription actor is required")
 	}
+
 	if strings.TrimSpace(key) == "" {
 		return entity.NewError("IDEMPOTENCY_KEY_REQUIRED", "subscription requires an idempotency key")
 	}
+
 	return nil
 }
 
@@ -196,8 +217,10 @@ func decodeSubscription(response []byte) (Subscription, error) {
 	if err := jsonparser.Unmarshal(response, &sub); err != nil {
 		return Subscription{}, entity.NewError("IDEMPOTENCY_RECORD_INVALID", "stored idempotency response is corrupt")
 	}
+
 	if sub.ID == "" {
 		return Subscription{}, entity.NewError("IDEMPOTENCY_RECORD_INVALID", "stored idempotency response is corrupt")
 	}
+
 	return sub, nil
 }

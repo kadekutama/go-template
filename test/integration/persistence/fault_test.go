@@ -2,7 +2,6 @@ package persistence_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 
 	appport "github.com/kadekutama/go-template/internal/application/port"
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
+	"github.com/kadekutama/go-template/test/integration/persistence"
 	mockapplication "github.com/kadekutama/go-template/test/mock/application"
 )
 
@@ -60,7 +60,7 @@ func TestFaultMatrix(t *testing.T) {
 			switch tc.fault {
 			case "crash-before-commit":
 				uow := mockapplication.NewMockUnitOfWork(t)
-				uow.EXPECT().Do(mock.Anything, mock.Anything).Return(errors.New("simulated crash before commit")).Once()
+				uow.EXPECT().Do(mock.Anything, mock.Anything).Return(persistence.ErrSimulatedCrashBeforeCommit).Once()
 
 				err := uow.Do(context.Background(), func(_ context.Context, _ appport.Tx) error {
 					return nil
@@ -74,7 +74,7 @@ func TestFaultMatrix(t *testing.T) {
 				idem.EXPECT().Reserve(mock.Anything, rec1).Return(appport.ReserveOutcome{}, nil).Once()
 				idem.EXPECT().Complete(mock.Anything, "key-01", []byte(`{"ok":true}`)).Return(nil).Once()
 				idem.EXPECT().Reserve(mock.Anything, rec1).Return(appport.ReserveOutcome{Replay: true, Response: []byte(`{"ok":true}`)}, nil).Once()
-				idem.EXPECT().Reserve(mock.Anything, rec2).Return(appport.ReserveOutcome{}, errors.New("changed fingerprint must conflict, never re-execute")).Once()
+				idem.EXPECT().Reserve(mock.Anything, rec2).Return(appport.ReserveOutcome{}, persistence.ErrChangedFingerprintMustConflictNeverReExecute).Once()
 
 				_, err := idem.Reserve(context.Background(), rec1)
 				require.NoError(t, err)
@@ -82,6 +82,7 @@ func TestFaultMatrix(t *testing.T) {
 				replay, err := idem.Reserve(context.Background(), rec1)
 				require.NoError(t, err)
 				assert.Equal(t, []byte(`{"ok":true}`), replay.Response)
+
 				_, err = idem.Reserve(context.Background(), rec2)
 				assert.Error(t, err, "changed fingerprint must conflict, never re-execute")
 			case "publish-ack-loss":
@@ -94,6 +95,7 @@ func TestFaultMatrix(t *testing.T) {
 					ClaimedAt   time.Time
 					DeliveredAt *time.Time
 				}
+
 				now := time.Now()
 				claimTimeout := 60 * time.Second
 				row := outboxFactRow{
@@ -123,12 +125,14 @@ func TestFaultMatrix(t *testing.T) {
 				if !txFail {
 					inbox[inboxKey] = true
 				}
+
 				assert.False(t, inbox[inboxKey], "failed transaction must not leave inbox receipt recorded")
 
 				// Message broker redelivers message: re-execute business change and commit inbox receipt
 				if !inbox[inboxKey] {
 					inbox[inboxKey] = true
 				}
+
 				assert.True(t, inbox[inboxKey], "retried message successfully records inbox receipt on commit")
 			case "provider-timeout":
 				// Money movement request to external provider times out with unknown outcome.
@@ -138,6 +142,7 @@ func TestFaultMatrix(t *testing.T) {
 					providerRef         string
 					requiresStatusCheck bool
 				}
+
 				wf := workflow{
 					status:              "OUTCOME_UNKNOWN",
 					providerRef:         "ext-tx-12345",
@@ -152,6 +157,7 @@ func TestFaultMatrix(t *testing.T) {
 					wf.status = "COMPLETED"
 					wf.requiresStatusCheck = false
 				}
+
 				assert.Equal(t, "COMPLETED", wf.status)
 				assert.False(t, wf.requiresStatusCheck)
 			default:

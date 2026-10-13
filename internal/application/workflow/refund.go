@@ -18,8 +18,8 @@ type RefundActions struct {
 // carry nothing to undo.
 func RefundSteps(actions RefundActions) []Step {
 	return []Step{
-		{Name: "validate-window", MaxAttempts: 1, Timeout: 10 * time.Second, Run: actions.ValidateWindow},
-		{Name: "execute-refund", MaxAttempts: 3, Timeout: 30 * time.Second, Run: actions.ExecuteRefund, Compensate: actions.LinkReversal},
-		{Name: StepNotify, MaxAttempts: 5, Timeout: 10 * time.Second, Run: actions.Notify},
+		{Name: "validate-window", MaxAttempts: 1, Timeout: timeout10 * time.Second, Run: actions.ValidateWindow},
+		{Name: "execute-refund", MaxAttempts: maxAttempts3, Timeout: timeout30 * time.Second, Run: actions.ExecuteRefund, Compensate: actions.LinkReversal},
+		{Name: StepNotify, MaxAttempts: maxAttempts5, Timeout: timeout10 * time.Second, Run: actions.Notify},
 	}
 }

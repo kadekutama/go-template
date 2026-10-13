@@ -57,6 +57,8 @@ func TestPaymentLinkValidate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.link.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -82,6 +84,8 @@ func TestPaymentLinkKey(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := tc.link.LinkKey()
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})

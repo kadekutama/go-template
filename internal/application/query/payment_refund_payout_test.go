@@ -58,6 +58,8 @@ func TestPaymentQueryServiceGetIntent(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			payments := new(mockapplication.MockPaymentQueryUseCases)
 			payments.On("GetIntent", mock.Anything, tc.query).Return(tc.programmed, tc.programmedErr).Once()
 			svc := query.NewPaymentQueryService(query.PaymentQueryServiceParams{Payments: payments})
@@ -114,6 +116,8 @@ func TestRefundQueryServiceGetRefund(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			payments := new(mockapplication.MockPaymentQueryUseCases)
 			payments.On("GetRefund", mock.Anything, tc.query).Return(tc.programmed, tc.programmedErr).Once()
 			svc := query.NewRefundQueryService(query.RefundQueryServiceParams{Payments: payments})
@@ -170,6 +174,8 @@ func TestPayoutQueryServiceGetPayout(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			payments := new(mockapplication.MockPaymentQueryUseCases)
 			payments.On("GetPayout", mock.Anything, tc.query).Return(tc.programmed, tc.programmedErr).Once()
 			svc := query.NewPayoutQueryService(query.PayoutQueryServiceParams{Payments: payments})

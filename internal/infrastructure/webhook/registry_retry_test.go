@@ -2,7 +2,6 @@ package webhook_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -83,6 +82,8 @@ func TestEndpointNormalized(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := tc.endpoint.Normalized()
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -117,77 +118,87 @@ func TestEndpointValidate(t *testing.T) {
 			endpoint: func() webhook.Endpoint {
 				e := base
 				e.ID = ""
+
 				return e
 			}(),
-			expectedError: errors.New("webhook: invalid endpoint (1 violation(s)): ID: rule \"required\" on value "),
+			expectedError: webhook.ErrWebhookInvalidEndpoint1ViolationSIDRuleRequiredOnValue,
 		},
 		{
 			name: "blank tenant rejected",
 			endpoint: func() webhook.Endpoint {
 				e := base
 				e.Tenant = ""
+
 				return e
 			}(),
-			expectedError: errors.New("webhook: invalid endpoint (1 violation(s)): Tenant: rule \"required\" on value "),
+			expectedError: webhook.ErrWebhookInvalidEndpoint1ViolationSTenantRuleRequiredOnValu,
 		},
 		{
 			name: "non-http url rejected",
 			endpoint: func() webhook.Endpoint {
 				e := base
 				e.URL = "ftp://x"
+
 				return e
 			}(),
-			expectedError: errors.New("webhook: invalid endpoint (1 violation(s)): URL: rule \"http_url\" on value ftp://x"),
+			expectedError: webhook.ErrWebhookInvalidEndpoint1ViolationSURLRuleHTTPURLOnValueFtp,
 		},
 		{
 			name: "blank url rejected",
 			endpoint: func() webhook.Endpoint {
 				e := base
 				e.URL = ""
+
 				return e
 			}(),
-			expectedError: errors.New("webhook: invalid endpoint (1 violation(s)): URL: rule \"required\" on value "),
+			expectedError: webhook.ErrWebhookInvalidEndpoint1ViolationSURLRuleRequiredOnValue,
 		},
 		{
 			name: "nil events rejected by required rule",
 			endpoint: func() webhook.Endpoint {
 				e := base
 				e.Events = nil
+
 				return e
 			}(),
-			expectedError: errors.New("webhook: invalid endpoint (1 violation(s)): Events: rule \"required\" on value []"),
+			expectedError: webhook.ErrWebhookInvalidEndpoint1ViolationSEventsRuleRequiredOnValu,
 		},
 		{
 			name: "empty events slice rejected by min rule",
 			endpoint: func() webhook.Endpoint {
 				e := base
 				e.Events = []string{}
+
 				return e
 			}(),
-			expectedError: errors.New("webhook: invalid endpoint (1 violation(s)): Events: rule \"min\" on value []"),
+			expectedError: webhook.ErrWebhookInvalidEndpoint1ViolationSEventsRuleMinOnValue,
 		},
 		{
 			name: "blank event in list rejected",
 			endpoint: func() webhook.Endpoint {
 				e := base
 				e.Events = []string{""}
+
 				return e
 			}(),
-			expectedError: errors.New("webhook: invalid endpoint (1 violation(s)): Events[0]: rule \"required\" on value "),
+			expectedError: webhook.ErrWebhookInvalidEndpoint1ViolationSEvents0RuleRequiredOnVal,
 		},
 		{
 			name: "blank secret rejected",
 			endpoint: func() webhook.Endpoint {
 				e := base
 				e.Secret = ""
+
 				return e
 			}(),
-			expectedError: errors.New("webhook: invalid endpoint (1 violation(s)): Secret: rule \"required\" on value "),
+			expectedError: webhook.ErrWebhookInvalidEndpoint1ViolationSSecretRuleRequiredOnValu,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.endpoint.Validate()
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
@@ -223,7 +234,7 @@ func TestRegistryUpsert(t *testing.T) {
 			r:             nil,
 			ctx:           context.Background(),
 			endpoint:      base,
-			expectedError: errors.New("webhook: registry is not initialized"),
+			expectedError: webhook.ErrWebhookRegistryIsNotInitialized,
 		},
 		{
 			name:          "valid endpoint stored successfully",
@@ -243,6 +254,7 @@ func TestRegistryUpsert(t *testing.T) {
 				e.URL = "  https://m.example.com/hook  "
 				e.Events = []string{"  transfer.completed.v1  "}
 				e.Secret = "  s1  "
+
 				return e
 			}(),
 			expectedError: nil,
@@ -254,9 +266,10 @@ func TestRegistryUpsert(t *testing.T) {
 			endpoint: func() webhook.Endpoint {
 				e := base
 				e.ID = ""
+
 				return e
 			}(),
-			expectedError: errors.New("webhook: invalid endpoint (1 violation(s)): ID: rule \"required\" on value "),
+			expectedError: webhook.ErrWebhookInvalidEndpoint1ViolationSIDRuleRequiredOnValue,
 		},
 		{
 			name: "whitespace id rejected after normalization",
@@ -265,9 +278,10 @@ func TestRegistryUpsert(t *testing.T) {
 			endpoint: func() webhook.Endpoint {
 				e := base
 				e.ID = "   "
+
 				return e
 			}(),
-			expectedError: errors.New("webhook: invalid endpoint (1 violation(s)): ID: rule \"required\" on value "),
+			expectedError: webhook.ErrWebhookInvalidEndpoint1ViolationSIDRuleRequiredOnValue,
 		},
 		{
 			name: "blank tenant rejected",
@@ -276,9 +290,10 @@ func TestRegistryUpsert(t *testing.T) {
 			endpoint: func() webhook.Endpoint {
 				e := base
 				e.Tenant = ""
+
 				return e
 			}(),
-			expectedError: errors.New("webhook: invalid endpoint (1 violation(s)): Tenant: rule \"required\" on value "),
+			expectedError: webhook.ErrWebhookInvalidEndpoint1ViolationSTenantRuleRequiredOnValu,
 		},
 		{
 			name: "whitespace tenant rejected after normalization",
@@ -287,9 +302,10 @@ func TestRegistryUpsert(t *testing.T) {
 			endpoint: func() webhook.Endpoint {
 				e := base
 				e.Tenant = "   "
+
 				return e
 			}(),
-			expectedError: errors.New("webhook: invalid endpoint (1 violation(s)): Tenant: rule \"required\" on value "),
+			expectedError: webhook.ErrWebhookInvalidEndpoint1ViolationSTenantRuleRequiredOnValu,
 		},
 		{
 			name: "non-http url rejected",
@@ -298,9 +314,10 @@ func TestRegistryUpsert(t *testing.T) {
 			endpoint: func() webhook.Endpoint {
 				e := base
 				e.URL = "ftp://x"
+
 				return e
 			}(),
-			expectedError: errors.New("webhook: invalid endpoint (1 violation(s)): URL: rule \"http_url\" on value ftp://x"),
+			expectedError: webhook.ErrWebhookInvalidEndpoint1ViolationSURLRuleHTTPURLOnValueFtp,
 		},
 		{
 			name: "blank url rejected",
@@ -309,9 +326,10 @@ func TestRegistryUpsert(t *testing.T) {
 			endpoint: func() webhook.Endpoint {
 				e := base
 				e.URL = ""
+
 				return e
 			}(),
-			expectedError: errors.New("webhook: invalid endpoint (1 violation(s)): URL: rule \"required\" on value "),
+			expectedError: webhook.ErrWebhookInvalidEndpoint1ViolationSURLRuleRequiredOnValue,
 		},
 		{
 			name: "no events rejected",
@@ -320,9 +338,10 @@ func TestRegistryUpsert(t *testing.T) {
 			endpoint: func() webhook.Endpoint {
 				e := base
 				e.Events = nil
+
 				return e
 			}(),
-			expectedError: errors.New("webhook: invalid endpoint (1 violation(s)): Events: rule \"min\" on value []"),
+			expectedError: webhook.ErrWebhookInvalidEndpoint1ViolationSEventsRuleMinOnValue,
 		},
 		{
 			name: "blank event in list rejected after normalization",
@@ -331,9 +350,10 @@ func TestRegistryUpsert(t *testing.T) {
 			endpoint: func() webhook.Endpoint {
 				e := base
 				e.Events = []string{"   "}
+
 				return e
 			}(),
-			expectedError: errors.New("webhook: invalid endpoint (1 violation(s)): Events[0]: rule \"required\" on value "),
+			expectedError: webhook.ErrWebhookInvalidEndpoint1ViolationSEvents0RuleRequiredOnVal,
 		},
 		{
 			name: "blank secret rejected",
@@ -342,9 +362,10 @@ func TestRegistryUpsert(t *testing.T) {
 			endpoint: func() webhook.Endpoint {
 				e := base
 				e.Secret = ""
+
 				return e
 			}(),
-			expectedError: errors.New("webhook: invalid endpoint (1 violation(s)): Secret: rule \"required\" on value "),
+			expectedError: webhook.ErrWebhookInvalidEndpoint1ViolationSSecretRuleRequiredOnValu,
 		},
 		{
 			name: "whitespace secret rejected after normalization",
@@ -353,14 +374,17 @@ func TestRegistryUpsert(t *testing.T) {
 			endpoint: func() webhook.Endpoint {
 				e := base
 				e.Secret = "   "
+
 				return e
 			}(),
-			expectedError: errors.New("webhook: invalid endpoint (1 violation(s)): Secret: rule \"required\" on value "),
+			expectedError: webhook.ErrWebhookInvalidEndpoint1ViolationSSecretRuleRequiredOnValu,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.r.Upsert(tc.ctx, tc.endpoint)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
@@ -391,7 +415,7 @@ func TestRegistryRemove(t *testing.T) {
 			ctx:           context.Background(),
 			id:            "ep-1",
 			setup:         nil,
-			expectedError: errors.New("webhook: registry is not initialized"),
+			expectedError: webhook.ErrWebhookRegistryIsNotInitialized,
 			verify:        nil,
 		},
 		{
@@ -410,6 +434,8 @@ func TestRegistryRemove(t *testing.T) {
 			},
 			expectedError: nil,
 			verify: func(t *testing.T, r *webhook.Registry) {
+				t.Helper()
+
 				found := r.Find(context.Background(), "t1", "transfer.completed.v1")
 				assert.Len(t, found, 1)
 			},
@@ -430,6 +456,8 @@ func TestRegistryRemove(t *testing.T) {
 			},
 			expectedError: nil,
 			verify: func(t *testing.T, r *webhook.Registry) {
+				t.Helper()
+
 				found := r.Find(context.Background(), "t1", "transfer.completed.v1")
 				assert.Empty(t, found)
 			},
@@ -450,6 +478,8 @@ func TestRegistryRemove(t *testing.T) {
 			},
 			expectedError: nil,
 			verify: func(t *testing.T, r *webhook.Registry) {
+				t.Helper()
+
 				found := r.Find(context.Background(), "t1", "transfer.completed.v1")
 				assert.Empty(t, found)
 			},
@@ -458,15 +488,19 @@ func TestRegistryRemove(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			if tc.setup != nil {
 				tc.setup(tc.r)
 			}
+
 			err := tc.r.Remove(tc.ctx, tc.id)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
 			} else {
 				assert.NoError(t, err)
 			}
+
 			if tc.verify != nil {
 				tc.verify(t, tc.r)
 			}
@@ -655,9 +689,12 @@ func TestRegistryFind(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			if tc.setup != nil {
 				tc.setup(tc.r)
 			}
+
 			actualResult := tc.r.Find(tc.ctx, tc.tenant, tc.event)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -699,30 +736,32 @@ func TestNewRetryPolicy(t *testing.T) {
 			name:             "nil steps rejected",
 			steps:            nil,
 			expectedAttempts: 0,
-			expectedError:    errors.New("webhook: at least one retry step is required"),
+			expectedError:    webhook.ErrWebhookAtLeastOneRetryStepIsRequired,
 		},
 		{
 			name:             "empty steps slice rejected",
 			steps:            []time.Duration{},
 			expectedAttempts: 0,
-			expectedError:    errors.New("webhook: at least one retry step is required"),
+			expectedError:    webhook.ErrWebhookAtLeastOneRetryStepIsRequired,
 		},
 		{
 			name:             "zero duration step rejected",
 			steps:            []time.Duration{time.Second, 0},
 			expectedAttempts: 0,
-			expectedError:    errors.New("webhook: retry steps must be positive"),
+			expectedError:    webhook.ErrWebhookRetryStepsMustBePositive,
 		},
 		{
 			name:             "negative step duration rejected",
 			steps:            []time.Duration{-time.Second},
 			expectedAttempts: 0,
-			expectedError:    errors.New("webhook: retry steps must be positive"),
+			expectedError:    webhook.ErrWebhookRetryStepsMustBePositive,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			policy, err := webhook.NewRetryPolicy(tc.steps)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
@@ -819,6 +858,8 @@ func TestRetryPolicyNextDelay(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualDelay, actualOk := tc.p.NextDelay(tc.attempt)
 			assert.Equal(t, tc.expectedDelay, actualDelay)
 			assert.Equal(t, tc.expectedOk, actualOk)
@@ -895,6 +936,7 @@ func TestRetryPolicyProperties(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Equal(t, tc.expectedRetries, tc.p.MaxRetries())
 			assert.Equal(t, tc.expectedAttempts, tc.p.MaxAttempts())
 			assert.Equal(t, tc.expectedHorizon, tc.p.Horizon())
@@ -906,7 +948,7 @@ func TestRetryPolicyProperties(t *testing.T) {
 func TestRetryableError(t *testing.T) {
 	t.Parallel()
 
-	causeErr := errors.New("underlying network timeout")
+	causeErr := webhook.ErrUnderlyingNetworkTimeout
 
 	type testCase struct {
 		name            string
@@ -948,6 +990,7 @@ func TestRetryableError(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Equal(t, tc.expectedMessage, tc.err.Error())
 			assert.Equal(t, tc.expectedUnwrap, tc.err.Unwrap())
 		})
@@ -988,14 +1031,15 @@ func TestWebhookDLQSinkRecord(t *testing.T) {
 			ctx:  context.Background(),
 			msg:  baseMsg,
 			setupMock: func(m *mockwebhook.MockDLQSink) {
-				m.EXPECT().Record(mock.Anything, baseMsg).Return(errors.New("webhook: record failed")).Once()
+				m.EXPECT().Record(mock.Anything, baseMsg).Return(webhook.ErrWebhookRecordFailed).Once()
 			},
-			expectedError: errors.New("webhook: record failed"),
+			expectedError: webhook.ErrWebhookRecordFailed,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			dlq := mockwebhook.NewMockDLQSink(t)
 			tc.setupMock(dlq)
 

@@ -40,6 +40,7 @@ func ToTransferDTO(record command.TransferRecord, cursor string) TransferDTO {
 		at := record.ExecuteAt
 		dto.ExecuteAt = &at
 	}
+
 	return dto
 }
 

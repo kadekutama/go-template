@@ -7,10 +7,10 @@ import (
 	"context"
 )
 
-// CommandHandler executes one validated command and returns its result with
+// Handler executes one validated command and returns its result with
 // an ordinary Go return. A Result/monad wrapper is not part of the contract:
 // errors are values carrying stable codes, translated at the edge.
-type CommandHandler[C any, R any] interface {
+type Handler[C any, R any] interface {
 	// Handle validates, authorizes, reserves idempotency, executes inside one
 	// UnitOfWork, and completes the idempotency record. Identical resubmission
 	// returns the original result without re-executing.

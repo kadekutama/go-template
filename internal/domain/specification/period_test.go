@@ -47,6 +47,7 @@ func TestPeriodOpen(t *testing.T) {
 			period: func() entity.PeriodData {
 				p := open
 				p.Status = entity.PeriodClosed
+
 				return p
 			}(),
 			expectedPassed:        false,
@@ -56,8 +57,11 @@ func TestPeriodOpen(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			res := specification.PeriodOpen().Evaluate(tc.ctx, tc.period)
 			assert.Equal(t, tc.expectedPassed, res.Passed())
+
 			if tc.expectedViolationCode != "" {
 				assert.NotEmpty(t, res.Violations)
 				assert.Equal(t, tc.expectedViolationCode, res.Violations[0].Code)
@@ -69,7 +73,7 @@ func TestPeriodOpen(t *testing.T) {
 func TestSpecComposition(t *testing.T) {
 	t.Parallel()
 
-	combined := specification.All[entity.PostingData](
+	combined := specification.All(
 		specification.PostingBalancesPerCurrency(),
 		specification.PostingTemplateAllowed(transferTemplate(), templateAccounts()),
 	)
@@ -96,6 +100,7 @@ func TestSpecComposition(t *testing.T) {
 			posting: func() entity.PostingData {
 				p := txPosting(testPosting2, txEntries(testPosting2, 100, 90))
 				p.Operation = "payout.v1"
+
 				return p
 			}(),
 			expectedPassed:         false,
@@ -105,6 +110,8 @@ func TestSpecComposition(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			res := combined.Evaluate(tc.ctx, tc.posting)
 			assert.Equal(t, tc.expectedPassed, res.Passed())
 			assert.Len(t, res.Violations, tc.expectedViolationCount)

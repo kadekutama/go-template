@@ -51,7 +51,7 @@ type MockPayoutStore_CreatePayout_Call struct {
 // CreatePayout is a helper method to define mock.On call
 //   - ctx context.Context
 //   - record command.PayoutRecord
-func (_e *MockPayoutStore_Expecter) CreatePayout(ctx interface{}, record interface{}) *MockPayoutStore_CreatePayout_Call {
+func (_e *MockPayoutStore_Expecter) CreatePayout(ctx any, record any) *MockPayoutStore_CreatePayout_Call {
 	return &MockPayoutStore_CreatePayout_Call{Call: _e.mock.On("CreatePayout", ctx, record)}
 }
 
@@ -109,7 +109,7 @@ type MockPayoutStore_FindPayout_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - id string
-func (_e *MockPayoutStore_Expecter) FindPayout(ctx interface{}, tenant interface{}, id interface{}) *MockPayoutStore_FindPayout_Call {
+func (_e *MockPayoutStore_Expecter) FindPayout(ctx any, tenant any, id any) *MockPayoutStore_FindPayout_Call {
 	return &MockPayoutStore_FindPayout_Call{Call: _e.mock.On("FindPayout", ctx, tenant, id)}
 }
 
@@ -167,7 +167,7 @@ type MockPayoutStore_GetPolicy_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - asset valueobject.AssetCode
-func (_e *MockPayoutStore_Expecter) GetPolicy(ctx interface{}, tenant interface{}, asset interface{}) *MockPayoutStore_GetPolicy_Call {
+func (_e *MockPayoutStore_Expecter) GetPolicy(ctx any, tenant any, asset any) *MockPayoutStore_GetPolicy_Call {
 	return &MockPayoutStore_GetPolicy_Call{Call: _e.mock.On("GetPolicy", ctx, tenant, asset)}
 }
 
@@ -227,7 +227,7 @@ type MockPayoutStore_ListPayouts_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - limit int
-func (_e *MockPayoutStore_Expecter) ListPayouts(ctx interface{}, tenant interface{}, limit interface{}) *MockPayoutStore_ListPayouts_Call {
+func (_e *MockPayoutStore_Expecter) ListPayouts(ctx any, tenant any, limit any) *MockPayoutStore_ListPayouts_Call {
 	return &MockPayoutStore_ListPayouts_Call{Call: _e.mock.On("ListPayouts", ctx, tenant, limit)}
 }
 
@@ -274,7 +274,7 @@ type MockPayoutStore_UpdatePayout_Call struct {
 // UpdatePayout is a helper method to define mock.On call
 //   - ctx context.Context
 //   - record command.PayoutRecord
-func (_e *MockPayoutStore_Expecter) UpdatePayout(ctx interface{}, record interface{}) *MockPayoutStore_UpdatePayout_Call {
+func (_e *MockPayoutStore_Expecter) UpdatePayout(ctx any, record any) *MockPayoutStore_UpdatePayout_Call {
 	return &MockPayoutStore_UpdatePayout_Call{Call: _e.mock.On("UpdatePayout", ctx, record)}
 }
 
@@ -321,7 +321,7 @@ type MockPayoutStore_UpdatePolicy_Call struct {
 // UpdatePolicy is a helper method to define mock.On call
 //   - ctx context.Context
 //   - policy valueobject.PayoutPolicy
-func (_e *MockPayoutStore_Expecter) UpdatePolicy(ctx interface{}, policy interface{}) *MockPayoutStore_UpdatePolicy_Call {
+func (_e *MockPayoutStore_Expecter) UpdatePolicy(ctx any, policy any) *MockPayoutStore_UpdatePolicy_Call {
 	return &MockPayoutStore_UpdatePolicy_Call{Call: _e.mock.On("UpdatePolicy", ctx, policy)}
 }
 

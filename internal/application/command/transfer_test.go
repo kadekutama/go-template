@@ -3,6 +3,7 @@ package command_test
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -24,7 +25,9 @@ const (
 	tfrAsset  = valueobject.AssetCode("USD")
 )
 
-var tfrAt = time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
+func tfrAt() time.Time {
+	return time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
+}
 
 func tfrTestAccounts() map[valueobject.AccountID]entity.AccountData {
 	return map[valueobject.AccountID]entity.AccountData{
@@ -34,12 +37,14 @@ func tfrTestAccounts() map[valueobject.AccountID]entity.AccountData {
 }
 
 func newTransferService(t *testing.T, uow port.UnitOfWork, store command.TransferStore, balances port.GetBalance, authz port.Authorizer) *command.TransferService {
+	t.Helper()
+
 	return command.NewTransferService(command.TransferServiceParams{
 		UoW:       uow,
 		Accounts:  newMockAccountRepository(t, tfrTestAccounts()),
 		Balances:  balances,
 		Transfers: store,
-		Clock:     newMockClock(t, tfrAt),
+		Clock:     newMockClock(t, tfrAt()),
 		IDs:       newMockIDGenerator(t, tfrTestIDs(60)...),
 		Authz:     authz,
 	})
@@ -86,7 +91,7 @@ func TestTransferCreate(t *testing.T) {
 				fp := command.Fingerprint(
 					req.IdempotencyKey, string(req.TenantID), string(req.LedgerID),
 					string(req.Source), string(req.Dest), string(req.AssetCode),
-					fmt.Sprintf("%d", req.AmountMinor),
+					strconv.FormatInt(req.AmountMinor, 10),
 					req.ExecuteAt.UTC().Format(time.RFC3339Nano), req.Recurrence,
 				)
 				setUOWIdem(uow, req.IdempotencyKey, fp, []byte("{corrupt-json"))
@@ -110,7 +115,8 @@ func TestTransferCreate(t *testing.T) {
 			name: "scheduled transfer persists pending without funds check",
 			cmd: func() port.TransferRequest {
 				c := transferTestCommand()
-				c.ExecuteAt = tfrAt.Add(24 * time.Hour)
+				c.ExecuteAt = tfrAt().Add(24 * time.Hour)
+
 				return c
 			}(),
 			available:          0,
@@ -138,6 +144,7 @@ func TestTransferCreate(t *testing.T) {
 			cmd: func() port.TransferRequest {
 				c := transferTestCommand()
 				c.TenantID = ""
+
 				return c
 			}(),
 			available:          9000,
@@ -152,6 +159,7 @@ func TestTransferCreate(t *testing.T) {
 			cmd: func() port.TransferRequest {
 				c := transferTestCommand()
 				c.LedgerID = ""
+
 				return c
 			}(),
 			available:          9000,
@@ -166,6 +174,7 @@ func TestTransferCreate(t *testing.T) {
 			cmd: func() port.TransferRequest {
 				c := transferTestCommand()
 				c.Source = ""
+
 				return c
 			}(),
 			available:          9000,
@@ -180,6 +189,7 @@ func TestTransferCreate(t *testing.T) {
 			cmd: func() port.TransferRequest {
 				c := transferTestCommand()
 				c.AssetCode = ""
+
 				return c
 			}(),
 			available:          9000,
@@ -194,6 +204,7 @@ func TestTransferCreate(t *testing.T) {
 			cmd: func() port.TransferRequest {
 				c := transferTestCommand()
 				c.AmountMinor = 0
+
 				return c
 			}(),
 			available:          9000,
@@ -208,6 +219,7 @@ func TestTransferCreate(t *testing.T) {
 			cmd: func() port.TransferRequest {
 				c := transferTestCommand()
 				c.AssetCode = "EUR"
+
 				return c
 			}(),
 			available:          9000,
@@ -222,6 +234,7 @@ func TestTransferCreate(t *testing.T) {
 			cmd: func() port.TransferRequest {
 				c := transferTestCommand()
 				c.Actor = ""
+
 				return c
 			}(),
 			available:          9000,
@@ -236,6 +249,7 @@ func TestTransferCreate(t *testing.T) {
 			cmd: func() port.TransferRequest {
 				c := transferTestCommand()
 				c.IdempotencyKey = ""
+
 				return c
 			}(),
 			available:          9000,
@@ -249,6 +263,7 @@ func TestTransferCreate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t, "cursor-5")
 			store := newMockTransferStore(t)
 			authz := newMockAuthorizer(t)
@@ -257,9 +272,11 @@ func TestTransferCreate(t *testing.T) {
 			tc.preload(uow, svc)
 			actualResult, err := svc.CreateTransfer(context.Background(), tc.cmd)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, tc.expectedStatus, actualResult.Status)
 			}
+
 			assert.Equal(t, tc.expectedRecords, transferCount(store))
 			assert.Equal(t, tc.expectedAuthzCalls, authzCalls(authz))
 		})
@@ -271,11 +288,13 @@ func TestTransferExecute(t *testing.T) {
 
 	seedPending := func(t *testing.T, svc *command.TransferService) string {
 		t.Helper()
+
 		cmd := transferTestCommand()
-		cmd.ExecuteAt = tfrAt.Add(24 * time.Hour)
+		cmd.ExecuteAt = tfrAt().Add(24 * time.Hour)
 		res, err := svc.CreateTransfer(context.Background(), cmd)
 		require.NoError(t, err)
 		require.Equal(t, command.TransferPending, res.Status)
+
 		return res.TransferID
 	}
 
@@ -323,6 +342,8 @@ func TestTransferExecute(t *testing.T) {
 			actor:     "u-1",
 			available: 9000,
 			preload: func(t *testing.T, svc *command.TransferService, id string) {
+				t.Helper()
+
 				_, err := svc.ExecuteTransfer(context.Background(), tfrTenant, id, "u-1")
 				require.NoError(t, err)
 			},
@@ -335,6 +356,8 @@ func TestTransferExecute(t *testing.T) {
 			actor:     "u-1",
 			available: 9000,
 			preload: func(t *testing.T, svc *command.TransferService, id string) {
+				t.Helper()
+
 				_, err := svc.CancelTransfer(context.Background(), port.TransferQuery{TenantID: tfrTenant, TransferID: id, Actor: "u-1"})
 				require.NoError(t, err)
 			},
@@ -345,6 +368,7 @@ func TestTransferExecute(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t, "cursor-5")
 			store := newMockTransferStore(t)
 			authz := newMockAuthorizer(t)
@@ -356,6 +380,7 @@ func TestTransferExecute(t *testing.T) {
 			tc.preload(t, svc, id)
 			actualResult, err := svc.ExecuteTransfer(context.Background(), tc.tenant, id, tc.actor)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, tc.expectedStatus, actualResult.Status)
 			}
@@ -368,10 +393,12 @@ func TestTransferCancel(t *testing.T) {
 
 	seedPending := func(t *testing.T, svc *command.TransferService) string {
 		t.Helper()
+
 		cmd := transferTestCommand()
-		cmd.ExecuteAt = tfrAt.Add(24 * time.Hour)
+		cmd.ExecuteAt = tfrAt().Add(24 * time.Hour)
 		res, err := svc.CreateTransfer(context.Background(), cmd)
 		require.NoError(t, err)
+
 		return res.TransferID
 	}
 
@@ -411,6 +438,8 @@ func TestTransferCancel(t *testing.T) {
 				return port.TransferQuery{TenantID: tfrTenant, TransferID: id, Actor: "u-1"}
 			},
 			preload: func(t *testing.T, svc *command.TransferService, id string) {
+				t.Helper()
+
 				_, err := svc.CancelTransfer(context.Background(), port.TransferQuery{TenantID: tfrTenant, TransferID: id, Actor: "u-1"})
 				require.NoError(t, err)
 			},
@@ -424,6 +453,8 @@ func TestTransferCancel(t *testing.T) {
 				return port.TransferQuery{TenantID: tfrTenant, TransferID: id, Actor: "u-1"}
 			},
 			preload: func(t *testing.T, svc *command.TransferService, id string) {
+				t.Helper()
+
 				_, err := svc.ExecuteTransfer(context.Background(), tfrTenant, id, "u-1")
 				require.NoError(t, err)
 			},
@@ -445,19 +476,23 @@ func TestTransferCancel(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t, "cursor-5")
 			store := newMockTransferStore(t)
 			authz := newMockAuthorizer(t)
 			balances := newMockBalances(t, map[valueobject.AccountID]int64{tfrSrc: 9000})
 			svc := newTransferService(t, uow, store, balances, authz)
 			id := seedPending(t, svc)
+
 			query := tc.query(id)
 			if tc.denied {
 				setAuthzDenied(authz, "u-1|transfer.cancel|ledger/"+id)
 			}
+
 			tc.preload(t, svc, id)
 			actualResult, err := svc.CancelTransfer(context.Background(), query)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, tc.expectedStatus, actualResult.Status)
 			}
@@ -470,12 +505,13 @@ func TestTransferBatch(t *testing.T) {
 
 	batchCommand := func(n int, tenant valueobject.TenantID) port.BatchTransferRequest {
 		items := make([]port.TransferRequest, 0, n)
-		for i := 0; i < n; i++ {
+		for i := range n {
 			item := transferTestCommand()
 			item.TenantID = tenant
 			item.IdempotencyKey = fmt.Sprintf("item-%d", i)
 			items = append(items, item)
 		}
+
 		return port.BatchTransferRequest{
 			TenantID: tfrTenant, LedgerID: tfrLedger, Items: items,
 			IdempotencyKey: "batch-1", Actor: "u-1",
@@ -511,10 +547,14 @@ func TestTransferBatch(t *testing.T) {
 			available: 90000,
 			preload: func(uow port.UnitOfWork) {
 				req := batchCommand(2, tfrTenant)
-				parts := []string{req.IdempotencyKey, string(req.TenantID), string(req.LedgerID), fmt.Sprintf("%d", len(req.Items))}
+
+				parts := make([]string, 0, 4+4*len(req.Items))
+
+				parts = append(parts, req.IdempotencyKey, string(req.TenantID), string(req.LedgerID), strconv.Itoa(len(req.Items)))
 				for _, it := range req.Items {
-					parts = append(parts, string(it.Source), string(it.Dest), string(it.AssetCode), fmt.Sprintf("%d", it.AmountMinor))
+					parts = append(parts, string(it.Source), string(it.Dest), string(it.AssetCode), strconv.FormatInt(it.AmountMinor, 10))
 				}
+
 				setUOWIdem(uow, req.IdempotencyKey, command.Fingerprint(parts...), []byte("{corrupt-json"))
 			},
 			expectedState:   "",
@@ -526,6 +566,7 @@ func TestTransferBatch(t *testing.T) {
 			req: func() port.BatchTransferRequest {
 				req := batchCommand(3, tfrTenant)
 				req.Items[1].AmountMinor = 90000
+
 				return req
 			}(),
 			available:         9000,
@@ -539,9 +580,10 @@ func TestTransferBatch(t *testing.T) {
 			name: "over-limit batch rejected pre-intake",
 			req: func() port.BatchTransferRequest {
 				items := make([]port.TransferRequest, 0, 1001)
-				for i := 0; i < 1001; i++ {
+				for range 1001 {
 					items = append(items, transferTestCommand())
 				}
+
 				return port.BatchTransferRequest{
 					TenantID: tfrTenant, LedgerID: tfrLedger, Items: items,
 					IdempotencyKey: "batch-1", Actor: "u-1",
@@ -565,6 +607,7 @@ func TestTransferBatch(t *testing.T) {
 			req: func() port.BatchTransferRequest {
 				b := batchCommand(2, tfrTenant)
 				b.TenantID = ""
+
 				return b
 			}(),
 			available:       90000,
@@ -577,6 +620,7 @@ func TestTransferBatch(t *testing.T) {
 			req: func() port.BatchTransferRequest {
 				b := batchCommand(2, tfrTenant)
 				b.LedgerID = ""
+
 				return b
 			}(),
 			available:       90000,
@@ -588,6 +632,7 @@ func TestTransferBatch(t *testing.T) {
 			name: "empty batch items fails envelope validation",
 			req: func() port.BatchTransferRequest {
 				b := batchCommand(0, tfrTenant)
+
 				return b
 			}(),
 			available:       90000,
@@ -600,6 +645,7 @@ func TestTransferBatch(t *testing.T) {
 			req: func() port.BatchTransferRequest {
 				b := batchCommand(2, tfrTenant)
 				b.Actor = ""
+
 				return b
 			}(),
 			available:       90000,
@@ -612,6 +658,7 @@ func TestTransferBatch(t *testing.T) {
 			req: func() port.BatchTransferRequest {
 				b := batchCommand(2, tfrTenant)
 				b.IdempotencyKey = ""
+
 				return b
 			}(),
 			available:       90000,
@@ -623,10 +670,13 @@ func TestTransferBatch(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			uow := newMockUOW(t, "cursor-5")
 			if tc.preload != nil {
 				tc.preload(uow)
 			}
+
 			store := newMockTransferStore(t)
 			authz := newMockAuthorizer(t)
 			balances := newMockBalances(t, map[valueobject.AccountID]int64{tfrSrc: tc.available})
@@ -634,10 +684,13 @@ func TestTransferBatch(t *testing.T) {
 			actualResult, err := svc.CreateBatchTransfer(context.Background(), tc.req)
 			assert.Equal(t, tc.expectedError, err)
 			assert.Equal(t, tc.expectedBatches, batchCount(store))
+
 			if tc.expectedError != nil {
 				return
 			}
+
 			assert.Equal(t, len(tc.req.Items), actualResult.TotalItems)
+
 			querySvc := query.NewTransferQueryService(query.TransferQueryServiceParams{Transfers: store})
 			status, statusErr := querySvc.GetBatchStatus(context.Background(), port.BatchStatusQuery{TenantID: tfrTenant, BatchID: actualResult.BatchID})
 			require.NoError(t, statusErr)
@@ -645,6 +698,7 @@ func TestTransferBatch(t *testing.T) {
 			assert.Len(t, status.Items, len(tc.req.Items))
 			assert.Equal(t, tc.expectedSucceeded, status.Succeeded)
 			assert.Equal(t, tc.expectedFailed, status.Failed)
+
 			for _, item := range status.Items {
 				if item.Status == command.TransferFailed {
 					assert.Equal(t, "INSUFFICIENT_FUNDS", item.ErrorCode)

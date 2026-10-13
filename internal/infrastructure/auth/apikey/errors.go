@@ -1,3 +1,4 @@
+// Package apikey issues, hashes, and verifies API keys for service authentication.
 package apikey
 
 import "errors"

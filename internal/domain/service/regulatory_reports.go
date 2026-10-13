@@ -54,6 +54,7 @@ func ReportFields(t ReportType) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return append([]string(nil), def.RequiredFields...), nil
 }
 
@@ -63,13 +64,16 @@ func ValidateReport(t ReportType, fields map[string]string) error {
 	if err != nil {
 		return err
 	}
+
 	if len(required) == 0 {
 		return entity.NewError("REPORT_FIELDS_REQUIRED", "regulatory report requires fields")
 	}
+
 	for _, name := range required {
 		if fields[name] == "" {
 			return entity.Errorf("REPORT_FIELD_MISSING", "report field %s is required", name)
 		}
 	}
+
 	return nil
 }

@@ -26,18 +26,23 @@ func (f LedgerFact) Validate() error {
 	if strings.TrimSpace(f.PostingID) == "" {
 		return entity.NewError("POSTING_ID_REQUIRED", "ledger fact posting id is required")
 	}
+
 	if strings.TrimSpace(f.Reference) == "" {
 		return entity.NewError("LEDGER_REFERENCE_REQUIRED", "ledger fact reference is required")
 	}
+
 	if f.AmountMinor <= 0 {
 		return entity.NewError("INVALID_ENTRY_AMOUNT", "ledger fact amount must be positive")
 	}
+
 	if strings.TrimSpace(f.AssetCode) == "" {
 		return entity.NewError("LEDGER_ASSET_REQUIRED", "ledger fact asset is required")
 	}
+
 	if f.EffectiveAt.IsZero() {
 		return entity.NewError("LEDGER_EFFECTIVE_REQUIRED", "ledger fact effective time is required")
 	}
+
 	return nil
 }
 
@@ -89,20 +94,25 @@ func MatchStatements(ledger []LedgerFact, external []entity.ExternalStatementLin
 	if err := validateMatchConfig(cfg); err != nil {
 		return nil, nil, err
 	}
+
 	if err := validateLedgerFacts(ledger); err != nil {
 		return nil, nil, err
 	}
+
 	if err := validateExternalLines(external); err != nil {
 		return nil, nil, err
 	}
+
 	sortedLedger := sortedLedgerFacts(ledger)
 	sortedExternal := sortedExternalLines(external)
 	duplicates, deduped := splitDuplicates(sortedExternal)
 	breaks := duplicateBreaks(duplicates, cfg)
+
 	matched, refBreaks, err := matchByReference(sortedLedger, deduped, cfg)
 	if err != nil {
 		return nil, nil, err
 	}
+
 	return matched, append(breaks, refBreaks...), nil
 }
 
@@ -113,24 +123,31 @@ func AutoResolveBreak(b entity.ReconciliationBreak, skew time.Duration, policy A
 	if b.Type == valueobject.BreakAmountMismatch {
 		return false, entity.NewError("AUTO_RESOLVE_FORBIDDEN", "amount mismatches require human review")
 	}
+
 	if b.Type == valueobject.BreakDuplicate {
 		return false, nil
 	}
+
 	if policy.RuleVersion == "" {
 		return false, entity.NewError("RULE_VERSION_REQUIRED", "auto-resolve requires a rule version")
 	}
+
 	if strings.TrimSpace(policy.DecisionActor) == "" {
 		return false, entity.NewError("DECISION_ACTOR_REQUIRED", "auto-resolve requires a decision actor")
 	}
+
 	if !typeAllowed(b.Type, policy.AllowedTypes) {
 		return false, nil
 	}
+
 	if skew < 0 {
 		skew = -skew
 	}
+
 	if skew > policy.MaxSkew {
 		return false, nil
 	}
+
 	return true, nil
 }
 
@@ -138,39 +155,50 @@ func validateMatchConfig(cfg MatchConfig) error {
 	if strings.TrimSpace(cfg.RuleVersion) == "" {
 		return entity.NewError("RULE_VERSION_REQUIRED", "match rule version is required")
 	}
+
 	if strings.TrimSpace(cfg.Actor) == "" {
 		return entity.NewError("DECISION_ACTOR_REQUIRED", "match decision actor is required")
 	}
+
 	if strings.TrimSpace(cfg.Rail) == "" {
 		return entity.NewError("TOLERANCE_POLICY_REQUIRED", "match rail is required for tolerance lookup")
 	}
+
 	if strings.TrimSpace(cfg.RunID) == "" {
 		return entity.NewError("RUN_ID_REQUIRED", "run id is required")
 	}
+
 	if strings.TrimSpace(cfg.TenantID) == "" {
 		return entity.NewError("TENANT_REQUIRED", "tenant id is required")
 	}
+
 	if cfg.TimingWindow < 0 {
 		return entity.NewError("TIMING_WINDOW_INVALID", "timing window must be non-negative")
 	}
+
 	return checkDuplicateTolerances(cfg.Tolerances)
 }
 
 func checkDuplicateTolerances(policies []TolerancePolicy) error {
 	seen := make(map[string]int64)
+
 	for _, t := range policies {
 		if strings.TrimSpace(t.Rail) == "" || strings.TrimSpace(t.AssetCode) == "" {
 			return entity.NewError("TOLERANCE_POLICY_REQUIRED", "tolerance requires rail and asset")
 		}
+
 		if t.ToleranceMinor < 0 {
 			return entity.NewError("TOLERANCE_POLICY_REQUIRED", "tolerance must be non-negative")
 		}
+
 		key := t.Rail + "\x00" + t.AssetCode
 		if prev, ok := seen[key]; ok && prev != t.ToleranceMinor {
 			return entity.NewError("TOLERANCE_POLICY_CONFLICT", "duplicate tolerance policy for rail and asset")
 		}
+
 		seen[key] = t.ToleranceMinor
 	}
+
 	return nil
 }
 
@@ -180,6 +208,7 @@ func validateLedgerFacts(ledger []LedgerFact) error {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -189,6 +218,7 @@ func validateExternalLines(external []entity.ExternalStatementLine) error {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -198,17 +228,22 @@ func sortedLedgerFacts(in []LedgerFact) []LedgerFact {
 		if c := strings.Compare(a.Reference, b.Reference); c != 0 {
 			return c
 		}
+
 		if c := cmp.Compare(a.AmountMinor, b.AmountMinor); c != 0 {
 			return c
 		}
+
 		if !a.EffectiveAt.Equal(b.EffectiveAt) {
 			if a.EffectiveAt.Before(b.EffectiveAt) {
 				return -1
 			}
+
 			return 1
 		}
+
 		return strings.Compare(a.PostingID, b.PostingID)
 	})
+
 	return out
 }
 
@@ -218,33 +253,45 @@ func sortedExternalLines(in []entity.ExternalStatementLine) []entity.ExternalSta
 		if c := strings.Compare(a.Reference, b.Reference); c != 0 {
 			return c
 		}
+
 		if c := cmp.Compare(a.AmountMinor, b.AmountMinor); c != 0 {
 			return c
 		}
+
 		if !a.EffectiveAt.Equal(b.EffectiveAt) {
 			if a.EffectiveAt.Before(b.EffectiveAt) {
 				return -1
 			}
+
 			return 1
 		}
+
 		return strings.Compare(a.LineID, b.LineID)
 	})
+
 	return out
 }
 
 func splitDuplicates(sorted []entity.ExternalStatementLine) ([]entity.ExternalStatementLine, []entity.ExternalStatementLine) {
 	seen := make(map[string]string)
-	var duplicates []entity.ExternalStatementLine
-	var deduped []entity.ExternalStatementLine
+
+	var (
+		duplicates []entity.ExternalStatementLine
+		deduped    []entity.ExternalStatementLine
+	)
+
 	for _, line := range sorted {
 		key := line.Reference + "\x00" + line.AssetCode + "\x00" + line.Hash
 		if prev, ok := seen[key]; ok && prev != "" {
 			duplicates = append(duplicates, line)
+
 			continue
 		}
+
 		seen[key] = line.LineID
 		deduped = append(deduped, line)
 	}
+
 	return duplicates, deduped
 }
 
@@ -264,6 +311,7 @@ func duplicateBreaks(duplicates []entity.ExternalStatementLine, cfg MatchConfig)
 			RuleVersion: cfg.RuleVersion,
 		})
 	}
+
 	return breaks
 }
 
@@ -271,24 +319,33 @@ func matchByReference(ledger []LedgerFact, external []entity.ExternalStatementLi
 	ledgerByRef := groupLedger(ledger)
 	externalByRef := groupExternal(external)
 	refs := unionRefs(ledgerByRef, externalByRef)
-	var matched []MatchGroup
-	var breaks []entity.ReconciliationBreak
+
+	var (
+		matched []MatchGroup
+		breaks  []entity.ReconciliationBreak
+	)
+
 	for _, ref := range refs {
 		lfacts := ledgerByRef[ref]
 		elines := externalByRef[ref]
+
 		groups, refBreaks, err := matchOneReference(ref, lfacts, elines, cfg)
 		if err != nil {
 			return nil, nil, err
 		}
+
 		matched = append(matched, groups...)
 		breaks = append(breaks, refBreaks...)
 	}
+
 	if matched == nil {
 		matched = []MatchGroup{}
 	}
+
 	if breaks == nil {
 		breaks = []entity.ReconciliationBreak{}
 	}
+
 	return matched, breaks, nil
 }
 
@@ -297,6 +354,7 @@ func groupLedger(ledger []LedgerFact) map[string][]LedgerFact {
 	for _, f := range ledger {
 		out[f.Reference] = append(out[f.Reference], f)
 	}
+
 	return out
 }
 
@@ -305,6 +363,7 @@ func groupExternal(external []entity.ExternalStatementLine) map[string][]entity.
 	for _, l := range external {
 		out[l.Reference] = append(out[l.Reference], l)
 	}
+
 	return out
 }
 
@@ -313,14 +372,18 @@ func unionRefs(a map[string][]LedgerFact, b map[string][]entity.ExternalStatemen
 	for k := range a {
 		set[k] = struct{}{}
 	}
+
 	for k := range b {
 		set[k] = struct{}{}
 	}
+
 	refs := make([]string, 0, len(set))
 	for k := range set {
 		refs = append(refs, k)
 	}
+
 	slices.Sort(refs)
+
 	return refs
 }
 
@@ -328,36 +391,46 @@ func matchOneReference(ref string, lfacts []LedgerFact, elines []entity.External
 	if len(lfacts) == 0 {
 		return nil, missingLedgerBreaks(ref, elines, cfg), nil
 	}
+
 	if len(elines) == 0 {
 		return nil, missingBankBreaks(ref, lfacts, cfg), nil
 	}
+
 	asset := lfacts[0].AssetCode
 	if !allAssetsEqual(lfacts, elines, asset) {
 		ledgerSum, externalSum, sumErr := checkedSums(lfacts, elines)
 		if sumErr != nil {
 			return nil, nil, sumErr
 		}
+
 		return nil, []entity.ReconciliationBreak{amountBreak(ref, lfacts, elines, ledgerSum, externalSum, cfg, 0)}, nil
 	}
+
 	tolerance, err := toleranceFor(cfg, asset)
 	if err != nil {
 		return nil, nil, err
 	}
+
 	ledgerSum, externalSum, sumErr := checkedSums(lfacts, elines)
 	if sumErr != nil {
 		return nil, nil, sumErr
 	}
+
 	skew := maxSkew(lfacts, elines)
+
 	diff, diffErr := checkedDiff(ledgerSum, externalSum)
 	if diffErr != nil {
 		return nil, nil, diffErr
 	}
+
 	if diff > tolerance {
 		return nil, []entity.ReconciliationBreak{amountBreak(ref, lfacts, elines, ledgerSum, externalSum, cfg, tolerance)}, nil
 	}
+
 	if skew > cfg.TimingWindow {
 		return nil, []entity.ReconciliationBreak{dateBreak(ref, lfacts, elines, ledgerSum, externalSum, cfg)}, nil
 	}
+
 	return []MatchGroup{matchedGroup(ref, lfacts, elines, ledgerSum, externalSum, cfg)}, nil, nil
 }
 
@@ -375,6 +448,7 @@ func missingLedgerBreaks(ref string, elines []entity.ExternalStatementLine, cfg 
 			RuleVersion: cfg.RuleVersion,
 		})
 	}
+
 	return breaks
 }
 
@@ -392,6 +466,7 @@ func missingBankBreaks(ref string, lfacts []LedgerFact, cfg MatchConfig) []entit
 			RuleVersion:   cfg.RuleVersion,
 		})
 	}
+
 	return breaks
 }
 
@@ -436,14 +511,17 @@ func matchedGroup(ref string, lfacts []LedgerFact, elines []entity.ExternalState
 	if len(lfacts) != 1 || len(elines) != 1 {
 		confidence = "MEDIUM"
 	}
+
 	ledgerRefs := make([]string, 0, len(lfacts))
 	for _, f := range lfacts {
 		ledgerRefs = append(ledgerRefs, f.PostingID)
 	}
+
 	externalRefs := make([]string, 0, len(elines))
 	for _, l := range elines {
 		externalRefs = append(externalRefs, l.LineID)
 	}
+
 	return MatchGroup{
 		GroupID:       "grp:" + cfg.RunID + ":" + ref + ":0",
 		RuleVersion:   cfg.RuleVersion,
@@ -463,9 +541,11 @@ func toleranceFor(cfg MatchConfig, asset string) (int64, error) {
 			if t.ToleranceMinor < 0 {
 				return 0, entity.NewError("TOLERANCE_POLICY_REQUIRED", "tolerance must be non-negative")
 			}
+
 			return t.ToleranceMinor, nil
 		}
 	}
+
 	return 0, entity.NewError("TOLERANCE_POLICY_REQUIRED", "tolerance policy is required for rail and asset")
 }
 
@@ -474,10 +554,12 @@ func checkedSums(lfacts []LedgerFact, elines []entity.ExternalStatementLine) (in
 	if err != nil {
 		return 0, 0, err
 	}
+
 	externalSum, err := sumExternalChecked(elines)
 	if err != nil {
 		return 0, 0, err
 	}
+
 	return ledgerSum, externalSum, nil
 }
 
@@ -488,8 +570,10 @@ func sumLedgerChecked(lfacts []LedgerFact) (int64, error) {
 		if !ok {
 			return 0, entity.NewError("AMOUNT_OVERFLOW", "ledger sum overflowed int64")
 		}
+
 		sum = next
 	}
+
 	return sum, nil
 }
 
@@ -500,8 +584,10 @@ func sumExternalChecked(elines []entity.ExternalStatementLine) (int64, error) {
 		if !ok {
 			return 0, entity.NewError("AMOUNT_OVERFLOW", "external sum overflowed int64")
 		}
+
 		sum = next
 	}
+
 	return sum, nil
 }
 
@@ -511,28 +597,33 @@ func allAssetsEqual(lfacts []LedgerFact, elines []entity.ExternalStatementLine, 
 			return false
 		}
 	}
+
 	for _, l := range elines {
 		if l.AssetCode != asset {
 			return false
 		}
 	}
+
 	return true
 }
 
 func maxSkew(lfacts []LedgerFact, elines []entity.ExternalStatementLine) time.Duration {
-	var max time.Duration
+	var peak time.Duration
+
 	for _, f := range lfacts {
 		for _, l := range elines {
 			skew := f.EffectiveAt.Sub(l.EffectiveAt)
 			if skew < 0 {
 				skew = -skew
 			}
-			if skew > max {
-				max = skew
+
+			if skew > peak {
+				peak = skew
 			}
 		}
 	}
-	return max
+
+	return peak
 }
 
 func typeAllowed(t valueobject.BreakType, allowed []valueobject.BreakType) bool {
@@ -544,11 +635,14 @@ func checkedDiff(a, b int64) (int64, error) {
 	if (a > 0 && b < 0 && diff < 0) || (a < 0 && b > 0 && diff > 0) {
 		return 0, entity.NewError("AMOUNT_OVERFLOW", "amount difference overflowed int64")
 	}
+
 	if diff < 0 {
 		if diff == math.MinInt64 {
 			return 0, entity.NewError("AMOUNT_OVERFLOW", "amount difference overflowed int64")
 		}
+
 		return -diff, nil
 	}
+
 	return diff, nil
 }

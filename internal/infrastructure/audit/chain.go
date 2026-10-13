@@ -1,3 +1,4 @@
+// Package audit appends tamper-evident hash-chained audit records and exports them to WORM storage.
 package audit
 
 import (
@@ -45,13 +46,13 @@ func hashEntry(tenant, actor, action, resource, before, after string, occurredAt
 	var framed []byte
 
 	framed = append(framed, "AUDIT-V1\x00"...)
-	framed = strconv.AppendInt(framed, seq, 10)
+	framed = strconv.AppendInt(framed, seq, decimalBase)
 	framed = append(framed, 0)
-	framed = strconv.AppendInt(framed, occurredAt.UnixNano(), 10)
+	framed = strconv.AppendInt(framed, occurredAt.UnixNano(), decimalBase)
 	framed = append(framed, 0)
 
 	for _, field := range []string{tenant, actor, action, resource, before, after, prevHash} {
-		framed = strconv.AppendInt(framed, int64(len(field)), 10)
+		framed = strconv.AppendInt(framed, int64(len(field)), decimalBase)
 		framed = append(framed, ':')
 		framed = append(framed, field...)
 		framed = append(framed, 0)
@@ -82,6 +83,7 @@ func verifySignature(key []byte, entryHash, signature string) bool {
 func rootHash(entries []StoredEntry) string {
 	if len(entries) == 0 {
 		sum := sha256.Sum256(nil)
+
 		return hex.EncodeToString(sum[:])
 	}
 
@@ -97,6 +99,7 @@ func rootHash(entries []StoredEntry) string {
 func merkleTreeRoot(nodes []string) string {
 	if len(nodes) == 0 {
 		sum := sha256.Sum256(nil)
+
 		return hex.EncodeToString(sum[:])
 	}
 
@@ -105,6 +108,7 @@ func merkleTreeRoot(nodes []string) string {
 
 	for len(current) > 1 {
 		var next []string
+
 		for i := 0; i < len(current); i += 2 {
 			if i+1 < len(current) {
 				sum := sha256.Sum256([]byte(current[i] + current[i+1]))
@@ -114,6 +118,7 @@ func merkleTreeRoot(nodes []string) string {
 				next = append(next, hex.EncodeToString(sum[:]))
 			}
 		}
+
 		current = next
 	}
 
@@ -121,7 +126,9 @@ func merkleTreeRoot(nodes []string) string {
 }
 
 // secretMarkers are substrings that must never enter audit entries.
-var secretMarkers = []string{"password=", "secret=", "bearer ", "private_key"}
+func secretMarkers() []string {
+	return []string{"password=", "secret=", "bearer ", "private_key"}
+}
 
 // fromPort maps one port entry onto chain inputs with secret guard.
 func fromPort(entry appport.AuditEntry) error {
@@ -131,7 +138,7 @@ func fromPort(entry appport.AuditEntry) error {
 
 	for _, field := range []string{entry.Actor, entry.Action, entry.Resource, entry.BeforeHash, entry.AfterHash} {
 		lowered := strings.ToLower(field)
-		for _, marker := range secretMarkers {
+		for _, marker := range secretMarkers() {
 			if strings.Contains(lowered, marker) {
 				return fmt.Errorf("%w: field carries secret material", ErrSecretInEntry)
 			}

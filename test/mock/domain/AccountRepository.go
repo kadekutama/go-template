@@ -61,7 +61,7 @@ type MockAccountRepository_Create_Call struct {
 // Create is a helper method to define mock.On call
 //   - ctx context.Context
 //   - account entity.AccountData
-func (_e *MockAccountRepository_Expecter) Create(ctx interface{}, account interface{}) *MockAccountRepository_Create_Call {
+func (_e *MockAccountRepository_Expecter) Create(ctx any, account any) *MockAccountRepository_Create_Call {
 	return &MockAccountRepository_Create_Call{Call: _e.mock.On("Create", ctx, account)}
 }
 
@@ -119,7 +119,7 @@ type MockAccountRepository_FindByID_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - id valueobject.AccountID
-func (_e *MockAccountRepository_Expecter) FindByID(ctx interface{}, tenant interface{}, id interface{}) *MockAccountRepository_FindByID_Call {
+func (_e *MockAccountRepository_Expecter) FindByID(ctx any, tenant any, id any) *MockAccountRepository_FindByID_Call {
 	return &MockAccountRepository_FindByID_Call{Call: _e.mock.On("FindByID", ctx, tenant, id)}
 }
 
@@ -187,7 +187,7 @@ type MockAccountRepository_FindByTenant_Call struct {
 //   - tenant valueobject.TenantID
 //   - cursor string
 //   - limit int
-func (_e *MockAccountRepository_Expecter) FindByTenant(ctx interface{}, tenant interface{}, cursor interface{}, limit interface{}) *MockAccountRepository_FindByTenant_Call {
+func (_e *MockAccountRepository_Expecter) FindByTenant(ctx any, tenant any, cursor any, limit any) *MockAccountRepository_FindByTenant_Call {
 	return &MockAccountRepository_FindByTenant_Call{Call: _e.mock.On("FindByTenant", ctx, tenant, cursor, limit)}
 }
 
@@ -235,7 +235,7 @@ type MockAccountRepository_UpdateMetadata_Call struct {
 //   - ctx context.Context
 //   - account entity.AccountData
 //   - expectedVersion int64
-func (_e *MockAccountRepository_Expecter) UpdateMetadata(ctx interface{}, account interface{}, expectedVersion interface{}) *MockAccountRepository_UpdateMetadata_Call {
+func (_e *MockAccountRepository_Expecter) UpdateMetadata(ctx any, account any, expectedVersion any) *MockAccountRepository_UpdateMetadata_Call {
 	return &MockAccountRepository_UpdateMetadata_Call{Call: _e.mock.On("UpdateMetadata", ctx, account, expectedVersion)}
 }
 
@@ -285,7 +285,7 @@ type MockAccountRepository_UpdateStatus_Call struct {
 //   - id valueobject.AccountID
 //   - status valueobject.AccountStatus
 //   - expectedVersion int64
-func (_e *MockAccountRepository_Expecter) UpdateStatus(ctx interface{}, tenant interface{}, id interface{}, status interface{}, expectedVersion interface{}) *MockAccountRepository_UpdateStatus_Call {
+func (_e *MockAccountRepository_Expecter) UpdateStatus(ctx any, tenant any, id any, status any, expectedVersion any) *MockAccountRepository_UpdateStatus_Call {
 	return &MockAccountRepository_UpdateStatus_Call{Call: _e.mock.On("UpdateStatus", ctx, tenant, id, status, expectedVersion)}
 }
 

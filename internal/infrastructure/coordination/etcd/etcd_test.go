@@ -57,11 +57,15 @@ func TestConfigForEndpoints(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			cfg, err := coordination.ConfigForEndpoints(tc.endpoints, tc.dialTimeout, tc.electionTTLSeconds, tc.leaderKeyPrefix)
 			if tc.expectedError {
 				require.Error(t, err)
+
 				return
 			}
+
 			require.NoError(t, err)
 			assert.Equal(t, tc.endpoints, cfg.Endpoints)
 			assert.Equal(t, tc.dialTimeout, cfg.DialTimeout)
@@ -146,6 +150,8 @@ func TestConfigValidate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.config.Validate()
 			if tc.expectedError == "" {
 				assert.NoError(t, err)
@@ -183,10 +189,13 @@ func TestNewClientValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			client, err := coordination.NewClient(tc.params)
 			if tc.expectedError {
 				require.Error(t, err)
 				assert.Nil(t, client)
+
 				return
 			}
 
@@ -218,6 +227,7 @@ func TestNewWatcherValidation(t *testing.T) {
 				client, err := coordination.NewClient(coordination.ClientParams{Config: testEtcdConfig()})
 				require.NoError(t, err)
 				t.Cleanup(func() { _ = client.Close() })
+
 				return coordination.WatcherParams{Client: client}
 			}(),
 			expectedError: false,
@@ -226,10 +236,13 @@ func TestNewWatcherValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			watcher, err := coordination.NewWatcher(tc.params)
 			if tc.expectedError {
 				require.Error(t, err)
 				assert.Nil(t, watcher)
+
 				return
 			}
 
@@ -262,6 +275,7 @@ func TestNewElectionValidation(t *testing.T) {
 				client, err := coordination.NewClient(coordination.ClientParams{Config: testEtcdConfig()})
 				require.NoError(t, err)
 				t.Cleanup(func() { _ = client.Close() })
+
 				return coordination.ElectionParams{
 					Client:     client,
 					KeyPrefix:  "/finance/reconciliation-leader",
@@ -277,6 +291,7 @@ func TestNewElectionValidation(t *testing.T) {
 				client, err := coordination.NewClient(coordination.ClientParams{Config: testEtcdConfig()})
 				require.NoError(t, err)
 				t.Cleanup(func() { _ = client.Close() })
+
 				return coordination.ElectionParams{
 					Client:     client,
 					KeyPrefix:  "",
@@ -290,10 +305,13 @@ func TestNewElectionValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			election, err := coordination.NewElection(tc.params)
 			if tc.expectedError {
 				require.Error(t, err)
 				assert.Nil(t, election)
+
 				return
 			}
 
@@ -328,6 +346,8 @@ func TestElectionUnitMethods(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			client, err := coordination.NewClient(coordination.ClientParams{Config: testEtcdConfig()})
 			require.NoError(t, err)
 			t.Cleanup(func() { _ = client.Close() })
@@ -346,11 +366,14 @@ func TestElectionUnitMethods(t *testing.T) {
 	}
 
 	t.Run("uninitialized elector returns descriptive errors", func(t *testing.T) {
+		t.Parallel()
+
 		uninit, err := coordination.NewElection(coordination.ElectionParams{
 			Client: func() *coordination.Client {
 				c, err := coordination.NewClient(coordination.ClientParams{Config: testEtcdConfig()})
 				require.NoError(t, err)
 				t.Cleanup(func() { _ = c.Close() })
+
 				return c
 			}(),
 			KeyPrefix:  "/finance/worker-leader",
@@ -379,6 +402,8 @@ func TestEtcdModule(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			app := fx.New(
 				coordination.Module(),
 				fx.Provide(testEtcdConfig),
@@ -388,6 +413,7 @@ func TestEtcdModule(t *testing.T) {
 			)
 			if tc.expectedError {
 				require.Error(t, app.Err())
+
 				return
 			}
 
@@ -413,6 +439,8 @@ func TestEtcdModuleDrainsClient(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			app := fx.New(
 				coordination.Module(),
 				fx.Provide(testEtcdConfig),
@@ -427,6 +455,7 @@ func TestEtcdModuleDrainsClient(t *testing.T) {
 			err := app.Stop(ctx)
 			if tc.expectedError {
 				require.Error(t, err)
+
 				return
 			}
 

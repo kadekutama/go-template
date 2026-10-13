@@ -2,7 +2,6 @@ package postgres_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -31,37 +30,42 @@ func TestWithinTxValidation(t *testing.T) {
 			fn: func(_ *gorm.DB) error {
 				return nil
 			},
-			expectedError: errors.New("postgres: db is required"),
+			expectedError: postgres.ErrPostgresDbIsRequired,
 		},
 		{
 			name:          "nil fn rejected",
 			ctx:           context.Background(),
 			db:            &gorm.DB{},
 			fn:            nil,
-			expectedError: errors.New("postgres: transaction callback is required"),
+			expectedError: postgres.ErrPostgresTransactionCallbackIsRequired,
 		},
 		{
 			name: "canceled context rejected",
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			}(),
 			db: &gorm.DB{},
 			fn: func(_ *gorm.DB) error {
 				return nil
 			},
-			expectedError: errors.New("postgres: context canceled: context canceled"),
+			expectedError: postgres.ErrPostgresContextCanceledContextCanceled,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := postgres.WithinTx(tc.ctx, tc.db, tc.fn)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
+
 				return
 			}
+
 			assert.NoError(t, err)
 		})
 	}
@@ -88,7 +92,7 @@ func TestWithinTenantTxValidation(t *testing.T) {
 			fn: func(_ *gorm.DB) error {
 				return nil
 			},
-			expectedError: errors.New("postgres: db is required"),
+			expectedError: postgres.ErrPostgresDbIsRequired,
 		},
 		{
 			name:          "nil fn rejected",
@@ -96,7 +100,7 @@ func TestWithinTenantTxValidation(t *testing.T) {
 			db:            &gorm.DB{},
 			tenant:        "0199a5a0-2b7e-7a1e-9b0c-4d5e6f7a8b9d",
 			fn:            nil,
-			expectedError: errors.New("postgres: transaction callback is required"),
+			expectedError: postgres.ErrPostgresTransactionCallbackIsRequired,
 		},
 		{
 			name:   "empty tenant rejected",
@@ -106,13 +110,14 @@ func TestWithinTenantTxValidation(t *testing.T) {
 			fn: func(_ *gorm.DB) error {
 				return nil
 			},
-			expectedError: errors.New("postgres: tenant is required"),
+			expectedError: postgres.ErrPostgresTenantIsRequired,
 		},
 		{
 			name: "canceled context rejected",
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			}(),
 			db:     &gorm.DB{},
@@ -120,17 +125,21 @@ func TestWithinTenantTxValidation(t *testing.T) {
 			fn: func(_ *gorm.DB) error {
 				return nil
 			},
-			expectedError: errors.New("postgres: context canceled: context canceled"),
+			expectedError: postgres.ErrPostgresContextCanceledContextCanceled,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := postgres.WithinTenantTx(tc.ctx, tc.db, tc.tenant, tc.fn)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
+
 				return
 			}
+
 			assert.NoError(t, err)
 		})
 	}

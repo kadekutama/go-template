@@ -17,6 +17,7 @@ func splitTestRate(base, quote valueobject.AssetCode, num, den int64, quotedAt t
 	if err != nil {
 		panic(err)
 	}
+
 	return valueobject.FxRate{
 		ID:          string(base) + string(quote) + "-1",
 		Pair:        pair,
@@ -28,7 +29,7 @@ func splitTestRate(base, quote valueobject.AssetCode, num, den int64, quotedAt t
 	}
 }
 
-func TestValidateSplit(t *testing.T) {
+func TestValidateSplitHappyPath(t *testing.T) {
 	t.Parallel()
 
 	const (
@@ -98,6 +99,7 @@ func TestValidateSplit(t *testing.T) {
 			req: func() service.SplitRequest {
 				r := baseReq
 				r.FeeMinor = 0
+
 				return r
 			}(),
 			accounts: accounts,
@@ -123,6 +125,7 @@ func TestValidateSplit(t *testing.T) {
 			req: func() service.SplitRequest {
 				r := baseReq
 				r.FeeMinor = 10000
+
 				return r
 			}(),
 			accounts: accounts,
@@ -144,218 +147,6 @@ func TestValidateSplit(t *testing.T) {
 			expectedError: nil,
 		},
 		{
-			name: "zero gross rejected",
-			req: func() service.SplitRequest {
-				r := baseReq
-				r.GrossMinor = 0
-				return r
-			}(),
-			accounts:       accounts,
-			expectedResult: service.SplitLines{},
-			expectedError:  entity.NewError("INVALID_SPLIT_AMOUNT", "split gross amount must be positive"),
-		},
-		{
-			name: "negative gross rejected",
-			req: func() service.SplitRequest {
-				r := baseReq
-				r.GrossMinor = -100
-				return r
-			}(),
-			accounts:       accounts,
-			expectedResult: service.SplitLines{},
-			expectedError:  entity.NewError("INVALID_SPLIT_AMOUNT", "split gross amount must be positive"),
-		},
-		{
-			name: "fee exceeding gross rejected",
-			req: func() service.SplitRequest {
-				r := baseReq
-				r.FeeMinor = 10001
-				return r
-			}(),
-			accounts:       accounts,
-			expectedResult: service.SplitLines{},
-			expectedError:  entity.NewError("SPLIT_MISMATCH", "split fee must satisfy 0 <= fee <= gross"),
-		},
-		{
-			name: "negative fee rejected",
-			req: func() service.SplitRequest {
-				r := baseReq
-				r.FeeMinor = -1
-				return r
-			}(),
-			accounts:       accounts,
-			expectedResult: service.SplitLines{},
-			expectedError:  entity.NewError("SPLIT_MISMATCH", "split fee must satisfy 0 <= fee <= gross"),
-		},
-		{
-			name: "empty asset rejected",
-			req: func() service.SplitRequest {
-				r := baseReq
-				r.AssetCode = ""
-				return r
-			}(),
-			accounts:       accounts,
-			expectedResult: service.SplitLines{},
-			expectedError:  entity.NewError("SPLIT_ASSET_REQUIRED", "split requires an asset code"),
-		},
-		{
-			name: "whitespace asset rejected",
-			req: func() service.SplitRequest {
-				r := baseReq
-				r.AssetCode = "   "
-				return r
-			}(),
-			accounts:       accounts,
-			expectedResult: service.SplitLines{},
-			expectedError:  entity.NewError("SPLIT_ASSET_REQUIRED", "split requires an asset code"),
-		},
-		{
-			name: "missing platform account rejected",
-			req: func() service.SplitRequest {
-				r := baseReq
-				r.PlatformAccount = ""
-				return r
-			}(),
-			accounts:       accounts,
-			expectedResult: service.SplitLines{},
-			expectedError:  entity.NewError("SPLIT_ACCOUNT_REQUIRED", "split requires platform, connected, and processor accounts"),
-		},
-		{
-			name: "duplicate posting accounts rejected",
-			req: func() service.SplitRequest {
-				r := baseReq
-				r.PlatformAccount = acctConnected
-				return r
-			}(),
-			accounts:       accounts,
-			expectedResult: service.SplitLines{},
-			expectedError:  entity.NewError("SPLIT_ACCOUNT_INVALID", "split posting accounts must be distinct"),
-		},
-		{
-			name:           "unknown platform account rejected",
-			req:            baseReq,
-			accounts:       map[valueobject.AccountID]entity.AccountData{},
-			expectedResult: service.SplitLines{},
-			expectedError:  entity.NewError("PLATFORM_ACCOUNT_NOT_FOUND", "platform account is unknown"),
-		},
-		{
-			name: "unknown connected account rejected",
-			req: func() service.SplitRequest {
-				r := baseReq
-				r.ConnectedAccount = valueobject.AccountID("a-ghost")
-				return r
-			}(),
-			accounts:       accounts,
-			expectedResult: service.SplitLines{},
-			expectedError:  entity.NewError("CONNECTED_ACCOUNT_NOT_FOUND", "connected account is unknown"),
-		},
-		{
-			name: "unknown processor account rejected",
-			req: func() service.SplitRequest {
-				r := baseReq
-				r.ProcessorAccount = valueobject.AccountID("a-ghost")
-				return r
-			}(),
-			accounts:       accounts,
-			expectedResult: service.SplitLines{},
-			expectedError:  entity.NewError("PROCESSOR_ACCOUNT_NOT_FOUND", "processor account is unknown"),
-		},
-		{
-			name: "frozen connected account rejected",
-			req: func() service.SplitRequest {
-				r := baseReq
-				r.ConnectedAccount = acctFrozen
-				r.Grants = map[string]bool{"t-conn": true}
-				return r
-			}(),
-			accounts:       accounts,
-			expectedResult: service.SplitLines{},
-			expectedError:  entity.NewError("ACCOUNT_FROZEN", "account is frozen"),
-		},
-		{
-			name: "closed platform account rejected",
-			req: func() service.SplitRequest {
-				r := baseReq
-				r.PlatformAccount = acctClosed
-				return r
-			}(),
-			accounts:       accounts,
-			expectedResult: service.SplitLines{},
-			expectedError:  entity.NewError("ACCOUNT_CLOSED", "account is closed"),
-		},
-		{
-			name: "missing hierarchy grant rejected",
-			req: func() service.SplitRequest {
-				r := baseReq
-				r.Grants = map[string]bool{}
-				return r
-			}(),
-			accounts:       accounts,
-			expectedResult: service.SplitLines{},
-			expectedError:  entity.NewError("HIERARCHY_GRANT_REQUIRED", "cross-child transfer requires an explicit hierarchy grant"),
-		},
-		{
-			name: "grant for another tenant rejected",
-			req: func() service.SplitRequest {
-				r := baseReq
-				r.Grants = map[string]bool{"t-other": true}
-				return r
-			}(),
-			accounts:       accounts,
-			expectedResult: service.SplitLines{},
-			expectedError:  entity.NewError("HIERARCHY_GRANT_REQUIRED", "cross-child transfer requires an explicit hierarchy grant"),
-		},
-		{
-			name: "processor leg outside charge asset rejected",
-			req: func() service.SplitRequest {
-				r := baseReq
-				r.ProcessorAccount = acctConnEUR
-				return r
-			}(),
-			accounts:       accounts,
-			expectedResult: service.SplitLines{},
-			expectedError:  entity.NewError("CURRENCY_MISMATCH", "split processor and platform legs must post in the charge asset"),
-		},
-		{
-			name: "cross-currency without rate rejected",
-			req: func() service.SplitRequest {
-				r := baseReq
-				r.ConnectedAccount = acctConnEUR
-				return r
-			}(),
-			accounts:       accounts,
-			expectedResult: service.SplitLines{},
-			expectedError:  entity.NewError("FX_RATE_MISSING", "split requires an FX rate for the settlement asset"),
-		},
-		{
-			name: "cross-currency mismatched pair rejected",
-			req: func() service.SplitRequest {
-				r := baseReq
-				r.ConnectedAccount = acctConnEUR
-				r.FXRate = splitTestRate(currEUR, currUSD, 10850, 10000, at)
-				r.FXRatePresent = true
-				r.At = at
-				return r
-			}(),
-			accounts:       accounts,
-			expectedResult: service.SplitLines{},
-			expectedError:  entity.NewError("FX_RATE_MISMATCH", "fx rate pair must convert charge asset to settlement asset"),
-		},
-		{
-			name: "cross-currency stale rate rejected",
-			req: func() service.SplitRequest {
-				r := baseReq
-				r.ConnectedAccount = acctConnEUR
-				r.FXRate = splitTestRate(currUSD, currEUR, 9200, 10000, at.Add(-3*time.Hour))
-				r.FXRatePresent = true
-				r.At = at
-				return r
-			}(),
-			accounts:       accounts,
-			expectedResult: service.SplitLines{},
-			expectedError:  entity.NewError("FX_RATE_STALE", "fx rate is stale"),
-		},
-		{
 			name: "cross-currency capture converts every leg",
 			req: func() service.SplitRequest {
 				r := baseReq
@@ -363,6 +154,7 @@ func TestValidateSplit(t *testing.T) {
 				r.FXRate = splitTestRate(currUSD, currEUR, 9200, 10000, at)
 				r.FXRatePresent = true
 				r.At = at
+
 				return r
 			}(),
 			accounts: accounts,
@@ -391,6 +183,7 @@ func TestValidateSplit(t *testing.T) {
 				r.FXRate = splitTestRate(currUSD, currEUR, 1, 3, at)
 				r.FXRatePresent = true
 				r.At = at
+
 				return r
 			}(),
 			accounts: accounts,
@@ -417,6 +210,7 @@ func TestValidateSplit(t *testing.T) {
 				r := baseReq
 				r.GrossMinor = math.MaxInt64
 				r.FeeMinor = 290
+
 				return r
 			}(),
 			accounts: accounts,
@@ -437,6 +231,400 @@ func TestValidateSplit(t *testing.T) {
 			},
 			expectedError: nil,
 		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			actualResult, err := service.ValidateSplit(tc.req, tc.accounts)
+			assert.Equal(t, tc.expectedResult, actualResult)
+			assert.Equal(t, tc.expectedError, err)
+		})
+	}
+}
+func TestValidateSplitValidationAmounts(t *testing.T) {
+	t.Parallel()
+
+	const (
+		acctPlatform  = valueobject.AccountID("a-platform")
+		acctConnected = valueobject.AccountID("a-connected")
+		acctProcessor = valueobject.AccountID("a-processor")
+		acctConnEUR   = valueobject.AccountID("a-connected-eur")
+		acctFrozen    = valueobject.AccountID("a-frozen")
+		acctClosed    = valueobject.AccountID("a-closed")
+		currUSD       = valueobject.AssetCode("USD")
+		currEUR       = valueobject.AssetCode("EUR")
+	)
+
+	accounts := map[valueobject.AccountID]entity.AccountData{
+		acctPlatform:  {ID: acctPlatform, TenantID: "t-platform", LedgerID: "l-1", Number: "3000", Name: "platform", Class: valueobject.ClassRevenue, AssetCode: currUSD, Status: valueobject.StatusActive, Version: 1},
+		acctConnected: {ID: acctConnected, TenantID: "t-conn", LedgerID: "l-1", Number: "3001", Name: "connected", Class: valueobject.ClassLiability, AssetCode: currUSD, Status: valueobject.StatusActive, Version: 1},
+		acctProcessor: {ID: acctProcessor, TenantID: "t-platform", LedgerID: "l-1", Number: "3002", Name: "processor", Class: valueobject.ClassAsset, AssetCode: currUSD, Status: valueobject.StatusActive, Version: 1},
+		acctConnEUR:   {ID: acctConnEUR, TenantID: "t-conn", LedgerID: "l-1", Number: "3003", Name: "connected-eur", Class: valueobject.ClassLiability, AssetCode: currEUR, Status: valueobject.StatusActive, Version: 1},
+		acctFrozen:    {ID: acctFrozen, TenantID: "t-conn", LedgerID: "l-1", Number: "3004", Name: "frozen", Class: valueobject.ClassLiability, AssetCode: currUSD, Status: valueobject.StatusFrozen, Version: 1},
+		acctClosed:    {ID: acctClosed, TenantID: "t-platform", LedgerID: "l-1", Number: "3005", Name: "closed", Class: valueobject.ClassRevenue, AssetCode: currUSD, Status: valueobject.StatusClosed, Version: 1},
+	}
+
+	baseReq := service.SplitRequest{
+		PlatformAccount:  acctPlatform,
+		ConnectedAccount: acctConnected,
+		ProcessorAccount: acctProcessor,
+		GrossMinor:       10000,
+		FeeMinor:         290,
+		AssetCode:        currUSD,
+		Grants:           map[string]bool{"t-conn": true},
+	}
+
+	type testCase struct {
+		name           string
+		req            service.SplitRequest
+		accounts       map[valueobject.AccountID]entity.AccountData
+		expectedResult service.SplitLines
+		expectedError  error
+	}
+
+	testCases := []testCase{
+		{
+			name: "zero gross rejected",
+			req: func() service.SplitRequest {
+				r := baseReq
+				r.GrossMinor = 0
+
+				return r
+			}(),
+			accounts:       accounts,
+			expectedResult: service.SplitLines{},
+			expectedError:  entity.NewError("INVALID_SPLIT_AMOUNT", "split gross amount must be positive"),
+		},
+		{
+			name: "negative gross rejected",
+			req: func() service.SplitRequest {
+				r := baseReq
+				r.GrossMinor = -100
+
+				return r
+			}(),
+			accounts:       accounts,
+			expectedResult: service.SplitLines{},
+			expectedError:  entity.NewError("INVALID_SPLIT_AMOUNT", "split gross amount must be positive"),
+		},
+		{
+			name: "fee exceeding gross rejected",
+			req: func() service.SplitRequest {
+				r := baseReq
+				r.FeeMinor = 10001
+
+				return r
+			}(),
+			accounts:       accounts,
+			expectedResult: service.SplitLines{},
+			expectedError:  entity.NewError("SPLIT_MISMATCH", "split fee must satisfy 0 <= fee <= gross"),
+		},
+		{
+			name: "negative fee rejected",
+			req: func() service.SplitRequest {
+				r := baseReq
+				r.FeeMinor = -1
+
+				return r
+			}(),
+			accounts:       accounts,
+			expectedResult: service.SplitLines{},
+			expectedError:  entity.NewError("SPLIT_MISMATCH", "split fee must satisfy 0 <= fee <= gross"),
+		},
+		{
+			name: "empty asset rejected",
+			req: func() service.SplitRequest {
+				r := baseReq
+				r.AssetCode = ""
+
+				return r
+			}(),
+			accounts:       accounts,
+			expectedResult: service.SplitLines{},
+			expectedError:  entity.NewError("SPLIT_ASSET_REQUIRED", "split requires an asset code"),
+		},
+		{
+			name: "whitespace asset rejected",
+			req: func() service.SplitRequest {
+				r := baseReq
+				r.AssetCode = "   "
+
+				return r
+			}(),
+			accounts:       accounts,
+			expectedResult: service.SplitLines{},
+			expectedError:  entity.NewError("SPLIT_ASSET_REQUIRED", "split requires an asset code"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			actualResult, err := service.ValidateSplit(tc.req, tc.accounts)
+			assert.Equal(t, tc.expectedResult, actualResult)
+			assert.Equal(t, tc.expectedError, err)
+		})
+	}
+}
+func TestValidateSplitValidationAccounts(t *testing.T) {
+	t.Parallel()
+
+	const (
+		acctPlatform  = valueobject.AccountID("a-platform")
+		acctConnected = valueobject.AccountID("a-connected")
+		acctProcessor = valueobject.AccountID("a-processor")
+		acctConnEUR   = valueobject.AccountID("a-connected-eur")
+		acctFrozen    = valueobject.AccountID("a-frozen")
+		acctClosed    = valueobject.AccountID("a-closed")
+		currUSD       = valueobject.AssetCode("USD")
+		currEUR       = valueobject.AssetCode("EUR")
+	)
+
+	accounts := map[valueobject.AccountID]entity.AccountData{
+		acctPlatform:  {ID: acctPlatform, TenantID: "t-platform", LedgerID: "l-1", Number: "3000", Name: "platform", Class: valueobject.ClassRevenue, AssetCode: currUSD, Status: valueobject.StatusActive, Version: 1},
+		acctConnected: {ID: acctConnected, TenantID: "t-conn", LedgerID: "l-1", Number: "3001", Name: "connected", Class: valueobject.ClassLiability, AssetCode: currUSD, Status: valueobject.StatusActive, Version: 1},
+		acctProcessor: {ID: acctProcessor, TenantID: "t-platform", LedgerID: "l-1", Number: "3002", Name: "processor", Class: valueobject.ClassAsset, AssetCode: currUSD, Status: valueobject.StatusActive, Version: 1},
+		acctConnEUR:   {ID: acctConnEUR, TenantID: "t-conn", LedgerID: "l-1", Number: "3003", Name: "connected-eur", Class: valueobject.ClassLiability, AssetCode: currEUR, Status: valueobject.StatusActive, Version: 1},
+		acctFrozen:    {ID: acctFrozen, TenantID: "t-conn", LedgerID: "l-1", Number: "3004", Name: "frozen", Class: valueobject.ClassLiability, AssetCode: currUSD, Status: valueobject.StatusFrozen, Version: 1},
+		acctClosed:    {ID: acctClosed, TenantID: "t-platform", LedgerID: "l-1", Number: "3005", Name: "closed", Class: valueobject.ClassRevenue, AssetCode: currUSD, Status: valueobject.StatusClosed, Version: 1},
+	}
+
+	baseReq := service.SplitRequest{
+		PlatformAccount:  acctPlatform,
+		ConnectedAccount: acctConnected,
+		ProcessorAccount: acctProcessor,
+		GrossMinor:       10000,
+		FeeMinor:         290,
+		AssetCode:        currUSD,
+		Grants:           map[string]bool{"t-conn": true},
+	}
+
+	type testCase struct {
+		name           string
+		req            service.SplitRequest
+		accounts       map[valueobject.AccountID]entity.AccountData
+		expectedResult service.SplitLines
+		expectedError  error
+	}
+
+	testCases := []testCase{
+		{
+			name: "missing platform account rejected",
+			req: func() service.SplitRequest {
+				r := baseReq
+				r.PlatformAccount = ""
+
+				return r
+			}(),
+			accounts:       accounts,
+			expectedResult: service.SplitLines{},
+			expectedError:  entity.NewError("SPLIT_ACCOUNT_REQUIRED", "split requires platform, connected, and processor accounts"),
+		},
+		{
+			name: "duplicate posting accounts rejected",
+			req: func() service.SplitRequest {
+				r := baseReq
+				r.PlatformAccount = acctConnected
+
+				return r
+			}(),
+			accounts:       accounts,
+			expectedResult: service.SplitLines{},
+			expectedError:  entity.NewError("SPLIT_ACCOUNT_INVALID", "split posting accounts must be distinct"),
+		},
+		{
+			name:           "unknown platform account rejected",
+			req:            baseReq,
+			accounts:       map[valueobject.AccountID]entity.AccountData{},
+			expectedResult: service.SplitLines{},
+			expectedError:  entity.NewError("PLATFORM_ACCOUNT_NOT_FOUND", "platform account is unknown"),
+		},
+		{
+			name: "unknown connected account rejected",
+			req: func() service.SplitRequest {
+				r := baseReq
+				r.ConnectedAccount = valueobject.AccountID("a-ghost")
+
+				return r
+			}(),
+			accounts:       accounts,
+			expectedResult: service.SplitLines{},
+			expectedError:  entity.NewError("CONNECTED_ACCOUNT_NOT_FOUND", "connected account is unknown"),
+		},
+		{
+			name: "unknown processor account rejected",
+			req: func() service.SplitRequest {
+				r := baseReq
+				r.ProcessorAccount = valueobject.AccountID("a-ghost")
+
+				return r
+			}(),
+			accounts:       accounts,
+			expectedResult: service.SplitLines{},
+			expectedError:  entity.NewError("PROCESSOR_ACCOUNT_NOT_FOUND", "processor account is unknown"),
+		},
+		{
+			name: "frozen connected account rejected",
+			req: func() service.SplitRequest {
+				r := baseReq
+				r.ConnectedAccount = acctFrozen
+				r.Grants = map[string]bool{"t-conn": true}
+
+				return r
+			}(),
+			accounts:       accounts,
+			expectedResult: service.SplitLines{},
+			expectedError:  entity.NewError("ACCOUNT_FROZEN", "account is frozen"),
+		},
+		{
+			name: "closed platform account rejected",
+			req: func() service.SplitRequest {
+				r := baseReq
+				r.PlatformAccount = acctClosed
+
+				return r
+			}(),
+			accounts:       accounts,
+			expectedResult: service.SplitLines{},
+			expectedError:  entity.NewError("ACCOUNT_CLOSED", "account is closed"),
+		},
+		{
+			name: "missing hierarchy grant rejected",
+			req: func() service.SplitRequest {
+				r := baseReq
+				r.Grants = map[string]bool{}
+
+				return r
+			}(),
+			accounts:       accounts,
+			expectedResult: service.SplitLines{},
+			expectedError:  entity.NewError("HIERARCHY_GRANT_REQUIRED", "cross-child transfer requires an explicit hierarchy grant"),
+		},
+		{
+			name: "grant for another tenant rejected",
+			req: func() service.SplitRequest {
+				r := baseReq
+				r.Grants = map[string]bool{"t-other": true}
+
+				return r
+			}(),
+			accounts:       accounts,
+			expectedResult: service.SplitLines{},
+			expectedError:  entity.NewError("HIERARCHY_GRANT_REQUIRED", "cross-child transfer requires an explicit hierarchy grant"),
+		},
+		{
+			name: "processor leg outside charge asset rejected",
+			req: func() service.SplitRequest {
+				r := baseReq
+				r.ProcessorAccount = acctConnEUR
+
+				return r
+			}(),
+			accounts:       accounts,
+			expectedResult: service.SplitLines{},
+			expectedError:  entity.NewError("CURRENCY_MISMATCH", "split processor and platform legs must post in the charge asset"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			actualResult, err := service.ValidateSplit(tc.req, tc.accounts)
+			assert.Equal(t, tc.expectedResult, actualResult)
+			assert.Equal(t, tc.expectedError, err)
+		})
+	}
+}
+func TestValidateSplitValidationCrossCurrency(t *testing.T) {
+	t.Parallel()
+
+	const (
+		acctPlatform  = valueobject.AccountID("a-platform")
+		acctConnected = valueobject.AccountID("a-connected")
+		acctProcessor = valueobject.AccountID("a-processor")
+		acctConnEUR   = valueobject.AccountID("a-connected-eur")
+		acctFrozen    = valueobject.AccountID("a-frozen")
+		acctClosed    = valueobject.AccountID("a-closed")
+		currUSD       = valueobject.AssetCode("USD")
+		currEUR       = valueobject.AssetCode("EUR")
+	)
+
+	at := time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC)
+
+	accounts := map[valueobject.AccountID]entity.AccountData{
+		acctPlatform:  {ID: acctPlatform, TenantID: "t-platform", LedgerID: "l-1", Number: "3000", Name: "platform", Class: valueobject.ClassRevenue, AssetCode: currUSD, Status: valueobject.StatusActive, Version: 1},
+		acctConnected: {ID: acctConnected, TenantID: "t-conn", LedgerID: "l-1", Number: "3001", Name: "connected", Class: valueobject.ClassLiability, AssetCode: currUSD, Status: valueobject.StatusActive, Version: 1},
+		acctProcessor: {ID: acctProcessor, TenantID: "t-platform", LedgerID: "l-1", Number: "3002", Name: "processor", Class: valueobject.ClassAsset, AssetCode: currUSD, Status: valueobject.StatusActive, Version: 1},
+		acctConnEUR:   {ID: acctConnEUR, TenantID: "t-conn", LedgerID: "l-1", Number: "3003", Name: "connected-eur", Class: valueobject.ClassLiability, AssetCode: currEUR, Status: valueobject.StatusActive, Version: 1},
+		acctFrozen:    {ID: acctFrozen, TenantID: "t-conn", LedgerID: "l-1", Number: "3004", Name: "frozen", Class: valueobject.ClassLiability, AssetCode: currUSD, Status: valueobject.StatusFrozen, Version: 1},
+		acctClosed:    {ID: acctClosed, TenantID: "t-platform", LedgerID: "l-1", Number: "3005", Name: "closed", Class: valueobject.ClassRevenue, AssetCode: currUSD, Status: valueobject.StatusClosed, Version: 1},
+	}
+
+	baseReq := service.SplitRequest{
+		PlatformAccount:  acctPlatform,
+		ConnectedAccount: acctConnected,
+		ProcessorAccount: acctProcessor,
+		GrossMinor:       10000,
+		FeeMinor:         290,
+		AssetCode:        currUSD,
+		Grants:           map[string]bool{"t-conn": true},
+	}
+
+	type testCase struct {
+		name           string
+		req            service.SplitRequest
+		accounts       map[valueobject.AccountID]entity.AccountData
+		expectedResult service.SplitLines
+		expectedError  error
+	}
+
+	testCases := []testCase{
+		{
+			name: "cross-currency without rate rejected",
+			req: func() service.SplitRequest {
+				r := baseReq
+				r.ConnectedAccount = acctConnEUR
+
+				return r
+			}(),
+			accounts:       accounts,
+			expectedResult: service.SplitLines{},
+			expectedError:  entity.NewError("FX_RATE_MISSING", "split requires an FX rate for the settlement asset"),
+		},
+		{
+			name: "cross-currency mismatched pair rejected",
+			req: func() service.SplitRequest {
+				r := baseReq
+				r.ConnectedAccount = acctConnEUR
+				r.FXRate = splitTestRate(currEUR, currUSD, 10850, 10000, at)
+				r.FXRatePresent = true
+				r.At = at
+
+				return r
+			}(),
+			accounts:       accounts,
+			expectedResult: service.SplitLines{},
+			expectedError:  entity.NewError("FX_RATE_MISMATCH", "fx rate pair must convert charge asset to settlement asset"),
+		},
+		{
+			name: "cross-currency stale rate rejected",
+			req: func() service.SplitRequest {
+				r := baseReq
+				r.ConnectedAccount = acctConnEUR
+				r.FXRate = splitTestRate(currUSD, currEUR, 9200, 10000, at.Add(-3*time.Hour))
+				r.FXRatePresent = true
+				r.At = at
+
+				return r
+			}(),
+			accounts:       accounts,
+			expectedResult: service.SplitLines{},
+			expectedError:  entity.NewError("FX_RATE_STALE", "fx rate is stale"),
+		},
 		{
 			name: "maximum gross cross-currency overflows conversion",
 			req: func() service.SplitRequest {
@@ -447,6 +635,7 @@ func TestValidateSplit(t *testing.T) {
 				r.FXRate = splitTestRate(currUSD, currEUR, 9200, 10000, at)
 				r.FXRatePresent = true
 				r.At = at
+
 				return r
 			}(),
 			accounts:       accounts,
@@ -457,6 +646,8 @@ func TestValidateSplit(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.ValidateSplit(tc.req, tc.accounts)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -464,7 +655,7 @@ func TestValidateSplit(t *testing.T) {
 	}
 }
 
-func TestValidateSplitRefund(t *testing.T) {
+func TestValidateSplitRefundOutcomes(t *testing.T) {
 	t.Parallel()
 
 	const (
@@ -475,8 +666,6 @@ func TestValidateSplitRefund(t *testing.T) {
 		currUSD       = valueobject.AssetCode("USD")
 		currEUR       = valueobject.AssetCode("EUR")
 	)
-
-	at := time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC)
 
 	baseOriginal := service.SplitLines{
 		DebitAccount:        acctProcessor,
@@ -492,22 +681,6 @@ func TestValidateSplitRefund(t *testing.T) {
 		ConvertedFeeMinor:   290,
 		GainLossMinor:       0,
 		FXRateID:            "",
-	}
-
-	baseFXOriginal := service.SplitLines{
-		DebitAccount:        acctProcessor,
-		DebitAmountMinor:    10000,
-		ConnectedAccount:    acctConnEUR,
-		NetMinor:            9710,
-		PlatformAccount:     acctPlatform,
-		FeeMinor:            290,
-		AssetCode:           currUSD,
-		SettlementAsset:     currEUR,
-		ConvertedGrossMinor: 9200,
-		ConvertedNetMinor:   8933,
-		ConvertedFeeMinor:   267,
-		GainLossMinor:       0,
-		FXRateID:            "USDEUR-1",
 	}
 
 	type testCase struct {
@@ -587,94 +760,56 @@ func TestValidateSplitRefund(t *testing.T) {
 			},
 			expectedError: nil,
 		},
-		{
-			name: "zero refund gross rejected",
-			req: service.SplitRefundRequest{
-				Original:         baseOriginal,
-				RefundGrossMinor: 0,
-				FeeRefundMinor:   0,
-			},
-			expectedResult: service.SplitRefundLines{},
-			expectedError:  entity.NewError("INVALID_REFUND_AMOUNT", "split refund gross must be positive"),
-		},
-		{
-			name: "negative refund gross rejected",
-			req: service.SplitRefundRequest{
-				Original:         baseOriginal,
-				RefundGrossMinor: -50,
-				FeeRefundMinor:   0,
-			},
-			expectedResult: service.SplitRefundLines{},
-			expectedError:  entity.NewError("INVALID_REFUND_AMOUNT", "split refund gross must be positive"),
-		},
-		{
-			name: "refund exceeding original rejected",
-			req: service.SplitRefundRequest{
-				Original:         baseOriginal,
-				RefundGrossMinor: 10001,
-				FeeRefundMinor:   290,
-			},
-			expectedResult: service.SplitRefundLines{},
-			expectedError:  entity.NewError("REFUND_EXCEEDS_ORIGINAL", "split refund exceeds the original gross"),
-		},
-		{
-			name: "fee refund exceeding refund gross rejected",
-			req: service.SplitRefundRequest{
-				Original:         baseOriginal,
-				RefundGrossMinor: 4000,
-				FeeRefundMinor:   4001,
-			},
-			expectedResult: service.SplitRefundLines{},
-			expectedError:  entity.NewError("FEE_REFUND_INVALID", "split fee refund must satisfy 0 <= fee <= min(refund gross, original fee)"),
-		},
-		{
-			name: "fee refund exceeding original fee rejected",
-			req: service.SplitRefundRequest{
-				Original:         baseOriginal,
-				RefundGrossMinor: 10000,
-				FeeRefundMinor:   291,
-			},
-			expectedResult: service.SplitRefundLines{},
-			expectedError:  entity.NewError("FEE_REFUND_INVALID", "split fee refund must satisfy 0 <= fee <= min(refund gross, original fee)"),
-		},
-		{
-			name: "negative fee refund rejected",
-			req: service.SplitRefundRequest{
-				Original:         baseOriginal,
-				RefundGrossMinor: 4000,
-				FeeRefundMinor:   -1,
-			},
-			expectedResult: service.SplitRefundLines{},
-			expectedError:  entity.NewError("FEE_REFUND_INVALID", "split fee refund must satisfy 0 <= fee <= min(refund gross, original fee)"),
-		},
-		{
-			name: "inconsistent original rejected",
-			req: func() service.SplitRefundRequest {
-				orig := baseOriginal
-				orig.NetMinor = 9000
-				return service.SplitRefundRequest{
-					Original:         orig,
-					RefundGrossMinor: 4000,
-					FeeRefundMinor:   100,
-				}
-			}(),
-			expectedResult: service.SplitRefundLines{},
-			expectedError:  entity.NewError("SPLIT_MISMATCH", "original split lines are inconsistent"),
-		},
-		{
-			name: "inconsistent settlement legs rejected",
-			req: func() service.SplitRefundRequest {
-				orig := baseFXOriginal
-				orig.GainLossMinor = 5
-				return service.SplitRefundRequest{
-					Original:         orig,
-					RefundGrossMinor: 4000,
-					FeeRefundMinor:   100,
-				}
-			}(),
-			expectedResult: service.SplitRefundLines{},
-			expectedError:  entity.NewError("SPLIT_MISMATCH", "original split settlement legs are inconsistent"),
-		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			actualResult, err := service.ValidateSplitRefund(tc.req)
+			assert.Equal(t, tc.expectedResult, actualResult)
+			assert.Equal(t, tc.expectedError, err)
+		})
+	}
+}
+func TestValidateSplitRefundCrossCurrency(t *testing.T) {
+	t.Parallel()
+
+	const (
+		acctPlatform  = valueobject.AccountID("a-platform")
+		acctConnected = valueobject.AccountID("a-connected")
+		acctProcessor = valueobject.AccountID("a-processor")
+		acctConnEUR   = valueobject.AccountID("a-connected-eur")
+		currUSD       = valueobject.AssetCode("USD")
+		currEUR       = valueobject.AssetCode("EUR")
+	)
+
+	at := time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC)
+
+	baseFXOriginal := service.SplitLines{
+		DebitAccount:        acctProcessor,
+		DebitAmountMinor:    10000,
+		ConnectedAccount:    acctConnEUR,
+		NetMinor:            9710,
+		PlatformAccount:     acctPlatform,
+		FeeMinor:            290,
+		AssetCode:           currUSD,
+		SettlementAsset:     currEUR,
+		ConvertedGrossMinor: 9200,
+		ConvertedNetMinor:   8933,
+		ConvertedFeeMinor:   267,
+		GainLossMinor:       0,
+		FXRateID:            "USDEUR-1",
+	}
+
+	type testCase struct {
+		name           string
+		req            service.SplitRefundRequest
+		expectedResult service.SplitRefundLines
+		expectedError  error
+	}
+
+	testCases := []testCase{
 		{
 			name: "cross-currency refund reconverts every leg",
 			req: service.SplitRefundRequest{
@@ -741,6 +876,162 @@ func TestValidateSplitRefund(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			actualResult, err := service.ValidateSplitRefund(tc.req)
+			assert.Equal(t, tc.expectedResult, actualResult)
+			assert.Equal(t, tc.expectedError, err)
+		})
+	}
+}
+func TestValidateSplitRefundValidation(t *testing.T) {
+	t.Parallel()
+
+	const (
+		acctPlatform  = valueobject.AccountID("a-platform")
+		acctConnected = valueobject.AccountID("a-connected")
+		acctProcessor = valueobject.AccountID("a-processor")
+		acctConnEUR   = valueobject.AccountID("a-connected-eur")
+		currUSD       = valueobject.AssetCode("USD")
+		currEUR       = valueobject.AssetCode("EUR")
+	)
+
+	baseOriginal := service.SplitLines{
+		DebitAccount:        acctProcessor,
+		DebitAmountMinor:    10000,
+		ConnectedAccount:    acctConnected,
+		NetMinor:            9710,
+		PlatformAccount:     acctPlatform,
+		FeeMinor:            290,
+		AssetCode:           currUSD,
+		SettlementAsset:     currUSD,
+		ConvertedGrossMinor: 10000,
+		ConvertedNetMinor:   9710,
+		ConvertedFeeMinor:   290,
+		GainLossMinor:       0,
+		FXRateID:            "",
+	}
+
+	baseFXOriginal := service.SplitLines{
+		DebitAccount:        acctProcessor,
+		DebitAmountMinor:    10000,
+		ConnectedAccount:    acctConnEUR,
+		NetMinor:            9710,
+		PlatformAccount:     acctPlatform,
+		FeeMinor:            290,
+		AssetCode:           currUSD,
+		SettlementAsset:     currEUR,
+		ConvertedGrossMinor: 9200,
+		ConvertedNetMinor:   8933,
+		ConvertedFeeMinor:   267,
+		GainLossMinor:       0,
+		FXRateID:            "USDEUR-1",
+	}
+
+	type testCase struct {
+		name           string
+		req            service.SplitRefundRequest
+		expectedResult service.SplitRefundLines
+		expectedError  error
+	}
+
+	testCases := []testCase{
+		{
+			name: "zero refund gross rejected",
+			req: service.SplitRefundRequest{
+				Original:         baseOriginal,
+				RefundGrossMinor: 0,
+				FeeRefundMinor:   0,
+			},
+			expectedResult: service.SplitRefundLines{},
+			expectedError:  entity.NewError("INVALID_REFUND_AMOUNT", "split refund gross must be positive"),
+		},
+		{
+			name: "negative refund gross rejected",
+			req: service.SplitRefundRequest{
+				Original:         baseOriginal,
+				RefundGrossMinor: -50,
+				FeeRefundMinor:   0,
+			},
+			expectedResult: service.SplitRefundLines{},
+			expectedError:  entity.NewError("INVALID_REFUND_AMOUNT", "split refund gross must be positive"),
+		},
+		{
+			name: "refund exceeding original rejected",
+			req: service.SplitRefundRequest{
+				Original:         baseOriginal,
+				RefundGrossMinor: 10001,
+				FeeRefundMinor:   290,
+			},
+			expectedResult: service.SplitRefundLines{},
+			expectedError:  entity.NewError("REFUND_EXCEEDS_ORIGINAL", "split refund exceeds the original gross"),
+		},
+		{
+			name: "fee refund exceeding refund gross rejected",
+			req: service.SplitRefundRequest{
+				Original:         baseOriginal,
+				RefundGrossMinor: 4000,
+				FeeRefundMinor:   4001,
+			},
+			expectedResult: service.SplitRefundLines{},
+			expectedError:  entity.NewError("FEE_REFUND_INVALID", "split fee refund must satisfy 0 <= fee <= min(refund gross, original fee)"),
+		},
+		{
+			name: "fee refund exceeding original fee rejected",
+			req: service.SplitRefundRequest{
+				Original:         baseOriginal,
+				RefundGrossMinor: 10000,
+				FeeRefundMinor:   291,
+			},
+			expectedResult: service.SplitRefundLines{},
+			expectedError:  entity.NewError("FEE_REFUND_INVALID", "split fee refund must satisfy 0 <= fee <= min(refund gross, original fee)"),
+		},
+		{
+			name: "negative fee refund rejected",
+			req: service.SplitRefundRequest{
+				Original:         baseOriginal,
+				RefundGrossMinor: 4000,
+				FeeRefundMinor:   -1,
+			},
+			expectedResult: service.SplitRefundLines{},
+			expectedError:  entity.NewError("FEE_REFUND_INVALID", "split fee refund must satisfy 0 <= fee <= min(refund gross, original fee)"),
+		},
+		{
+			name: "inconsistent original rejected",
+			req: func() service.SplitRefundRequest {
+				orig := baseOriginal
+				orig.NetMinor = 9000
+
+				return service.SplitRefundRequest{
+					Original:         orig,
+					RefundGrossMinor: 4000,
+					FeeRefundMinor:   100,
+				}
+			}(),
+			expectedResult: service.SplitRefundLines{},
+			expectedError:  entity.NewError("SPLIT_MISMATCH", "original split lines are inconsistent"),
+		},
+		{
+			name: "inconsistent settlement legs rejected",
+			req: func() service.SplitRefundRequest {
+				orig := baseFXOriginal
+				orig.GainLossMinor = 5
+
+				return service.SplitRefundRequest{
+					Original:         orig,
+					RefundGrossMinor: 4000,
+					FeeRefundMinor:   100,
+				}
+			}(),
+			expectedResult: service.SplitRefundLines{},
+			expectedError:  entity.NewError("SPLIT_MISMATCH", "original split settlement legs are inconsistent"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.ValidateSplitRefund(tc.req)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)

@@ -1,7 +1,6 @@
 package webhook
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -20,7 +19,7 @@ type RetryPolicy struct {
 // positive duration), so a bad configuration fails at wiring time.
 func NewRetryPolicy(steps []time.Duration) (*RetryPolicy, error) {
 	if len(steps) == 0 {
-		return nil, fmt.Errorf("webhook: at least one retry step is required")
+		return nil, ErrWebhookAtLeastOneRetryStepIsRequired
 	}
 
 	out := make([]time.Duration, len(steps))
@@ -28,7 +27,7 @@ func NewRetryPolicy(steps []time.Duration) (*RetryPolicy, error) {
 
 	for _, step := range out {
 		if step <= 0 {
-			return nil, fmt.Errorf("webhook: retry steps must be positive")
+			return nil, ErrWebhookRetryStepsMustBePositive
 		}
 	}
 
@@ -78,7 +77,7 @@ func (p *RetryPolicy) Schedule() []time.Duration {
 
 // NextDelay returns the backoff before retry attempt (0-based). ok=false
 // means the schedule is exhausted and the message routes to DLQ.
-func (p *RetryPolicy) NextDelay(attempt int) (delay time.Duration, ok bool) {
+func (p *RetryPolicy) NextDelay(attempt int) (time.Duration, bool) {
 	if p == nil || attempt < 0 || attempt >= len(p.steps) {
 		return 0, false
 	}

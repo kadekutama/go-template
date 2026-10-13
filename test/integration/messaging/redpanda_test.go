@@ -1,8 +1,9 @@
-// Package messaging is the E08-T06 G4 slice for the durable log: the
-// franz-go producer publishes outbox facts and a consumer reads them back,
-// proving the at-least-once relay path end to end (partitioning, headers,
-// payload integrity, per-key FIFO order).
 package messaging
+
+// The durable-log slice below covers the franz-go producer publishing outbox
+// facts and a consumer reading them back, proving the at-least-once relay
+// path end to end (partitioning, headers, payload integrity, per-key FIFO
+// order).
 
 import (
 	"context"
@@ -22,6 +23,7 @@ import (
 // records on one partition key come back in order with headers and payload
 // intact, and a second consumer group sees the same records (replayable log).
 func TestRedpandaPublishConsumeRoundTrip(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	handle, err := testcontainers.StartRedpanda(t)
@@ -36,10 +38,11 @@ func TestRedpandaPublishConsumeRoundTrip(t *testing.T) {
 		DialTimeout: 5 * time.Second,
 	})
 	require.NoError(t, err)
+
 	defer func() { _ = producer.Close() }()
 
 	const topic = "ledger.events.v1"
-	createTopic(t, ctx, handle.Seed(), topic)
+	createTopic(ctx, t, handle.Seed(), topic)
 
 	payloads := [][]byte{[]byte(`{"seq":1}`), []byte(`{"seq":2}`), []byte(`{"seq":3}`)}
 	for _, payload := range payloads {
@@ -49,7 +52,7 @@ func TestRedpandaPublishConsumeRoundTrip(t *testing.T) {
 		}, payload))
 	}
 
-	records := consumeAll(t, ctx, handle.Seed(), topic)
+	records := consumeAll(ctx, t, handle.Seed(), topic)
 	require.Len(t, records, 3)
 
 	for idx, record := range records {
@@ -62,11 +65,12 @@ func TestRedpandaPublishConsumeRoundTrip(t *testing.T) {
 
 // createTopic provisions the test topic explicitly (1 partition, RF 1):
 // the suite never relies on broker-side auto-creation.
-func createTopic(t *testing.T, ctx context.Context, seed, topic string) {
+func createTopic(ctx context.Context, t *testing.T, seed, topic string) {
 	t.Helper()
 
 	client, err := kgo.NewClient(kgo.SeedBrokers(seed))
 	require.NoError(t, err)
+
 	defer client.Close()
 
 	admin := kadm.NewClient(client)
@@ -81,7 +85,7 @@ func createTopic(t *testing.T, ctx context.Context, seed, topic string) {
 
 // consumeAll reads every record currently on topic with an ephemeral,
 // non-group consumer starting at the log head.
-func consumeAll(t *testing.T, ctx context.Context, seed, topic string) []*kgo.Record {
+func consumeAll(ctx context.Context, t *testing.T, seed, topic string) []*kgo.Record {
 	t.Helper()
 
 	client, err := kgo.NewClient(
@@ -91,9 +95,11 @@ func consumeAll(t *testing.T, ctx context.Context, seed, topic string) []*kgo.Re
 		kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()),
 	)
 	require.NoError(t, err)
+
 	defer client.Close()
 
 	var out []*kgo.Record
+
 	deadline := time.Now().Add(90 * time.Second)
 
 	for len(out) < 3 && time.Now().Before(deadline) {

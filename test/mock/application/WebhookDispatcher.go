@@ -49,7 +49,7 @@ type MockWebhookDispatcher_Dispatch_Call struct {
 // Dispatch is a helper method to define mock.On call
 //   - ctx context.Context
 //   - message port.WebhookMessage
-func (_e *MockWebhookDispatcher_Expecter) Dispatch(ctx interface{}, message interface{}) *MockWebhookDispatcher_Dispatch_Call {
+func (_e *MockWebhookDispatcher_Expecter) Dispatch(ctx any, message any) *MockWebhookDispatcher_Dispatch_Call {
 	return &MockWebhookDispatcher_Dispatch_Call{Call: _e.mock.On("Dispatch", ctx, message)}
 }
 

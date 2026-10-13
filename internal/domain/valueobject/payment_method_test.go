@@ -1,7 +1,7 @@
 package valueobject_test
 
 import (
-	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -61,18 +61,20 @@ func TestParsePaymentMethod(t *testing.T) {
 			name:           "unknown method",
 			s:              "CASH",
 			expectedResult: valueobject.PaymentMethod(""),
-			expectedError:  errors.New(`payment: invalid method "CASH"`),
+			expectedError:  fmt.Errorf("payment: invalid method %q: %w", "CASH", valueobject.ErrPaymentInvalidMethod2),
 		},
 		{
 			name:           "empty method",
 			s:              "",
 			expectedResult: valueobject.PaymentMethod(""),
-			expectedError:  errors.New(`payment: invalid method ""`),
+			expectedError:  fmt.Errorf("payment: invalid method %q: %w", "", valueobject.ErrPaymentInvalidMethod2),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := valueobject.ParsePaymentMethod(tc.s)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -161,12 +163,14 @@ func TestMethodCapabilities(t *testing.T) {
 			name:           "invalid method",
 			m:              valueobject.PaymentMethod("UNKNOWN"),
 			expectedResult: valueobject.Capabilities{},
-			expectedError:  errors.New(`payment: invalid method "UNKNOWN"`),
+			expectedError:  fmt.Errorf("payment: invalid method %q: %w", "UNKNOWN", valueobject.ErrPaymentInvalidMethod2),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := valueobject.MethodCapabilities(tc.m)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)

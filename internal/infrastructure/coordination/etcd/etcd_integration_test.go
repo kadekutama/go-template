@@ -2,7 +2,7 @@ package etcd_test
 
 import (
 	"context"
-	"fmt"
+	"net"
 	"testing"
 	"time"
 
@@ -28,21 +28,19 @@ func startEtcd(t *testing.T) string {
 	defer cancel()
 
 	req := tc.GenericContainerRequest{
-		ContainerRequest: tc.ContainerRequest{
-			Image:        etcdImage,
-			ExposedPorts: []string{"2379/tcp", "2380/tcp"},
-			Cmd: []string{
-				"etcd",
-				"--advertise-client-urls", "http://0.0.0.0:2379",
-				"--listen-client-urls", "http://0.0.0.0:2379",
-				"--initial-advertise-peer-urls", "http://0.0.0.0:2380",
-				"--listen-peer-urls", "http://0.0.0.0:2380",
-				"--initial-cluster", "default=http://0.0.0.0:2380",
-			},
-			WaitingFor: wait.ForLog("ready to serve client request").
-				WithStartupTimeout(testcontainers.StartupTimeout()).
-				WithPollInterval(500 * time.Millisecond),
+		Image:        etcdImage,
+		ExposedPorts: []string{"2379/tcp", "2380/tcp"},
+		Cmd: []string{
+			"etcd",
+			"--advertise-client-urls", "http://0.0.0.0:2379",
+			"--listen-client-urls", "http://0.0.0.0:2379",
+			"--initial-advertise-peer-urls", "http://0.0.0.0:2380",
+			"--listen-peer-urls", "http://0.0.0.0:2380",
+			"--initial-cluster", "default=http://0.0.0.0:2380",
 		},
+		WaitingFor: wait.ForLog("ready to serve client request").
+			WithStartupTimeout(testcontainers.StartupTimeout()).
+			WithPollInterval(500 * time.Millisecond),
 		Started: true,
 	}
 
@@ -56,7 +54,7 @@ func startEtcd(t *testing.T) string {
 	host, err := container.Host(ctx)
 	require.NoError(t, err)
 
-	return fmt.Sprintf("http://%s:%s", host, mapped.Port())
+	return "http://" + net.JoinHostPort(host, mapped.Port())
 }
 
 func testEtcdConfigWithEndpoint(endpoint string) coordination.Config {
@@ -69,6 +67,7 @@ func testEtcdConfigWithEndpoint(endpoint string) coordination.Config {
 }
 
 func TestEtcdWatcherStreamsMutations(t *testing.T) {
+	t.Parallel()
 	endpoint := startEtcd(t)
 	ctx := context.Background()
 
@@ -76,6 +75,7 @@ func TestEtcdWatcherStreamsMutations(t *testing.T) {
 		Config: testEtcdConfigWithEndpoint(endpoint),
 	})
 	require.NoError(t, err)
+
 	defer func() { _ = client.Close() }()
 
 	require.NoError(t, client.Health(ctx))
@@ -107,6 +107,7 @@ func TestEtcdWatcherStreamsMutations(t *testing.T) {
 }
 
 func TestEtcdElectionCampaignResign(t *testing.T) {
+	t.Parallel()
 	endpoint := startEtcd(t)
 	ctx := context.Background()
 
@@ -171,25 +172,32 @@ func TestEtcdElectionCampaignResign(t *testing.T) {
 	concurrentElector := newElector("/finance/concurrent-test")
 	ready := make(chan struct{})
 	done := make(chan error, 2)
+
 	for _, id := range []string{"pod-concurrent-a", "pod-concurrent-b"} {
 		go func(id string) {
 			<-ready
+
 			done <- concurrentElector.Campaign(ctx, id)
 		}(id)
 	}
+
 	close(ready)
+
 	err1 := <-done
 	err2 := <-done
 	assert.True(t, (err1 == nil && err2 != nil) || (err1 != nil && err2 == nil), "exactly one campaign must succeed")
+
 	if err1 == nil {
 		assert.Contains(t, err2.Error(), "already campaigning")
 	} else {
 		assert.Contains(t, err1.Error(), "already campaigning")
 	}
+
 	require.NoError(t, concurrentElector.Resign(ctx))
 }
 
 func TestEtcdElectionCancelCleanup(t *testing.T) {
+	t.Parallel()
 	endpoint := startEtcd(t)
 	ctx := context.Background()
 
@@ -223,6 +231,7 @@ func TestEtcdElectionCancelCleanup(t *testing.T) {
 }
 
 func TestEtcdElectionTrimsCandidate(t *testing.T) {
+	t.Parallel()
 	endpoint := startEtcd(t)
 	ctx := context.Background()
 

@@ -25,6 +25,7 @@ func TestLedgerMappingRoundTrip(t *testing.T) {
 			ledger: func() entity.Ledger {
 				ledger, err := entity.NewLedger("20000000-0000-4000-8000-000000000001", "10000000-0000-4000-8000-000000000001", "Test", "USD", "v1")
 				require.NoError(t, err)
+
 				return ledger
 			}(),
 			expectedTable: "ledgers",
@@ -33,6 +34,8 @@ func TestLedgerMappingRoundTrip(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			model := models.LedgerToModel(tc.ledger)
 			assert.Equal(t, tc.expectedTable, model.TableName())
 			assert.Equal(t, tc.ledger.ID.String(), model.ID)
@@ -69,6 +72,8 @@ func TestLedgerToEntityRejectsInvalidRow(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			_, err := models.LedgerToEntity(tc.model)
 			require.Error(t, err, "invalid stored rows must surface, never silent zero values")
 		})
@@ -134,6 +139,7 @@ func TestTablePins(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Equal(t, tc.expectedTable, tc.table)
 		})
 	}

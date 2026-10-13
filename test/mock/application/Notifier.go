@@ -50,7 +50,7 @@ type MockNotifier_Send_Call struct {
 //   - ctx context.Context
 //   - notification port.Notification
 //   - idempotencyKey string
-func (_e *MockNotifier_Expecter) Send(ctx interface{}, notification interface{}, idempotencyKey interface{}) *MockNotifier_Send_Call {
+func (_e *MockNotifier_Expecter) Send(ctx any, notification any, idempotencyKey any) *MockNotifier_Send_Call {
 	return &MockNotifier_Send_Call{Call: _e.mock.On("Send", ctx, notification, idempotencyKey)}
 }
 

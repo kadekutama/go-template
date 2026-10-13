@@ -20,6 +20,7 @@ func TestOpsReads(t *testing.T) {
 	t.Parallel()
 
 	t.Run("run and break reads delegate to store", func(t *testing.T) {
+		t.Parallel()
 		store := mockcommand.NewMockReconStore(t)
 		store.EXPECT().
 			FindRun(mock.Anything, valueobject.TenantID("t-1"), "run-1").
@@ -33,6 +34,7 @@ func TestOpsReads(t *testing.T) {
 	})
 
 	t.Run("period read delegates to store", func(t *testing.T) {
+		t.Parallel()
 		store := mockcommand.NewMockPeriodStore(t)
 		store.EXPECT().
 			FindPeriod(mock.Anything, "t-1", "l-1", "2026-09").
@@ -46,6 +48,7 @@ func TestOpsReads(t *testing.T) {
 	})
 
 	t.Run("report status maps record", func(t *testing.T) {
+		t.Parallel()
 		store := mockcommand.NewMockReportStore(t)
 		store.EXPECT().
 			FindReport(mock.Anything, valueobject.TenantID("t-1"), "rep-1").
@@ -59,6 +62,7 @@ func TestOpsReads(t *testing.T) {
 	})
 
 	t.Run("export read delegates to store", func(t *testing.T) {
+		t.Parallel()
 		store := mockcommand.NewMockComplianceStore(t)
 		store.EXPECT().
 			FindExport(mock.Anything, valueobject.TenantID("t-1"), "exp-1").

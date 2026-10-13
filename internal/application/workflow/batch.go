@@ -18,8 +18,8 @@ type BatchActions struct {
 // outcomes close PARTIAL through the normal path, not through compensation.
 func BatchSteps(actions BatchActions) []Step {
 	return []Step{
-		{Name: "intake-batch", MaxAttempts: 2, Timeout: 10 * time.Second, Run: actions.IntakeBatch},
-		{Name: "execute-items", MaxAttempts: 1, Timeout: 5 * time.Minute, Run: actions.ExecuteItems},
-		{Name: "close-batch", MaxAttempts: 3, Timeout: 10 * time.Second, Run: actions.CloseBatch},
+		{Name: "intake-batch", MaxAttempts: maxAttempts2, Timeout: timeout10 * time.Second, Run: actions.IntakeBatch},
+		{Name: "execute-items", MaxAttempts: 1, Timeout: timeout5 * time.Minute, Run: actions.ExecuteItems},
+		{Name: "close-batch", MaxAttempts: maxAttempts3, Timeout: timeout10 * time.Second, Run: actions.CloseBatch},
 	}
 }

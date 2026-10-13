@@ -2,7 +2,6 @@ package postgres_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -29,7 +28,7 @@ func TestNewPoolsRequiresPrimary(t *testing.T) {
 			params: postgres.PoolsParams{
 				Primary: nil,
 			},
-			expectedError: errors.New("postgres: replica pools need a primary"),
+			expectedError: postgres.ErrPostgresReplicaPoolsNeedAPrimary,
 		},
 		{
 			name: "primary only accepted",
@@ -42,6 +41,8 @@ func TestNewPoolsRequiresPrimary(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			pools, err := postgres.NewPools(tc.params)
 			if tc.expectedError != nil {
 				require.Error(t, err)
@@ -81,7 +82,7 @@ func TestSelectorRouting(t *testing.T) {
 		{
 			name:          "lag sample error fails toward primary",
 			hasReplica:    true,
-			source:        postgres.StaticLagSource{Err: errors.New("unreachable")},
+			source:        postgres.StaticLagSource{Err: postgres.ErrUnreachable},
 			expectReplica: false,
 		},
 		{
@@ -100,7 +101,10 @@ func TestSelectorRouting(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			primary := &gorm.DB{}
+
 			var replica *gorm.DB
 			if tc.hasReplica {
 				replica = &gorm.DB{}
@@ -143,34 +147,38 @@ func TestNewSelectorGuards(t *testing.T) {
 				Pools:    nil,
 				LagBound: 30,
 			},
-			expectedError: errors.New("postgres: selector needs pools"),
+			expectedError: postgres.ErrPostgresSelectorNeedsPools,
 		},
 		{
 			name: "non-positive bound rejected",
 			params: func() postgres.SelectorParams {
 				pools, _ := postgres.NewPools(postgres.PoolsParams{Primary: &gorm.DB{}})
+
 				return postgres.SelectorParams{
 					Pools:    pools,
 					LagBound: 0,
 				}
 			}(),
-			expectedError: errors.New("postgres: lag bound must be positive"),
+			expectedError: postgres.ErrPostgresLagBoundMustBePositive,
 		},
 		{
 			name: "negative bound rejected",
 			params: func() postgres.SelectorParams {
 				pools, _ := postgres.NewPools(postgres.PoolsParams{Primary: &gorm.DB{}})
+
 				return postgres.SelectorParams{
 					Pools:    pools,
 					LagBound: -5,
 				}
 			}(),
-			expectedError: errors.New("postgres: lag bound must be positive"),
+			expectedError: postgres.ErrPostgresLagBoundMustBePositive,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			selector, err := postgres.NewSelector(tc.params)
 			require.Error(t, err)
 			assert.Equal(t, tc.expectedError.Error(), err.Error())
@@ -210,7 +218,7 @@ func TestLagAlertShape(t *testing.T) {
 			threshold:      30.0,
 			severity:       "warning",
 			expectedResult: postgres.LagAlertRule{},
-			expectedError:  errors.New("postgres: lag alert metric is required"),
+			expectedError:  postgres.ErrPostgresLagAlertMetricIsRequired,
 		},
 		{
 			name:           "zero threshold rejected",
@@ -218,7 +226,7 @@ func TestLagAlertShape(t *testing.T) {
 			threshold:      0,
 			severity:       "warning",
 			expectedResult: postgres.LagAlertRule{},
-			expectedError:  errors.New("postgres: lag alert threshold must be positive"),
+			expectedError:  postgres.ErrPostgresLagAlertThresholdMustBePositive,
 		},
 		{
 			name:           "negative threshold rejected",
@@ -226,7 +234,7 @@ func TestLagAlertShape(t *testing.T) {
 			threshold:      -1.5,
 			severity:       "warning",
 			expectedResult: postgres.LagAlertRule{},
-			expectedError:  errors.New("postgres: lag alert threshold must be positive"),
+			expectedError:  postgres.ErrPostgresLagAlertThresholdMustBePositive,
 		},
 		{
 			name:           "missing severity rejected",
@@ -234,18 +242,23 @@ func TestLagAlertShape(t *testing.T) {
 			threshold:      30.0,
 			severity:       "",
 			expectedResult: postgres.LagAlertRule{},
-			expectedError:  errors.New("postgres: lag alert severity is required"),
+			expectedError:  postgres.ErrPostgresLagAlertSeverityIsRequired,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := postgres.NewLagAlertRule(tc.metric, tc.threshold, tc.severity)
 			assert.Equal(t, tc.expectedResult, actualResult)
+
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
+
 				return
 			}
+
 			assert.NoError(t, err)
 		})
 	}
@@ -295,7 +308,7 @@ func TestRouterResidency(t *testing.T) {
 				Region:   "xx",
 			},
 			expectRegion:  "",
-			expectedError: errors.New("postgres: unknown region xx"),
+			expectedError: postgres.ErrPostgresUnknownRegionXx,
 			expectAudited: false,
 		},
 		{
@@ -305,7 +318,7 @@ func TestRouterResidency(t *testing.T) {
 				Region:   "",
 			},
 			expectRegion:  "",
-			expectedError: errors.New("postgres: residency region is required"),
+			expectedError: postgres.ErrPostgresResidencyRegionIsRequired,
 			expectAudited: false,
 		},
 		{
@@ -315,13 +328,15 @@ func TestRouterResidency(t *testing.T) {
 				Region:   "eu",
 			},
 			expectRegion:  "",
-			expectedError: errors.New("postgres: tenant is required"),
+			expectedError: postgres.ErrPostgresTenantIsRequired,
 			expectAudited: false,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			euPool := &gorm.DB{}
 			usPool := &gorm.DB{}
 			pools := map[string]*gorm.DB{"eu": euPool, "us": usPool}
@@ -368,26 +383,28 @@ func TestNewRouterGuards(t *testing.T) {
 			params: postgres.RouterParams{
 				Pools: map[string]*gorm.DB{},
 			},
-			expectedError: errors.New("postgres: router needs at least one region pool"),
+			expectedError: postgres.ErrPostgresRouterNeedsAtLeastOneRegionPool,
 		},
 		{
 			name: "blank region rejected",
 			params: postgres.RouterParams{
 				Pools: map[string]*gorm.DB{"": {}},
 			},
-			expectedError: errors.New("postgres: router needs a named pool per region"),
+			expectedError: postgres.ErrPostgresRouterNeedsANamedPoolPerRegion,
 		},
 		{
 			name: "nil pool rejected",
 			params: postgres.RouterParams{
 				Pools: map[string]*gorm.DB{"eu": nil},
 			},
-			expectedError: errors.New("postgres: router needs a named pool per region"),
+			expectedError: postgres.ErrPostgresRouterNeedsANamedPoolPerRegion,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			router, err := postgres.NewRouter(tc.params)
 			if tc.expectedError != nil {
 				require.Error(t, err)

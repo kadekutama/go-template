@@ -26,6 +26,7 @@ func NewClient(params ClientParams) (*Client, error) {
 	if err := params.Config.Validate(); err != nil {
 		return nil, err
 	}
+
 	cfg := params.Config
 
 	cli, err := clientv3.New(clientv3.Config{
@@ -57,12 +58,12 @@ func (c *Client) Close() error {
 // Health verifies the cluster answers a cheap metadata read within timeout.
 func (c *Client) Health(ctx context.Context) error {
 	if c == nil || c.inner == nil {
-		return fmt.Errorf("etcd: client is not initialized")
+		return ErrEtcdClientIsNotInitialized
 	}
 
 	timeout := c.cfg.DialTimeout
 	if timeout <= 0 || timeout > 10*time.Second {
-		timeout = 10 * time.Second
+		timeout = maxDialTimeoutSecs * time.Second
 	}
 
 	call, cancel := context.WithTimeout(ctx, timeout)
@@ -78,7 +79,7 @@ func (c *Client) Health(ctx context.Context) error {
 // Put stores a key unconditionally. Callers needing transactions use Txn.
 func (c *Client) Put(ctx context.Context, key, value string) error {
 	if c == nil || c.inner == nil {
-		return fmt.Errorf("etcd: client is not initialized")
+		return ErrEtcdClientIsNotInitialized
 	}
 
 	if _, err := c.inner.Put(ctx, key, value); err != nil {
@@ -91,7 +92,7 @@ func (c *Client) Put(ctx context.Context, key, value string) error {
 // Get returns the value for key.
 func (c *Client) Get(ctx context.Context, key string) (string, error) {
 	if c == nil || c.inner == nil {
-		return "", fmt.Errorf("etcd: client is not initialized")
+		return "", ErrEtcdClientIsNotInitialized
 	}
 
 	resp, err := c.inner.Get(ctx, key)
@@ -100,8 +101,8 @@ func (c *Client) Get(ctx context.Context, key string) (string, error) {
 	}
 
 	if len(resp.Kvs) == 0 {
-		return "", fmt.Errorf("etcd: key %s not found", key)
+		return "", fmt.Errorf("etcd: key %s not found: %w", key, ErrEtcdKeyNotFound)
 	}
 
-	return string(resp.Kvs[0].Value), nil
+	return string(resp.Kvs[0].GetValue()), nil
 }

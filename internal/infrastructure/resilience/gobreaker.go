@@ -1,4 +1,4 @@
-// Package resilience adapts sony/gobreaker behind the kernel Breaker port
+// Package resilience adapts sony/gobreaker v2 behind the kernel Breaker port
 // (E01-T08). Provider code imports the kernel port only; swapping gobreaker
 // means replacing this package plus one fx line.
 package resilience
@@ -11,7 +11,7 @@ import (
 
 	kernel "github.com/kadekutama/go-template/internal/shared/kernel/resilience"
 
-	"github.com/sony/gobreaker"
+	"github.com/sony/gobreaker/v2"
 )
 
 // ErrBreakerOpen marks fast-failed calls. Use errors.Is to detect them.
@@ -30,7 +30,7 @@ type Settings struct {
 // CircuitBreaker is the gobreaker-backed kernel Breaker.
 type CircuitBreaker struct {
 	name    string
-	inner   *gobreaker.CircuitBreaker
+	inner   *gobreaker.CircuitBreaker[any]
 	hooks   func(name string, from, to kernel.State)
 	timeout time.Duration
 }
@@ -40,12 +40,14 @@ func New(name string, settings Settings) *CircuitBreaker {
 	if settings.FailureThreshold == 0 {
 		settings.FailureThreshold = 5
 	}
+
 	if settings.ProbeTimeout <= 0 {
-		settings.ProbeTimeout = 30 * time.Second
+		settings.ProbeTimeout = probeTimeoutSecs * time.Second
 	}
+
 	breaker := &CircuitBreaker{name: name, hooks: settings.OnStateChange, timeout: settings.ProbeTimeout}
 	threshold := settings.FailureThreshold
-	breaker.inner = gobreaker.NewCircuitBreaker(gobreaker.Settings{
+	breaker.inner = gobreaker.NewCircuitBreaker[any](gobreaker.Settings{
 		Name:        name,
 		MaxRequests: 1,
 		Timeout:     settings.ProbeTimeout,
@@ -58,6 +60,7 @@ func New(name string, settings Settings) *CircuitBreaker {
 			}
 		},
 	})
+
 	return breaker
 }
 
@@ -67,6 +70,8 @@ func mapState(state gobreaker.State) kernel.State {
 		return kernel.StateOpen
 	case gobreaker.StateHalfOpen:
 		return kernel.StateHalfOpen
+	case gobreaker.StateClosed:
+		return kernel.StateClosed
 	default:
 		return kernel.StateClosed
 	}
@@ -80,12 +85,14 @@ func (b *CircuitBreaker) Execute(ctx context.Context, _ string, _ string, fn fun
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+
 	_, err := b.inner.Execute(func() (any, error) {
 		return nil, fn(ctx)
 	})
 	if errors.Is(err, gobreaker.ErrOpenState) || errors.Is(err, gobreaker.ErrTooManyRequests) {
 		return fmt.Errorf("%w (breaker %q)", ErrBreakerOpen, b.name)
 	}
+
 	return err
 }
 

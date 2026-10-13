@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"time"
 
@@ -11,22 +12,24 @@ import (
 	"github.com/kadekutama/go-template/pkg/jsonparser"
 )
 
-// Report webhook event name (domain-events §3.11).
+// EventReportGenerated is the report webhook event name (domain-events §3.11).
 const EventReportGenerated = "report.generated.v1"
 
 // ReportTemplates is the 10 named report types (features §6): six
 // financial, four operational. Generation is parameterized over this list.
-var ReportTemplates = []string{
-	"trial-balance",
-	"balance-sheet",
-	"income-statement",
-	"cash-flow-statement",
-	"general-ledger-detail",
-	"account-statements",
-	"transaction-volume",
-	"settlement",
-	"fee-revenue",
-	"exception-reports",
+func ReportTemplates() []string {
+	return []string{
+		"trial-balance",
+		"balance-sheet",
+		"income-statement",
+		"cash-flow-statement",
+		"general-ledger-detail",
+		"account-statements",
+		"transaction-volume",
+		"settlement",
+		"fee-revenue",
+		"exception-reports",
+	}
 }
 
 // Report lifecycle states.
@@ -99,24 +102,31 @@ func (s *ReportService) GenerateReport(ctx context.Context, req port.ReportReque
 	if err := validateReportEnvelope(req); err != nil {
 		return port.ReportResult{}, err
 	}
+
 	subject := port.Subject{ID: req.Actor, TenantID: req.TenantID}
 	if err := RequireAuthz(ctx, s.authz, subject, "report.generate", "tenant/"+string(req.TenantID)); err != nil {
 		return port.ReportResult{}, err
 	}
+
 	now := s.clock.Now().UTC()
+
 	body, err := renderReportSummary(req, now)
 	if err != nil {
 		return port.ReportResult{}, err
 	}
+
 	reportID := s.ids.NewID()
+
 	key := "reports/" + string(req.TenantID) + "/" + reportID + ".json"
 	if err := s.storage.Put(ctx, req.TenantID, key, port.StoredObject{Content: body, ContentType: "application/json"}); err != nil {
 		return port.ReportResult{}, err
 	}
+
 	signed, err := s.storage.SignedURL(ctx, req.TenantID, key, time.Hour)
 	if err != nil {
 		return port.ReportResult{}, err
 	}
+
 	parts := append([]string{req.IdempotencyKey, string(req.TenantID), req.Template, req.Destination},
 		MapParts("params", req.Parameters)...)
 	rec := port.IdempotencyRecord{
@@ -124,6 +134,7 @@ func (s *ReportService) GenerateReport(ctx context.Context, req port.ReportReque
 		Fingerprint: Fingerprint(parts...),
 		TenantID:    req.TenantID,
 	}
+
 	return stageReport(ctx, s.uow, rec, req.TenantID, reportID, req.Template, now,
 		func(ctx context.Context) error {
 			return s.reports.CreateReport(ctx, ReportRecord{
@@ -139,39 +150,49 @@ func (s *ReportService) GenerateReport(ctx context.Context, req port.ReportReque
 // (same key, same bytes: overwrite-safe), so callbacks stay retry-safe.
 func stageReport(ctx context.Context, uow port.UnitOfWork, rec port.IdempotencyRecord, tenant valueobject.TenantID, reportID, template string, now time.Time, persist func(ctx context.Context) error, result port.ReportResult) (port.ReportResult, error) {
 	var out port.ReportResult
+
 	err := uow.Do(ctx, func(ctx context.Context, tx port.Tx) error {
 		outcome, err := tx.Idempotency().Reserve(ctx, rec)
 		if err != nil {
 			return err
 		}
+
 		if outcome.Replay {
 			decoded, err := decodeReportResult(outcome.Response)
 			if err != nil {
 				return err
 			}
+
 			out = decoded
+
 			return nil
 		}
+
 		if err := persist(ctx); err != nil {
 			return err
 		}
+
 		out = result
 		out.Cursor = tx.Cursor()
+
 		encoded, err := jsonparser.Marshal(out)
 		if err != nil {
 			return err
 		}
+
 		if err := tx.Outbox().Append(ctx, port.OutboxFact{
 			TenantID: tenant, EventType: EventReportGenerated,
 			AggregateID: reportID, Payload: reportPayload(reportID, template), OccurredAt: now,
 		}); err != nil {
 			return err
 		}
+
 		return tx.Idempotency().Complete(ctx, rec.Key, encoded)
 	})
 	if err != nil {
 		return port.ReportResult{}, err
 	}
+
 	return out, nil
 }
 
@@ -181,12 +202,13 @@ func (s *ReportService) ReportStatus(ctx context.Context, tenant valueobject.Ten
 	if err != nil {
 		return port.ReportResult{}, err
 	}
+
 	return port.ReportResult{ReportID: record.ID, Status: record.Status, SignedURL: record.URL}, nil
 }
 
 // ListTemplates returns the supported report templates.
 func (s *ReportService) ListTemplates() []string {
-	return append([]string(nil), ReportTemplates...)
+	return append([]string(nil), ReportTemplates()...)
 }
 
 // validateReportEnvelope checks the generation envelope including template membership.
@@ -194,26 +216,25 @@ func validateReportEnvelope(req port.ReportRequest) error {
 	if strings.TrimSpace(req.TenantID.String()) == "" {
 		return entity.NewError("TENANT_REQUIRED", "tenant id is required")
 	}
+
 	if !isReportTemplate(req.Template) {
 		return entity.NewError("REPORT_TEMPLATE_UNKNOWN", "report template is unknown")
 	}
+
 	if strings.TrimSpace(req.Actor) == "" {
 		return entity.NewError("ACTOR_REQUIRED", "report actor is required")
 	}
+
 	if strings.TrimSpace(req.IdempotencyKey) == "" {
 		return entity.NewError("IDEMPOTENCY_KEY_REQUIRED", "report requires an idempotency key")
 	}
+
 	return nil
 }
 
 // isReportTemplate reports membership in the 10 named types.
 func isReportTemplate(template string) bool {
-	for _, known := range ReportTemplates {
-		if known == template {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ReportTemplates(), template)
 }
 
 // renderReportSummary renders the deterministic summary payload for one
@@ -229,6 +250,7 @@ func renderReportSummary(req port.ReportRequest, now time.Time) ([]byte, error) 
 // reportPayload builds the §3.11-shaped fact payload: id plus template.
 func reportPayload(id, template string) []byte {
 	encoded, _ := jsonparser.Marshal(map[string]string{payloadIDKey: id, "template": template})
+
 	return encoded
 }
 
@@ -238,8 +260,10 @@ func decodeReportResult(response []byte) (port.ReportResult, error) {
 	if err := jsonparser.Unmarshal(response, &result); err != nil {
 		return port.ReportResult{}, entity.NewError("IDEMPOTENCY_RECORD_INVALID", "stored idempotency response is corrupt")
 	}
+
 	if result.ReportID == "" {
 		return port.ReportResult{}, entity.NewError("IDEMPOTENCY_RECORD_INVALID", "stored idempotency response is corrupt")
 	}
+
 	return result, nil
 }

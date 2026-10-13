@@ -59,7 +59,7 @@ type MockDisputeQueryUseCases_GetDispute_Call struct {
 // GetDispute is a helper method to define mock.On call
 //   - ctx context.Context
 //   - query port.DisputeQuery
-func (_e *MockDisputeQueryUseCases_Expecter) GetDispute(ctx interface{}, query interface{}) *MockDisputeQueryUseCases_GetDispute_Call {
+func (_e *MockDisputeQueryUseCases_Expecter) GetDispute(ctx any, query any) *MockDisputeQueryUseCases_GetDispute_Call {
 	return &MockDisputeQueryUseCases_GetDispute_Call{Call: _e.mock.On("GetDispute", ctx, query)}
 }
 
@@ -116,7 +116,7 @@ type MockDisputeQueryUseCases_ListDisputes_Call struct {
 // ListDisputes is a helper method to define mock.On call
 //   - ctx context.Context
 //   - filter port.DisputeListFilter
-func (_e *MockDisputeQueryUseCases_Expecter) ListDisputes(ctx interface{}, filter interface{}) *MockDisputeQueryUseCases_ListDisputes_Call {
+func (_e *MockDisputeQueryUseCases_Expecter) ListDisputes(ctx any, filter any) *MockDisputeQueryUseCases_ListDisputes_Call {
 	return &MockDisputeQueryUseCases_ListDisputes_Call{Call: _e.mock.On("ListDisputes", ctx, filter)}
 }
 

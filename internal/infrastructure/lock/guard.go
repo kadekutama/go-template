@@ -66,14 +66,15 @@ func WithLock(ctx context.Context, params GuardParams, tenant valueobject.Tenant
 		return acquireError(ctx, params, err, tenant, key)
 	}
 
-	defer releaseLease(params, lease, tenant, key)
+	defer releaseLease(ctx, params, lease, tenant, key)
 
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	renewed := make(chan error, 1)
-	group := safe.NewGroup(params.Logger, func(p safe.Panic) {
+	group := safe.NewGroup(params.Logger, func(p safe.PanicError) {
 		renewed <- p
+
 		cancel()
 	})
 
@@ -84,6 +85,7 @@ func WithLock(ctx context.Context, params GuardParams, tenant valueobject.Tenant
 	group.Go(runCtx, func(context.Context) {
 		if renewErr := renew(runCtx, lease, ttl, params.RefreshInterval); renewErr != nil {
 			renewed <- renewErr
+
 			cancel()
 		}
 	})
@@ -113,21 +115,24 @@ func acquireError(ctx context.Context, params GuardParams, err error, tenant val
 	return err
 }
 
-// releaseLease frees the lease on Background (not ctx): it must be freed even
-// when the caller cancels or fn fails, otherwise the key stalls until TTL
-// expiry. OnReleased observes the release for metrics/audits.
-func releaseLease(params GuardParams, lease appport.Lock, tenant valueobject.TenantID, key string) {
-	_ = lease.Release(context.Background())
+// releaseLease frees the lease on a cancellation-detached context: it must
+// be freed even when the caller cancels or fn fails, otherwise the key
+// stalls until TTL expiry. Detaching (rather than Background) keeps any
+// values the caller attached while dropping only cancellation.
+// OnReleased observes the release for metrics/audits.
+func releaseLease(ctx context.Context, params GuardParams, lease appport.Lock, tenant valueobject.TenantID, key string) {
+	releaseCtx := context.WithoutCancel(ctx)
+	_ = lease.Release(releaseCtx)
 
 	if params.OnReleased != nil {
-		params.OnReleased(context.Background(), tenant, key)
+		params.OnReleased(releaseCtx, tenant, key)
 	}
 }
 
 // guardError resolves the guard's return value. A lease lost mid-run is the
 // root cause of fn seeing a cancelled context, so it takes precedence over
 // that derived cancellation error (a renewal panic surfaces the same way as
-// the contained safe.Panic). Any other fn error is the work's own failure
+// the contained safe.PanicError). Any other fn error is the work's own failure
 // and wins.
 func guardError(fnErr, renewErr error) error {
 	if fnErr == nil || (renewErr != nil && errors.Is(fnErr, context.Canceled)) {

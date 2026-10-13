@@ -1,7 +1,6 @@
 package valueobject_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -36,20 +35,23 @@ func TestParseDirection(t *testing.T) {
 			name:           "invalid direction",
 			raw:            "SIDEWAYS",
 			expectedResult: "",
-			expectedError:  errors.New("account: invalid direction \"SIDEWAYS\""),
+			expectedError:  valueobject.ErrAccountInvalidDirectionSIDEWAYS,
 		},
 		{
 			name:           "empty string",
 			raw:            "",
 			expectedResult: "",
-			expectedError:  errors.New("account: invalid direction \"\""),
+			expectedError:  valueobject.ErrAccountInvalidDirection,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, err := valueobject.ParseDirection(tc.raw)
 			assert.Equal(t, tc.expectedResult, got)
+
 			if tc.expectedError != nil {
 				assert.Equal(t, tc.expectedError.Error(), err.Error())
 			} else {
@@ -104,20 +106,23 @@ func TestParseAccountClass(t *testing.T) {
 			name:           "invalid class",
 			raw:            "CRYPTO",
 			expectedResult: "",
-			expectedError:  errors.New("account: invalid class \"CRYPTO\""),
+			expectedError:  valueobject.ErrAccountInvalidClassCRYPTO,
 		},
 		{
 			name:           "empty class",
 			raw:            "",
 			expectedResult: "",
-			expectedError:  errors.New("account: invalid class \"\""),
+			expectedError:  valueobject.ErrAccountInvalidClass,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, err := valueobject.ParseAccountClass(tc.raw)
 			assert.Equal(t, tc.expectedResult, got)
+
 			if tc.expectedError != nil {
 				assert.Equal(t, tc.expectedError.Error(), err.Error())
 			} else {
@@ -166,6 +171,8 @@ func TestNormalSide(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := tc.class.NormalSide()
 			assert.Equal(t, tc.expectedResult, got)
 		})
@@ -205,20 +212,23 @@ func TestParseAccountStatus(t *testing.T) {
 			name:           "invalid status",
 			raw:            "PENDING",
 			expectedResult: "",
-			expectedError:  errors.New("account: invalid status \"PENDING\""),
+			expectedError:  valueobject.ErrAccountInvalidStatusPENDING,
 		},
 		{
 			name:           "empty status",
 			raw:            "",
 			expectedResult: "",
-			expectedError:  errors.New("account: invalid status \"\""),
+			expectedError:  valueobject.ErrAccountInvalidStatus,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, err := valueobject.ParseAccountStatus(tc.raw)
 			assert.Equal(t, tc.expectedResult, got)
+
 			if tc.expectedError != nil {
 				assert.Equal(t, tc.expectedError.Error(), err.Error())
 			} else {

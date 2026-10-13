@@ -67,9 +67,11 @@ func (s funcSpec[T]) Evaluate(ctx context.Context, candidate T) SpecResult {
 			Message: "specification: nil predicate function",
 		}}}
 	}
+
 	if s.fn(ctx, candidate) {
 		return SpecResult{}
 	}
+
 	return SpecResult{Violations: []Violation{copyViolation(s.violation)}}
 }
 
@@ -87,20 +89,25 @@ func All[T any](specs ...Specification[T]) Specification[T] {
 // Evaluate runs every child and aggregates all violations.
 func (s allSpec[T]) Evaluate(ctx context.Context, candidate T) SpecResult {
 	var out []Violation
+
 	for _, child := range s.specs {
 		if child == nil {
 			out = append(out, Violation{
 				Code:    codeNilChild,
 				Message: "specification: nil child in All",
 			})
+
 			continue
 		}
+
 		res := child.Evaluate(ctx, candidate)
 		out = append(out, copyViolations(res.Violations)...)
 	}
+
 	if len(out) == 0 {
 		return SpecResult{}
 	}
+
 	return SpecResult{Violations: out}
 }
 
@@ -124,21 +131,27 @@ func (s anySpec[T]) Evaluate(ctx context.Context, candidate T) SpecResult {
 			Message: "specification: Any requires at least one child",
 		}}}
 	}
+
 	var out []Violation
+
 	for _, child := range s.specs {
 		if child == nil {
 			out = append(out, Violation{
 				Code:    codeNilChild,
 				Message: "specification: nil child in Any",
 			})
+
 			continue
 		}
+
 		res := child.Evaluate(ctx, candidate)
 		if res.Passed() {
 			return SpecResult{}
 		}
+
 		out = append(out, copyViolations(res.Violations)...)
 	}
+
 	return SpecResult{Violations: out}
 }
 
@@ -162,9 +175,11 @@ func (s notSpec[T]) Evaluate(ctx context.Context, candidate T) SpecResult {
 			Message: "specification: nil child in Not",
 		}}}
 	}
+
 	if s.spec.Evaluate(ctx, candidate).Passed() {
 		return SpecResult{Violations: []Violation{copyViolation(s.violation)}}
 	}
+
 	return SpecResult{}
 }
 
@@ -180,12 +195,14 @@ func (f evalFunc[T]) Evaluate(ctx context.Context, candidate T) SpecResult {
 			Message: "specification: nil evaluator function",
 		}}}
 	}
+
 	return f(ctx, candidate)
 }
 
 func copyViolation(in Violation) Violation {
 	out := in
 	out.Details = maps.Clone(in.Details)
+
 	return out
 }
 
@@ -193,9 +210,11 @@ func copyViolations(in []Violation) []Violation {
 	if len(in) == 0 {
 		return nil
 	}
+
 	out := make([]Violation, 0, len(in))
 	for _, v := range in {
 		out = append(out, copyViolation(v))
 	}
+
 	return out
 }

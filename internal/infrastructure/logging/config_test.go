@@ -1,7 +1,6 @@
 package logging_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -59,31 +58,35 @@ func TestConfigValidate(t *testing.T) {
 			cfg: logging.Config{
 				Level: "",
 			},
-			expectedError: errors.New("logging: level is required"),
+			expectedError: logging.ErrLoggingLevelIsRequired,
 		},
 		{
 			name: "whitespace level rejected",
 			cfg: logging.Config{
 				Level: "   ",
 			},
-			expectedError: errors.New("logging: level is required"),
+			expectedError: logging.ErrLoggingLevelIsRequired,
 		},
 		{
 			name: "unknown level rejected",
 			cfg: logging.Config{
 				Level: "trace",
 			},
-			expectedError: errors.New("logging: unknown log level \"trace\""),
+			expectedError: logging.ErrLoggingUnknownLogLevelTrace,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.cfg.Validate()
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
+
 				return
 			}
+
 			assert.NoError(t, err)
 		})
 	}

@@ -24,6 +24,7 @@ func (c MapCarrier) Keys() []string {
 	for key := range c {
 		keys = append(keys, key)
 	}
+
 	return keys
 }
 
@@ -32,6 +33,7 @@ func Inject(ctx context.Context, carrier propagation.TextMapCarrier) {
 	if ctx == nil || carrier == nil {
 		return
 	}
+
 	Propagator().Inject(ctx, carrier)
 }
 
@@ -40,9 +42,11 @@ func Extract(ctx context.Context, carrier propagation.TextMapCarrier) context.Co
 	if ctx == nil {
 		ctx = context.Background()
 	}
+
 	if carrier == nil {
 		return ctx
 	}
+
 	return Propagator().Extract(ctx, carrier)
 }
 
@@ -56,6 +60,7 @@ func (c headerCarrier) Keys() []string {
 	for key := range c.header {
 		keys = append(keys, key)
 	}
+
 	return keys
 }
 
@@ -64,6 +69,7 @@ func InjectHTTP(ctx context.Context, header http.Header) {
 	if header == nil {
 		return
 	}
+
 	Inject(ctx, headerCarrier{header: header})
 }
 
@@ -73,7 +79,9 @@ func ExtractHTTP(ctx context.Context, header http.Header) context.Context {
 		if ctx == nil {
 			return context.Background()
 		}
+
 		return ctx
 	}
+
 	return Extract(ctx, headerCarrier{header: header})
 }

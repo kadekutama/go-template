@@ -66,7 +66,7 @@ type MockAMLProvider_Screen_Call struct {
 // Screen is a helper method to define mock.On call
 //   - ctx context.Context
 //   - req repository.ScreeningRequest
-func (_e *MockAMLProvider_Expecter) Screen(ctx interface{}, req interface{}) *MockAMLProvider_Screen_Call {
+func (_e *MockAMLProvider_Expecter) Screen(ctx any, req any) *MockAMLProvider_Screen_Call {
 	return &MockAMLProvider_Screen_Call{Call: _e.mock.On("Screen", ctx, req)}
 }
 

@@ -29,12 +29,10 @@ func StartValkey(t *testing.T) (*ValkeyHandle, error) {
 	defer cancel()
 
 	req := tc.GenericContainerRequest{
-		ContainerRequest: tc.ContainerRequest{
-			Image:        ValkeyImage,
-			ExposedPorts: []string{"6379/tcp"},
-			WaitingFor:   wait.ForListeningPort("6379/tcp"),
-		},
-		Started: true,
+		Image:        ValkeyImage,
+		ExposedPorts: []string{"6379/tcp"},
+		WaitingFor:   wait.ForListeningPort("6379/tcp"),
+		Started:      true,
 	}
 
 	container, err := tc.GenericContainer(ctx, req)
@@ -43,6 +41,7 @@ func StartValkey(t *testing.T) (*ValkeyHandle, error) {
 	}
 
 	h := &ValkeyHandle{container: container}
+
 	t.Cleanup(func() {
 		_ = h.Terminate(context.Background())
 	})
@@ -50,12 +49,14 @@ func StartValkey(t *testing.T) (*ValkeyHandle, error) {
 	mapped, err := container.MappedPort(ctx, "6379")
 	if err != nil {
 		_ = h.Terminate(context.Background())
+
 		return nil, fmt.Errorf("map valkey port: %w", err)
 	}
 
 	host, err := container.Host(ctx)
 	if err != nil {
 		_ = h.Terminate(context.Background())
+
 		return nil, fmt.Errorf("valkey host: %w", err)
 	}
 

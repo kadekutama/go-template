@@ -1,7 +1,6 @@
 package di
 
 import (
-	"errors"
 	"os"
 	"strings"
 
@@ -32,8 +31,9 @@ func ProvideLoggingConfig() (logging.Config, error) {
 	if raw == "" {
 		raw = strings.TrimSpace(os.Getenv("APP_OBSERVABILITY__LOG_LEVEL"))
 	}
+
 	if raw == "" {
-		return logging.Config{}, errors.New("logging: log level is required (set APP_LOG_LEVEL or APP_OBSERVABILITY__LOG_LEVEL)")
+		return logging.Config{}, ErrLoggingLogLevelIsRequiredSetAPPLOGLEVELOrAPPOBSERVABILITY
 	}
 
 	cfg := logging.Config{Level: raw}
@@ -52,6 +52,7 @@ func ProvideLoggerWithConfig(cfg logging.Config) (log.Logger, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
+
 	return logging.New(os.Stdout, cfg), nil
 }
 

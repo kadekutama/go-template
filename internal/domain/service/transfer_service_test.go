@@ -1,7 +1,6 @@
 package service_test
 
 import (
-	"errors"
 	"testing"
 	"time"
 
@@ -78,6 +77,7 @@ func TestValidateImmediate(t *testing.T) {
 			req: func() service.TransferRequest {
 				r := baseReq
 				r.AmountMinor = 0
+
 				return r
 			}(),
 			accounts:             accounts,
@@ -90,6 +90,7 @@ func TestValidateImmediate(t *testing.T) {
 			req: func() service.TransferRequest {
 				r := baseReq
 				r.Dest = r.Source
+
 				return r
 			}(),
 			accounts:             accounts,
@@ -102,6 +103,7 @@ func TestValidateImmediate(t *testing.T) {
 			req: func() service.TransferRequest {
 				r := baseReq
 				r.Source = acctFrz
+
 				return r
 			}(),
 			accounts:             accounts,
@@ -114,6 +116,7 @@ func TestValidateImmediate(t *testing.T) {
 			req: func() service.TransferRequest {
 				r := baseReq
 				r.Dest = acctCls
+
 				return r
 			}(),
 			accounts:             accounts,
@@ -126,6 +129,7 @@ func TestValidateImmediate(t *testing.T) {
 			req: func() service.TransferRequest {
 				r := baseReq
 				r.TenantID = "t-other"
+
 				return r
 			}(),
 			accounts:             accounts,
@@ -138,6 +142,7 @@ func TestValidateImmediate(t *testing.T) {
 			req: func() service.TransferRequest {
 				r := baseReq
 				r.LedgerID = "l-other"
+
 				return r
 			}(),
 			accounts:             accounts,
@@ -150,6 +155,7 @@ func TestValidateImmediate(t *testing.T) {
 			req: func() service.TransferRequest {
 				r := baseReq
 				r.Source = "unknown-acct"
+
 				return r
 			}(),
 			accounts:             accounts,
@@ -162,6 +168,7 @@ func TestValidateImmediate(t *testing.T) {
 			req: func() service.TransferRequest {
 				r := baseReq
 				r.Dest = "unknown-acct"
+
 				return r
 			}(),
 			accounts:             accounts,
@@ -174,6 +181,7 @@ func TestValidateImmediate(t *testing.T) {
 			req: func() service.TransferRequest {
 				r := baseReq
 				r.Dest = acctEur
+
 				return r
 			}(),
 			accounts:             accounts,
@@ -187,6 +195,7 @@ func TestValidateImmediate(t *testing.T) {
 				r := baseReq
 				r.Dest = acctEur
 				r.FXRatePresent = true
+
 				return r
 			}(),
 			accounts:             accounts,
@@ -205,6 +214,7 @@ func TestValidateImmediate(t *testing.T) {
 				r := baseReq
 				r.AssetCode = currEUR
 				r.FXRatePresent = true
+
 				return r
 			}(),
 			accounts:             accounts,
@@ -216,6 +226,8 @@ func TestValidateImmediate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.ValidateImmediate(tc.req, tc.accounts, tc.sourceAvailableMinor)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -239,14 +251,12 @@ func TestValidateSchedule(t *testing.T) {
 
 	now := time.Date(2026, 9, 14, 0, 0, 0, 0, time.UTC)
 	baseSchedule := service.ScheduleRequest{
-		TransferRequest: service.TransferRequest{
-			TenantID:    "t-1",
-			LedgerID:    "l-1",
-			Source:      acctSrc,
-			Dest:        acctDst,
-			AssetCode:   currUSD,
-			AmountMinor: 5000,
-		},
+		TenantID:        "t-1",
+		LedgerID:        "l-1",
+		Source:          acctSrc,
+		Dest:            acctDst,
+		AssetCode:       currUSD,
+		AmountMinor:     5000,
 		ExecuteAt:       now.Add(time.Hour),
 		IdempotencyRoot: "sched-1",
 	}
@@ -272,6 +282,7 @@ func TestValidateSchedule(t *testing.T) {
 			req: func() service.ScheduleRequest {
 				s := baseSchedule
 				s.AmountMinor = 0
+
 				return s
 			}(),
 			accounts:      accounts,
@@ -283,6 +294,7 @@ func TestValidateSchedule(t *testing.T) {
 			req: func() service.ScheduleRequest {
 				s := baseSchedule
 				s.IdempotencyRoot = ""
+
 				return s
 			}(),
 			accounts:      accounts,
@@ -294,6 +306,7 @@ func TestValidateSchedule(t *testing.T) {
 			req: func() service.ScheduleRequest {
 				s := baseSchedule
 				s.ExecuteAt = now.Add(-time.Hour)
+
 				return s
 			}(),
 			accounts:      accounts,
@@ -305,6 +318,7 @@ func TestValidateSchedule(t *testing.T) {
 			req: func() service.ScheduleRequest {
 				s := baseSchedule
 				s.Recurrence = &service.RecurrenceRule{Occurrences: 0}
+
 				return s
 			}(),
 			accounts:      accounts,
@@ -316,6 +330,7 @@ func TestValidateSchedule(t *testing.T) {
 			req: func() service.ScheduleRequest {
 				s := baseSchedule
 				s.Dest = s.Source
+
 				return s
 			}(),
 			accounts:      accounts,
@@ -327,6 +342,7 @@ func TestValidateSchedule(t *testing.T) {
 			req: func() service.ScheduleRequest {
 				s := baseSchedule
 				s.Source = "unknown-acct"
+
 				return s
 			}(),
 			accounts:      accounts,
@@ -337,6 +353,8 @@ func TestValidateSchedule(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := service.ValidateSchedule(tc.req, tc.accounts, tc.now)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -359,14 +377,12 @@ func TestValidateExecution(t *testing.T) {
 
 	now := time.Date(2026, 9, 14, 0, 0, 0, 0, time.UTC)
 	sched := service.ScheduleRequest{
-		TransferRequest: service.TransferRequest{
-			TenantID:    "t-1",
-			LedgerID:    "l-1",
-			Source:      acctSrc,
-			Dest:        acctDst,
-			AssetCode:   currUSD,
-			AmountMinor: 5000,
-		},
+		TenantID:        "t-1",
+		LedgerID:        "l-1",
+		Source:          acctSrc,
+		Dest:            acctDst,
+		AssetCode:       currUSD,
+		AmountMinor:     5000,
 		ExecuteAt:       now.Add(time.Hour),
 		IdempotencyRoot: "sched-1",
 	}
@@ -406,6 +422,8 @@ func TestValidateExecution(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.ValidateExecution(tc.req, tc.accounts, tc.sourceAvailableMinor)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -457,6 +475,8 @@ func TestExpandRecurrence(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.ExpandRecurrence(tc.root, tc.n)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -483,9 +503,10 @@ func TestEvaluateBatch(t *testing.T) {
 
 	validate := func(it service.BatchItem) error {
 		_, err := service.ValidateImmediate(it.Request, accounts, 999999)
+
 		return err
 	}
-	failFn := func(service.BatchItem) error { return errors.New("boom") }
+	failFn := func(service.BatchItem) error { return service.ErrBoom }
 
 	type testCase struct {
 		name           string
@@ -506,6 +527,7 @@ func TestEvaluateBatch(t *testing.T) {
 					Request: func() service.TransferRequest {
 						r := baseTransfer
 						r.AmountMinor = 0
+
 						return r
 					}(),
 				},
@@ -575,6 +597,8 @@ func TestEvaluateBatch(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := service.EvaluateBatch(tc.batchID, tc.items, tc.fn)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -608,6 +632,8 @@ func TestBatchItemKey(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := service.BatchItemKey(tc.batchID, tc.itemKey)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -644,6 +670,7 @@ func TestValidateTemplate(t *testing.T) {
 			template: func() service.TransferTemplate {
 				t := base
 				t.ID = ""
+
 				return t
 			}(),
 			expectedError: entity.NewError("TEMPLATE_ID_REQUIRED", "template id is required"),
@@ -653,6 +680,7 @@ func TestValidateTemplate(t *testing.T) {
 			template: func() service.TransferTemplate {
 				t := base
 				t.TenantID = ""
+
 				return t
 			}(),
 			expectedError: entity.NewError("TENANT_MISMATCH", "template requires tenant and ledger scope"),
@@ -662,6 +690,7 @@ func TestValidateTemplate(t *testing.T) {
 			template: func() service.TransferTemplate {
 				t := base
 				t.LedgerID = ""
+
 				return t
 			}(),
 			expectedError: entity.NewError("TENANT_MISMATCH", "template requires tenant and ledger scope"),
@@ -671,6 +700,7 @@ func TestValidateTemplate(t *testing.T) {
 			template: func() service.TransferTemplate {
 				t := base
 				t.Source = ""
+
 				return t
 			}(),
 			expectedError: entity.NewError("TEMPLATE_ACCOUNT_REQUIRED", "template requires source and destination accounts"),
@@ -680,6 +710,7 @@ func TestValidateTemplate(t *testing.T) {
 			template: func() service.TransferTemplate {
 				t := base
 				t.Dest = ""
+
 				return t
 			}(),
 			expectedError: entity.NewError("TEMPLATE_ACCOUNT_REQUIRED", "template requires source and destination accounts"),
@@ -689,6 +720,7 @@ func TestValidateTemplate(t *testing.T) {
 			template: func() service.TransferTemplate {
 				t := base
 				t.AssetCode = ""
+
 				return t
 			}(),
 			expectedError: entity.NewError("TEMPLATE_ASSET_REQUIRED", "template requires an asset code"),
@@ -698,6 +730,7 @@ func TestValidateTemplate(t *testing.T) {
 			template: func() service.TransferTemplate {
 				t := base
 				t.AmountMinor = 0
+
 				return t
 			}(),
 			expectedError: entity.NewError("INVALID_TRANSFER_AMOUNT", "template amount must be positive"),
@@ -707,6 +740,7 @@ func TestValidateTemplate(t *testing.T) {
 			template: func() service.TransferTemplate {
 				t := base
 				t.AmountMinor = -10
+
 				return t
 			}(),
 			expectedError: entity.NewError("INVALID_TRANSFER_AMOUNT", "template amount must be positive"),
@@ -715,6 +749,8 @@ func TestValidateTemplate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := service.ValidateTemplate(tc.template)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -761,6 +797,7 @@ func TestApplyTemplate(t *testing.T) {
 			expectedResult: func() service.TransferRequest {
 				r := baseExpected
 				r.AmountMinor = 250
+
 				return r
 			}(),
 			expectedError: nil,
@@ -785,6 +822,8 @@ func TestApplyTemplate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.ApplyTemplate(tc.template, tc.amountMinor, tc.fxRatePresent)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)

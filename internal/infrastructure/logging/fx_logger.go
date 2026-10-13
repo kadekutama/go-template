@@ -1,8 +1,9 @@
+package logging
+
 // FxLogger adapts the kernel log port to fxevent.Logger so fx framework
 // events flow through the configured backend (zerolog per ADR-012) instead
 // of fx.NopLogger (E01-T04-R06). Lifecycle milestones log at Info, routine
 // wiring at Debug, and every hook/supply/invoke failure at Error.
-package logging
 
 import (
 	"context"
@@ -24,20 +25,10 @@ type FxLogger struct {
 // hide startup failures.
 func NewFxLogger(inner log.Logger) (*FxLogger, error) {
 	if inner == nil {
-		return nil, fmt.Errorf("logging: fx logger requires a non-nil kernel logger")
+		return nil, ErrLoggingFxLoggerRequiresANonNilKernelLogger
 	}
 
 	return &FxLogger{inner: inner}, nil
-}
-
-// fail emits msg at Error when err is set and reports whether it did.
-func (l *FxLogger) fail(ctx context.Context, msg string, err error, fields ...any) bool {
-	if err == nil {
-		return false
-	}
-
-	l.inner.Error(ctx, msg, append(fields, log.Err(err))...)
-	return true
 }
 
 // LogEvent implements fxevent.Logger by delegating to per-family mappers.
@@ -55,6 +46,17 @@ func (l *FxLogger) LogEvent(event fxevent.Event) {
 	}
 
 	l.logLifecycleEvent(event)
+}
+
+// fail emits msg at Error when err is set and reports whether it did.
+func (l *FxLogger) fail(ctx context.Context, msg string, err error, fields ...any) bool {
+	if err == nil {
+		return false
+	}
+
+	l.inner.Error(ctx, msg, append(fields, log.Err(err))...)
+
+	return true
 }
 
 // logHookEvent maps hook execution events. It reports whether it handled event.

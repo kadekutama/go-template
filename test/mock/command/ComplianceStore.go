@@ -62,7 +62,7 @@ type MockComplianceStore_FindExport_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - id string
-func (_e *MockComplianceStore_Expecter) FindExport(ctx interface{}, tenant interface{}, id interface{}) *MockComplianceStore_FindExport_Call {
+func (_e *MockComplianceStore_Expecter) FindExport(ctx any, tenant any, id any) *MockComplianceStore_FindExport_Call {
 	return &MockComplianceStore_FindExport_Call{Call: _e.mock.On("FindExport", ctx, tenant, id)}
 }
 
@@ -109,7 +109,7 @@ type MockComplianceStore_RecordDecision_Call struct {
 // RecordDecision is a helper method to define mock.On call
 //   - ctx context.Context
 //   - decision command.ScreeningDecision
-func (_e *MockComplianceStore_Expecter) RecordDecision(ctx interface{}, decision interface{}) *MockComplianceStore_RecordDecision_Call {
+func (_e *MockComplianceStore_Expecter) RecordDecision(ctx any, decision any) *MockComplianceStore_RecordDecision_Call {
 	return &MockComplianceStore_RecordDecision_Call{Call: _e.mock.On("RecordDecision", ctx, decision)}
 }
 
@@ -156,7 +156,7 @@ type MockComplianceStore_SaveExport_Call struct {
 // SaveExport is a helper method to define mock.On call
 //   - ctx context.Context
 //   - export command.RegulatoryExport
-func (_e *MockComplianceStore_Expecter) SaveExport(ctx interface{}, export interface{}) *MockComplianceStore_SaveExport_Call {
+func (_e *MockComplianceStore_Expecter) SaveExport(ctx any, export any) *MockComplianceStore_SaveExport_Call {
 	return &MockComplianceStore_SaveExport_Call{Call: _e.mock.On("SaveExport", ctx, export)}
 }
 

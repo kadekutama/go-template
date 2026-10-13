@@ -47,6 +47,7 @@ func TestTenantFixtureDeterministic(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Equal(t, tc.expectedTenant, fixtures.Tenant(tc.id, tc.alias))
 		})
 	}
@@ -79,10 +80,13 @@ func TestAccountFixturesChart(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			accounts := fixtures.Accounts(tc.tenantID, tc.ledgerID)
 			assert.Len(t, accounts, tc.expectedCount)
 
 			seen := make(map[string]bool)
+
 			for _, acct := range accounts {
 				assert.NotEmpty(t, acct.AccountID)
 				assert.NotEmpty(t, acct.AssetCode)
@@ -117,6 +121,8 @@ func TestPostingFixturesBalanced(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			postings := fixtures.Postings(tc.tenantID, tc.ledgerID)
 			assert.Len(t, postings, tc.expectedPostings)
 
@@ -166,6 +172,8 @@ func TestWorkflowAndStatementFixtures(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			workflows := fixtures.Workflows(tc.tenantID)
 			assert.Len(t, workflows, tc.expectedWorkflows)
 

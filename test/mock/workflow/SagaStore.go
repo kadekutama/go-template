@@ -49,7 +49,7 @@ type MockSagaStore_CreateSaga_Call struct {
 // CreateSaga is a helper method to define mock.On call
 //   - ctx context.Context
 //   - record workflow.SagaRecord
-func (_e *MockSagaStore_Expecter) CreateSaga(ctx interface{}, record interface{}) *MockSagaStore_CreateSaga_Call {
+func (_e *MockSagaStore_Expecter) CreateSaga(ctx any, record any) *MockSagaStore_CreateSaga_Call {
 	return &MockSagaStore_CreateSaga_Call{Call: _e.mock.On("CreateSaga", ctx, record)}
 }
 
@@ -107,7 +107,7 @@ type MockSagaStore_FindSaga_Call struct {
 //   - ctx context.Context
 //   - tenantID string
 //   - sagaID string
-func (_e *MockSagaStore_Expecter) FindSaga(ctx interface{}, tenantID interface{}, sagaID interface{}) *MockSagaStore_FindSaga_Call {
+func (_e *MockSagaStore_Expecter) FindSaga(ctx any, tenantID any, sagaID any) *MockSagaStore_FindSaga_Call {
 	return &MockSagaStore_FindSaga_Call{Call: _e.mock.On("FindSaga", ctx, tenantID, sagaID)}
 }
 
@@ -154,7 +154,7 @@ type MockSagaStore_UpdateSaga_Call struct {
 // UpdateSaga is a helper method to define mock.On call
 //   - ctx context.Context
 //   - record workflow.SagaRecord
-func (_e *MockSagaStore_Expecter) UpdateSaga(ctx interface{}, record interface{}) *MockSagaStore_UpdateSaga_Call {
+func (_e *MockSagaStore_Expecter) UpdateSaga(ctx any, record any) *MockSagaStore_UpdateSaga_Call {
 	return &MockSagaStore_UpdateSaga_Call{Call: _e.mock.On("UpdateSaga", ctx, record)}
 }
 

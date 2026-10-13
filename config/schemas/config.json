@@ -328,6 +328,56 @@
         }
       }
     },
+    "cron_admin": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "bind_addr": {
+          "type": "string"
+        },
+        "private_listener": {
+          "type": "boolean"
+        },
+        "allowed_origin": {
+          "type": "string"
+        },
+        "tls_cert_file": {
+          "type": "string"
+        },
+        "tls_key_file": {
+          "type": "string"
+        },
+        "tls_client_ca_file": {
+          "type": "string"
+        },
+        "rate_limit_budget": {
+          "type": "integer"
+        },
+        "rate_limit_window_sec": {
+          "type": "integer"
+        },
+        "session_max_ttl_sec": {
+          "type": "integer"
+        },
+        "session_scope": {
+          "type": "string"
+        },
+        "session_cookie_name": {
+          "type": "string"
+        },
+        "limiter_namespace": {
+          "type": "string"
+        },
+        "anonymous_subject": {
+          "type": "string"
+        },
+        "session_key_file": {
+          "type": "string"
+        }
+      }
+    },
     "redpanda": {
       "type": "object",
       "required": [

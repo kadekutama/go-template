@@ -1,7 +1,6 @@
 package event
 
 import (
-	"errors"
 	"time"
 )
 
@@ -16,13 +15,15 @@ type FeeAssessedPayload struct {
 }
 
 // NewFeeAssessed builds fee.assessed.v1.
-func NewFeeAssessed(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload FeeAssessedPayload, meta EventMetadata) (TypedEvent[FeeAssessedPayload], error) {
+func NewFeeAssessed(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload FeeAssessedPayload, meta Metadata) (TypedEvent[FeeAssessedPayload], error) {
 	if err := requireIDs(map[string]string{"fee_id": payload.FeeID, fieldTenantID: payload.TenantID, fieldAccountID: payload.AccountID}); err != nil {
 		return TypedEvent[FeeAssessedPayload]{}, err
 	}
+
 	if payload.AmountMinor <= 0 {
-		return TypedEvent[FeeAssessedPayload]{}, errors.New("event: amount_minor must be positive")
+		return TypedEvent[FeeAssessedPayload]{}, ErrEventAmountMinorMustBePositive
 	}
+
 	return newTyped("fee.assessed.v1", eventID, aggregateID, "Fee", occurredAt, version, seq, payload, meta)
 }
 
@@ -34,9 +35,10 @@ type FeeCollectedPayload struct {
 }
 
 // NewFeeCollected builds fee.collected.v1.
-func NewFeeCollected(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload FeeCollectedPayload, meta EventMetadata) (TypedEvent[FeeCollectedPayload], error) {
+func NewFeeCollected(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload FeeCollectedPayload, meta Metadata) (TypedEvent[FeeCollectedPayload], error) {
 	if err := requireIDs(map[string]string{"fee_id": payload.FeeID, fieldTenantID: payload.TenantID, fieldPostingID: payload.PostingID}); err != nil {
 		return TypedEvent[FeeCollectedPayload]{}, err
 	}
+
 	return newTyped("fee.collected.v1", eventID, aggregateID, "Fee", occurredAt, version, seq, payload, meta)
 }

@@ -1,7 +1,6 @@
 package redpanda_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -36,7 +35,7 @@ func TestRegistry(t *testing.T) {
 			name:           "zero config rejected",
 			cfg:            redpanda.TopicsConfig{},
 			expectedResult: nil,
-			expectedError:  errors.New("redpanda: ledger events topic is required"),
+			expectedError:  redpanda.ErrRedpandaLedgerEventsTopicIsRequired,
 		},
 		{
 			name: "valid registry",
@@ -80,6 +79,7 @@ func TestRegistry(t *testing.T) {
 				c.LedgerEvents = "custom.ledger.v1"
 				c.Partitions = 6
 				c.RetentionHrs = 48
+
 				return c
 			}(),
 			expectedResult: []redpanda.TopicSpec{
@@ -119,36 +119,40 @@ func TestRegistry(t *testing.T) {
 			cfg: func() redpanda.TopicsConfig {
 				c := baseConfig
 				c.OutboxFacts = c.LedgerEvents
+
 				return c
 			}(),
 			expectedResult: nil,
-			expectedError:  errors.New("redpanda: duplicate topic name \"ledger.events.v1\""),
+			expectedError:  redpanda.ErrRedpandaDuplicateTopicNameLedgerEventsV1,
 		},
 		{
 			name: "missing partition keys rejected",
 			cfg: func() redpanda.TopicsConfig {
 				c := baseConfig
 				c.PartitionKeys = ""
+
 				return c
 			}(),
 			expectedResult: nil,
-			expectedError:  errors.New("redpanda: partition keys is required"),
+			expectedError:  redpanda.ErrRedpandaPartitionKeysIsRequired,
 		},
 		{
 			name: "missing dlq suffix rejected",
 			cfg: func() redpanda.TopicsConfig {
 				c := baseConfig
 				c.DLQSuffix = ""
+
 				return c
 			}(),
 			expectedResult: nil,
-			expectedError:  errors.New("redpanda: dlq suffix is required"),
+			expectedError:  redpanda.ErrRedpandaDlqSuffixIsRequired,
 		},
 		{
 			name: "padded topic stored trimmed",
 			cfg: func() redpanda.TopicsConfig {
 				c := baseConfig
 				c.LedgerEvents = "  ledger.events.v1  "
+
 				return c
 			}(),
 			expectedResult: []redpanda.TopicSpec{
@@ -188,81 +192,92 @@ func TestRegistry(t *testing.T) {
 			cfg: func() redpanda.TopicsConfig {
 				c := baseConfig
 				c.OutboxFacts = "  ledger.events.v1  "
+
 				return c
 			}(),
 			expectedResult: nil,
-			expectedError:  errors.New("redpanda: duplicate topic name \"ledger.events.v1\""),
+			expectedError:  redpanda.ErrRedpandaDuplicateTopicNameLedgerEventsV1,
 		},
 		{
 			name: "whitespace topic rejected",
 			cfg: func() redpanda.TopicsConfig {
 				c := baseConfig
 				c.LedgerEvents = "   "
+
 				return c
 			}(),
 			expectedResult: nil,
-			expectedError:  errors.New("redpanda: ledger events topic is required"),
+			expectedError:  redpanda.ErrRedpandaLedgerEventsTopicIsRequired,
 		},
 		{
 			name: "zero partitions rejected",
 			cfg: func() redpanda.TopicsConfig {
 				c := baseConfig
 				c.Partitions = 0
+
 				return c
 			}(),
 			expectedResult: nil,
-			expectedError:  errors.New("redpanda: partitions must be positive"),
+			expectedError:  redpanda.ErrRedpandaPartitionsMustBePositive,
 		},
 		{
 			name: "negative partitions rejected",
 			cfg: func() redpanda.TopicsConfig {
 				c := baseConfig
 				c.Partitions = -2
+
 				return c
 			}(),
 			expectedResult: nil,
-			expectedError:  errors.New("redpanda: partitions must be positive"),
+			expectedError:  redpanda.ErrRedpandaPartitionsMustBePositive,
 		},
 		{
 			name: "zero retention rejected",
 			cfg: func() redpanda.TopicsConfig {
 				c := baseConfig
 				c.RetentionHrs = 0
+
 				return c
 			}(),
 			expectedResult: nil,
-			expectedError:  errors.New("redpanda: retention hours must be positive"),
+			expectedError:  redpanda.ErrRedpandaRetentionHoursMustBePositive,
 		},
 		{
 			name: "whitespace partition keys rejected",
 			cfg: func() redpanda.TopicsConfig {
 				c := baseConfig
 				c.PartitionKeys = "   "
+
 				return c
 			}(),
 			expectedResult: nil,
-			expectedError:  errors.New("redpanda: partition keys is required"),
+			expectedError:  redpanda.ErrRedpandaPartitionKeysIsRequired,
 		},
 		{
 			name: "whitespace dlq suffix rejected",
 			cfg: func() redpanda.TopicsConfig {
 				c := baseConfig
 				c.DLQSuffix = "   "
+
 				return c
 			}(),
 			expectedResult: nil,
-			expectedError:  errors.New("redpanda: dlq suffix is required"),
+			expectedError:  redpanda.ErrRedpandaDlqSuffixIsRequired,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			registry, err := redpanda.NewTopicRegistry(tc.cfg)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
 				assert.Nil(t, registry)
+
 				return
 			}
+
 			require.NoError(t, err)
 			require.NotNil(t, registry)
 			assert.Equal(t, tc.expectedResult, registry.Registry())
@@ -336,6 +351,7 @@ func TestIsKnownTopic(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Equal(t, tc.expectedResult, registry.IsKnownTopic(tc.topicName))
 		})
 	}
@@ -383,6 +399,8 @@ func TestAllTopics(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			topics := registry.AllTopics()
 			require.Len(t, topics, tc.expectedLength)
 			assert.Equal(t, tc.expectedFirst, topics[0])
@@ -453,53 +471,58 @@ func TestPartitionKey(t *testing.T) {
 			tenant:         "",
 			account:        "a1",
 			expectedResult: "",
-			expectedError:  errors.New("redpanda: tenant and account are required"),
+			expectedError:  redpanda.ErrRedpandaTenantAndAccountAreRequired,
 		},
 		{
 			name:           "whitespace tenant rejected",
 			tenant:         "   ",
 			account:        "a1",
 			expectedResult: "",
-			expectedError:  errors.New("redpanda: tenant and account are required"),
+			expectedError:  redpanda.ErrRedpandaTenantAndAccountAreRequired,
 		},
 		{
 			name:           "empty account rejected",
 			tenant:         "t1",
 			account:        "",
 			expectedResult: "",
-			expectedError:  errors.New("redpanda: tenant and account are required"),
+			expectedError:  redpanda.ErrRedpandaTenantAndAccountAreRequired,
 		},
 		{
 			name:           "whitespace account rejected",
 			tenant:         "t1",
 			account:        "   ",
 			expectedResult: "",
-			expectedError:  errors.New("redpanda: tenant and account are required"),
+			expectedError:  redpanda.ErrRedpandaTenantAndAccountAreRequired,
 		},
 		{
 			name:           "colon in tenant rejected",
 			tenant:         "t:1",
 			account:        "a1",
 			expectedResult: "",
-			expectedError:  errors.New("redpanda: partition segments must not contain ':'"),
+			expectedError:  redpanda.ErrRedpandaPartitionSegmentsMustNotContain,
 		},
 		{
 			name:           "colon in account rejected",
 			tenant:         "t1",
 			account:        "a:1",
 			expectedResult: "",
-			expectedError:  errors.New("redpanda: partition segments must not contain ':'"),
+			expectedError:  redpanda.ErrRedpandaPartitionSegmentsMustNotContain,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := redpanda.PartitionKey(tc.tenant, tc.account)
 			assert.Equal(t, tc.expectedResult, actualResult)
+
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
+
 				return
 			}
+
 			assert.NoError(t, err)
 		})
 	}
@@ -550,24 +573,29 @@ func TestDLQFor(t *testing.T) {
 			name:           "blank rejected",
 			topicOrGroup:   "",
 			expectedResult: "",
-			expectedError:  errors.New("redpanda: topic or group is required"),
+			expectedError:  redpanda.ErrRedpandaTopicOrGroupIsRequired,
 		},
 		{
 			name:           "whitespace rejected",
 			topicOrGroup:   "   ",
 			expectedResult: "",
-			expectedError:  errors.New("redpanda: topic or group is required"),
+			expectedError:  redpanda.ErrRedpandaTopicOrGroupIsRequired,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := registry.DLQFor(tc.topicOrGroup)
 			assert.Equal(t, tc.expectedResult, actualResult)
+
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
+
 				return
 			}
+
 			assert.NoError(t, err)
 		})
 	}

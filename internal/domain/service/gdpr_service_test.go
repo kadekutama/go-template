@@ -59,6 +59,7 @@ func TestErasePII(t *testing.T) {
 					"address": "x",
 				}
 				r.LedgerSums = map[string]int64{"USD": 15000, "EUR": 200}
+
 				return r
 			}(),
 			expectedResult: service.ErasureResult{
@@ -77,6 +78,7 @@ func TestErasePII(t *testing.T) {
 			req: func() service.ErasureRequest {
 				r := baseReq
 				r.Fields = map[string]string{"amount_minor": "15000"}
+
 				return r
 			}(),
 			expectedResult: service.ErasureResult{},
@@ -87,6 +89,7 @@ func TestErasePII(t *testing.T) {
 			req: func() service.ErasureRequest {
 				r := baseReq
 				r.TenantID = ""
+
 				return r
 			}(),
 			expectedResult: service.ErasureResult{},
@@ -97,6 +100,7 @@ func TestErasePII(t *testing.T) {
 			req: func() service.ErasureRequest {
 				r := baseReq
 				r.TenantID = "   "
+
 				return r
 			}(),
 			expectedResult: service.ErasureResult{},
@@ -107,6 +111,7 @@ func TestErasePII(t *testing.T) {
 			req: func() service.ErasureRequest {
 				r := baseReq
 				r.SubjectID = ""
+
 				return r
 			}(),
 			expectedResult: service.ErasureResult{},
@@ -117,6 +122,7 @@ func TestErasePII(t *testing.T) {
 			req: func() service.ErasureRequest {
 				r := baseReq
 				r.SubjectID = "   "
+
 				return r
 			}(),
 			expectedResult: service.ErasureResult{},
@@ -127,6 +133,7 @@ func TestErasePII(t *testing.T) {
 			req: func() service.ErasureRequest {
 				r := baseReq
 				r.SubjectType = ""
+
 				return r
 			}(),
 			expectedResult: service.ErasureResult{},
@@ -137,6 +144,7 @@ func TestErasePII(t *testing.T) {
 			req: func() service.ErasureRequest {
 				r := baseReq
 				r.SubjectType = "   "
+
 				return r
 			}(),
 			expectedResult: service.ErasureResult{},
@@ -147,6 +155,7 @@ func TestErasePII(t *testing.T) {
 			req: func() service.ErasureRequest {
 				r := baseReq
 				r.Fields = map[string]string{}
+
 				return r
 			}(),
 			expectedResult: service.ErasureResult{},
@@ -157,6 +166,7 @@ func TestErasePII(t *testing.T) {
 			req: func() service.ErasureRequest {
 				r := baseReq
 				r.Fields = nil
+
 				return r
 			}(),
 			expectedResult: service.ErasureResult{},
@@ -169,6 +179,7 @@ func TestErasePII(t *testing.T) {
 				r.Fields = map[string]string{"email": "a@b.c"}
 				r.LedgerSums = map[string]int64{"USD": 100}
 				r.UnderLegalHold = true
+
 				return r
 			}(),
 			expectedResult: service.ErasureResult{},
@@ -179,6 +190,7 @@ func TestErasePII(t *testing.T) {
 			req: func() service.ErasureRequest {
 				r := baseReq
 				r.Now = time.Time{}
+
 				return r
 			}(),
 			expectedResult: service.ErasureResult{},
@@ -188,6 +200,8 @@ func TestErasePII(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.ErasePII(tc.req)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -264,6 +278,8 @@ func TestGDPRClassifyField(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := service.ClassifyField(tc.fieldName)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -443,6 +459,8 @@ func TestExportBundle(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.BuildExportBundle(tc.tenantID, tc.subjectID, tc.accounts, tc.transactions, tc.entries, tc.format)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -527,6 +545,8 @@ func TestDetectErasedValueLeak(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := service.DetectErasedValueLeak(tc.payload, tc.rawValues)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -590,6 +610,8 @@ func TestVerifyLedgerSumsPreserved(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := service.VerifyLedgerSumsPreserved(tc.before, tc.after)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -740,6 +762,8 @@ func TestBuildErasurePayloadValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.BuildErasurePayload(tc.erasureID, tc.tenantID, tc.subjectType, tc.shreddedFields, tc.now)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -776,6 +800,7 @@ func TestValidateExportBundleDirect(t *testing.T) {
 			b: func() service.ExportBundle {
 				b := baseBundle
 				b.Format = "XML"
+
 				return b
 			}(),
 			expectedError: entity.NewError("EXPORT_INVALID", "export format must be JSON or CSV"),
@@ -785,6 +810,7 @@ func TestValidateExportBundleDirect(t *testing.T) {
 			b: func() service.ExportBundle {
 				b := baseBundle
 				b.Format = "json"
+
 				return b
 			}(),
 			expectedError: entity.NewError("EXPORT_INVALID", "export format must be JSON or CSV"),
@@ -794,6 +820,7 @@ func TestValidateExportBundleDirect(t *testing.T) {
 			b: func() service.ExportBundle {
 				b := baseBundle
 				b.TenantID = ""
+
 				return b
 			}(),
 			expectedError: entity.NewError("EXPORT_IDENTITY_REQUIRED", "export requires tenant and subject ids"),
@@ -803,6 +830,7 @@ func TestValidateExportBundleDirect(t *testing.T) {
 			b: func() service.ExportBundle {
 				b := baseBundle
 				b.TenantID = "  "
+
 				return b
 			}(),
 			expectedError: entity.NewError("EXPORT_IDENTITY_REQUIRED", "export requires tenant and subject ids"),
@@ -812,6 +840,7 @@ func TestValidateExportBundleDirect(t *testing.T) {
 			b: func() service.ExportBundle {
 				b := baseBundle
 				b.SubjectID = ""
+
 				return b
 			}(),
 			expectedError: entity.NewError("EXPORT_IDENTITY_REQUIRED", "export requires tenant and subject ids"),
@@ -821,6 +850,7 @@ func TestValidateExportBundleDirect(t *testing.T) {
 			b: func() service.ExportBundle {
 				b := baseBundle
 				b.SubjectID = "  "
+
 				return b
 			}(),
 			expectedError: entity.NewError("EXPORT_IDENTITY_REQUIRED", "export requires tenant and subject ids"),
@@ -830,6 +860,7 @@ func TestValidateExportBundleDirect(t *testing.T) {
 			b: func() service.ExportBundle {
 				b := baseBundle
 				b.Accounts = nil
+
 				return b
 			}(),
 			expectedError: entity.NewError("EXPORT_INVALID", "export requires accounts, transactions, and entries"),
@@ -839,6 +870,7 @@ func TestValidateExportBundleDirect(t *testing.T) {
 			b: func() service.ExportBundle {
 				b := baseBundle
 				b.Accounts = []string{}
+
 				return b
 			}(),
 			expectedError: entity.NewError("EXPORT_INVALID", "export requires accounts, transactions, and entries"),
@@ -848,6 +880,7 @@ func TestValidateExportBundleDirect(t *testing.T) {
 			b: func() service.ExportBundle {
 				b := baseBundle
 				b.Transactions = nil
+
 				return b
 			}(),
 			expectedError: entity.NewError("EXPORT_INVALID", "export requires accounts, transactions, and entries"),
@@ -857,6 +890,7 @@ func TestValidateExportBundleDirect(t *testing.T) {
 			b: func() service.ExportBundle {
 				b := baseBundle
 				b.Transactions = []string{}
+
 				return b
 			}(),
 			expectedError: entity.NewError("EXPORT_INVALID", "export requires accounts, transactions, and entries"),
@@ -866,6 +900,7 @@ func TestValidateExportBundleDirect(t *testing.T) {
 			b: func() service.ExportBundle {
 				b := baseBundle
 				b.Entries = nil
+
 				return b
 			}(),
 			expectedError: entity.NewError("EXPORT_INVALID", "export requires accounts, transactions, and entries"),
@@ -875,6 +910,7 @@ func TestValidateExportBundleDirect(t *testing.T) {
 			b: func() service.ExportBundle {
 				b := baseBundle
 				b.Entries = []string{}
+
 				return b
 			}(),
 			expectedError: entity.NewError("EXPORT_INVALID", "export requires accounts, transactions, and entries"),
@@ -883,6 +919,8 @@ func TestValidateExportBundleDirect(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := service.ValidateExportBundle(tc.b)
 			assert.Equal(t, tc.expectedError, err)
 		})

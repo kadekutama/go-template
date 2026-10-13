@@ -49,7 +49,7 @@ type MockHTTPSender_Send_Call struct {
 //   - url string
 //   - headers map[string]string
 //   - body []byte
-func (_e *MockHTTPSender_Expecter) Send(ctx interface{}, url interface{}, headers interface{}, body interface{}) *MockHTTPSender_Send_Call {
+func (_e *MockHTTPSender_Expecter) Send(ctx any, url any, headers any, body any) *MockHTTPSender_Send_Call {
 	return &MockHTTPSender_Send_Call{Call: _e.mock.On("Send", ctx, url, headers, body)}
 }
 

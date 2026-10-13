@@ -1,6 +1,9 @@
 package log
 
-import "context"
+import (
+	"context"
+	"maps"
+)
 
 type contextKey struct{}
 
@@ -14,15 +17,15 @@ func WithContext(ctx context.Context, fields map[string]string) context.Context 
 	if ctx == nil {
 		ctx = context.Background()
 	}
+
 	merged := map[string]string{}
+
 	if existing, ok := ctx.Value(contextKey{}).(contextFields); ok {
-		for key, val := range existing.values {
-			merged[key] = val
-		}
+		maps.Copy(merged, existing.values)
 	}
-	for key, val := range fields {
-		merged[key] = val
-	}
+
+	maps.Copy(merged, fields)
+
 	return context.WithValue(ctx, contextKey{}, contextFields{values: merged})
 }
 
@@ -31,13 +34,14 @@ func FromContext(ctx context.Context) map[string]string {
 	if ctx == nil {
 		return map[string]string{}
 	}
+
 	if existing, ok := ctx.Value(contextKey{}).(contextFields); ok {
 		out := make(map[string]string, len(existing.values))
-		for key, val := range existing.values {
-			out[key] = val
-		}
+		maps.Copy(out, existing.values)
+
 		return out
 	}
+
 	return map[string]string{}
 }
 

@@ -50,29 +50,37 @@ func StartRecovery(existing map[string]RecoveryAttempt, attempt RecoveryAttempt,
 	if attempt.TenantID.String() == "" || attempt.AccountID.String() == "" || attempt.AssetCode == "" {
 		return RecoveryAttempt{}, entity.NewError("RECOVERY_SCOPE_REQUIRED", "recovery requires tenant, account, and asset scope")
 	}
+
 	if attempt.IdempotencyKey == "" || attempt.ProviderKey == "" {
 		return RecoveryAttempt{}, entity.NewError("IDEMPOTENCY_KEY_REQUIRED", "recovery requires idempotency and provider keys")
 	}
+
 	if attempt.InstrumentID == "" {
 		return RecoveryAttempt{}, entity.NewError("ACCOUNT_UNVERIFIED", "recovery requires a verified external bank instrument")
 	}
+
 	if attempt.AmountMinor <= 0 {
 		return RecoveryAttempt{}, entity.NewError("INVALID_RECOVERY_AMOUNT", "recovery amount must be positive")
 	}
+
 	if attempt.Actor == "" || attempt.EvidenceURI == "" {
 		return RecoveryAttempt{}, entity.NewError("EVIDENCE_REQUIRED", "recovery requires actor and evidence")
 	}
+
 	k := RecoveryKey(attempt.TenantID, attempt.AccountID, attempt.AssetCode, attempt.IdempotencyKey)
 	if prev, ok := existing[k]; ok {
 		if fingerprint != prev.Fingerprint {
 			return prev, entity.NewError("IDEMPOTENCY_CONFLICT", "idempotency key reuse with different fingerprint")
 		}
+
 		return prev, nil
 	}
+
 	attempt.Status = RecoveryPending
 	attempt.Outcome = OutcomeUnknown
 	attempt.Fingerprint = fingerprint
 	existing[k] = attempt
+
 	return attempt, nil
 }
 
@@ -83,9 +91,11 @@ func ResolveRecoveryOutcome(attempt RecoveryAttempt, confirmed bool, traceID str
 	} else {
 		attempt.Outcome = OutcomeFailed
 	}
+
 	if traceID != "" {
 		attempt.ProviderTraceID = traceID
 	}
+
 	return attempt
 }
 
@@ -108,21 +118,27 @@ func ConfirmRecovery(attempt RecoveryAttempt, debit, credit valueobject.AccountI
 	if attempt.Status != valueobject.RecoveryPending {
 		return attempt, RecoveryPosting{}, entity.NewError("RECOVERY_STATE_INVALID", "recovery is not pending")
 	}
+
 	if attempt.Outcome != OutcomeConfirmed {
 		return attempt, RecoveryPosting{}, entity.NewError("OUTCOME_UNKNOWN", "recovery outcome unknown: status lookup required before commit")
 	}
+
 	if debit.String() == "" || credit.String() == "" {
 		return attempt, RecoveryPosting{}, entity.NewError("RECOVERY_ACCOUNT_REQUIRED", "recovery requires debit and credit accounts")
 	}
+
 	if debit == credit {
 		return attempt, RecoveryPosting{}, entity.NewError("RECOVERY_ACCOUNT_INVALID", "recovery posting accounts must be distinct")
 	}
+
 	if credit != attempt.AccountID {
 		return attempt, RecoveryPosting{}, entity.NewError("RECOVERY_ACCOUNT_MISMATCH", "recovery must credit the recovery account")
 	}
+
 	if auditRef == "" {
 		return attempt, RecoveryPosting{}, entity.NewError("EVIDENCE_REQUIRED", "recovery commit requires an audit reference")
 	}
+
 	attempt.Status = RecoveryCollected
 	posting := RecoveryPosting{
 		DebitAccount:  debit,
@@ -132,6 +148,7 @@ func ConfirmRecovery(attempt RecoveryAttempt, debit, credit valueobject.AccountI
 		AuditRef:      auditRef,
 		OutboxEvent:   "recovery.collected.v1",
 	}
+
 	return attempt, posting, nil
 }
 
@@ -141,6 +158,8 @@ func CancelRecovery(attempt RecoveryAttempt) (RecoveryAttempt, error) {
 	if !valueobject.CanTransitionRecovery(attempt.Status, valueobject.RecoveryCanceled) {
 		return attempt, entity.NewError("RECOVERY_STATE_INVALID", "recovery can be canceled only while PENDING")
 	}
+
 	attempt.Status = RecoveryCanceled
+
 	return attempt, nil
 }

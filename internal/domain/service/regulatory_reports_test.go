@@ -1,6 +1,7 @@
 package service_test
 
 import (
+	"maps"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -60,6 +61,7 @@ func TestReportFields(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			actualResult, err := service.ReportFields(tc.t)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -138,6 +140,7 @@ func TestReportDefinitionFor(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			actualResult, err := service.ReportDefinitionFor(tc.t)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -215,10 +218,9 @@ func TestValidateRegulatoryReport(t *testing.T) {
 			t:    service.ReportCallReport,
 			fields: func() map[string]string {
 				m := make(map[string]string, len(baseCallFields))
-				for k, v := range baseCallFields {
-					m[k] = v
-				}
+				maps.Copy(m, baseCallFields)
 				delete(m, "total_assets_minor")
+
 				return m
 			}(),
 			expectedError: entity.Errorf("REPORT_FIELD_MISSING", "report field %s is required", "total_assets_minor"),
@@ -228,10 +230,9 @@ func TestValidateRegulatoryReport(t *testing.T) {
 			t:    service.ReportCallReport,
 			fields: func() map[string]string {
 				m := make(map[string]string, len(baseCallFields))
-				for k, v := range baseCallFields {
-					m[k] = v
-				}
+				maps.Copy(m, baseCallFields)
 				m["period_start"] = ""
+
 				return m
 			}(),
 			expectedError: entity.Errorf("REPORT_FIELD_MISSING", "report field %s is required", "period_start"),
@@ -252,6 +253,7 @@ func TestValidateRegulatoryReport(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			err := service.ValidateReport(tc.t, tc.fields)
 			assert.Equal(t, tc.expectedError, err)
 		})

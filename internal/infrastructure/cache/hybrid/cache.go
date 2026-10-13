@@ -100,7 +100,7 @@ func (t TTLSet) Validate() error {
 
 	for _, bound := range bounds {
 		if bound.ttl <= 0 {
-			return fmt.Errorf("cache: ttl %s must be positive", bound.name)
+			return fmt.Errorf("cache: ttl %s must be positive: %w", bound.name, ErrCacheTTLMustBePositive)
 		}
 	}
 
@@ -440,6 +440,8 @@ func validateValue[V any](value V) error {
 	switch reflected.Kind() {
 	case reflect.Func, reflect.Chan, reflect.UnsafePointer, reflect.Complex64, reflect.Complex128:
 		return fmt.Errorf("%w: %s", ErrUnsupportedValueType, reflected.Kind())
+	case reflect.Invalid, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr, reflect.Float32, reflect.Float64, reflect.Array, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice, reflect.String, reflect.Struct:
+		return nil
 	default:
 		return nil
 	}

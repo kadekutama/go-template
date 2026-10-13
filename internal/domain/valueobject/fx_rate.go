@@ -1,7 +1,6 @@
 package valueobject
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -24,23 +23,29 @@ type FxRate struct {
 // convention (`fx: CODE detail`); callers map them to stable domain codes.
 func (r FxRate) Validate() error {
 	if r.ID == "" {
-		return fmt.Errorf("fx: FX_RATE_ID_REQUIRED: rate id is required")
+		return ErrFxFXRATEIDREQUIREDRateIDIsRequired
 	}
+
 	if r.Pair.Base == "" || r.Pair.Quote == "" {
-		return fmt.Errorf("fx: FX_PAIR_REQUIRED: rate requires a base/quote pair")
+		return ErrFxFXPAIRREQUIREDRateRequiresABaseQuotePair
 	}
+
 	if r.Numerator <= 0 || r.Denominator <= 0 {
-		return fmt.Errorf("fx: FX_RATE_INVALID: numerator and denominator must be positive")
+		return ErrFxFXRATEINVALIDNumeratorAndDenominatorMustBePositive
 	}
+
 	if r.Source == "" {
-		return fmt.Errorf("fx: FX_SOURCE_REQUIRED: rate source is required")
+		return ErrFxFXSOURCEREQUIREDRateSourceIsRequired
 	}
+
 	if r.QuotedAt.IsZero() {
-		return fmt.Errorf("fx: FX_QUOTED_AT_REQUIRED: quote time is required")
+		return ErrFxFXQUOTEDATREQUIREDQuoteTimeIsRequired
 	}
+
 	if r.TTL <= 0 {
-		return fmt.Errorf("fx: FX_TTL_REQUIRED: rate TTL must be positive")
+		return ErrFxFXTTLREQUIREDRateTTLMustBePositive
 	}
+
 	return nil
 }
 

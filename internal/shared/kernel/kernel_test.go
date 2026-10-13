@@ -44,8 +44,10 @@ func TestFixedClock(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			clock := NewFixedClock(tc.times...)
-			for i := 0; i < tc.calls; i++ {
+			for i := range tc.calls {
 				got := clock.Now()
 				assert.Equal(t, tc.expectedTimes[i], got)
 			}
@@ -72,22 +74,28 @@ func TestUUIDv7UniqueAndVersioned(t *testing.T) {
 	gen := NewUUIDGenerator()
 
 	const count = 100
+
 	seen := map[string]bool{}
-	for i := 0; i < count; i++ {
+
+	for range count {
 		id := gen.NewID()
 		if len(id) != 36 {
 			t.Fatalf("unexpected UUID length %d: %q", len(id), id)
 		}
+
 		parsed, err := uuid.Parse(id)
 		if err != nil {
 			t.Fatalf("unparseable UUID %q: %v", id, err)
 		}
+
 		if parsed.Version() != 7 {
 			t.Errorf("want UUIDv7, got version %d: %q", parsed.Version(), id)
 		}
+
 		if seen[id] {
 			t.Fatalf("duplicate UUID: %q", id)
 		}
+
 		seen[id] = true
 	}
 }

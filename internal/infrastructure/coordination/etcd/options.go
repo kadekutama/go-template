@@ -5,7 +5,6 @@
 package etcd
 
 import (
-	"fmt"
 	"strings"
 	"time"
 )
@@ -23,25 +22,25 @@ type Config struct {
 // Validate reports whether c can initialize an etcd client.
 func (c Config) Validate() error {
 	if len(c.Endpoints) == 0 {
-		return fmt.Errorf("etcd: at least one endpoint is required")
+		return ErrEtcdAtLeastOneEndpointIsRequired
 	}
 
 	for _, endpoint := range c.Endpoints {
 		if strings.TrimSpace(endpoint) == "" {
-			return fmt.Errorf("etcd: endpoint must not be blank")
+			return ErrEtcdEndpointMustNotBeBlank
 		}
 	}
 
 	if c.DialTimeout <= 0 {
-		return fmt.Errorf("etcd: dial timeout must be positive")
+		return ErrEtcdDialTimeoutMustBePositive
 	}
 
 	if c.ElectionTTLSeconds <= 0 {
-		return fmt.Errorf("etcd: election TTL must be positive")
+		return ErrEtcdElectionTTLMustBePositive
 	}
 
 	if strings.TrimSpace(c.LeaderKeyPrefix) == "" {
-		return fmt.Errorf("etcd: leader key prefix must not be blank")
+		return ErrEtcdLeaderKeyPrefixMustNotBeBlank
 	}
 
 	return nil

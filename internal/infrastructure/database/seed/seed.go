@@ -136,32 +136,32 @@ func DevPlan() Plan {
 			ID: "40000000-0000-4000-8000-000000000001", TenantID: TenantID, LedgerID: LedgerID,
 			Operation: "FUNDING", Description: "initial funding",
 			Lines: []PostingLine{
-				{AccountID: AcctOperatingUSD, Side: SideDebit, AmountMinor: 100000, AssetCode: AssetUSD},
-				{AccountID: AcctSuspenseUSD, Side: SideCredit, AmountMinor: 100000, AssetCode: AssetUSD},
+				{AccountID: AcctOperatingUSD, Side: SideDebit, AmountMinor: amountMinor100000, AssetCode: AssetUSD},
+				{AccountID: AcctSuspenseUSD, Side: SideCredit, AmountMinor: amountMinor100000, AssetCode: AssetUSD},
 			},
 		},
 		{
 			ID: "40000000-0000-4000-8000-000000000002", TenantID: TenantID, LedgerID: LedgerID,
 			Operation: "TRANSFER", Description: "test transfer",
 			Lines: []PostingLine{
-				{AccountID: AcctOperatingUSD, Side: SideCredit, AmountMinor: 25000, AssetCode: AssetUSD},
-				{AccountID: AcctOperatingEUR, Side: SideDebit, AmountMinor: 25000, AssetCode: AssetUSD},
+				{AccountID: AcctOperatingUSD, Side: SideCredit, AmountMinor: amountMinor25000, AssetCode: AssetUSD},
+				{AccountID: AcctOperatingEUR, Side: SideDebit, AmountMinor: amountMinor25000, AssetCode: AssetUSD},
 			},
 		},
 		{
 			ID: "40000000-0000-4000-8000-000000000003", TenantID: TenantID, LedgerID: LedgerID,
 			Operation: "FEE", Description: "test fee",
 			Lines: []PostingLine{
-				{AccountID: AcctOperatingUSD, Side: SideDebit, AmountMinor: 290, AssetCode: AssetUSD},
-				{AccountID: AcctFeeUSD, Side: SideCredit, AmountMinor: 290, AssetCode: AssetUSD},
+				{AccountID: AcctOperatingUSD, Side: SideDebit, AmountMinor: amountMinor290, AssetCode: AssetUSD},
+				{AccountID: AcctFeeUSD, Side: SideCredit, AmountMinor: amountMinor290, AssetCode: AssetUSD},
 			},
 		},
 		{
 			ID: "40000000-0000-4000-8000-000000000004", TenantID: TenantID, LedgerID: LedgerID,
 			Operation: "REFUND", Description: "test refund",
 			Lines: []PostingLine{
-				{AccountID: AcctOperatingUSD, Side: SideDebit, AmountMinor: 5000, AssetCode: AssetUSD},
-				{AccountID: AcctSuspenseUSD, Side: SideCredit, AmountMinor: 5000, AssetCode: AssetUSD},
+				{AccountID: AcctOperatingUSD, Side: SideDebit, AmountMinor: amountMinor5000, AssetCode: AssetUSD},
+				{AccountID: AcctSuspenseUSD, Side: SideCredit, AmountMinor: amountMinor5000, AssetCode: AssetUSD},
 			},
 		},
 	}
@@ -205,7 +205,7 @@ type Stores struct {
 // Running Apply twice yields the same row set (idempotent).
 func Apply(ctx context.Context, plan Plan, stores Stores) error {
 	if stores.Ledgers == nil || stores.Accounts == nil || stores.Postings == nil {
-		return fmt.Errorf("seed: ledger, account, and posting stores are required")
+		return ErrSeedLedgerAccountAndPostingStoresAreRequired
 	}
 
 	if err := ensureLedgers(ctx, plan.Ledgers, stores.Ledgers); err != nil {
@@ -286,8 +286,8 @@ func ensurePostings(ctx context.Context, postings []PlannedPosting, store Postin
 
 // postingSeed maps one planned posting onto legs by side.
 func postingSeed(posting PlannedPosting) (PostingSeed, error) {
-	if len(posting.Lines) < 2 {
-		return PostingSeed{}, fmt.Errorf("seed: posting %s needs at least two lines", posting.ID)
+	if len(posting.Lines) < minPostingLines {
+		return PostingSeed{}, fmt.Errorf("seed: posting %s needs at least two lines: %w", posting.ID, ErrSeedPostingNeedsAtLeastTwoLines)
 	}
 
 	seed := PostingSeed{

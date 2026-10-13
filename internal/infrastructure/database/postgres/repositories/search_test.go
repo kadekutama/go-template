@@ -2,7 +2,6 @@ package repositories
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -39,26 +38,29 @@ func TestParseSeqCursor(t *testing.T) {
 			name:           "entry id rejected",
 			cursor:         "550e8400-e29b-41d4-a716-446655440000",
 			expectedResult: 0,
-			expectedError:  errors.New("postgres: invalid cursor"),
+			expectedError:  ErrPostgresInvalidCursor,
 		},
 		{
 			name:           "negative rejected",
 			cursor:         "-1",
 			expectedResult: 0,
-			expectedError:  errors.New("postgres: invalid cursor"),
+			expectedError:  ErrPostgresInvalidCursor,
 		},
 		{
 			name:           "garbage rejected",
 			cursor:         "next-page",
 			expectedResult: 0,
-			expectedError:  errors.New("postgres: invalid cursor"),
+			expectedError:  ErrPostgresInvalidCursor,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := parseSeqCursor(tc.cursor)
 			assert.Equal(t, tc.expectedResult, actualResult)
+
 			if tc.expectedError != nil {
 				require.Error(t, err)
 				assert.Equal(t, tc.expectedError.Error(), err.Error())
@@ -86,14 +88,17 @@ func TestNewPostingSearch(t *testing.T) {
 				DB: nil,
 			},
 			expectedResult: nil,
-			expectedError:  errors.New("postgres: posting search needs DB"),
+			expectedError:  ErrPostgresPostingSearchNeedsDB,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := NewPostingSearch(tc.params)
 			assert.Equal(t, tc.expectedResult, actualResult)
+
 			if tc.expectedError != nil {
 				require.Error(t, err)
 				assert.Equal(t, tc.expectedError.Error(), err.Error())
@@ -123,7 +128,7 @@ func TestPostingSearchGuards(t *testing.T) {
 				TenantID: "",
 			},
 			expectedResult: appport.PostingSearchPage{},
-			expectedError:  errors.New("postgres: tenant is required"),
+			expectedError:  ErrPostgresTenantIsRequired,
 		},
 		{
 			name: "amount bounds need the reporting read model",
@@ -133,7 +138,7 @@ func TestPostingSearchGuards(t *testing.T) {
 				MinAmount: 100,
 			},
 			expectedResult: appport.PostingSearchPage{},
-			expectedError:  errors.New("postgres: amount bounds need the reporting read model (E06-T09)"),
+			expectedError:  ErrPostgresAmountBoundsNeedTheReportingReadModelE06T09,
 		},
 		{
 			name: "status filter rejected with reason",
@@ -143,7 +148,7 @@ func TestPostingSearchGuards(t *testing.T) {
 				Status:   "PENDING",
 			},
 			expectedResult: appport.PostingSearchPage{},
-			expectedError:  errors.New("postgres: postings carry no status; corrections are new linked postings"),
+			expectedError:  ErrPostgresPostingsCarryNoStatusCorrectionsAreNewLinkedPosti,
 		},
 		{
 			name: "bad cursor rejected before SQL",
@@ -153,12 +158,14 @@ func TestPostingSearchGuards(t *testing.T) {
 				Cursor:   "not-a-seq",
 			},
 			expectedResult: appport.PostingSearchPage{},
-			expectedError:  errors.New("postgres: invalid cursor"),
+			expectedError:  ErrPostgresInvalidCursor,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			search := &PostingSearch{db: nil}
 			actualResult, err := search.Search(tc.ctx, tc.filter)
 			assert.Equal(t, tc.expectedResult, actualResult)

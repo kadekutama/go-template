@@ -2,7 +2,6 @@ package command
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"time"
 
@@ -73,10 +72,10 @@ type IntentStore interface {
 	ListIntents(ctx context.Context, tenant valueobject.TenantID, limit int) ([]IntentRecord, error)
 }
 
-// IntentService backs payment-intent charging over the payment-processor
-// port. Provider calls happen OUTSIDE UnitOfWork callbacks (callbacks stay
-// retry-safe); durable state transitions commit with outbox facts inside.
-// IntentServiceParams carries dependencies for IntentService.
+// IntentServiceParams carries dependencies for IntentService, which backs
+// payment-intent charging over the payment-processor port. Provider calls
+// happen OUTSIDE UnitOfWork callbacks (callbacks stay retry-safe); durable
+// state transitions commit with outbox facts inside.
 type IntentServiceParams struct {
 	UoW            port.UnitOfWork
 	Intents        IntentStore
@@ -105,8 +104,9 @@ type IntentService struct {
 // at runtime instead of at wiring time.
 func NewIntentService(params IntentServiceParams) (*IntentService, error) {
 	if params.AuthExpiryDays <= 0 {
-		return nil, errors.New("payment: auth expiry days must be positive")
+		return nil, ErrPaymentAuthExpiryDaysMustBePositive
 	}
+
 	return &IntentService{
 		uow:            params.UoW,
 		intents:        params.Intents,
@@ -123,13 +123,16 @@ func (s *IntentService) CreateIntent(ctx context.Context, req port.PaymentIntent
 	if err := validateIntentEnvelope(req); err != nil {
 		return port.PaymentIntentResult{}, err
 	}
+
 	subject := port.Subject{ID: req.Actor, TenantID: req.TenantID}
 	if err := RequireAuthz(ctx, s.authz, subject, "payment.create", "ledger/"+string(req.LedgerID)); err != nil {
 		return port.PaymentIntentResult{}, err
 	}
+
 	if _, err := service.Authorize("intent", req.AmountMinor, "intent", s.clock.Now().UTC(), s.authExpiryDays, false); err != nil {
 		return port.PaymentIntentResult{}, err
 	}
+
 	intentID := s.ids.NewID()
 	now := s.clock.Now().UTC()
 	rec := port.IdempotencyRecord{
@@ -137,20 +140,26 @@ func (s *IntentService) CreateIntent(ctx context.Context, req port.PaymentIntent
 		Fingerprint: Fingerprint(req.IdempotencyKey, string(req.TenantID), string(req.LedgerID), int64ToString(req.AmountMinor), string(req.AssetCode), string(req.Method)),
 		TenantID:    req.TenantID,
 	}
+
 	var result port.PaymentIntentResult
+
 	err := s.uow.Do(ctx, func(ctx context.Context, tx port.Tx) error {
 		outcome, err := tx.Idempotency().Reserve(ctx, rec)
 		if err != nil {
 			return err
 		}
+
 		if outcome.Replay {
 			decoded, err := decodeIntentResult(outcome.Response)
 			if err != nil {
 				return err
 			}
+
 			result = decoded
+
 			return nil
 		}
+
 		if err := s.intents.CreateIntent(ctx, IntentRecord{
 			ID: intentID, TenantID: req.TenantID, LedgerID: req.LedgerID,
 			AmountMinor: req.AmountMinor, AssetCode: req.AssetCode, Method: req.Method,
@@ -158,22 +167,27 @@ func (s *IntentService) CreateIntent(ctx context.Context, req port.PaymentIntent
 		}); err != nil {
 			return err
 		}
+
 		result = port.PaymentIntentResult{IntentID: intentID, Status: IntentPending, Cursor: tx.Cursor()}
+
 		encoded, err := jsonparser.Marshal(result)
 		if err != nil {
 			return err
 		}
+
 		if err := tx.Outbox().Append(ctx, port.OutboxFact{
 			TenantID: req.TenantID, LedgerID: req.LedgerID, EventType: EventIntentCreated,
 			AggregateID: intentID, Payload: intentPayload(intentID, IntentPending, ""), OccurredAt: now,
 		}); err != nil {
 			return err
 		}
+
 		return tx.Idempotency().Complete(ctx, rec.Key, encoded)
 	})
 	if err != nil {
 		return port.PaymentIntentResult{}, err
 	}
+
 	return result, nil
 }
 
@@ -184,22 +198,27 @@ func (s *IntentService) ConfirmIntent(ctx context.Context, req port.ConfirmInten
 	if err := validateConfirmEnvelope(req); err != nil {
 		return port.PaymentIntentResult{}, err
 	}
+
 	subject := port.Subject{ID: req.Actor}
 	if err := RequireAuthz(ctx, s.authz, subject, "payment.confirm", "intent/"+req.IntentID); err != nil {
 		return port.PaymentIntentResult{}, err
 	}
+
 	intent, err := s.intents.FindIntent(ctx, req.TenantID, req.IntentID)
 	if err != nil {
 		return port.PaymentIntentResult{}, err
 	}
+
 	if intent.Status != IntentPending {
 		// Terminal intents replay their stored outcome when the same key
 		// resubmits; a fresh key on settled work is a state error.
 		if result, replayed, err := s.checkIntentReplay(ctx, intentOpRecord(intent.TenantID, intent.ID, "confirm", req.IdempotencyKey, int64ToString(req.CaptureMinor))); err != nil || replayed {
 			return result, err
 		}
+
 		return port.PaymentIntentResult{}, entity.NewError("INTENT_STATE_INVALID", "only pending intents can be confirmed")
 	}
+
 	charged, err := s.processor.Charge(ctx, port.ChargeRequest{
 		TenantID: intent.TenantID, IntentID: intent.ID, AmountMinor: req.CaptureMinor, AssetCode: intent.AssetCode,
 		Method: intent.Method, IdempotencyKey: req.IdempotencyKey, Timeout: processorTimeout,
@@ -207,16 +226,19 @@ func (s *IntentService) ConfirmIntent(ctx context.Context, req port.ConfirmInten
 	if err != nil {
 		return port.PaymentIntentResult{}, err
 	}
+
 	now := s.clock.Now().UTC()
 	if charged.RequiresAction {
 		return s.transitionIntent(ctx, intent, "confirm", req.IdempotencyKey, []string{int64ToString(req.CaptureMinor)}, IntentRequiresAction, charged.ProviderID, EventIntentRequiresAction, "", now)
 	}
+
 	if _, err := service.Capture(service.Authorization{
 		ID: intent.AuthID, AmountMinor: intent.AmountMinor, CapturedMinor: intent.CapturedMinor,
 		Status: valueobject.AuthAuthorized,
 	}, req.CaptureMinor); err != nil {
 		return port.PaymentIntentResult{}, err
 	}
+
 	return s.transitionIntent(ctx, withCapture(intent, req.CaptureMinor, charged.ProviderID), "confirm", req.IdempotencyKey, []string{int64ToString(req.CaptureMinor)}, IntentConfirmed, charged.ProviderID, EventIntentSucceeded, "", now)
 }
 
@@ -226,19 +248,24 @@ func (s *IntentService) CancelIntent(ctx context.Context, query port.PaymentQuer
 	if err != nil {
 		return port.PaymentIntentResult{}, err
 	}
+
 	if strings.TrimSpace(query.Actor) == "" {
 		return port.PaymentIntentResult{}, entity.NewError("ACTOR_REQUIRED", "payment actor is required")
 	}
+
 	subject := port.Subject{ID: query.Actor, TenantID: intent.TenantID}
 	if err := RequireAuthz(ctx, s.authz, subject, "payment.cancel", "intent/"+intent.ID); err != nil {
 		return port.PaymentIntentResult{}, err
 	}
+
 	if result, replayed, err := s.checkIntentReplay(ctx, intentOpRecord(intent.TenantID, intent.ID, "cancel", "cancel:"+intent.ID)); err != nil || replayed {
 		return result, err
 	}
+
 	if intent.Status != IntentPending && intent.Status != IntentRequiresAction {
 		return port.PaymentIntentResult{}, entity.NewError("INTENT_STATE_INVALID", "only uncaptured intents can be canceled")
 	}
+
 	return s.transitionIntent(ctx, intent, "cancel", "cancel:"+intent.ID, nil, IntentCanceled, intent.ProviderID, EventIntentCanceled, "", s.clock.Now().UTC())
 }
 
@@ -249,33 +276,41 @@ func (s *IntentService) CompleteChallenge(ctx context.Context, tenant valueobjec
 	if err != nil {
 		return port.PaymentIntentResult{}, err
 	}
+
 	subject := port.Subject{ID: actor, TenantID: tenant}
 	if err := RequireAuthz(ctx, s.authz, subject, "payment.confirm", "intent/"+intentID); err != nil {
 		return port.PaymentIntentResult{}, err
 	}
+
 	if result, replayed, err := s.checkIntentReplay(ctx, intentOpRecord(tenant, intentID, "challenge", key, formatChallengeOutcome(succeeded))); err != nil || replayed {
 		return result, err
 	}
+
 	if intent.Status != IntentRequiresAction {
 		return port.PaymentIntentResult{}, entity.NewError("INTENT_STATE_INVALID", "only challenged intents can complete")
 	}
+
 	completed, err := s.processor.CompleteChallenge(ctx, port.ChallengeCompletion{
 		TenantID: tenant, ProviderID: intent.ProviderID, Succeeded: succeeded, Timeout: processorTimeout,
 	})
 	if err != nil {
 		return port.PaymentIntentResult{}, err
 	}
+
 	now := s.clock.Now().UTC()
 	if !succeeded {
 		return s.transitionIntent(ctx, intent, "challenge", key, []string{"false"}, IntentFailed, intent.ProviderID, EventIntentFailed, "CHALLENGE_FAILED", now)
 	}
+
 	if _, err := service.Capture(service.Authorization{
 		ID: intent.AuthID, AmountMinor: intent.AmountMinor, CapturedMinor: intent.CapturedMinor,
 		Status: valueobject.AuthAuthorized,
 	}, intent.AmountMinor); err != nil {
 		return port.PaymentIntentResult{}, err
 	}
+
 	_ = completed
+
 	return s.transitionIntent(ctx, withCapture(intent, intent.AmountMinor, intent.ProviderID), "challenge", key, []string{"true"}, IntentConfirmed, intent.ProviderID, EventIntentSucceeded, "", now)
 }
 
@@ -285,6 +320,7 @@ func (s *IntentService) GetIntent(ctx context.Context, query port.PaymentQuery) 
 	if err != nil {
 		return port.PaymentIntentResult{}, err
 	}
+
 	return port.PaymentIntentResult{IntentID: intent.ID, Status: intent.Status}, nil
 }
 
@@ -293,14 +329,17 @@ func (s *IntentService) ListIntents(ctx context.Context, tenant valueobject.Tena
 	if err := validatePageLimit(limit); err != nil {
 		return nil, err
 	}
+
 	records, err := s.intents.ListIntents(ctx, tenant, limit)
 	if err != nil {
 		return nil, err
 	}
+
 	out := make([]port.PaymentIntentResult, 0, len(records))
 	for _, record := range records {
 		out = append(out, port.PaymentIntentResult{IntentID: record.ID, Status: record.Status})
 	}
+
 	return out, nil
 }
 
@@ -310,18 +349,23 @@ func (s *IntentService) ListIntents(ctx context.Context, tenant valueobject.Tena
 // instead of replaying the wrong outcome.
 func (s *IntentService) transitionIntent(ctx context.Context, intent IntentRecord, op, key string, extra []string, status, providerID, eventType, errorCode string, now time.Time) (port.PaymentIntentResult, error) {
 	rec := intentOpRecord(intent.TenantID, intent.ID, op, key, extra...)
+
 	var result port.PaymentIntentResult
+
 	err := s.uow.Do(ctx, func(ctx context.Context, tx port.Tx) error {
 		outcome, err := tx.Idempotency().Reserve(ctx, rec)
 		if err != nil {
 			return err
 		}
+
 		if outcome.Replay {
 			decoded, err := decodeIntentResult(outcome.Response)
 			if err != nil {
 				return err
 			}
+
 			result = decoded
+
 			return nil
 		}
 		// Reload and compare status: a concurrent transition (cancel, second
@@ -333,31 +377,39 @@ func (s *IntentService) transitionIntent(ctx context.Context, intent IntentRecor
 		if err != nil {
 			return err
 		}
+
 		if current.Status != intent.Status {
 			return entity.NewError("INTENT_CONCURRENT_MODIFICATION", "intent changed during processing; resubmit with the same key")
 		}
+
 		intent.Status = status
 		intent.ProviderID = providerID
+
 		intent.ErrorCode = errorCode
 		if err := s.intents.UpdateIntent(ctx, intent); err != nil {
 			return err
 		}
+
 		result = port.PaymentIntentResult{IntentID: intent.ID, Status: status, Cursor: tx.Cursor()}
+
 		encoded, err := jsonparser.Marshal(result)
 		if err != nil {
 			return err
 		}
+
 		if err := tx.Outbox().Append(ctx, port.OutboxFact{
 			TenantID: intent.TenantID, LedgerID: intent.LedgerID, EventType: eventType,
 			AggregateID: intent.ID, Payload: intentPayload(intent.ID, status, errorCode), OccurredAt: now,
 		}); err != nil {
 			return err
 		}
+
 		return tx.Idempotency().Complete(ctx, rec.Key, encoded)
 	})
 	if err != nil {
 		return port.PaymentIntentResult{}, err
 	}
+
 	return result, nil
 }
 
@@ -366,6 +418,7 @@ func formatChallengeOutcome(succeeded bool) string {
 	if succeeded {
 		return "true"
 	}
+
 	return "false"
 }
 
@@ -374,6 +427,7 @@ func formatChallengeOutcome(succeeded bool) string {
 // (reentrant for the same holder); a different fingerprint conflicts.
 func intentOpRecord(tenant valueobject.TenantID, intentID, op, key string, extra ...string) port.IdempotencyRecord {
 	parts := append([]string{key, intentID, op}, extra...)
+
 	return port.IdempotencyRecord{
 		Key:         key,
 		Fingerprint: Fingerprint(parts...),
@@ -385,26 +439,33 @@ func intentOpRecord(tenant valueobject.TenantID, intentID, op, key string, extra
 // the operation, reports whether it replayed, and leases the key otherwise.
 func (s *IntentService) checkIntentReplay(ctx context.Context, rec port.IdempotencyRecord) (port.PaymentIntentResult, bool, error) {
 	var result port.PaymentIntentResult
+
 	replayed := false
+
 	err := s.uow.Do(ctx, func(ctx context.Context, tx port.Tx) error {
 		outcome, err := tx.Idempotency().Reserve(ctx, rec)
 		if err != nil {
 			return err
 		}
+
 		if !outcome.Replay {
 			return nil
 		}
+
 		decoded, err := decodeIntentResult(outcome.Response)
 		if err != nil {
 			return err
 		}
+
 		result = decoded
 		replayed = true
+
 		return nil
 	})
 	if err != nil {
 		return port.PaymentIntentResult{}, false, err
 	}
+
 	return result, replayed, nil
 }
 
@@ -412,6 +473,7 @@ func (s *IntentService) checkIntentReplay(ctx context.Context, rec port.Idempote
 func withCapture(intent IntentRecord, captured int64, providerID string) IntentRecord {
 	intent.CapturedMinor += captured
 	intent.ProviderID = providerID
+
 	return intent
 }
 
@@ -420,15 +482,19 @@ func validateConfirmEnvelope(req port.ConfirmIntentRequest) error {
 	if strings.TrimSpace(req.IntentID) == "" {
 		return entity.NewError("INTENT_ID_REQUIRED", "intent id is required")
 	}
+
 	if strings.TrimSpace(req.Actor) == "" {
 		return entity.NewError("ACTOR_REQUIRED", "payment actor is required")
 	}
+
 	if strings.TrimSpace(req.IdempotencyKey) == "" {
 		return entity.NewError("IDEMPOTENCY_KEY_REQUIRED", "payment requires an idempotency key")
 	}
+
 	if req.CaptureMinor <= 0 {
 		return entity.NewError("INVALID_CAPTURE_AMOUNT", "capture amount must be positive")
 	}
+
 	return nil
 }
 
@@ -437,27 +503,34 @@ func validateIntentEnvelope(req port.PaymentIntentRequest) error {
 	if strings.TrimSpace(req.TenantID.String()) == "" {
 		return entity.NewError("TENANT_REQUIRED", "tenant id is required")
 	}
+
 	if strings.TrimSpace(req.LedgerID.String()) == "" {
 		return entity.NewError("LEDGER_REQUIRED", "ledger id is required")
 	}
+
 	if req.AmountMinor <= 0 {
 		return entity.NewError("INVALID_INTENT_AMOUNT", "intent amount must be positive")
 	}
+
 	if strings.TrimSpace(string(req.AssetCode)) == "" {
 		return entity.NewError("INTENT_ASSET_REQUIRED", "intent requires an asset code")
 	}
+
 	if strings.TrimSpace(req.Actor) == "" {
 		return entity.NewError("ACTOR_REQUIRED", "payment actor is required")
 	}
+
 	if strings.TrimSpace(req.IdempotencyKey) == "" {
 		return entity.NewError("IDEMPOTENCY_KEY_REQUIRED", "payment requires an idempotency key")
 	}
+
 	return nil
 }
 
 // intentPayload builds the §10-shaped webhook payload: id plus status.
 func intentPayload(id, status, errorCode string) []byte {
 	encoded, _ := jsonparser.Marshal(map[string]string{payloadIDKey: id, payloadStatusKey: status, payloadErrorKey: errorCode})
+
 	return encoded
 }
 
@@ -467,8 +540,10 @@ func decodeIntentResult(response []byte) (port.PaymentIntentResult, error) {
 	if err := jsonparser.Unmarshal(response, &result); err != nil {
 		return port.PaymentIntentResult{}, entity.NewError("IDEMPOTENCY_RECORD_INVALID", "stored idempotency response is corrupt")
 	}
+
 	if result.IntentID == "" {
 		return port.PaymentIntentResult{}, entity.NewError("IDEMPOTENCY_RECORD_INVALID", "stored idempotency response is corrupt")
 	}
+
 	return result, nil
 }

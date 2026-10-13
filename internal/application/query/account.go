@@ -35,6 +35,7 @@ func (s *AccountQueryService) GetAccount(ctx context.Context, query port.Account
 	if err != nil {
 		return port.AccountResult{}, err
 	}
+
 	return port.AccountResult{Account: account}, nil
 }
 
@@ -43,9 +44,11 @@ func (s *AccountQueryService) ListAccounts(ctx context.Context, query port.Accou
 	if query.Limit <= 0 || query.Limit > 100 {
 		return port.AccountPage{}, entity.NewError("INVALID_PAGE_LIMIT", "limit must be between 1 and 100")
 	}
+
 	accounts, next, err := s.accounts.FindByTenant(ctx, query.TenantID, query.Cursor, query.Limit)
 	if err != nil {
 		return port.AccountPage{}, err
 	}
+
 	return port.AccountPage{Accounts: accounts, NextCursor: next}, nil
 }

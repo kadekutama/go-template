@@ -12,11 +12,13 @@ import (
 
 func TestValidateRefundToOriginalMethod(t *testing.T) {
 	t.Parallel()
+
 	type testCase struct {
 		name          string
 		m             valueobject.PaymentMethod
 		expectedError error
 	}
+
 	testCases := []testCase{
 		{
 			name:          "ach reversible",
@@ -56,6 +58,8 @@ func TestValidateRefundToOriginalMethod(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := service.ValidateRefundToOriginalMethod(tc.m)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -64,6 +68,7 @@ func TestValidateRefundToOriginalMethod(t *testing.T) {
 
 func TestTransitionPayment(t *testing.T) {
 	t.Parallel()
+
 	type testCase struct {
 		name           string
 		from           valueobject.PaymentStatus
@@ -71,6 +76,7 @@ func TestTransitionPayment(t *testing.T) {
 		expectedResult valueobject.PaymentStatus
 		expectedError  error
 	}
+
 	testCases := []testCase{
 		{
 			name:           "authorized to captured",
@@ -89,6 +95,8 @@ func TestTransitionPayment(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.TransitionPayment(tc.from, tc.to)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -98,12 +106,14 @@ func TestTransitionPayment(t *testing.T) {
 
 func TestDispositionFor(t *testing.T) {
 	t.Parallel()
+
 	type testCase struct {
 		name           string
 		code           string
 		expectedResult valueobject.ReturnDisposition
 		expectedError  error
 	}
+
 	testCases := []testCase{
 		{
 			name:           "r01",
@@ -240,6 +250,8 @@ func TestDispositionFor(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.DispositionFor(tc.code)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -249,12 +261,14 @@ func TestDispositionFor(t *testing.T) {
 
 func TestAddLink(t *testing.T) {
 	t.Parallel()
+
 	type testCase struct {
 		name          string
 		existing      map[string]entity.PaymentLink
 		link          entity.PaymentLink
 		expectedError error
 	}
+
 	testCases := []testCase{
 		{
 			name:     "ok",
@@ -291,6 +305,8 @@ func TestAddLink(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := service.AddLink(tc.existing, tc.link)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -299,10 +315,12 @@ func TestAddLink(t *testing.T) {
 
 func TestResolveTimeout(t *testing.T) {
 	t.Parallel()
+
 	type testCase struct {
 		name           string
 		expectedResult service.ProviderOutcome
 	}
+
 	testCases := []testCase{
 		{
 			name:           "timeout is unknown",
@@ -311,6 +329,8 @@ func TestResolveTimeout(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := service.ResolveTimeout()
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -319,12 +339,14 @@ func TestResolveTimeout(t *testing.T) {
 
 func TestRequireStatusLookup(t *testing.T) {
 	t.Parallel()
+
 	type testCase struct {
 		name            string
 		outcome         service.ProviderOutcome
 		lookupConfirmed bool
 		expectedError   error
 	}
+
 	testCases := []testCase{
 		{
 			name:            "blind retry rejected",
@@ -347,6 +369,8 @@ func TestRequireStatusLookup(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := service.RequireStatusLookup(tc.outcome, tc.lookupConfirmed)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -355,6 +379,7 @@ func TestRequireStatusLookup(t *testing.T) {
 
 func TestDuplicateDelivery(t *testing.T) {
 	t.Parallel()
+
 	type testCase struct {
 		name            string
 		existing        map[string]entity.ProviderObjectLink
@@ -363,6 +388,7 @@ func TestDuplicateDelivery(t *testing.T) {
 		expectedResult2 bool
 		expectedError   error
 	}
+
 	testCases := []testCase{
 		{
 			name:     "first delivery",
@@ -418,6 +444,8 @@ func TestDuplicateDelivery(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult1, actualResult2, err := service.DuplicateDelivery(tc.existing, tc.link)
 			assert.Equal(t, tc.expectedResult1, actualResult1)
 			assert.Equal(t, tc.expectedResult2, actualResult2)

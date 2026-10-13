@@ -26,29 +26,37 @@ type TopicsConfig struct {
 // Validate ensures all required topic names, sizing, and topology settings are valid.
 func (c TopicsConfig) Validate() error {
 	if strings.TrimSpace(c.LedgerEvents) == "" {
-		return fmt.Errorf("redpanda: ledger events topic is required")
+		return ErrRedpandaLedgerEventsTopicIsRequired
 	}
+
 	if strings.TrimSpace(c.OutboxFacts) == "" {
-		return fmt.Errorf("redpanda: outbox facts topic is required")
+		return ErrRedpandaOutboxFactsTopicIsRequired
 	}
+
 	if strings.TrimSpace(c.WebhookJobs) == "" {
-		return fmt.Errorf("redpanda: webhook jobs topic is required")
+		return ErrRedpandaWebhookJobsTopicIsRequired
 	}
+
 	if strings.TrimSpace(c.AuditStreams) == "" {
-		return fmt.Errorf("redpanda: audit streams topic is required")
+		return ErrRedpandaAuditStreamsTopicIsRequired
 	}
+
 	if c.Partitions <= 0 {
-		return fmt.Errorf("redpanda: partitions must be positive")
+		return ErrRedpandaPartitionsMustBePositive
 	}
+
 	if c.RetentionHrs <= 0 {
-		return fmt.Errorf("redpanda: retention hours must be positive")
+		return ErrRedpandaRetentionHoursMustBePositive
 	}
+
 	if strings.TrimSpace(c.PartitionKeys) == "" {
-		return fmt.Errorf("redpanda: partition keys is required")
+		return ErrRedpandaPartitionKeysIsRequired
 	}
+
 	if strings.TrimSpace(c.DLQSuffix) == "" {
-		return fmt.Errorf("redpanda: dlq suffix is required")
+		return ErrRedpandaDlqSuffixIsRequired
 	}
+
 	return nil
 }
 
@@ -83,7 +91,7 @@ func NewTopicRegistry(cfg TopicsConfig) (*TopicRegistry, error) {
 
 	for _, name := range names {
 		if _, dup := known[name]; dup {
-			return nil, fmt.Errorf("redpanda: duplicate topic name %q", name)
+			return nil, fmt.Errorf("redpanda: duplicate topic name %q: %w", name, ErrRedpandaDuplicateTopicName)
 		}
 
 		known[name] = struct{}{}
@@ -149,7 +157,7 @@ func (r *TopicRegistry) IsKnownTopic(name string) bool {
 func (r *TopicRegistry) DLQFor(topicOrGroup string) (string, error) {
 	trimmed := strings.TrimSpace(topicOrGroup)
 	if trimmed == "" {
-		return "", fmt.Errorf("redpanda: topic or group is required")
+		return "", ErrRedpandaTopicOrGroupIsRequired
 	}
 
 	// Known topics and unqualified names get the canonical DLQ suffix;
@@ -176,11 +184,11 @@ func PartitionKey(tenant, account string) (string, error) {
 	trimmedAccount := strings.TrimSpace(account)
 
 	if trimmedTenant == "" || trimmedAccount == "" {
-		return "", fmt.Errorf("redpanda: tenant and account are required")
+		return "", ErrRedpandaTenantAndAccountAreRequired
 	}
 
 	if strings.Contains(trimmedTenant, ":") || strings.Contains(trimmedAccount, ":") {
-		return "", fmt.Errorf("redpanda: partition segments must not contain ':'")
+		return "", ErrRedpandaPartitionSegmentsMustNotContain
 	}
 
 	return trimmedTenant + ":" + trimmedAccount, nil

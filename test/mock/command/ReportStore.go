@@ -51,7 +51,7 @@ type MockReportStore_CreateReport_Call struct {
 // CreateReport is a helper method to define mock.On call
 //   - ctx context.Context
 //   - record command.ReportRecord
-func (_e *MockReportStore_Expecter) CreateReport(ctx interface{}, record interface{}) *MockReportStore_CreateReport_Call {
+func (_e *MockReportStore_Expecter) CreateReport(ctx any, record any) *MockReportStore_CreateReport_Call {
 	return &MockReportStore_CreateReport_Call{Call: _e.mock.On("CreateReport", ctx, record)}
 }
 
@@ -109,7 +109,7 @@ type MockReportStore_FindReport_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - id string
-func (_e *MockReportStore_Expecter) FindReport(ctx interface{}, tenant interface{}, id interface{}) *MockReportStore_FindReport_Call {
+func (_e *MockReportStore_Expecter) FindReport(ctx any, tenant any, id any) *MockReportStore_FindReport_Call {
 	return &MockReportStore_FindReport_Call{Call: _e.mock.On("FindReport", ctx, tenant, id)}
 }
 
@@ -169,7 +169,7 @@ type MockReportStore_ListReports_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - limit int
-func (_e *MockReportStore_Expecter) ListReports(ctx interface{}, tenant interface{}, limit interface{}) *MockReportStore_ListReports_Call {
+func (_e *MockReportStore_Expecter) ListReports(ctx any, tenant any, limit any) *MockReportStore_ListReports_Call {
 	return &MockReportStore_ListReports_Call{Call: _e.mock.On("ListReports", ctx, tenant, limit)}
 }
 
@@ -216,7 +216,7 @@ type MockReportStore_UpdateReport_Call struct {
 // UpdateReport is a helper method to define mock.On call
 //   - ctx context.Context
 //   - record command.ReportRecord
-func (_e *MockReportStore_Expecter) UpdateReport(ctx interface{}, record interface{}) *MockReportStore_UpdateReport_Call {
+func (_e *MockReportStore_Expecter) UpdateReport(ctx any, record any) *MockReportStore_UpdateReport_Call {
 	return &MockReportStore_UpdateReport_Call{Call: _e.mock.On("UpdateReport", ctx, record)}
 }
 

@@ -65,13 +65,16 @@ func (s *TransactionQueryService) GetStatement(ctx context.Context, tenant value
 	if err != nil {
 		return Statement{}, err
 	}
+
 	if account.LedgerID != ledger {
 		return Statement{}, entity.NewError("LEDGER_MISMATCH", "account belongs to a different ledger")
 	}
+
 	entries, err := s.scanStatementEntries(ctx, tenant, accountID, from, to)
 	if err != nil {
 		return Statement{}, err
 	}
+
 	return Statement{Account: account, Entries: entries, From: from, To: to}, nil
 }
 
@@ -79,28 +82,35 @@ func (s *TransactionQueryService) GetStatement(ctx context.Context, tenant value
 // the account's lines.
 func (s *TransactionQueryService) scanStatementEntries(ctx context.Context, tenant valueobject.TenantID, accountID valueobject.AccountID, from, to time.Time) ([]entity.Entry, error) {
 	var out []entity.Entry
+
 	cursor := ""
+
 	for pages := 0; ; pages++ {
 		if pages >= statementScanPages {
 			return nil, entity.NewError("STATEMENT_TOO_LARGE", "statement exceeds the bounded scan")
 		}
-		page, err := s.query.Search(ctx, port.PostingFilter{TenantID: tenant, Cursor: cursor, Limit: 500})
+
+		page, err := s.query.Search(ctx, port.PostingFilter{TenantID: tenant, Cursor: cursor, Limit: limit500})
 		if err != nil {
 			return nil, err
 		}
+
 		for _, posting := range page.Postings {
 			if posting.RecordedAt.Before(from) || posting.RecordedAt.After(to) {
 				continue
 			}
+
 			for _, entry := range posting.Entries {
 				if entry.AccountID == accountID {
 					out = append(out, entry)
 				}
 			}
 		}
+
 		if page.NextCursor == "" || page.NextCursor == cursor {
 			return out, nil
 		}
+
 		cursor = page.NextCursor
 	}
 }

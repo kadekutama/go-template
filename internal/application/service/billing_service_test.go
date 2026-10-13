@@ -14,7 +14,9 @@ import (
 	mockservice "github.com/kadekutama/go-template/test/mock/service"
 )
 
-var billAt = time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
+func billAt() time.Time {
+	return time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
+}
 
 func TestBillingRecord(t *testing.T) {
 	t.Parallel()
@@ -32,7 +34,7 @@ func TestBillingRecord(t *testing.T) {
 			name: "first record applies",
 			event: service.UsageEvent{
 				EventID: "e-1", TenantID: "t-1", Kind: service.UsageTransactionsPosted,
-				Quantity: 3, OccurredAt: billAt,
+				Quantity: 3, OccurredAt: billAt(),
 			},
 			mockSetup: func(m *mockservice.MockUsageStore) {
 				m.EXPECT().AppendEvent(mock.Anything, mock.MatchedBy(func(e service.UsageEvent) bool {
@@ -46,7 +48,7 @@ func TestBillingRecord(t *testing.T) {
 			name: "replay does not double count",
 			event: service.UsageEvent{
 				EventID: "e-1", TenantID: "t-1", Kind: service.UsageTransactionsPosted,
-				Quantity: 3, OccurredAt: billAt,
+				Quantity: 3, OccurredAt: billAt(),
 			},
 			mockSetup: func(m *mockservice.MockUsageStore) {
 				m.EXPECT().AppendEvent(mock.Anything, mock.MatchedBy(func(e service.UsageEvent) bool {
@@ -60,7 +62,7 @@ func TestBillingRecord(t *testing.T) {
 			name: "unknown kind rejected",
 			event: service.UsageEvent{
 				EventID: "e-9", TenantID: "t-1", Kind: "telepathy",
-				Quantity: 1, OccurredAt: billAt,
+				Quantity: 1, OccurredAt: billAt(),
 			},
 			mockSetup:       func(_ *mockservice.MockUsageStore) {},
 			expectedApplied: false,
@@ -70,7 +72,7 @@ func TestBillingRecord(t *testing.T) {
 			name: "zero quantity rejected",
 			event: service.UsageEvent{
 				EventID: "e-9", TenantID: "t-1", Kind: service.UsageAPICalls,
-				Quantity: 0, OccurredAt: billAt,
+				Quantity: 0, OccurredAt: billAt(),
 			},
 			mockSetup:       func(_ *mockservice.MockUsageStore) {},
 			expectedApplied: false,
@@ -80,6 +82,7 @@ func TestBillingRecord(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			store := mockservice.NewMockUsageStore(t)
 			tc.mockSetup(store)
 			svc := service.NewBillingService(service.BillingServiceParams{Store: store})
@@ -94,6 +97,7 @@ func TestBillingExport(t *testing.T) {
 	t.Parallel()
 
 	t.Run("export matches hand computation", func(t *testing.T) {
+		t.Parallel()
 		store := mockservice.NewMockUsageStore(t)
 		store.EXPECT().PeriodLines(mock.Anything, "t-1", "2026-09-15", "2026-09-16").Return([]service.DailyUsage{
 			{TenantID: "t-1", Day: "2026-09-15", Kind: service.UsageAPICalls, Quantity: 100},
@@ -112,6 +116,7 @@ func TestBillingExport(t *testing.T) {
 	})
 
 	t.Run("inverted range rejected", func(t *testing.T) {
+		t.Parallel()
 		store := mockservice.NewMockUsageStore(t)
 		svc := service.NewBillingService(service.BillingServiceParams{Store: store})
 		_, err := svc.ExportCSV(context.Background(), "t-1", "2026-09-16", "2026-09-15")
@@ -119,6 +124,7 @@ func TestBillingExport(t *testing.T) {
 	})
 
 	t.Run("bad day rejected", func(t *testing.T) {
+		t.Parallel()
 		store := mockservice.NewMockUsageStore(t)
 		svc := service.NewBillingService(service.BillingServiceParams{Store: store})
 		_, err := svc.ExportCSV(context.Background(), "t-1", "15-09-2026", "2026-09-16")
@@ -126,6 +132,7 @@ func TestBillingExport(t *testing.T) {
 	})
 
 	t.Run("day totals validation branches", func(t *testing.T) {
+		t.Parallel()
 		store := mockservice.NewMockUsageStore(t)
 		svc := service.NewBillingService(service.BillingServiceParams{Store: store})
 
@@ -145,16 +152,17 @@ func TestBillingExport(t *testing.T) {
 	})
 
 	t.Run("record validation branches", func(t *testing.T) {
+		t.Parallel()
 		store := mockservice.NewMockUsageStore(t)
 		svc := service.NewBillingService(service.BillingServiceParams{Store: store})
 
 		_, err := svc.Record(context.Background(), service.UsageEvent{
-			TenantID: "t-1", Kind: service.UsageAPICalls, Quantity: 1, OccurredAt: billAt,
+			TenantID: "t-1", Kind: service.UsageAPICalls, Quantity: 1, OccurredAt: billAt(),
 		})
 		assert.Equal(t, entity.NewError("USAGE_EVENT_REQUIRED", "usage event id is required"), err)
 
 		_, err = svc.Record(context.Background(), service.UsageEvent{
-			EventID: "e-1", Kind: service.UsageAPICalls, Quantity: 1, OccurredAt: billAt,
+			EventID: "e-1", Kind: service.UsageAPICalls, Quantity: 1, OccurredAt: billAt(),
 		})
 		assert.Equal(t, entity.NewError("TENANT_ID_REQUIRED", "tenant id is required"), err)
 

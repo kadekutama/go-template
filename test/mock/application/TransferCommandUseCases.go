@@ -59,7 +59,7 @@ type MockTransferCommandUseCases_CancelTransfer_Call struct {
 // CancelTransfer is a helper method to define mock.On call
 //   - ctx context.Context
 //   - query port.TransferQuery
-func (_e *MockTransferCommandUseCases_Expecter) CancelTransfer(ctx interface{}, query interface{}) *MockTransferCommandUseCases_CancelTransfer_Call {
+func (_e *MockTransferCommandUseCases_Expecter) CancelTransfer(ctx any, query any) *MockTransferCommandUseCases_CancelTransfer_Call {
 	return &MockTransferCommandUseCases_CancelTransfer_Call{Call: _e.mock.On("CancelTransfer", ctx, query)}
 }
 
@@ -116,7 +116,7 @@ type MockTransferCommandUseCases_CreateBatchTransfer_Call struct {
 // CreateBatchTransfer is a helper method to define mock.On call
 //   - ctx context.Context
 //   - req port.BatchTransferRequest
-func (_e *MockTransferCommandUseCases_Expecter) CreateBatchTransfer(ctx interface{}, req interface{}) *MockTransferCommandUseCases_CreateBatchTransfer_Call {
+func (_e *MockTransferCommandUseCases_Expecter) CreateBatchTransfer(ctx any, req any) *MockTransferCommandUseCases_CreateBatchTransfer_Call {
 	return &MockTransferCommandUseCases_CreateBatchTransfer_Call{Call: _e.mock.On("CreateBatchTransfer", ctx, req)}
 }
 
@@ -173,7 +173,7 @@ type MockTransferCommandUseCases_CreateTransfer_Call struct {
 // CreateTransfer is a helper method to define mock.On call
 //   - ctx context.Context
 //   - req port.TransferRequest
-func (_e *MockTransferCommandUseCases_Expecter) CreateTransfer(ctx interface{}, req interface{}) *MockTransferCommandUseCases_CreateTransfer_Call {
+func (_e *MockTransferCommandUseCases_Expecter) CreateTransfer(ctx any, req any) *MockTransferCommandUseCases_CreateTransfer_Call {
 	return &MockTransferCommandUseCases_CreateTransfer_Call{Call: _e.mock.On("CreateTransfer", ctx, req)}
 }
 

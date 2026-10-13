@@ -68,6 +68,8 @@ func TestBuildBalanceKey(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.BuildBalanceKey(tc.tenant, tc.account, tc.asset)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -111,6 +113,8 @@ func TestBuildBalanceCursorKey(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.BuildBalanceCursorKey(tc.tenant, tc.account, tc.asset, tc.cursor)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -172,6 +176,8 @@ func TestParseBalanceKey(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualTenant, actualAccount, actualAsset, actualCursor, err := service.ParseBalanceKey(tc.key)
 			assert.Equal(t, tc.expectedTenant, actualTenant)
 			assert.Equal(t, tc.expectedAccount, actualAccount)
@@ -215,6 +221,8 @@ func TestBuildIdempotencyKey(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.BuildIdempotencyKey(tc.tenant, tc.operation, tc.key)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -263,6 +271,8 @@ func TestParseIdempotencyKey(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualTenant, actualOperation, actualKey, err := service.ParseIdempotencyKey(tc.key)
 			assert.Equal(t, tc.expectedTenant, actualTenant)
 			assert.Equal(t, tc.expectedOperation, actualOperation)
@@ -302,6 +312,8 @@ func TestBuildRateLimitKey(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.BuildRateLimitKey(tc.tenant, tc.user)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -346,6 +358,8 @@ func TestParseRateLimitKey(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualTenant, actualUser, err := service.ParseRateLimitKey(tc.key)
 			assert.Equal(t, tc.expectedTenant, actualTenant)
 			assert.Equal(t, tc.expectedUser, actualUser)
@@ -426,6 +440,8 @@ func TestBuildSubject(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.BuildSubject(tc.tenant, tc.eventType)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -470,6 +486,8 @@ func TestParseSubject(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualTenant, actualEvent, err := service.ParseSubject(tc.subject)
 			assert.Equal(t, tc.expectedTenant, actualTenant)
 			assert.Equal(t, tc.expectedEvent, actualEvent)
@@ -502,21 +520,26 @@ func TestRLSPolicyMatrix(t *testing.T) {
 	t.Parallel()
 
 	matrix := service.RLSPolicyMatrix()
+
 	scopes := map[string]map[string]string{}
 	for _, row := range matrix {
 		if scopes[row.Table] == nil {
 			scopes[row.Table] = map[string]string{}
 		}
+
 		scopes[row.Table][row.Operation] = row.Scope
 	}
+
 	for _, table := range []string{"tenants", "asset_registry", "ledgers", "accounts", "postings", "entries", "balance_checkpoints", "holds", "idempotency_records", "outbox_events", "inbox_receipts"} {
 		assert.Contains(t, scopes, table, "matrix must cover %s", table)
 	}
+
 	for _, operation := range []string{"SELECT", "INSERT", "UPDATE", "DELETE"} {
 		assert.Equal(t, service.RLSScopeSelf, scopes["tenants"][operation], "tenants rows are self-scoped")
 		assert.Equal(t, service.RLSScopeTenant, scopes["ledgers"][operation], "ledgers rows are tenant-scoped")
 		assert.Equal(t, service.RLSScopeService, scopes["inbox_receipts"][operation], "inbox has no tenant column and stays service-scoped")
 	}
+
 	assert.Equal(t, service.RLSScopeSharedRead, scopes["asset_registry"]["SELECT"], "asset registry is globally readable")
 	assert.Equal(t, service.RLSScopeService, scopes["asset_registry"]["INSERT"], "asset registry writes stay service-gated")
 }
@@ -550,6 +573,8 @@ func TestRequireTenant(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := service.RequireTenant(tc.tenant)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -624,6 +649,8 @@ func TestResidencySettingsValidate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.settings.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -704,6 +731,8 @@ func TestWhiteLabelSettingsValidate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.settings.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})

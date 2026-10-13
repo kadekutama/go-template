@@ -49,7 +49,7 @@ type MockPostingStore_Create_Call struct {
 // Create is a helper method to define mock.On call
 //   - ctx context.Context
 //   - posting seed.PostingSeed
-func (_e *MockPostingStore_Expecter) Create(ctx interface{}, posting interface{}) *MockPostingStore_Create_Call {
+func (_e *MockPostingStore_Expecter) Create(ctx any, posting any) *MockPostingStore_Create_Call {
 	return &MockPostingStore_Create_Call{Call: _e.mock.On("Create", ctx, posting)}
 }
 
@@ -106,7 +106,7 @@ type MockPostingStore_Exists_Call struct {
 // Exists is a helper method to define mock.On call
 //   - ctx context.Context
 //   - id string
-func (_e *MockPostingStore_Expecter) Exists(ctx interface{}, id interface{}) *MockPostingStore_Exists_Call {
+func (_e *MockPostingStore_Expecter) Exists(ctx any, id any) *MockPostingStore_Exists_Call {
 	return &MockPostingStore_Exists_Call{Call: _e.mock.On("Exists", ctx, id)}
 }
 

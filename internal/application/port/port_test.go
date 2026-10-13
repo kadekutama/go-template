@@ -2,7 +2,6 @@ package port_test
 
 import (
 	"context"
-	"errors"
 	"go/parser"
 	"go/token"
 	"os"
@@ -54,21 +53,25 @@ func TestUnitOfWorkAtomicity(t *testing.T) {
 		},
 		{
 			name:              "mid-transaction failure persists nothing",
-			callbackError:     errors.New("boom"),
+			callbackError:     port.ErrBoom,
 			expectedCommitted: nil,
-			expectedError:     errors.New("boom"),
+			expectedError:     port.ErrBoom,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			uow := &atomicFakeUOW{}
 
 			err := uow.Do(context.Background(), func(ctx context.Context, tx port.Tx) error {
 				appendErr := tx.Outbox().Append(ctx, port.OutboxFact{EventType: "transfer.completed.v1"})
 				require.NoError(t, appendErr)
+
 				completeErr := tx.Idempotency().Complete(ctx, "key-1", []byte(`{"ok":true}`))
 				require.NoError(t, completeErr)
+
 				return tc.callbackError
 			})
 
@@ -88,12 +91,14 @@ type atomicFakeUOW struct {
 	committed []string
 }
 
-func (u *atomicFakeUOW) Do(_ context.Context, fn func(context.Context, port.Tx) error) error {
+func (u *atomicFakeUOW) Do(ctx context.Context, fn func(context.Context, port.Tx) error) error {
 	var staged []string
-	if err := fn(context.Background(), &atomicFakeTx{staged: &staged}); err != nil {
+	if err := fn(ctx, &atomicFakeTx{staged: &staged}); err != nil {
 		return err
 	}
+
 	u.committed = append(u.committed, staged...)
+
 	return nil
 }
 
@@ -117,6 +122,7 @@ func (o *atomicFakeOutbox) Append(_ context.Context, facts ...port.OutboxFact) e
 	for _, fact := range facts {
 		*o.staged = append(*o.staged, "outbox:"+fact.EventType)
 	}
+
 	return nil
 }
 
@@ -130,6 +136,7 @@ func (s *atomicFakeIdem) Reserve(_ context.Context, _ port.IdempotencyRecord) (p
 
 func (s *atomicFakeIdem) Complete(_ context.Context, key string, _ []byte) error {
 	*s.staged = append(*s.staged, "idem:"+key)
+
 	return nil
 }
 
@@ -198,6 +205,7 @@ func TestIdempotencyReserve(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			store := mockapplication.NewMockIdempotencyStore(t)
 			tc.setupMock(store)
 			outcome, err := store.Reserve(context.Background(), port.IdempotencyRecord{Key: tc.key, Fingerprint: tc.fingerprint})
@@ -263,6 +271,7 @@ func TestAuthorizerBoundary(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			authz := mockapplication.NewMockAuthorizer(t)
 			tc.setupMock(authz, tc.subject, tc.action, tc.resource)
 			err := authz.Authorize(context.Background(), tc.subject, tc.action, tc.resource)
@@ -287,30 +296,40 @@ func TestPortImportBoundary(t *testing.T) {
 
 	entries, err := os.ReadDir(".")
 	require.NoError(t, err)
+
 	checked := 0
+
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
 			continue
 		}
+
 		checked++
 		path := filepath.Join(".", entry.Name())
 		src, readErr := os.ReadFile(filepath.Clean(path)) // #nosec G304 -- test inspects package source files
 		require.NoError(t, readErr)
+
 		parsed, parseErr := parser.ParseFile(token.NewFileSet(), path, src, parser.ImportsOnly)
 		require.NoError(t, parseErr)
+
 		for _, imp := range parsed.Imports {
 			importPath, unquoteErr := strconv.Unquote(imp.Path.Value)
 			require.NoError(t, unquoteErr)
+
 			quoted := strconv.Quote(importPath)
 			allowed := false
+
 			for _, prefix := range allowedPrefixes {
 				if strings.HasPrefix(quoted, strings.TrimSuffix(prefix, `"`)) {
 					allowed = true
+
 					break
 				}
 			}
+
 			assert.True(t, allowed, "port file %s imports %s", entry.Name(), importPath)
 		}
 	}
-	assert.Greater(t, checked, 0)
+
+	assert.Positive(t, checked)
 }

@@ -26,25 +26,32 @@ func (e Entry) Validate() error {
 			return NewError("ENTRY_ID_INVALID", "entry id is invalid")
 		}
 	}
+
 	if e.PostingID.String() != "" {
 		if _, err := valueobject.ParsePostingID(e.PostingID.String()); err != nil {
 			return NewError("ENTRY_POSTING_INVALID", "posting id is invalid")
 		}
 	}
+
 	if e.AccountID.String() == "" {
 		return NewError("ENTRY_ACCOUNT_REQUIRED", "account id is required")
 	}
+
 	if e.Side != valueobject.DirectionDebit && e.Side != valueobject.DirectionCredit {
 		return NewError("ENTRY_SIDE_INVALID", "side must be DEBIT or CREDIT")
 	}
+
 	if e.AmountMinor <= 0 {
 		return NewError("INVALID_ENTRY_AMOUNT", "entry amount must be a positive minor-unit quantity")
 	}
+
 	if e.AssetCode == "" {
 		return NewError("ENTRY_ASSET_REQUIRED", "asset code is required")
 	}
+
 	if e.AccountSeq < 1 {
 		return NewError("ENTRY_SEQUENCE_REQUIRED", "account sequence must be at least 1")
 	}
+
 	return nil
 }

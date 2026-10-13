@@ -8,8 +8,8 @@ import (
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
 )
 
-// ReportQueryService serves report reads for the edge. Strong reads.
-// ReportQueryServiceParams encapsulates dependencies for ReportQueryService.
+// ReportQueryServiceParams encapsulates dependencies for ReportQueryService,
+// which serves report reads for the edge. Strong reads.
 type ReportQueryServiceParams struct {
 	Reports command.ReportStore
 }
@@ -32,6 +32,7 @@ func (s *ReportQueryService) GetReport(ctx context.Context, tenant valueobject.T
 	if err != nil {
 		return port.ReportResult{}, err
 	}
+
 	return port.ReportResult{ReportID: record.ID, Status: record.Status, SignedURL: record.URL}, nil
 }
 
@@ -41,9 +42,11 @@ func (s *ReportQueryService) ListReports(ctx context.Context, tenant valueobject
 	if err != nil {
 		return nil, err
 	}
+
 	out := make([]port.ReportResult, 0, len(records))
 	for _, record := range records {
 		out = append(out, port.ReportResult{ReportID: record.ID, Status: record.Status, SignedURL: record.URL})
 	}
+
 	return out, nil
 }

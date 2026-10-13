@@ -59,7 +59,7 @@ type MockListEntries_Execute_Call struct {
 // Execute is a helper method to define mock.On call
 //   - ctx context.Context
 //   - query port.EntriesQuery
-func (_e *MockListEntries_Expecter) Execute(ctx interface{}, query interface{}) *MockListEntries_Execute_Call {
+func (_e *MockListEntries_Expecter) Execute(ctx any, query any) *MockListEntries_Execute_Call {
 	return &MockListEntries_Execute_Call{Call: _e.mock.On("Execute", ctx, query)}
 }
 

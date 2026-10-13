@@ -12,11 +12,11 @@ type Error struct {
 	Message string
 }
 
-// Error implements the error interface.
-func (e *Error) Error() string { return e.Code + ": " + e.Message }
-
 // NewError builds a coded domain error.
 func NewError(code, message string) *Error { return &Error{Code: code, Message: message} }
+
+// Error implements the error interface.
+func (e *Error) Error() string { return e.Code + ": " + e.Message }
 
 // Errorf builds a coded domain error with formatting.
 func Errorf(code, format string, args ...any) *Error {

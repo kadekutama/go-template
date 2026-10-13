@@ -1,7 +1,6 @@
 package aggregate_test
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -25,6 +24,7 @@ func postingAccounts() map[valueobject.AccountID]entity.AccountData {
 			Class: class, AssetCode: testUSD, Status: status, Version: 1,
 		}
 	}
+
 	return map[valueobject.AccountID]entity.AccountData{
 		testAccount1: mk(testAccount1, "1000", valueobject.ClassAsset, valueobject.StatusActive),
 		testAccount2: mk(testAccount2, "2000", valueobject.ClassLiability, valueobject.StatusActive),
@@ -40,6 +40,7 @@ func postingEntries(pid valueobject.PostingID, dAmt, cAmt int64) []entity.Entry 
 
 func postingParams(pid valueobject.PostingID, entries []entity.Entry, accounts map[valueobject.AccountID]entity.AccountData) aggregate.PostingParams {
 	at := time.Date(2026, 9, 14, 7, 0, 0, 0, time.UTC)
+
 	return aggregate.PostingParams{
 		ID: pid, TenantID: testTenantID, LedgerID: testLedgerID, Operation: "transfer.v1",
 		Description: "test", Entries: entries, Accounts: accounts,
@@ -49,11 +50,13 @@ func postingParams(pid valueobject.PostingID, entries []entity.Entry, accounts m
 
 func openUnassignedTestPosting(t *testing.T) aggregate.Posting {
 	t.Helper()
+
 	accounts := postingAccounts()
 	entries := []entity.Entry{
 		{ID: testEntry1, AccountID: testAccount1, Side: valueobject.DirectionDebit, AmountMinor: 250, AssetCode: testUSD, AccountSeq: 1},
 		{ID: testEntry2, AccountID: testAccount2, Side: valueobject.DirectionCredit, AmountMinor: 250, AssetCode: testUSD, AccountSeq: 1},
 	}
+
 	p, err := aggregate.ConstructPosting(aggregate.PostingParams{
 		ID: "", TenantID: testTenantID, LedgerID: testLedgerID, Operation: "transfer.v1",
 		Description: "test", Entries: entries, Accounts: accounts,
@@ -64,6 +67,7 @@ func openUnassignedTestPosting(t *testing.T) aggregate.Posting {
 	if err != nil {
 		t.Fatalf("ConstructPosting unassigned: %v", err)
 	}
+
 	return p
 }
 
@@ -89,6 +93,7 @@ func TestConstructPosting(t *testing.T) {
 			p: func() aggregate.PostingParams {
 				p := baseParams
 				p.Entries = postingEntries(testPosting1, 100, 90)
+
 				return p
 			}(),
 			expectedError: &entity.Error{
@@ -110,6 +115,7 @@ func TestConstructPosting(t *testing.T) {
 				}
 				params := postingParams(testPosting1, entries, accounts)
 				params.Metadata = map[string]string{"fx_trade_id": "fx-1"}
+
 				return params
 			}(),
 			expectedError: nil,
@@ -126,6 +132,7 @@ func TestConstructPosting(t *testing.T) {
 					{ID: testEntry3, PostingID: testPosting1, AccountID: testAccount3, Side: valueobject.DirectionDebit, AmountMinor: 10000, AssetCode: testEUR, AccountSeq: 1},
 					{ID: testEntry4, PostingID: testPosting1, AccountID: testAccount4, Side: valueobject.DirectionCredit, AmountMinor: 9999, AssetCode: testEUR, AccountSeq: 1},
 				}
+
 				return postingParams(testPosting1, entries, accounts)
 			}(),
 			expectedError: &entity.Error{
@@ -140,6 +147,7 @@ func TestConstructPosting(t *testing.T) {
 				frozen := accounts[testAccount1]
 				frozen.Status = valueobject.StatusFrozen
 				accounts[testAccount1] = frozen
+
 				return postingParams(testPosting1, postingEntries(testPosting1, 100, 100), accounts)
 			}(),
 			expectedError: entity.Errorf("ACCOUNT_FROZEN", "account %s is frozen", testAccount1),
@@ -151,6 +159,7 @@ func TestConstructPosting(t *testing.T) {
 				closed := accounts[testAccount1]
 				closed.Status = valueobject.StatusClosed
 				accounts[testAccount1] = closed
+
 				return postingParams(testPosting1, postingEntries(testPosting1, 100, 100), accounts)
 			}(),
 			expectedError: entity.Errorf("ACCOUNT_CLOSED", "account %s is closed", testAccount1),
@@ -160,6 +169,7 @@ func TestConstructPosting(t *testing.T) {
 			p: func() aggregate.PostingParams {
 				p := baseParams
 				p.Accounts = map[valueobject.AccountID]entity.AccountData{}
+
 				return p
 			}(),
 			expectedError: entity.Errorf("ACCOUNT_NOT_FOUND", "account %s is unknown", testAccount1),
@@ -171,6 +181,7 @@ func TestConstructPosting(t *testing.T) {
 				mismatch := accounts[testAccount1]
 				mismatch.TenantID = "other-tenant"
 				accounts[testAccount1] = mismatch
+
 				return postingParams(testPosting1, postingEntries(testPosting1, 100, 100), accounts)
 			}(),
 			expectedError: entity.Errorf("ACCOUNT_SCOPE_MISMATCH", "account %s is outside the posting scope", testAccount1),
@@ -182,6 +193,7 @@ func TestConstructPosting(t *testing.T) {
 				mismatch := accounts[testAccount1]
 				mismatch.LedgerID = "other-ledger"
 				accounts[testAccount1] = mismatch
+
 				return postingParams(testPosting1, postingEntries(testPosting1, 100, 100), accounts)
 			}(),
 			expectedError: entity.Errorf("ACCOUNT_SCOPE_MISMATCH", "account %s is outside the posting scope", testAccount1),
@@ -193,6 +205,7 @@ func TestConstructPosting(t *testing.T) {
 				mismatch := accounts[testAccount1]
 				mismatch.AssetCode = "EUR"
 				accounts[testAccount1] = mismatch
+
 				return postingParams(testPosting1, postingEntries(testPosting1, 100, 100), accounts)
 			}(),
 			expectedError: entity.Errorf("ACCOUNT_ASSET_MISMATCH", "entry asset %s does not match account %s asset", testUSD, testAccount1),
@@ -205,6 +218,7 @@ func TestConstructPosting(t *testing.T) {
 					{ID: testEntry1, PostingID: testPosting2, AccountID: testAccount1, Side: valueobject.DirectionDebit, AmountMinor: 250, AssetCode: testUSD, AccountSeq: 1},
 					{ID: testEntry2, PostingID: testPosting1, AccountID: testAccount2, Side: valueobject.DirectionCredit, AmountMinor: 250, AssetCode: testUSD, AccountSeq: 1},
 				}
+
 				return p
 			}(),
 			expectedError: entity.NewError("ENTRY_POSTING_MISMATCH", "entry posting id must match the posting"),
@@ -218,6 +232,7 @@ func TestConstructPosting(t *testing.T) {
 					{ID: testEntry1, AccountID: testAccount1, Side: valueobject.DirectionDebit, AmountMinor: 250, AssetCode: testUSD, AccountSeq: 1},
 					{ID: testEntry2, AccountID: testAccount2, Side: valueobject.DirectionCredit, AmountMinor: 250, AssetCode: testUSD, AccountSeq: 1},
 				}
+
 				return p
 			}(),
 			expectedError: nil,
@@ -226,10 +241,14 @@ func TestConstructPosting(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			res, err := aggregate.ConstructPosting(tc.p)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
-				assert.Equal(t, len(tc.p.Entries), len(res.Record().Entries))
+				assert.Len(t, res.Record().Entries, len(tc.p.Entries))
+
 				if tc.p.ID != "" {
 					require.Len(t, res.UncommittedEvents(), 1)
 					assert.Equal(t, "transaction.posted.v1", res.UncommittedEvents()[0].EventType())
@@ -252,9 +271,12 @@ func TestReversePosting(t *testing.T) {
 
 	at := time.Date(2026, 9, 14, 8, 0, 0, 0, time.UTC)
 	idGen := mockapplication.NewMockIDGenerator(t)
+
 	var idCounter atomic.Int64
+
 	idGen.EXPECT().NewID().RunAndReturn(func() string {
 		val := idCounter.Add(1)
+
 		return fmt.Sprintf("11111111-1111-4111-8111-%012x", val)
 	}).Maybe()
 
@@ -290,6 +312,7 @@ func TestReversePosting(t *testing.T) {
 			p: func() aggregate.ReverseParams {
 				rp := baseReverseParams
 				rp.Reason = ""
+
 				return rp
 			}(),
 			expectedError: entity.NewError("REVERSAL_REASON_REQUIRED", "reversal requires a reason"),
@@ -301,6 +324,7 @@ func TestReversePosting(t *testing.T) {
 			p: func() aggregate.ReverseParams {
 				rp := baseReverseParams
 				rp.IDGen = nil
+
 				return rp
 			}(),
 			expectedError: entity.NewError("ID_GENERATOR_REQUIRED", "reversal requires an ID generator for mirrored entries"),
@@ -313,6 +337,7 @@ func TestReversePosting(t *testing.T) {
 				f := m[testAccount1]
 				f.Status = valueobject.StatusFrozen
 				m[testAccount1] = f
+
 				return m
 			}(),
 			p:             baseReverseParams,
@@ -322,8 +347,11 @@ func TestReversePosting(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			rev, err := aggregate.ReversePosting(tc.original, tc.accounts, tc.p)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				rec := rev.Record()
 				assert.NotNil(t, rec.ReversalOf)
@@ -342,15 +370,17 @@ func TestReversePosting(t *testing.T) {
 
 func TestPostingImmutable(t *testing.T) {
 	t.Parallel()
-	typ := reflect.TypeOf(aggregate.Posting{})
-	for i := 0; i < typ.NumField(); i++ {
-		if typ.Field(i).IsExported() {
-			t.Errorf("Posting exposes mutable field %s", typ.Field(i).Name)
+
+	typ := reflect.TypeFor[aggregate.Posting]()
+	for f := range typ.Fields() {
+		if f.IsExported() {
+			t.Errorf("Posting exposes mutable field %s", f.Name)
 		}
 	}
+
 	ptr := reflect.PointerTo(typ)
-	for i := 0; i < ptr.NumMethod(); i++ {
-		n := ptr.Method(i).Name
+	for m := range ptr.Methods() {
+		n := m.Name
 		if strings.HasPrefix(n, "Set") || strings.HasPrefix(n, "Update") || strings.HasPrefix(n, "Delete") || strings.HasPrefix(n, "Mutate") {
 			t.Errorf("Posting has mutator %s", n)
 		}
@@ -360,7 +390,9 @@ func TestPostingImmutable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConstructPosting: %v", err)
 	}
+
 	rec := p.Record()
+
 	rec.Entries[0].AmountMinor = 1
 	if p.Record().Entries[0].AmountMinor != 100 {
 		t.Fatal("Record must return a copy")
@@ -369,10 +401,12 @@ func TestPostingImmutable(t *testing.T) {
 
 func TestPostingIDAccessor(t *testing.T) {
 	t.Parallel()
+
 	p, err := aggregate.ConstructPosting(postingParams(testPosting7, postingEntries(testPosting7, 500, 500), postingAccounts()))
 	if err != nil {
 		t.Fatalf("ConstructPosting: %v", err)
 	}
+
 	if p.ID() != testPosting7 {
 		t.Fatalf("ID = %s", p.ID())
 	}
@@ -410,6 +444,7 @@ func TestPostingAssignID(t *testing.T) {
 				p := openUnassignedTestPosting(t)
 				err := p.AssignID(testPosting1, nil, testEvent1)
 				require.NoError(t, err)
+
 				return p
 			}(),
 			id:            testPosting2,
@@ -445,14 +480,17 @@ func TestPostingAssignID(t *testing.T) {
 			id:            testPosting1,
 			entries:       nil,
 			eventID:       "",
-			expectedError: errors.New("event: event_id is required"),
+			expectedError: aggregate.ErrEventEventIDIsRequired,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.posting.AssignID(tc.id, tc.entries, tc.eventID)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, tc.id, tc.posting.Record().ID)
 				evts := tc.posting.UncommittedEvents()

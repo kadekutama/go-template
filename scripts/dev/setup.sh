@@ -181,7 +181,7 @@ GO_TOOLS=(
   "govulncheck:golang.org/x/vuln/cmd/govulncheck@latest"
   "gosec:github.com/securego/gosec/v2/cmd/gosec@latest"
   "go-licenses:github.com/google/go-licenses@latest"
-  "mockery:github.com/vektra/mockery/v2@latest"
+  "mockery:github.com/vektra/mockery/v3@latest"
   "buf:github.com/bufbuild/buf/cmd/buf@latest"
   "oapi-codegen:github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest"
   "air:github.com/air-verse/air@latest"

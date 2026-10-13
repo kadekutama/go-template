@@ -25,6 +25,7 @@ func localeFrom(ctx context.Context) string {
 	if tag == "" {
 		return "en"
 	}
+
 	return tag
 }
 
@@ -37,15 +38,18 @@ type Translator struct {
 func NewTranslator() (*Translator, error) {
 	bundle := i18n.NewBundle(language.English)
 	bundle.RegisterUnmarshalFunc("yaml", yaml.Unmarshal)
+
 	for _, name := range []string{"en.yaml", "id.yaml"} {
 		data, err := locale.FS.ReadFile(name)
 		if err != nil {
 			return nil, err
 		}
+
 		if _, err := bundle.ParseMessageFileBytes(data, name); err != nil {
 			return nil, err
 		}
 	}
+
 	return &Translator{bundle: bundle}, nil
 }
 
@@ -55,13 +59,17 @@ func (t *Translator) Translate(ctx context.Context, err *AppError) string {
 	if err == nil {
 		return ""
 	}
+
 	if t == nil || t.bundle == nil {
 		return err.Message
 	}
+
 	localizer := i18n.NewLocalizer(t.bundle, localeFrom(ctx), "en")
+
 	msg, locErr := localizer.Localize(&i18n.LocalizeConfig{MessageID: string(err.Code)})
 	if locErr != nil || msg == "" {
 		return err.Message
 	}
+
 	return msg
 }

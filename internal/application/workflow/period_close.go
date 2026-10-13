@@ -18,7 +18,7 @@ type PeriodCloseActions struct {
 // for operators instead of half-closing.
 func PeriodCloseSteps(actions PeriodCloseActions) []Step {
 	return []Step{
-		{Name: "validate-gates", MaxAttempts: 1, Timeout: 30 * time.Second, Run: actions.ValidateGates},
-		{Name: "close-period", MaxAttempts: 2, Timeout: 30 * time.Second, Run: actions.ClosePeriod},
+		{Name: "validate-gates", MaxAttempts: 1, Timeout: timeout30 * time.Second, Run: actions.ValidateGates},
+		{Name: "close-period", MaxAttempts: maxAttempts2, Timeout: timeout30 * time.Second, Run: actions.ClosePeriod},
 	}
 }

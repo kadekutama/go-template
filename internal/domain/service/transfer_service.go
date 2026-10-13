@@ -32,32 +32,41 @@ func ValidateImmediate(req TransferRequest, accounts map[valueobject.AccountID]e
 	if req.AmountMinor <= 0 {
 		return TransferLines{}, entity.NewError("INVALID_TRANSFER_AMOUNT", "transfer amount must be positive")
 	}
+
 	if req.Source == req.Dest {
 		return TransferLines{}, entity.NewError("SELF_TRANSFER_REJECTED", "transfer source and destination must differ")
 	}
+
 	src, ok := accounts[req.Source]
 	if !ok {
 		return TransferLines{}, entity.NewError("SOURCE_ACCOUNT_NOT_FOUND", "source account is unknown")
 	}
+
 	dst, ok := accounts[req.Dest]
 	if !ok {
 		return TransferLines{}, entity.NewError("DEST_ACCOUNT_NOT_FOUND", "destination account is unknown")
 	}
+
 	if err := checkTransferScope(req, src, dst); err != nil {
 		return TransferLines{}, err
 	}
+
 	if err := checkTransferAccountActive(src); err != nil {
 		return TransferLines{}, err
 	}
+
 	if err := checkTransferAccountActive(dst); err != nil {
 		return TransferLines{}, err
 	}
+
 	if err := checkTransferAssets(req, src, dst); err != nil {
 		return TransferLines{}, err
 	}
+
 	if sourceAvailableMinor < req.AmountMinor {
 		return TransferLines{}, entity.NewError("INSUFFICIENT_FUNDS", "source available balance below transfer amount")
 	}
+
 	return TransferLines{
 		DebitAccount:  req.Source,
 		CreditAccount: req.Dest,
@@ -70,9 +79,11 @@ func checkTransferScope(req TransferRequest, src, dst entity.AccountData) error 
 	if src.TenantID != req.TenantID || dst.TenantID != req.TenantID {
 		return entity.NewError("TENANT_MISMATCH", "transfer accounts must share the request tenant")
 	}
+
 	if src.LedgerID != req.LedgerID || dst.LedgerID != req.LedgerID {
 		return entity.NewError("LEDGER_MISMATCH", "transfer accounts must share the request ledger")
 	}
+
 	return nil
 }
 
@@ -98,8 +109,10 @@ func checkTransferAssets(req TransferRequest, src, dst entity.AccountData) error
 	if !req.FXRatePresent {
 		return entity.NewError("CURRENCY_MISMATCH", "transfer asset must match account assets")
 	}
+
 	if req.AssetCode != src.AssetCode && req.AssetCode != dst.AssetCode {
 		return entity.NewError("CURRENCY_MISMATCH", "transfer asset must match at least one leg")
 	}
+
 	return nil
 }

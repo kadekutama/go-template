@@ -5,8 +5,8 @@
 **Purpose:** Make work resumable from repository state without relying on chat history
 
 This protocol is **Specification-Driven Development (SDD)** at the delivery
-level. It is different from the domain **Specification pattern** described in
-`.opencode/skills/sdd-specifications.md`.
+level. It is distinct from domain Specifications: executable business rules
+within `internal/domain/`, governed by the Domain Expertise rules in `AGENTS.md`.
 
 The [SDD interoperability guide](SDD-INTEROP.md) maps this protocol to
 OpenSpec and GitHub Spec Kit terminology. It is a mapping only: this `tasks/`

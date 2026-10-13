@@ -21,7 +21,7 @@ func ParseRecoveryStatus(s string) (RecoveryStatus, error) {
 	case RecoveryPending, RecoveryCollected, RecoveryFailed, RecoveryCanceled:
 		return RecoveryStatus(s), nil
 	default:
-		return "", fmt.Errorf("recovery: invalid status %q", s)
+		return "", fmt.Errorf("recovery: invalid status %q: %w", s, ErrRecoveryInvalidStatus)
 	}
 }
 

@@ -31,7 +31,7 @@ type PostingRepository struct {
 // NewPostingRepository builds the adapter; DB must be non-nil.
 func NewPostingRepository(params PostingRepositoryParams) (*PostingRepository, error) {
 	if params.DB == nil {
-		return nil, fmt.Errorf("postgres: posting repository needs DB")
+		return nil, ErrPostgresPostingRepositoryNeedsDB
 	}
 
 	return &PostingRepository{db: params.DB}, nil
@@ -41,7 +41,7 @@ func NewPostingRepository(params PostingRepositoryParams) (*PostingRepository, e
 // deterministic account locks, per-account sequence assignment, structural
 // validation, per-asset balance, then a single commit of posting + entries.
 // Anything failing persists nothing. The adapter owns account_seq numbering
-// (per account, after the current max); caller-supplied values are replaced.
+// (per account, after the current maxVersion); caller-supplied values are replaced.
 func (r *PostingRepository) Commit(ctx context.Context, posting entity.PostingData) (entity.PostingData, error) {
 	var stored entity.PostingData
 
@@ -177,22 +177,22 @@ func lockPostingAccounts(ctx context.Context, tx *gorm.DB, posting entity.Postin
 	for _, id := range ids {
 		row, ok := byID[id]
 		if !ok {
-			return fmt.Errorf("postgres: unknown account %s", id)
+			return fmt.Errorf("postgres: unknown account %s: %w", id, ErrPostgresUnknownAccount)
 		}
 
 		if row.TenantID != posting.TenantID.String() || row.LedgerID != posting.LedgerID.String() {
-			return fmt.Errorf("postgres: account %s outside posting scope", id)
+			return fmt.Errorf("postgres: account %s outside posting scope: %w", id, ErrPostgresAccountOutsidePostingScope)
 		}
 
 		if row.Status != string(valueobject.StatusActive) {
-			return fmt.Errorf("postgres: account %s is not ACTIVE", id)
+			return fmt.Errorf("postgres: account %s is not ACTIVE: %w", id, ErrPostgresAccountIsNotACTIVE)
 		}
 	}
 
 	return nil
 }
 
-// assignSequences numbers entries per account after the current max so every
+// assignSequences numbers entries per account after the current maxVersion so every
 // row carries a monotonic account_seq without caller coordination.
 func assignSequences(ctx context.Context, tx *gorm.DB, posting entity.PostingData) (entity.PostingData, error) {
 	next := make(map[string]int64)
@@ -202,16 +202,16 @@ func assignSequences(ctx context.Context, tx *gorm.DB, posting entity.PostingDat
 
 		base, ok := next[account]
 		if !ok {
-			var max int64
+			var maxVersion int64
 
 			err := tx.WithContext(ctx).Model(&models.EntryModel{}).
 				Where("tenant_id = ? AND account_id = ?", posting.TenantID.String(), account).
-				Select("COALESCE(MAX(account_seq), 0)").Scan(&max).Error
+				Select("COALESCE(MAX(account_seq), 0)").Scan(&maxVersion).Error
 			if err != nil {
 				return entity.PostingData{}, fmt.Errorf("postgres: sequence base: %w", err)
 			}
 
-			base = max
+			base = maxVersion
 		}
 
 		base++
@@ -229,7 +229,7 @@ func (r *PostingRepository) FindByID(
 	id valueobject.PostingID,
 ) (entity.PostingData, error) {
 	if tenant.String() == "" {
-		return entity.PostingData{}, fmt.Errorf("postgres: tenant is required")
+		return entity.PostingData{}, ErrPostgresTenantIsRequired
 	}
 
 	var posting models.PostingModel
@@ -262,7 +262,7 @@ func (r *PostingRepository) FindByExternalReference(
 	reference string,
 ) (entity.PostingData, error) {
 	if tenant.String() == "" {
-		return entity.PostingData{}, fmt.Errorf("postgres: tenant is required")
+		return entity.PostingData{}, ErrPostgresTenantIsRequired
 	}
 
 	var posting models.PostingModel
@@ -300,7 +300,7 @@ func (r *PostingRepository) FindByAccount(
 	limit int,
 ) ([]entity.PostingData, string, error) {
 	if tenant.String() == "" {
-		return nil, "", fmt.Errorf("postgres: tenant is required")
+		return nil, "", ErrPostgresTenantIsRequired
 	}
 
 	if limit <= 0 || limit > 100 {
@@ -385,7 +385,7 @@ func assemblePage(
 	for _, id := range ids {
 		row, ok := byID[id]
 		if !ok {
-			return nil, "", fmt.Errorf("postgres: posting %s vanished mid-page", id)
+			return nil, "", fmt.Errorf("postgres: posting %s vanished mid-page: %w", id, ErrPostgresPostingVanishedMidPage)
 		}
 
 		out = append(out, postingToEntity(row, byPosting[id]))
@@ -408,7 +408,7 @@ func parseSeqCursor(cursor string) (int64, error) {
 
 	seq, err := strconv.ParseInt(cursor, 10, 64)
 	if err != nil || seq < 0 {
-		return 0, fmt.Errorf("postgres: invalid cursor")
+		return 0, ErrPostgresInvalidCursor
 	}
 
 	return seq, nil
@@ -422,7 +422,7 @@ func findEntriesByPosting(
 	posting valueobject.PostingID,
 ) ([]entity.Entry, error) {
 	if tenant.String() == "" {
-		return nil, fmt.Errorf("postgres: tenant is required")
+		return nil, ErrPostgresTenantIsRequired
 	}
 
 	if err := scopeTenant(ctx, db, tenant); err != nil {
@@ -457,7 +457,7 @@ func checkBalanced(entries []entity.Entry) error {
 
 		sum, overflow := addChecked(nets[entry.AssetCode], delta)
 		if overflow {
-			return fmt.Errorf("postgres: balance overflow for asset %s", entry.AssetCode)
+			return fmt.Errorf("postgres: balance overflow for asset %s: %w", entry.AssetCode, ErrPostgresBalanceOverflowForAsset)
 		}
 
 		nets[entry.AssetCode] = sum
@@ -465,7 +465,7 @@ func checkBalanced(entries []entity.Entry) error {
 
 	for asset, net := range nets {
 		if net != 0 {
-			return fmt.Errorf("postgres: unbalanced posting for asset %s", asset)
+			return fmt.Errorf("postgres: unbalanced posting for asset %s: %w", asset, ErrPostgresUnbalancedPostingForAsset)
 		}
 	}
 
@@ -484,6 +484,7 @@ func addChecked(left int64, right int64) (int64, bool) {
 
 func postingToModel(posting entity.PostingData) models.PostingModel {
 	var reversal *string
+
 	if posting.ReversalOf != nil {
 		reversed := posting.ReversalOf.String()
 		reversal = &reversed

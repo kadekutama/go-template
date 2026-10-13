@@ -2,7 +2,6 @@ package redpanda
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -16,10 +15,10 @@ type Broker interface {
 	Publish(ctx context.Context, topic, key string, headers map[string]string, payload []byte) error
 }
 
-// RedpandaParams carries client configuration (Parameter Object pattern).
+// Params carries client configuration (Parameter Object pattern).
 // Seeds are host:port pairs. TLS + SASL/SCRAM are required in prod;
 // local/dev may run plaintext against the compose fragment (E17 operates).
-type RedpandaParams struct {
+type Params struct {
 	Seeds            []string      `validate:"-"`
 	ClientID         string        `validate:"-"`
 	UseTLS           bool          `validate:"-"`
@@ -46,7 +45,7 @@ type Client struct {
 
 // NewClient validates endpoints without dialing. At least one non-blank
 // seed is required; timeouts must be positive and explicit.
-func NewClient(params RedpandaParams) (*Client, error) {
+func NewClient(params Params) (*Client, error) {
 	if err := validate.Struct("redpanda", "params", params); err != nil {
 		return nil, err
 	}
@@ -59,15 +58,15 @@ func NewClient(params RedpandaParams) (*Client, error) {
 	}
 
 	if len(seeds) == 0 {
-		return nil, fmt.Errorf("redpanda: at least one seed is required")
+		return nil, ErrRedpandaAtLeastOneSeedIsRequired
 	}
 
 	if params.DialTimeout <= 0 {
-		return nil, fmt.Errorf("redpanda: dial timeout must be positive")
+		return nil, ErrRedpandaDialTimeoutMustBePositive
 	}
 
 	if params.MetadataTimeout <= 0 {
-		return nil, fmt.Errorf("redpanda: metadata timeout must be positive")
+		return nil, ErrRedpandaMetadataTimeoutMustBePositive
 	}
 
 	return &Client{

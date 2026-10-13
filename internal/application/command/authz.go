@@ -15,5 +15,6 @@ func RequireAuthz(ctx context.Context, authz port.Authorizer, subject port.Subje
 	if strings.TrimSpace(subject.ID) == "" {
 		return entity.NewError("FORBIDDEN", "subject is not authorized for this action")
 	}
+
 	return authz.Authorize(ctx, subject, action, resource)
 }

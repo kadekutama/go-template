@@ -22,6 +22,7 @@ func TestTyped(t *testing.T) {
 	t.Parallel()
 
 	t.Run("views bind to the shared engine", func(t *testing.T) {
+		t.Parallel()
 		shared := mockstore.NewMockExpiringStore(t)
 		engine, err := hybrid.New(hybrid.Params{
 			L1:            shared,
@@ -39,6 +40,8 @@ func TestTyped(t *testing.T) {
 	})
 
 	t.Run("nil engine view reports not initialized", func(t *testing.T) {
+		t.Parallel()
+
 		var engine *hybrid.Cache
 
 		view := hybrid.Typed[cacheBalance](engine)
@@ -49,8 +52,12 @@ func TestTyped(t *testing.T) {
 	})
 
 	t.Run("seam conformance for both adapters", func(t *testing.T) {
-		var _ store.Store = (*mockstore.MockStore)(nil)
-		var _ store.ExpiringStore = (*mockstore.MockExpiringStore)(nil)
+		t.Parallel()
+
+		var (
+			_ store.Store         = (*mockstore.MockStore)(nil)
+			_ store.ExpiringStore = (*mockstore.MockExpiringStore)(nil)
+		)
 	})
 }
 

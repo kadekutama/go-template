@@ -1,7 +1,6 @@
 package resilience
 
 import (
-	"errors"
 	"testing"
 	"time"
 
@@ -20,23 +19,25 @@ func TestDefaultClassifier(t *testing.T) {
 	testCases := []testCase{
 		{
 			name:           "retryable error classified",
-			err:            &RetryableError{Err: errors.New("x")},
+			err:            &RetryableError{Err: ErrX},
 			expectedResult: Retryable,
 		},
 		{
 			name:           "permanent error classified",
-			err:            &PermanentError{Err: errors.New("x")},
+			err:            &PermanentError{Err: ErrX},
 			expectedResult: Permanent,
 		},
 		{
 			name:           "standard error classified as unknown",
-			err:            errors.New("x"),
+			err:            ErrX,
 			expectedResult: Unknown,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := DefaultClassifier(tc.err)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -101,6 +102,8 @@ func TestShouldRetry(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := ShouldRetry(tc.class, tc.idempotent, tc.key)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -148,6 +151,8 @@ func TestBackoffFor(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := policy.BackoffFor(tc.attempt)
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expectedResult, actualResult)
@@ -182,41 +187,47 @@ func TestRetryPolicyValidate(t *testing.T) {
 			policy: func() RetryPolicy {
 				p := validPolicy
 				p.MaxAttempts = 0
+
 				return p
 			}(),
-			expectedError: errors.New("resilience: max attempts must be positive"),
+			expectedError: ErrResilienceMaxAttemptsMustBePositive,
 		},
 		{
 			name: "zero initial backoff rejected",
 			policy: func() RetryPolicy {
 				p := validPolicy
 				p.InitialBackoff = 0
+
 				return p
 			}(),
-			expectedError: errors.New("resilience: initial backoff must be positive"),
+			expectedError: ErrResilienceInitialBackoffMustBePositive,
 		},
 		{
 			name: "max backoff less than initial backoff rejected",
 			policy: func() RetryPolicy {
 				p := validPolicy
 				p.MaxBackoff = 50 * time.Millisecond
+
 				return p
 			}(),
-			expectedError: errors.New("resilience: max backoff must be greater than or equal to initial backoff"),
+			expectedError: ErrResilienceMaxBackoffMustBeGreaterThanOrEqualToInitialBack,
 		},
 		{
 			name: "multiplier less than 1 rejected",
 			policy: func() RetryPolicy {
 				p := validPolicy
 				p.Multiplier = 0.5
+
 				return p
 			}(),
-			expectedError: errors.New("resilience: multiplier must be at least 1.0"),
+			expectedError: ErrResilienceMultiplierMustBeAtLeast10,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.policy.Validate()
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
@@ -230,7 +241,7 @@ func TestRetryPolicyValidate(t *testing.T) {
 func TestErrorWrappers(t *testing.T) {
 	t.Parallel()
 
-	inner := errors.New("underlying issue")
+	inner := ErrUnderlyingIssue
 
 	type testCase struct {
 		name           string
@@ -256,8 +267,10 @@ func TestErrorWrappers(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Equal(t, tc.expectedError, tc.err.Error())
 			assert.ErrorIs(t, tc.err, tc.expectedUnwrap)
+
 			if unwrap, ok := tc.err.(interface{ Unwrap() error }); ok {
 				assert.Equal(t, tc.expectedUnwrap, unwrap.Unwrap())
 			}

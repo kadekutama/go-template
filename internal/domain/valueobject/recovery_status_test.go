@@ -1,7 +1,7 @@
 package valueobject_test
 
 import (
-	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -48,18 +48,20 @@ func TestParseRecoveryStatus(t *testing.T) {
 			name:           "invalid status",
 			s:              "SETTLED",
 			expectedResult: valueobject.RecoveryStatus(""),
-			expectedError:  errors.New(`recovery: invalid status "SETTLED"`),
+			expectedError:  fmt.Errorf("recovery: invalid status %q: %w", "SETTLED", valueobject.ErrRecoveryInvalidStatus),
 		},
 		{
 			name:           "empty status",
 			s:              "",
 			expectedResult: valueobject.RecoveryStatus(""),
-			expectedError:  errors.New(`recovery: invalid status ""`),
+			expectedError:  fmt.Errorf("recovery: invalid status %q: %w", "", valueobject.ErrRecoveryInvalidStatus),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := valueobject.ParseRecoveryStatus(tc.s)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -124,6 +126,8 @@ func TestCanTransitionRecovery(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := valueobject.CanTransitionRecovery(tc.from, tc.to)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})

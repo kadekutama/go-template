@@ -12,9 +12,11 @@ func ValidateRefundToOriginalMethod(m valueobject.PaymentMethod) error {
 	if err != nil {
 		return entity.NewError("PAYMENT_METHOD_UNKNOWN", "payment method is unknown")
 	}
+
 	if !caps.Reversible {
 		return entity.NewError("METHOD_IRREVERSIBLE", "payment method does not support refund to original method")
 	}
+
 	return nil
 }
 
@@ -23,6 +25,7 @@ func TransitionPayment(from, to valueobject.PaymentStatus) (valueobject.PaymentS
 	if !valueobject.CanTransitionPayment(from, to) {
 		return from, entity.NewError("PAYMENT_TRANSITION_ILLEGAL", "illegal payment transition")
 	}
+
 	return to, nil
 }
 
@@ -32,6 +35,7 @@ func DispositionFor(code string) (valueobject.ReturnDisposition, error) {
 	if err != nil {
 		return "", entity.NewError("RETURN_CODE_UNKNOWN", "return code is unknown")
 	}
+
 	return d, nil
 }
 
@@ -41,9 +45,11 @@ func AddLink(existing map[string]entity.PaymentLink, link entity.PaymentLink) er
 	if err := link.Validate(); err != nil {
 		return err
 	}
+
 	if _, dup := existing[link.LinkKey()]; dup {
 		return entity.NewError("DUPLICATE_LINK", "payment link already exists")
 	}
+
 	return nil
 }
 
@@ -69,6 +75,7 @@ func RequireStatusLookup(outcome ProviderOutcome, lookupConfirmed bool) error {
 	if outcome == OutcomeUnknown && !lookupConfirmed {
 		return entity.NewError("OUTCOME_UNKNOWN", "provider outcome unknown: status lookup required before retry")
 	}
+
 	return nil
 }
 
@@ -78,8 +85,10 @@ func DuplicateDelivery(existing map[string]entity.ProviderObjectLink, link entit
 	if err := link.Validate(); err != nil {
 		return entity.ProviderObjectLink{}, false, err
 	}
+
 	if prev, ok := existing[link.DeliveryKey()]; ok {
 		return prev, true, nil
 	}
+
 	return link, false, nil
 }

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/egress-policy.json",
+  "title": "Provider egress policy",
+  "description": "Per-provider outbound quotas consumed by the E09.1-T03 egress limiter. Every provider operation needs an explicit positive budget, window, and max wait; there is no default or unlimited quota.",
+  "type": "object",
+  "required": ["policies"],
+  "additionalProperties": false,
+  "properties": {
+    "policies": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["provider", "operation", "budget", "window", "max_wait"],
+        "additionalProperties": false,
+        "properties": {
+          "provider": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[^:[:space:][:cntrl:]]+$"
+          },
+          "operation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[^:[:space:][:cntrl:]]+$"
+          },
+          "budget": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "window": {
+            "type": "string",
+            "pattern": "^[0-9]+(ns|us|ms|s|m|h)$"
+          },
+          "max_wait": {
+            "type": "string",
+            "pattern": "^[0-9]+(ns|us|ms|s|m|h)$"
+          }
+        }
+      }
+    }
+  }
+}

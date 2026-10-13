@@ -57,7 +57,7 @@ func TestNewDispatcher(t *testing.T) {
 				Tolerance:   5 * time.Minute,
 			},
 			expectedResult: false,
-			expectedError:  errors.New("dispatcher: endpoint lookup is required"),
+			expectedError:  consumer.ErrDispatcherEndpointLookupIsRequired,
 		},
 		{
 			name: "nil sender rejected",
@@ -70,7 +70,7 @@ func TestNewDispatcher(t *testing.T) {
 				Tolerance:   5 * time.Minute,
 			},
 			expectedResult: false,
-			expectedError:  errors.New("dispatcher: sender is required"),
+			expectedError:  consumer.ErrDispatcherSenderIsRequired,
 		},
 		{
 			name: "nil receipts rejected",
@@ -83,7 +83,7 @@ func TestNewDispatcher(t *testing.T) {
 				Tolerance:   5 * time.Minute,
 			},
 			expectedResult: false,
-			expectedError:  errors.New("dispatcher: receipt store is required"),
+			expectedError:  consumer.ErrDispatcherReceiptStoreIsRequired,
 		},
 		{
 			name: "nil dlq rejected",
@@ -96,7 +96,7 @@ func TestNewDispatcher(t *testing.T) {
 				Tolerance:   5 * time.Minute,
 			},
 			expectedResult: false,
-			expectedError:  errors.New("dispatcher: dlq sink is required"),
+			expectedError:  consumer.ErrDispatcherDlqSinkIsRequired,
 		},
 		{
 			name: "nil retry policy rejected",
@@ -109,7 +109,7 @@ func TestNewDispatcher(t *testing.T) {
 				Tolerance:   5 * time.Minute,
 			},
 			expectedResult: false,
-			expectedError:  errors.New("dispatcher: retry policy is required"),
+			expectedError:  consumer.ErrDispatcherRetryPolicyIsRequired,
 		},
 		{
 			name: "non-positive tolerance rejected",
@@ -122,18 +122,22 @@ func TestNewDispatcher(t *testing.T) {
 				Tolerance:   0,
 			},
 			expectedResult: false,
-			expectedError:  errors.New("dispatcher: tolerance must be positive"),
+			expectedError:  consumer.ErrDispatcherToleranceMustBePositive,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			dispatcher, err := consumer.NewDispatcher(tc.params)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
 				assert.Nil(t, dispatcher)
+
 				return
 			}
+
 			require.NoError(t, err)
 			require.NotNil(t, dispatcher)
 			assert.Equal(t, tc.expectedResult, dispatcher != nil)
@@ -163,6 +167,7 @@ func TestDispatcherDispatchValidation(t *testing.T) {
 			Tolerance:   5 * time.Minute,
 		})
 		require.NoError(t, err)
+
 		return d
 	}
 
@@ -176,12 +181,13 @@ func TestDispatcherDispatchValidation(t *testing.T) {
 			message: appport.WebhookMessage{
 				TenantID: func() valueobject.TenantID {
 					t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000050")
+
 					return t
 				}(),
 				EventType: "transfer.completed.v1",
 				Payload:   []byte(`{"id":"evt-val"}`),
 			},
-			expectedError: errors.New("dispatcher: not initialized"),
+			expectedError: consumer.ErrDispatcherNotInitialized,
 		},
 		{
 			name:       "blank tenant rejected",
@@ -192,7 +198,7 @@ func TestDispatcherDispatchValidation(t *testing.T) {
 				EventType: "transfer.completed.v1",
 				Payload:   []byte(`{"id":"evt-val"}`),
 			},
-			expectedError: errors.New("dispatcher: tenant is required"),
+			expectedError: consumer.ErrDispatcherTenantIsRequired,
 		},
 		{
 			name:       "blank event rejected",
@@ -201,12 +207,13 @@ func TestDispatcherDispatchValidation(t *testing.T) {
 			message: appport.WebhookMessage{
 				TenantID: func() valueobject.TenantID {
 					t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000050")
+
 					return t
 				}(),
 				EventType: "",
 				Payload:   []byte(`{"id":"evt-val"}`),
 			},
-			expectedError: errors.New("dispatcher: event type is required"),
+			expectedError: consumer.ErrDispatcherEventTypeIsRequired,
 		},
 		{
 			name:       "whitespace event rejected",
@@ -215,12 +222,13 @@ func TestDispatcherDispatchValidation(t *testing.T) {
 			message: appport.WebhookMessage{
 				TenantID: func() valueobject.TenantID {
 					t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000050")
+
 					return t
 				}(),
 				EventType: "   ",
 				Payload:   []byte(`{"id":"evt-val"}`),
 			},
-			expectedError: errors.New("dispatcher: event type is required"),
+			expectedError: consumer.ErrDispatcherEventTypeIsRequired,
 		},
 		{
 			name:       "nil payload rejected",
@@ -229,12 +237,13 @@ func TestDispatcherDispatchValidation(t *testing.T) {
 			message: appport.WebhookMessage{
 				TenantID: func() valueobject.TenantID {
 					t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000050")
+
 					return t
 				}(),
 				EventType: "transfer.completed.v1",
 				Payload:   nil,
 			},
-			expectedError: errors.New("dispatcher: payload is required"),
+			expectedError: consumer.ErrDispatcherPayloadIsRequired,
 		},
 		{
 			name:       "canceled context rejected",
@@ -242,11 +251,13 @@ func TestDispatcherDispatchValidation(t *testing.T) {
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			}(),
 			message: appport.WebhookMessage{
 				TenantID: func() valueobject.TenantID {
 					t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000050")
+
 					return t
 				}(),
 				EventType: "transfer.completed.v1",
@@ -258,9 +269,12 @@ func TestDispatcherDispatchValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			d := tc.dispatcher()
 			err := d.Dispatch(tc.ctx, tc.message)
 			require.Error(t, err)
+
 			if errors.Is(tc.expectedError, context.Canceled) {
 				assert.ErrorIs(t, err, tc.expectedError)
 			} else {
@@ -322,6 +336,7 @@ func TestDispatcherDispatchScenarios(t *testing.T) {
 			expectedDLQ:   0,
 			expectedError: nil,
 			verifyHeaders: func(t *testing.T, headers []map[string]string) {
+				t.Helper()
 				require.Len(t, headers, 1)
 				h := headers[0]
 				assert.Contains(t, h["X-Ledger-Signature"], "v1=")
@@ -351,11 +366,11 @@ func TestDispatcherDispatchScenarios(t *testing.T) {
 					Active: true,
 				},
 			},
-			senderFail:    errors.New("down"),
+			senderFail:    consumer.ErrDown,
 			repeatSend:    1,
 			expectedCalls: 2,
 			expectedDLQ:   0,
-			expectedError: errors.New("down"),
+			expectedError: consumer.ErrDown,
 			verifyHeaders: nil,
 		},
 		{
@@ -372,6 +387,8 @@ func TestDispatcherDispatchScenarios(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			policy, err := webhook.NewRetryPolicy([]time.Duration{
 				time.Minute, 5 * time.Minute, 15 * time.Minute, time.Hour,
 				6 * time.Hour, 24 * time.Hour, 48 * time.Hour,
@@ -382,17 +399,23 @@ func TestDispatcherDispatchScenarios(t *testing.T) {
 			lookup.EXPECT().Find(mock.Anything, mock.Anything, mock.Anything).Return(tc.endpoints).Maybe()
 
 			sender := mockconsumer.NewMockHTTPSender(t)
+
 			var calls atomic.Int32
+
 			headerCh := make(chan map[string]string, 100)
+
 			sender.EXPECT().Send(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 				RunAndReturn(func(_ context.Context, _ string, headers map[string]string, _ []byte) error {
 					calls.Add(1)
+
 					headerCh <- headers
+
 					return tc.senderFail
 				}).Maybe()
 
 			receipts := mockconsumer.NewMockReceiptStore(t)
 			seen := &doubles.DedupSet{}
+
 			receipts.EXPECT().Claim(mock.Anything, mock.Anything, mock.Anything).
 				RunAndReturn(func(_ context.Context, consumerID, eventID string) (bool, error) {
 					return seen.Claim(consumerID, eventID), nil
@@ -400,14 +423,17 @@ func TestDispatcherDispatchScenarios(t *testing.T) {
 			receipts.EXPECT().Release(mock.Anything, mock.Anything, mock.Anything).
 				RunAndReturn(func(_ context.Context, consumerID, eventID string) error {
 					seen.Release(consumerID, eventID)
+
 					return nil
 				}).Maybe()
 
 			dlq := mockwebhook.NewMockDLQSink(t)
 			recordedDLQ := &doubles.MessageLog[webhook.DLQMessage]{}
+
 			dlq.EXPECT().Record(mock.Anything, mock.Anything).
 				RunAndReturn(func(_ context.Context, msg webhook.DLQMessage) error {
 					recordedDLQ.Add(msg)
+
 					return nil
 				}).Maybe()
 
@@ -429,7 +455,7 @@ func TestDispatcherDispatchScenarios(t *testing.T) {
 			}
 
 			var lastErr error
-			for i := 0; i < tc.repeatSend; i++ {
+			for range tc.repeatSend {
 				lastErr = dispatcher.Dispatch(context.Background(), msg)
 			}
 
@@ -445,10 +471,12 @@ func TestDispatcherDispatchScenarios(t *testing.T) {
 			assert.Equal(t, tc.expectedDLQ, dlqLen)
 
 			close(headerCh)
+
 			var recordedHeaders []map[string]string
 			for h := range headerCh {
 				recordedHeaders = append(recordedHeaders, h)
 			}
+
 			if tc.verifyHeaders != nil {
 				tc.verifyHeaders(t, recordedHeaders)
 			}
@@ -478,6 +506,8 @@ func TestDispatcherRetryScheduleAndDLQ(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			endpoint := webhook.Endpoint{
 				ID:     "ep-policy",
 				Tenant: "01950000-0000-7000-8000-000000000050",
@@ -494,10 +524,11 @@ func TestDispatcherRetryScheduleAndDLQ(t *testing.T) {
 			lookup.EXPECT().Find(mock.Anything, mock.Anything, mock.Anything).Return([]webhook.Endpoint{endpoint}).Maybe()
 
 			sender := mockconsumer.NewMockHTTPSender(t)
-			sender.EXPECT().Send(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(errors.New("down")).Maybe()
+			sender.EXPECT().Send(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(consumer.ErrDown).Maybe()
 
 			receipts := mockconsumer.NewMockReceiptStore(t)
 			seen := &doubles.DedupSet{}
+
 			receipts.EXPECT().Claim(mock.Anything, mock.Anything, mock.Anything).
 				RunAndReturn(func(_ context.Context, consumerID, eventID string) (bool, error) {
 					return seen.Claim(consumerID, eventID), nil
@@ -505,14 +536,17 @@ func TestDispatcherRetryScheduleAndDLQ(t *testing.T) {
 			receipts.EXPECT().Release(mock.Anything, mock.Anything, mock.Anything).
 				RunAndReturn(func(_ context.Context, consumerID, eventID string) error {
 					seen.Release(consumerID, eventID)
+
 					return nil
 				}).Maybe()
 
 			dlq := mockwebhook.NewMockDLQSink(t)
 			recordedDLQ := &doubles.MessageLog[webhook.DLQMessage]{}
+
 			dlq.EXPECT().Record(mock.Anything, mock.Anything).
 				RunAndReturn(func(_ context.Context, msg webhook.DLQMessage) error {
 					recordedDLQ.Add(msg)
+
 					return nil
 				}).Maybe()
 
@@ -543,8 +577,9 @@ func TestDispatcherRetryScheduleAndDLQ(t *testing.T) {
 			}
 
 			require.NoError(t, dispatcher.Dispatch(context.Background(), msg))
+
 			dlqMsgs := recordedDLQ.All()
-			require.Equal(t, 1, len(dlqMsgs))
+			require.Len(t, dlqMsgs, 1)
 			assert.Equal(t, tc.expectedAttempts, dlqMsgs[0].Attempts)
 		})
 	}

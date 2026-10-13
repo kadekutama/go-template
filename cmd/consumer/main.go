@@ -19,11 +19,13 @@ func main() {
 		fmt.Fprintln(os.Stderr, "consumer: "+err.Error())
 		os.Exit(1)
 	}
+
 	logger, err := di.ProvideLoggerWithConfig(cfg)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "consumer: "+err.Error())
 		os.Exit(1)
 	}
+
 	os.Exit(di.RunApp(logger, "consumer", version, nil,
 		di.DomainModule(),
 		di.ApplicationModule(),

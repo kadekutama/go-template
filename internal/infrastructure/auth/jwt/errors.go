@@ -1,3 +1,4 @@
+// Package jwt issues and validates JWT access and refresh tokens, including revocation and family reuse checks.
 package jwt
 
 import "errors"

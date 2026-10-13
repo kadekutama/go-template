@@ -62,7 +62,7 @@ type MockComplianceQueryUseCases_ReportStatus_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - reportID string
-func (_e *MockComplianceQueryUseCases_Expecter) ReportStatus(ctx interface{}, tenant interface{}, reportID interface{}) *MockComplianceQueryUseCases_ReportStatus_Call {
+func (_e *MockComplianceQueryUseCases_Expecter) ReportStatus(ctx any, tenant any, reportID any) *MockComplianceQueryUseCases_ReportStatus_Call {
 	return &MockComplianceQueryUseCases_ReportStatus_Call{Call: _e.mock.On("ReportStatus", ctx, tenant, reportID)}
 }
 

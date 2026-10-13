@@ -63,7 +63,7 @@ type MockScreeningProvider_Screen_Call struct {
 //   - subject port.ScreeningSubject
 //   - reference string
 //   - timeout time.Duration
-func (_e *MockScreeningProvider_Expecter) Screen(ctx interface{}, subject interface{}, reference interface{}, timeout interface{}) *MockScreeningProvider_Screen_Call {
+func (_e *MockScreeningProvider_Expecter) Screen(ctx any, subject any, reference any, timeout any) *MockScreeningProvider_Screen_Call {
 	return &MockScreeningProvider_Screen_Call{Call: _e.mock.On("Screen", ctx, subject, reference, timeout)}
 }
 

@@ -19,6 +19,7 @@ type RecurrenceRule struct {
 // and a durable reservation are enforced atomically at execution.
 type ScheduleRequest struct {
 	TransferRequest
+
 	ExecuteAt       time.Time
 	Recurrence      *RecurrenceRule
 	IdempotencyRoot string
@@ -31,12 +32,15 @@ func ValidateSchedule(req ScheduleRequest, accounts map[valueobject.AccountID]en
 	if err := validateScheduleBasics(req, now); err != nil {
 		return err
 	}
+
 	if err := validateScheduleAccounts(req, accounts); err != nil {
 		return err
 	}
+
 	if req.Recurrence != nil && req.Recurrence.Occurrences < 1 {
 		return entity.NewError("RECURRENCE_INVALID", "recurrence occurrences must be positive")
 	}
+
 	return nil
 }
 
@@ -44,15 +48,19 @@ func validateScheduleBasics(req ScheduleRequest, now time.Time) error {
 	if req.AmountMinor <= 0 {
 		return entity.NewError("INVALID_TRANSFER_AMOUNT", "transfer amount must be positive")
 	}
+
 	if req.IdempotencyRoot == "" {
 		return entity.NewError("IDEMPOTENCY_ROOT_REQUIRED", "scheduled transfer requires an idempotency root")
 	}
+
 	if req.ExecuteAt.IsZero() || !req.ExecuteAt.After(now) {
 		return entity.NewError("EXECUTE_AT_INVALID", "scheduled transfer must execute in the future")
 	}
+
 	if req.Source == req.Dest {
 		return entity.NewError("SELF_TRANSFER_REJECTED", "transfer source and destination must differ")
 	}
+
 	return nil
 }
 
@@ -61,19 +69,24 @@ func validateScheduleAccounts(req ScheduleRequest, accounts map[valueobject.Acco
 	if !ok {
 		return entity.NewError("SOURCE_ACCOUNT_NOT_FOUND", "source account is unknown")
 	}
+
 	dst, ok := accounts[req.Dest]
 	if !ok {
 		return entity.NewError("DEST_ACCOUNT_NOT_FOUND", "destination account is unknown")
 	}
+
 	if err := checkTransferScope(req.TransferRequest, src, dst); err != nil {
 		return err
 	}
+
 	if err := checkTransferAccountActive(src); err != nil {
 		return err
 	}
+
 	if err := checkTransferAccountActive(dst); err != nil {
 		return err
 	}
+
 	return checkTransferAssets(req.TransferRequest, src, dst)
 }
 
@@ -89,12 +102,15 @@ func ExpandRecurrence(root string, n int) ([]string, error) {
 	if root == "" {
 		return nil, entity.NewError("IDEMPOTENCY_ROOT_REQUIRED", "recurrence root is required")
 	}
+
 	if n < 1 {
 		return nil, entity.NewError("RECURRENCE_INVALID", "recurrence occurrences must be positive")
 	}
+
 	keys := make([]string, 0, n)
 	for i := 1; i <= n; i++ {
 		keys = append(keys, root+":"+strconv.Itoa(i))
 	}
+
 	return keys, nil
 }

@@ -1,7 +1,7 @@
 package event
 
 import (
-	"errors"
+	"maps"
 	"time"
 )
 
@@ -30,16 +30,19 @@ type TransactionPostedPayload struct {
 }
 
 // NewTransactionPosted builds transaction.posted.v1.
-func NewTransactionPosted(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TransactionPostedPayload, meta EventMetadata) (TypedEvent[TransactionPostedPayload], error) {
+func NewTransactionPosted(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TransactionPostedPayload, meta Metadata) (TypedEvent[TransactionPostedPayload], error) {
 	if err := requireIDs(map[string]string{fieldPostingID: payload.PostingID, fieldTenantID: payload.TenantID, fieldLedgerID: payload.LedgerID}); err != nil {
 		return TypedEvent[TransactionPostedPayload]{}, err
 	}
-	if len(payload.Entries) < 2 {
-		return TypedEvent[TransactionPostedPayload]{}, errors.New("event: posted transaction requires at least two entries")
+
+	if len(payload.Entries) < minEntries2 {
+		return TypedEvent[TransactionPostedPayload]{}, ErrEventPostedTransactionRequiresAtLeastTwoEntries
 	}
+
 	entries := make([]EntryPayload, len(payload.Entries))
 	copy(entries, payload.Entries)
 	payload.Entries = entries
+
 	return newTyped("transaction.posted.v1", eventID, aggregateID, "Posting", occurredAt, version, seq, payload, meta)
 }
 
@@ -58,23 +61,26 @@ type TransactionReversedPayload struct {
 }
 
 // NewTransactionReversed builds transaction.reversed.v1.
-func NewTransactionReversed(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TransactionReversedPayload, meta EventMetadata) (TypedEvent[TransactionReversedPayload], error) {
+func NewTransactionReversed(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TransactionReversedPayload, meta Metadata) (TypedEvent[TransactionReversedPayload], error) {
 	if err := requireIDs(map[string]string{fieldPostingID: payload.PostingID, fieldTenantID: payload.TenantID, "original_posting_id": payload.OriginalPostingID}); err != nil {
 		return TypedEvent[TransactionReversedPayload]{}, err
 	}
+
 	if payload.Reason == "" {
-		return TypedEvent[TransactionReversedPayload]{}, errors.New("event: reason is required")
+		return TypedEvent[TransactionReversedPayload]{}, ErrEventReasonIsRequired
 	}
+
 	entries := make([]EntryPayload, len(payload.ReversedEntries))
 	copy(entries, payload.ReversedEntries)
+
 	payload.ReversedEntries = entries
 	if payload.Metadata != nil {
 		md := make(map[string]string, len(payload.Metadata))
-		for k, v := range payload.Metadata {
-			md[k] = v
-		}
+		maps.Copy(md, payload.Metadata)
+
 		payload.Metadata = md
 	}
+
 	return newTyped("transaction.reversed.v1", eventID, aggregateID, "Posting", occurredAt, version, seq, payload, meta)
 }
 
@@ -88,10 +94,11 @@ type TransactionFailedPayload struct {
 }
 
 // NewTransactionFailed builds transaction.failed.v1.
-func NewTransactionFailed(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TransactionFailedPayload, meta EventMetadata) (TypedEvent[TransactionFailedPayload], error) {
+func NewTransactionFailed(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TransactionFailedPayload, meta Metadata) (TypedEvent[TransactionFailedPayload], error) {
 	if err := requireIDs(map[string]string{"attempt_id": payload.AttemptID, fieldTenantID: payload.TenantID, fieldCode: payload.Code}); err != nil {
 		return TypedEvent[TransactionFailedPayload]{}, err
 	}
+
 	return newTyped("transaction.failed.v1", eventID, aggregateID, "Posting", occurredAt, version, seq, payload, meta)
 }
 
@@ -105,9 +112,10 @@ type TransactionPendingPayload struct {
 }
 
 // NewTransactionPending builds transaction.pending.v1.
-func NewTransactionPending(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TransactionPendingPayload, meta EventMetadata) (TypedEvent[TransactionPendingPayload], error) {
+func NewTransactionPending(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TransactionPendingPayload, meta Metadata) (TypedEvent[TransactionPendingPayload], error) {
 	if err := requireIDs(map[string]string{"attempt_id": payload.AttemptID, fieldTenantID: payload.TenantID}); err != nil {
 		return TypedEvent[TransactionPendingPayload]{}, err
 	}
+
 	return newTyped("transaction.pending.v1", eventID, aggregateID, "Posting", occurredAt, version, seq, payload, meta)
 }

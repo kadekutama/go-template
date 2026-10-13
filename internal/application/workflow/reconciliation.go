@@ -17,7 +17,7 @@ type ReconciliationActions struct {
 // matching moves no money.
 func ReconciliationSteps(actions ReconciliationActions) []Step {
 	return []Step{
-		{Name: "match-statements", MaxAttempts: 2, Timeout: 60 * time.Second, Run: actions.MatchStatements},
-		{Name: "resolve-breaks", MaxAttempts: 3, Timeout: 60 * time.Second, Run: actions.ResolveBreaks},
+		{Name: "match-statements", MaxAttempts: maxAttempts2, Timeout: timeout60 * time.Second, Run: actions.MatchStatements},
+		{Name: "resolve-breaks", MaxAttempts: maxAttempts3, Timeout: timeout60 * time.Second, Run: actions.ResolveBreaks},
 	}
 }

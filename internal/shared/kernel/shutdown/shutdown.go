@@ -5,7 +5,6 @@ package shutdown
 
 import (
 	"context"
-	"errors"
 	"os/signal"
 	"syscall"
 	"time"
@@ -16,14 +15,17 @@ import (
 // The drain error (if any) is returned; serve errors are returned immediately.
 func Run(ctx context.Context, timeout time.Duration, serve func(ctx context.Context) error, drain func(ctx context.Context) error) error {
 	if serve == nil {
-		return errors.New("shutdown: serve func must not be nil")
+		return ErrShutdownServeFuncMustNotBeNil
 	}
+
 	if timeout <= 0 {
-		return errors.New("shutdown: drain timeout must be positive")
+		return ErrShutdownDrainTimeoutMustBePositive
 	}
+
 	if drain == nil {
 		drain = func(context.Context) error { return nil }
 	}
+
 	drainTimeout := timeout
 
 	ctx, stop := signal.NotifyContext(ctx, syscall.SIGTERM, syscall.SIGINT)
@@ -38,8 +40,11 @@ func Run(ctx context.Context, timeout time.Duration, serve func(ctx context.Cont
 	case <-ctx.Done():
 	}
 
-	drainCtx, cancel := context.WithTimeout(context.Background(), drainTimeout)
+	// Detach from caller cancellation (drain must run after SIGTERM) while
+	// keeping values and bounding the wait with drainTimeout.
+	drainCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), drainTimeout)
 	defer cancel()
+
 	done := make(chan error, 1)
 	go func() { done <- drain(drainCtx) }()
 

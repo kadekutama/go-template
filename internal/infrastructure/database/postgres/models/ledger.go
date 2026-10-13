@@ -1,3 +1,4 @@
+// Package models declares the GORM Postgres table models and their lifecycle hooks.
 package models
 
 import (
@@ -56,6 +57,7 @@ func LedgerToEntity(model LedgerModel) (entity.Ledger, error) {
 	if strings.TrimSpace(model.ID) == "" {
 		return entity.Ledger{}, entity.NewError("LEDGER_ID_REQUIRED", "ledger id is required")
 	}
+
 	ledger, err := entity.NewLedger(
 		valueobject.LedgerID(model.ID),
 		valueobject.TenantID(model.TenantID),
@@ -100,6 +102,7 @@ func (m *AccountModel) BeforeCreate(_ *gorm.DB) error {
 	if m.Metadata == "" {
 		m.Metadata = "{}"
 	}
+
 	return nil
 }
 
@@ -108,6 +111,7 @@ func (m *AccountModel) BeforeUpdate(_ *gorm.DB) error {
 	if m.Metadata == "" {
 		m.Metadata = "{}"
 	}
+
 	return nil
 }
 
@@ -136,6 +140,7 @@ func (m *PostingModel) BeforeCreate(_ *gorm.DB) error {
 	if m.Metadata == "" {
 		m.Metadata = "{}"
 	}
+
 	return nil
 }
 
@@ -144,6 +149,7 @@ func (m *PostingModel) BeforeUpdate(_ *gorm.DB) error {
 	if m.Metadata == "" {
 		m.Metadata = "{}"
 	}
+
 	return nil
 }
 

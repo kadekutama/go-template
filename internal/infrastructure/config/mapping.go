@@ -1,7 +1,7 @@
 package config
 
 import (
-	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -46,8 +46,9 @@ func (c CacheTTLsConfig) HybridTTLs() (hybrid.TTLSet, error) {
 // the product invariant never rests on test convention.
 func (c TenancyConfig) AssetCap() (int, error) {
 	if c.MaxOnboardingAssets <= 0 {
-		return 0, fmt.Errorf("tenancy: max_onboarding_assets must be positive (see config.yaml)")
+		return 0, ErrTenancyMaxOnboardingAssetsMustBePositiveSeeConfigYaml
 	}
+
 	return c.MaxOnboardingAssets, nil
 }
 
@@ -77,7 +78,7 @@ func (c RedpandaConfig) Topics() (redpanda.TopicsConfig, error) {
 // missing schedule can never silently fall back to a hardcoded table.
 func (c WebhookConfig) RetryPolicy() (*webhook.RetryPolicy, error) {
 	if len(c.RetryStepsSec) == 0 {
-		return nil, fmt.Errorf("webhook: retry steps are required (see config.yaml)")
+		return nil, ErrWebhookRetryStepsAreRequiredSeeConfigYaml
 	}
 
 	steps := make([]time.Duration, 0, len(c.RetryStepsSec))
@@ -91,8 +92,9 @@ func (c WebhookConfig) RetryPolicy() (*webhook.RetryPolicy, error) {
 // Tolerance returns the configured signature timestamp tolerance.
 func (c WebhookConfig) Tolerance() (time.Duration, error) {
 	if c.ToleranceSec <= 0 {
-		return 0, fmt.Errorf("webhook: tolerance_sec must be positive (see config.yaml)")
+		return 0, ErrWebhookToleranceSecMustBePositiveSeeConfigYaml
 	}
+
 	return time.Duration(c.ToleranceSec) * time.Second, nil
 }
 
@@ -116,7 +118,7 @@ func (c CoordinationConfig) Coordination() (etcd.Config, error) {
 // HTTPClientParams maps the configured HTTP client parameters onto httpclient.Params.
 func (c HTTPClientConfig) HTTPClientParams() (httpclient.Params, error) {
 	if c.TimeoutSec <= 0 || c.MaxIdleConns <= 0 || c.MaxIdleConnsPerHost <= 0 || c.IdleConnTimeoutSec <= 0 {
-		return httpclient.Params{}, fmt.Errorf("httpclient: all parameters must be positive")
+		return httpclient.Params{}, ErrHttpclientAllParametersMustBePositive
 	}
 
 	return httpclient.Params{
@@ -132,14 +134,18 @@ func (c HTTPClientConfig) HTTPClientParams() (httpclient.Params, error) {
 // validation and mapping agree on every bound.
 func (c APIKeyConfig) HasherParams() (apikey.HasherParams, error) {
 	if c.Time <= 0 || c.MemoryKiB <= 0 || c.Threads <= 0 || c.Threads > 16 || c.KeyLen <= 0 || c.SaltLen <= 0 {
-		return apikey.HasherParams{}, fmt.Errorf("apikey: all parameters must be positive (threads 1-16)")
+		return apikey.HasherParams{}, ErrApikeyAllParametersMustBePositiveThreads116
+	}
+
+	if c.Time > math.MaxUint32 || c.MemoryKiB > math.MaxUint32 || c.KeyLen > math.MaxUint32 {
+		return apikey.HasherParams{}, ErrApikeyParametersExceedUint32Range
 	}
 
 	return apikey.HasherParams{
-		Time:    uint32(c.Time),      //nolint:gosec // guarded positive above
-		Memory:  uint32(c.MemoryKiB), //nolint:gosec // guarded positive above
-		Threads: uint8(c.Threads),    //nolint:gosec // guarded <= 255 above
-		KeyLen:  uint32(c.KeyLen),    //nolint:gosec // guarded positive above
+		Time:    uint32(c.Time),
+		Memory:  uint32(c.MemoryKiB),
+		Threads: uint8(c.Threads),
+		KeyLen:  uint32(c.KeyLen),
 		SaltLen: c.SaltLen,
 	}, nil
 }
@@ -159,13 +165,14 @@ func (c Config) Tracing(serviceVersion string) (tracing.Config, error) {
 	if err := cfg.Validate(); err != nil {
 		return tracing.Config{}, err
 	}
+
 	return cfg, nil
 }
 
 // Logging maps the configured log level onto logging.Config.
 func (c ObservabilityConfig) Logging() (logging.Config, error) {
 	if strings.TrimSpace(c.LogLevel) == "" {
-		return logging.Config{}, fmt.Errorf("logging: log_level is required")
+		return logging.Config{}, ErrLoggingLogLevelIsRequired
 	}
 
 	cfg := logging.Config{Level: c.LogLevel}

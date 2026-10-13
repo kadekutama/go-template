@@ -2,7 +2,6 @@ package workflow_test
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -27,6 +26,7 @@ func newMockSagaStore(t *testing.T) *mockworkflow.MockSagaStore {
 		if _, dup := records.LoadOrStore(record.ID, record); dup {
 			return entity.NewError("SAGA_CONFLICT", "saga id already exists")
 		}
+
 		return nil
 	}).Maybe()
 
@@ -35,11 +35,13 @@ func newMockSagaStore(t *testing.T) *mockworkflow.MockSagaStore {
 		if !ok {
 			return workflow.SagaRecord{}, entity.NewError("SAGA_NOT_FOUND", "saga is unknown")
 		}
+
 		return val.(workflow.SagaRecord), nil
 	}).Maybe()
 
 	store.EXPECT().UpdateSaga(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, record workflow.SagaRecord) error {
 		records.Store(record.ID, record)
+
 		return nil
 	}).Maybe()
 
@@ -50,6 +52,7 @@ func newRunner(t *testing.T, store *mockworkflow.MockSagaStore) *workflow.Runner
 	t.Helper()
 	clock := mockapplication.NewMockClock(t)
 	clock.EXPECT().Now().Return(time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)).Maybe()
+
 	return workflow.NewRunner(workflow.RunnerParams{Store: store, Clock: clock})
 }
 
@@ -63,8 +66,10 @@ func (e *keyedEffects) apply(key string) {
 	if _, loaded := e.applied.LoadOrStore(key, 1); loaded {
 		return
 	}
+
 	for {
 		old := e.order.Load()
+
 		var next []string
 		if old != nil {
 			next = make([]string, len(*old)+1)
@@ -73,6 +78,7 @@ func (e *keyedEffects) apply(key string) {
 		} else {
 			next = []string{key}
 		}
+
 		if e.order.CompareAndSwap(old, &next) {
 			break
 		}
@@ -83,6 +89,7 @@ func (e *keyedEffects) count(key string) int {
 	if val, ok := e.applied.Load(key); ok {
 		return val.(int)
 	}
+
 	return 0
 }
 
@@ -91,8 +98,10 @@ func (e *keyedEffects) orderList() []string {
 	if old == nil {
 		return nil
 	}
+
 	out := make([]string, len(*old))
 	copy(out, *old)
+
 	return out
 }
 
@@ -110,15 +119,18 @@ func TestSagaCrashResume(t *testing.T) {
 			Run: func(context.Context) error {
 				effects.apply("saga-1:a")
 				cancel()
+
 				return nil
 			},
 		},
 		{Name: "b", MaxAttempts: 1, Run: func(context.Context) error {
 			effects.apply("saga-1:b")
+
 			return nil
 		}},
 		{Name: "c", MaxAttempts: 1, Run: func(context.Context) error {
 			effects.apply("saga-1:c")
+
 			return nil
 		}},
 	}
@@ -144,13 +156,29 @@ func TestSagaCompensationOrder(t *testing.T) {
 	steps := []workflow.Step{
 		{
 			Name: "a", MaxAttempts: 1,
-			Run:        func(context.Context) error { effects.apply("run:a"); return nil },
-			Compensate: func(context.Context) error { effects.apply("undo:a"); return nil },
+			Run: func(context.Context) error {
+				effects.apply("run:a")
+
+				return nil
+			},
+			Compensate: func(context.Context) error {
+				effects.apply("undo:a")
+
+				return nil
+			},
 		},
 		{
 			Name: "b", MaxAttempts: 1,
-			Run:        func(context.Context) error { effects.apply("run:b"); return nil },
-			Compensate: func(context.Context) error { effects.apply("undo:b"); return nil },
+			Run: func(context.Context) error {
+				effects.apply("run:b")
+
+				return nil
+			},
+			Compensate: func(context.Context) error {
+				effects.apply("undo:b")
+
+				return nil
+			},
 		},
 		{
 			Name: "c", MaxAttempts: 1,
@@ -174,7 +202,7 @@ func TestSagaCompensationFailure(t *testing.T) {
 		{
 			Name: "a", MaxAttempts: 1,
 			Run:        func(context.Context) error { return nil },
-			Compensate: func(context.Context) error { return errors.New("undo exploded") },
+			Compensate: func(context.Context) error { return workflow.ErrUndoExploded },
 		},
 		{
 			Name: "b", MaxAttempts: 1,
@@ -183,7 +211,7 @@ func TestSagaCompensationFailure(t *testing.T) {
 	}
 
 	record, err := runner.Start(context.Background(), "t-1", "transfer", "saga-3", steps)
-	assert.Equal(t, errors.New("undo exploded"), err)
+	assert.Equal(t, workflow.ErrUndoExploded, err)
 	assert.Equal(t, workflow.SagaFailed, record.State)
 }
 
@@ -197,6 +225,7 @@ func TestSagaDuplicateStart(t *testing.T) {
 	steps := []workflow.Step{
 		{Name: "a", MaxAttempts: 1, Run: func(context.Context) error {
 			effects.apply("saga-4:a")
+
 			return nil
 		}},
 	}
@@ -246,6 +275,7 @@ func TestSagaResumeTerminal(t *testing.T) {
 	steps := []workflow.Step{
 		{Name: "a", MaxAttempts: 1, Run: func(context.Context) error {
 			runs++
+
 			return nil
 		}},
 	}
@@ -264,6 +294,8 @@ func TestSagaValidation(t *testing.T) {
 	runner := newRunner(t, store)
 
 	t.Run("empty id rejected", func(t *testing.T) {
+		t.Parallel()
+
 		_, err := runner.Start(context.Background(), "t-1", "transfer", "", []workflow.Step{
 			{Name: "a", Run: func(context.Context) error { return nil }},
 		})
@@ -271,6 +303,8 @@ func TestSagaValidation(t *testing.T) {
 	})
 
 	t.Run("no steps rejected", func(t *testing.T) {
+		t.Parallel()
+
 		_, err := runner.Start(context.Background(), "t-1", "transfer", "saga-7", nil)
 		assert.Equal(t, entity.NewError("SAGA_STEPS_REQUIRED", "saga requires at least one step"), err)
 	})

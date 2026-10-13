@@ -23,7 +23,7 @@ func ParseDirection(s string) (Direction, error) {
 	case DirectionCredit:
 		return DirectionCredit, nil
 	default:
-		return "", fmt.Errorf("account: invalid direction %q", s)
+		return "", fmt.Errorf("account: invalid direction %q: %w", s, ErrAccountInvalidDirection2)
 	}
 }
 
@@ -45,7 +45,7 @@ func ParseAccountClass(s string) (AccountClass, error) {
 	case ClassAsset, ClassLiability, ClassEquity, ClassRevenue, ClassExpense:
 		return AccountClass(s), nil
 	default:
-		return "", fmt.Errorf("account: invalid class %q", s)
+		return "", fmt.Errorf("account: invalid class %q: %w", s, ErrAccountInvalidClass2)
 	}
 }
 
@@ -55,6 +55,8 @@ func (c AccountClass) NormalSide() Direction {
 	switch c {
 	case ClassAsset, ClassExpense:
 		return DirectionDebit
+	case ClassLiability, ClassEquity, ClassRevenue:
+		return DirectionCredit
 	default:
 		return DirectionCredit
 	}
@@ -76,6 +78,6 @@ func ParseAccountStatus(s string) (AccountStatus, error) {
 	case StatusActive, StatusFrozen, StatusClosed:
 		return AccountStatus(s), nil
 	default:
-		return "", fmt.Errorf("account: invalid status %q", s)
+		return "", fmt.Errorf("account: invalid status %q: %w", s, ErrAccountInvalidStatus2)
 	}
 }

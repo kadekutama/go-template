@@ -58,7 +58,7 @@ type MockReceiptStore_Claim_Call struct {
 //   - ctx context.Context
 //   - _a1 string
 //   - eventID string
-func (_e *MockReceiptStore_Expecter) Claim(ctx interface{}, _a1 interface{}, eventID interface{}) *MockReceiptStore_Claim_Call {
+func (_e *MockReceiptStore_Expecter) Claim(ctx any, _a1 any, eventID any) *MockReceiptStore_Claim_Call {
 	return &MockReceiptStore_Claim_Call{Call: _e.mock.On("Claim", ctx, _a1, eventID)}
 }
 
@@ -106,7 +106,7 @@ type MockReceiptStore_Release_Call struct {
 //   - ctx context.Context
 //   - _a1 string
 //   - eventID string
-func (_e *MockReceiptStore_Expecter) Release(ctx interface{}, _a1 interface{}, eventID interface{}) *MockReceiptStore_Release_Call {
+func (_e *MockReceiptStore_Expecter) Release(ctx any, _a1 any, eventID any) *MockReceiptStore_Release_Call {
 	return &MockReceiptStore_Release_Call{Call: _e.mock.On("Release", ctx, _a1, eventID)}
 }
 

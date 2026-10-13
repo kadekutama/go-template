@@ -1,7 +1,7 @@
 package valueobject_test
 
 import (
-	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -60,18 +60,20 @@ func TestParseAuthStatus(t *testing.T) {
 			name:           "invalid status",
 			s:              "INVALID",
 			expectedResult: valueobject.AuthStatus(""),
-			expectedError:  errors.New(`auth: invalid status "INVALID"`),
+			expectedError:  fmt.Errorf("auth: invalid status %q: %w", "INVALID", valueobject.ErrAuthInvalidStatus),
 		},
 		{
 			name:           "empty status",
 			s:              "",
 			expectedResult: valueobject.AuthStatus(""),
-			expectedError:  errors.New(`auth: invalid status ""`),
+			expectedError:  fmt.Errorf("auth: invalid status %q: %w", "", valueobject.ErrAuthInvalidStatus),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := valueobject.ParseAuthStatus(tc.s)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -184,6 +186,8 @@ func TestCanTransitionAuth(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := valueobject.CanTransitionAuth(tc.from, tc.to)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})

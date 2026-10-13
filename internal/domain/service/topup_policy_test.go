@@ -48,6 +48,7 @@ func TestValidateTopup(t *testing.T) {
 			req: func() service.TopupRequest {
 				r := baseReq
 				r.InstrumentVerified = false
+
 				return r
 			}(),
 			expectedResult: service.TopupFunding{},
@@ -58,6 +59,7 @@ func TestValidateTopup(t *testing.T) {
 			req: func() service.TopupRequest {
 				r := baseReq
 				r.AmountMinor = 0
+
 				return r
 			}(),
 			expectedResult: service.TopupFunding{},
@@ -68,6 +70,7 @@ func TestValidateTopup(t *testing.T) {
 			req: func() service.TopupRequest {
 				r := baseReq
 				r.IdempotencyKey = ""
+
 				return r
 			}(),
 			expectedResult: service.TopupFunding{},
@@ -78,6 +81,7 @@ func TestValidateTopup(t *testing.T) {
 			req: func() service.TopupRequest {
 				r := baseReq
 				r.CreditAccount = ""
+
 				return r
 			}(),
 			expectedResult: service.TopupFunding{},
@@ -88,6 +92,7 @@ func TestValidateTopup(t *testing.T) {
 			req: func() service.TopupRequest {
 				r := baseReq
 				r.AssetCode = ""
+
 				return r
 			}(),
 			expectedResult: service.TopupFunding{},
@@ -97,6 +102,8 @@ func TestValidateTopup(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.ValidateTopup(tc.req)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -202,6 +209,8 @@ func TestSettleTopup(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult1, actualResult2, err := service.SettleTopup(tc.status, tc.funding, tc.bankCash, tc.traceID, tc.succeeded)
 			assert.Equal(t, tc.expectedResult1, actualResult1)
 			assert.Equal(t, tc.expectedResult2, actualResult2)
@@ -237,6 +246,8 @@ func TestCancelTopup(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.CancelTopup(tc.status)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -287,6 +298,7 @@ func TestEvaluateEligibility(t *testing.T) {
 			in: func() service.EligibilityInput {
 				in := baseIn
 				in.TenantAgeDays = 3
+
 				return in
 			}(),
 			expectedResult: service.EligibilityResult{Reason: service.ReasonFirstPayoutHold},
@@ -297,6 +309,7 @@ func TestEvaluateEligibility(t *testing.T) {
 			in: func() service.EligibilityInput {
 				in := baseIn
 				in.RequestedMinor = 100
+
 				return in
 			}(),
 			expectedResult: service.EligibilityResult{Reason: service.ReasonBelowMinimum},
@@ -308,6 +321,7 @@ func TestEvaluateEligibility(t *testing.T) {
 				in := baseIn
 				in.AvailableMinor = 5000
 				in.RequestedMinor = 4600
+
 				return in
 			}(),
 			expectedResult: service.EligibilityResult{Reason: service.ReasonReserveShortfall},
@@ -318,6 +332,7 @@ func TestEvaluateEligibility(t *testing.T) {
 			in: func() service.EligibilityInput {
 				in := baseIn
 				in.AvailableMinor = -100
+
 				return in
 			}(),
 			expectedResult: service.EligibilityResult{Reason: service.ReasonNegativeAvailable},
@@ -328,6 +343,7 @@ func TestEvaluateEligibility(t *testing.T) {
 			in: func() service.EligibilityInput {
 				in := baseIn
 				in.DestinationVerified = false
+
 				return in
 			}(),
 			expectedResult: service.EligibilityResult{Reason: service.ReasonDestinationUnverified},
@@ -339,6 +355,7 @@ func TestEvaluateEligibility(t *testing.T) {
 				in := baseIn
 				in.Method = valueobject.PayoutRTP
 				in.Policy.InstantEligible = false
+
 				return in
 			}(),
 			expectedResult: service.EligibilityResult{Reason: service.ReasonInstantIneligible},
@@ -349,6 +366,7 @@ func TestEvaluateEligibility(t *testing.T) {
 			in: func() service.EligibilityInput {
 				in := baseIn
 				in.Policy = valueobject.PayoutPolicy{}
+
 				return in
 			}(),
 			expectedResult: service.EligibilityResult{},
@@ -359,6 +377,7 @@ func TestEvaluateEligibility(t *testing.T) {
 			in: func() service.EligibilityInput {
 				in := baseIn
 				in.Cursor = ""
+
 				return in
 			}(),
 			expectedResult: service.EligibilityResult{},
@@ -369,6 +388,7 @@ func TestEvaluateEligibility(t *testing.T) {
 			in: func() service.EligibilityInput {
 				in := baseIn
 				in.AssetCode = "EUR"
+
 				return in
 			}(),
 			expectedResult: service.EligibilityResult{},
@@ -379,6 +399,7 @@ func TestEvaluateEligibility(t *testing.T) {
 			in: func() service.EligibilityInput {
 				in := baseIn
 				in.RequestedMinor = 0
+
 				return in
 			}(),
 			expectedResult: service.EligibilityResult{},
@@ -388,6 +409,8 @@ func TestEvaluateEligibility(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.EvaluateEligibility(tc.in)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -419,6 +442,8 @@ func TestBlockedError(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := tc.result.BlockedError()
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -489,6 +514,7 @@ func TestStartRecovery(t *testing.T) {
 			attempt: func() service.RecoveryAttempt {
 				a := baseAttempt
 				a.TenantID = ""
+
 				return a
 			}(),
 			fingerprint:    "fp",
@@ -501,6 +527,7 @@ func TestStartRecovery(t *testing.T) {
 			attempt: func() service.RecoveryAttempt {
 				a := baseAttempt
 				a.IdempotencyKey = ""
+
 				return a
 			}(),
 			fingerprint:    "fp",
@@ -513,6 +540,7 @@ func TestStartRecovery(t *testing.T) {
 			attempt: func() service.RecoveryAttempt {
 				a := baseAttempt
 				a.InstrumentID = ""
+
 				return a
 			}(),
 			fingerprint:    "fp",
@@ -525,6 +553,7 @@ func TestStartRecovery(t *testing.T) {
 			attempt: func() service.RecoveryAttempt {
 				a := baseAttempt
 				a.AmountMinor = 0
+
 				return a
 			}(),
 			fingerprint:    "fp",
@@ -537,6 +566,7 @@ func TestStartRecovery(t *testing.T) {
 			attempt: func() service.RecoveryAttempt {
 				a := baseAttempt
 				a.Actor = ""
+
 				return a
 			}(),
 			fingerprint:    "fp",
@@ -547,6 +577,8 @@ func TestStartRecovery(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.StartRecovery(tc.existing, tc.attempt, tc.fingerprint)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -590,6 +622,7 @@ func TestResolveRecoveryOutcome(t *testing.T) {
 				r := pending
 				r.Outcome = service.OutcomeConfirmed
 				r.ProviderTraceID = "tr-9"
+
 				return r
 			}(),
 		},
@@ -601,6 +634,7 @@ func TestResolveRecoveryOutcome(t *testing.T) {
 			expectedResult: func() service.RecoveryAttempt {
 				r := pending
 				r.Outcome = service.OutcomeFailed
+
 				return r
 			}(),
 		},
@@ -608,6 +642,8 @@ func TestResolveRecoveryOutcome(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := service.ResolveRecoveryOutcome(tc.attempt, tc.confirmed, tc.traceID)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -657,6 +693,7 @@ func TestConfirmRecovery(t *testing.T) {
 			expectedResult1: func() service.RecoveryAttempt {
 				r := resolved
 				r.Status = valueobject.RecoveryCollected
+
 				return r
 			}(),
 			expectedResult2: service.RecoveryPosting{
@@ -724,6 +761,7 @@ func TestConfirmRecovery(t *testing.T) {
 			attempt: func() service.RecoveryAttempt {
 				r := resolved
 				r.Status = valueobject.RecoveryCollected
+
 				return r
 			}(),
 			debit:    "bank-cash",
@@ -732,6 +770,7 @@ func TestConfirmRecovery(t *testing.T) {
 			expectedResult1: func() service.RecoveryAttempt {
 				r := resolved
 				r.Status = valueobject.RecoveryCollected
+
 				return r
 			}(),
 			expectedResult2: service.RecoveryPosting{},
@@ -741,6 +780,8 @@ func TestConfirmRecovery(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult1, actualResult2, err := service.ConfirmRecovery(tc.attempt, tc.debit, tc.credit, tc.auditRef)
 			assert.Equal(t, tc.expectedResult1, actualResult1)
 			assert.Equal(t, tc.expectedResult2, actualResult2)
@@ -781,6 +822,7 @@ func TestCancelRecovery(t *testing.T) {
 			expectedResult: func() service.RecoveryAttempt {
 				r := pending
 				r.Status = valueobject.RecoveryCanceled
+
 				return r
 			}(),
 			expectedError: nil,
@@ -790,11 +832,13 @@ func TestCancelRecovery(t *testing.T) {
 			attempt: func() service.RecoveryAttempt {
 				r := pending
 				r.Status = valueobject.RecoveryCollected
+
 				return r
 			}(),
 			expectedResult: func() service.RecoveryAttempt {
 				r := pending
 				r.Status = valueobject.RecoveryCollected
+
 				return r
 			}(),
 			expectedError: &entity.Error{Code: "RECOVERY_STATE_INVALID", Message: "recovery can be canceled only while PENDING"},
@@ -803,6 +847,8 @@ func TestCancelRecovery(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.CancelRecovery(tc.attempt)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -843,6 +889,8 @@ func TestRecoveryKey(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := service.RecoveryKey(tc.tenant, tc.account, tc.asset, tc.key)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})

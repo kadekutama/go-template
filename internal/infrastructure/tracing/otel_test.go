@@ -2,7 +2,6 @@ package tracing
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -20,6 +19,7 @@ import (
 func recorderProvider() (*Provider, *tracetest.SpanRecorder) {
 	recorder := tracetest.NewSpanRecorder()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
+
 	return &Provider{tracerProvider: tp}, recorder
 }
 
@@ -38,8 +38,10 @@ func TestPropagateKeepsTraceIDStrict(t *testing.T) {
 	span.End()
 
 	extracted := trace.Extract(context.Background(), carrier)
+
 	_, child := tracer.Start(extracted, "child")
 	defer child.End()
+
 	if got := child.SpanContext().TraceID(); got != want {
 		t.Errorf("trace ID changed across propagate: %s != %s", got, want)
 	}
@@ -52,16 +54,18 @@ func TestRecordErrorMarksSpan(t *testing.T) {
 	tracer := provider.Tracer("test")
 
 	_, span := tracer.Start(context.Background(), "op")
-	span.RecordError(errors.New("boom-test"))
+	span.RecordError(ErrBoomTest)
 	span.End()
 
 	ended := recorder.Ended()
 	if len(ended) != 1 {
 		t.Fatalf("expected 1 span, got %d", len(ended))
 	}
+
 	if ended[0].Status().Code != codes.Error {
 		t.Errorf("expected Error status, got %v", ended[0].Status())
 	}
+
 	if len(ended[0].Events()) == 0 {
 		t.Error("expected exception event on RecordError")
 	}
@@ -81,14 +85,18 @@ func TestSpanSetAttributes(t *testing.T) {
 	if len(ended) != 1 {
 		t.Fatalf("expected 1 span, got %d", len(ended))
 	}
+
 	attrs := ended[0].Attributes()
 	foundKey := false
+
 	for _, attr := range attrs {
 		if attr.Key == "test.key" && attr.Value.AsString() == "test.value" {
 			foundKey = true
+
 			break
 		}
 	}
+
 	if !foundKey {
 		t.Errorf("expected test.key attribute not found in %v", attrs)
 	}
@@ -224,11 +232,14 @@ func TestBootstrapValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			provider, err := Bootstrap(tc.cfg)
 			if tc.expectedError {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
+
 				if assert.NotNil(t, provider) {
 					assert.False(t, provider.Exporting())
 					_ = provider.Shutdown(context.Background())
@@ -249,6 +260,7 @@ func TestProviderExcludedRoutes(t *testing.T) {
 		ExcludedRoutes: []string{"/healthz", "/readyz", "/livez"},
 	})
 	assert.NoError(t, err)
+
 	defer func() { _ = provider.Shutdown(context.Background()) }()
 
 	assert.True(t, provider.IsExcludedRoute("/healthz"))

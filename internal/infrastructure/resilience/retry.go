@@ -16,6 +16,7 @@ type SleepFunc func(ctx context.Context, d time.Duration) error
 func RealSleep(ctx context.Context, d time.Duration) error {
 	timer := time.NewTimer(d)
 	defer timer.Stop()
+
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -39,35 +40,44 @@ func Execute(
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+
 	if err := policy.Validate(); err != nil {
 		return err
 	}
+
 	if classify == nil {
 		classify = kernel.DefaultClassifier
 	}
 
 	var lastErr error
+
 	for attempt := 1; ; attempt++ {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+
 		lastErr = fn(ctx)
 		if lastErr == nil {
 			return nil
 		}
+
 		if attempt >= policy.MaxAttempts {
 			break
 		}
+
 		if !kernel.ShouldRetry(classify(lastErr), idempotent, idempotencyKey) {
 			break
 		}
+
 		backoff, err := policy.BackoffFor(attempt)
 		if err != nil {
 			return err
 		}
+
 		if err := sleep(ctx, backoff); err != nil {
 			return err
 		}
 	}
+
 	return fmt.Errorf("resilience: attempts exhausted: %w", lastErr)
 }

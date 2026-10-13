@@ -14,21 +14,25 @@ func Convert(amountMinor int64, rate valueobject.FxRate, at time.Time) (int64, e
 	if err := rate.Validate(); err != nil {
 		return 0, entity.NewError("FX_RATE_INVALID", "fx rate is invalid: "+err.Error())
 	}
+
 	if amountMinor < 0 {
 		return 0, entity.NewError("INVALID_FX_AMOUNT", "fx amount must be non-negative")
 	}
+
 	if rate.IsStale(at) {
 		return 0, entity.NewError("FX_RATE_STALE", "fx rate is stale")
 	}
+
 	hi, ok := checkedMul(amountMinor, rate.Numerator)
 	if !ok {
 		return 0, entity.NewError("FX_OVERFLOW", "fx conversion overflowed")
 	}
 	// Half-up: (hi + den/2) / den.
-	q, ok := checkedAdd(hi, rate.Denominator/2)
+	q, ok := checkedAdd(hi, rate.Denominator/roundingHalfDivisor)
 	if !ok {
 		return 0, entity.NewError("FX_OVERFLOW", "fx conversion overflowed")
 	}
+
 	return q / rate.Denominator, nil
 }
 
@@ -52,16 +56,20 @@ func LotsBalance(lots []LotTotals) error {
 	if len(lots) == 0 {
 		return entity.NewError("FX_LOTS_REQUIRED", "fx conversion requires at least one currency lot")
 	}
+
 	for _, l := range lots {
 		if l.Asset == "" {
 			return entity.NewError("FX_LOT_ASSET_REQUIRED", "fx lot requires an asset code")
 		}
+
 		if l.Debits <= 0 || l.Credits <= 0 {
 			return entity.NewError("INVALID_ENTRY_AMOUNT", "fx lot legs must be positive")
 		}
+
 		if l.Debits != l.Credits {
 			return entity.NewError("UNBALANCED_TRANSACTION", "fx lot must balance independently")
 		}
 	}
+
 	return nil
 }

@@ -61,7 +61,7 @@ type MockPostingRepository_Commit_Call struct {
 // Commit is a helper method to define mock.On call
 //   - ctx context.Context
 //   - posting entity.PostingData
-func (_e *MockPostingRepository_Expecter) Commit(ctx interface{}, posting interface{}) *MockPostingRepository_Commit_Call {
+func (_e *MockPostingRepository_Expecter) Commit(ctx any, posting any) *MockPostingRepository_Commit_Call {
 	return &MockPostingRepository_Commit_Call{Call: _e.mock.On("Commit", ctx, posting)}
 }
 
@@ -130,7 +130,7 @@ type MockPostingRepository_FindByAccount_Call struct {
 //   - account valueobject.AccountID
 //   - cursor string
 //   - limit int
-func (_e *MockPostingRepository_Expecter) FindByAccount(ctx interface{}, tenant interface{}, account interface{}, cursor interface{}, limit interface{}) *MockPostingRepository_FindByAccount_Call {
+func (_e *MockPostingRepository_Expecter) FindByAccount(ctx any, tenant any, account any, cursor any, limit any) *MockPostingRepository_FindByAccount_Call {
 	return &MockPostingRepository_FindByAccount_Call{Call: _e.mock.On("FindByAccount", ctx, tenant, account, cursor, limit)}
 }
 
@@ -188,7 +188,7 @@ type MockPostingRepository_FindByExternalReference_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - reference string
-func (_e *MockPostingRepository_Expecter) FindByExternalReference(ctx interface{}, tenant interface{}, reference interface{}) *MockPostingRepository_FindByExternalReference_Call {
+func (_e *MockPostingRepository_Expecter) FindByExternalReference(ctx any, tenant any, reference any) *MockPostingRepository_FindByExternalReference_Call {
 	return &MockPostingRepository_FindByExternalReference_Call{Call: _e.mock.On("FindByExternalReference", ctx, tenant, reference)}
 }
 
@@ -246,7 +246,7 @@ type MockPostingRepository_FindByID_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - id valueobject.PostingID
-func (_e *MockPostingRepository_Expecter) FindByID(ctx interface{}, tenant interface{}, id interface{}) *MockPostingRepository_FindByID_Call {
+func (_e *MockPostingRepository_Expecter) FindByID(ctx any, tenant any, id any) *MockPostingRepository_FindByID_Call {
 	return &MockPostingRepository_FindByID_Call{Call: _e.mock.On("FindByID", ctx, tenant, id)}
 }
 

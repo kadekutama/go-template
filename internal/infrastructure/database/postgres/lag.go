@@ -1,7 +1,6 @@
 package postgres
 
 import (
-	"errors"
 	"strings"
 )
 
@@ -15,20 +14,6 @@ type LagAlertRule struct {
 	Severity  string
 }
 
-// Validate ensures the alert rule configuration is non-empty and has a positive threshold.
-func (r LagAlertRule) Validate() error {
-	if strings.TrimSpace(r.Metric) == "" {
-		return errors.New("postgres: lag alert metric is required")
-	}
-	if r.Threshold <= 0 {
-		return errors.New("postgres: lag alert threshold must be positive")
-	}
-	if strings.TrimSpace(r.Severity) == "" {
-		return errors.New("postgres: lag alert severity is required")
-	}
-	return nil
-}
-
 // NewLagAlertRule builds and validates a LagAlertRule.
 func NewLagAlertRule(metric string, threshold float64, severity string) (LagAlertRule, error) {
 	rule := LagAlertRule{
@@ -39,6 +24,7 @@ func NewLagAlertRule(metric string, threshold float64, severity string) (LagAler
 	if err := rule.Validate(); err != nil {
 		return LagAlertRule{}, err
 	}
+
 	return rule, nil
 }
 
@@ -46,6 +32,23 @@ func NewLagAlertRule(metric string, threshold float64, severity string) (LagAler
 type StaticLagSource struct {
 	Lag float64
 	Err error
+}
+
+// Validate ensures the alert rule configuration is non-empty and has a positive threshold.
+func (r LagAlertRule) Validate() error {
+	if strings.TrimSpace(r.Metric) == "" {
+		return ErrPostgresLagAlertMetricIsRequired
+	}
+
+	if r.Threshold <= 0 {
+		return ErrPostgresLagAlertThresholdMustBePositive
+	}
+
+	if strings.TrimSpace(r.Severity) == "" {
+		return ErrPostgresLagAlertSeverityIsRequired
+	}
+
+	return nil
 }
 
 // Sample returns the canned lag.

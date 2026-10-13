@@ -18,6 +18,7 @@ func TestBatchIntakeReplay(t *testing.T) {
 	t.Parallel()
 
 	t.Run("duplicate intake replays without re-executing", func(t *testing.T) {
+		t.Parallel()
 		uow := newMockUOW(t, "cursor-5")
 		store := newMockTransferStore(t)
 		authz := newMockAuthorizer(t)
@@ -38,6 +39,7 @@ func TestBatchIntakeReplay(t *testing.T) {
 	})
 
 	t.Run("crashed batch converges on resubmission", func(t *testing.T) {
+		t.Parallel()
 		uow := newMockUOW(t, "cursor-5")
 		store := newMockTransferStore(t)
 		authz := newMockAuthorizer(t)
@@ -54,6 +56,7 @@ func TestBatchIntakeReplay(t *testing.T) {
 			{BatchID: batchID, Index: 0, TransferID: "tfr-c0", Status: command.TransferPending},
 			{BatchID: batchID, Index: 1, TransferID: "tfr-c1", Status: command.TransferPending},
 		}))
+
 		for _, id := range []string{"tfr-c0", "tfr-c1"} {
 			require.NoError(t, store.CreateTransfer(context.Background(), command.TransferRecord{
 				ID: id, TenantID: tfrTenant, LedgerID: tfrLedger,
@@ -61,6 +64,7 @@ func TestBatchIntakeReplay(t *testing.T) {
 				Status: command.TransferPending,
 			}))
 		}
+
 		intake := port.BatchTransferResult{BatchID: batchID, TotalItems: 2, AcceptedItems: 2, Cursor: "cursor-5"}
 		encoded, err := jsonparser.Marshal(intake)
 		require.NoError(t, err)
@@ -88,6 +92,7 @@ func TestBatchIntakeReplay(t *testing.T) {
 	})
 
 	t.Run("partially executed batch converges on original indexes", func(t *testing.T) {
+		t.Parallel()
 		uow := newMockUOW(t, "cursor-5")
 		store := newMockTransferStore(t)
 		authz := newMockAuthorizer(t)
@@ -105,6 +110,7 @@ func TestBatchIntakeReplay(t *testing.T) {
 			{BatchID: batchID, Index: 1, TransferID: "tfr-p1", Status: command.TransferFailed, ErrorCode: "INSUFFICIENT_FUNDS"},
 			{BatchID: batchID, Index: 2, TransferID: "tfr-p2", Status: command.TransferPending},
 		}))
+
 		for id, status := range map[string]string{
 			"tfr-p0": command.TransferCompleted,
 			"tfr-p1": command.TransferFailed,
@@ -116,9 +122,11 @@ func TestBatchIntakeReplay(t *testing.T) {
 				Status: status,
 			}))
 		}
+
 		intake := port.BatchTransferResult{BatchID: batchID, TotalItems: 3, AcceptedItems: 3, Cursor: "cursor-5"}
 		encoded, err := jsonparser.Marshal(intake)
 		require.NoError(t, err)
+
 		fingerprint := command.Fingerprint("batch-1", "t-1", "l-1", "3",
 			"a-src", "a-dst", "USD", "5000",
 			"a-src", "a-dst", "USD", "5000",
@@ -139,10 +147,12 @@ func TestBatchIntakeReplay(t *testing.T) {
 		assert.Equal(t, command.BatchPartial, status.State)
 		assert.Equal(t, 2, status.Succeeded)
 		assert.Equal(t, 1, status.Failed)
+
 		byIndex := map[int]port.BatchItemStatus{}
 		for _, item := range status.Items {
 			byIndex[item.Index] = item
 		}
+
 		assert.Equal(t, command.TransferCompleted, byIndex[0].Status)
 		assert.Equal(t, "tfr-p0", byIndex[0].TransferID)
 		assert.Equal(t, command.TransferFailed, byIndex[1].Status)

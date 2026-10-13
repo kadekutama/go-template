@@ -39,16 +39,19 @@ func (s *ReconReportService) SummarizeRun(ctx context.Context, tenant valueobjec
 	if err != nil {
 		return RunSummary{}, err
 	}
+
 	breaks, err := s.runs.ListBreaksByRun(ctx, tenant, runID)
 	if err != nil {
 		return RunSummary{}, err
 	}
+
 	summary := RunSummary{RunID: run.ID, Status: run.Status, ByStatus: map[string]int{}}
 	for _, record := range breaks {
 		status := string(record.Status)
 		summary.ByStatus[status]++
 		summary.Total++
 	}
+
 	return summary, nil
 }
 
@@ -58,15 +61,18 @@ func (s *ReconReportService) BreaksByStatus(ctx context.Context, tenant valueobj
 	if err != nil {
 		return nil, err
 	}
+
 	filtered := make([]command.BreakRecord, 0, len(breaks))
 	for _, record := range breaks {
 		if status != "" && string(record.Status) != status {
 			continue
 		}
+
 		filtered = append(filtered, record)
 		if limit > 0 && len(filtered) >= limit {
 			break
 		}
 	}
+
 	return filtered, nil
 }

@@ -19,6 +19,6 @@ func ParseMatchDecision(s string) (MatchDecision, error) {
 	case MatchMatched, MatchBreak:
 		return MatchDecision(s), nil
 	default:
-		return "", fmt.Errorf("reconciliation: invalid match decision %q", s)
+		return "", fmt.Errorf("reconciliation: invalid match decision %q: %w", s, ErrReconciliationInvalidMatchDecision)
 	}
 }

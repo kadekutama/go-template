@@ -64,7 +64,7 @@ type MockEnvelopeCrypto_Decrypt_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - envelope port.EncryptedEnvelope
-func (_e *MockEnvelopeCrypto_Expecter) Decrypt(ctx interface{}, tenant interface{}, envelope interface{}) *MockEnvelopeCrypto_Decrypt_Call {
+func (_e *MockEnvelopeCrypto_Expecter) Decrypt(ctx any, tenant any, envelope any) *MockEnvelopeCrypto_Decrypt_Call {
 	return &MockEnvelopeCrypto_Decrypt_Call{Call: _e.mock.On("Decrypt", ctx, tenant, envelope)}
 }
 
@@ -123,7 +123,7 @@ type MockEnvelopeCrypto_Encrypt_Call struct {
 //   - tenant valueobject.TenantID
 //   - purpose string
 //   - plaintext []byte
-func (_e *MockEnvelopeCrypto_Expecter) Encrypt(ctx interface{}, tenant interface{}, purpose interface{}, plaintext interface{}) *MockEnvelopeCrypto_Encrypt_Call {
+func (_e *MockEnvelopeCrypto_Expecter) Encrypt(ctx any, tenant any, purpose any, plaintext any) *MockEnvelopeCrypto_Encrypt_Call {
 	return &MockEnvelopeCrypto_Encrypt_Call{Call: _e.mock.On("Encrypt", ctx, tenant, purpose, plaintext)}
 }
 
@@ -180,7 +180,7 @@ type MockEnvelopeCrypto_Rewrap_Call struct {
 // Rewrap is a helper method to define mock.On call
 //   - ctx context.Context
 //   - envelope port.EncryptedEnvelope
-func (_e *MockEnvelopeCrypto_Expecter) Rewrap(ctx interface{}, envelope interface{}) *MockEnvelopeCrypto_Rewrap_Call {
+func (_e *MockEnvelopeCrypto_Expecter) Rewrap(ctx any, envelope any) *MockEnvelopeCrypto_Rewrap_Call {
 	return &MockEnvelopeCrypto_Rewrap_Call{Call: _e.mock.On("Rewrap", ctx, envelope)}
 }
 

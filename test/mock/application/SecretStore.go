@@ -62,7 +62,7 @@ type MockSecretStore_Get_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - name string
-func (_e *MockSecretStore_Expecter) Get(ctx interface{}, tenant interface{}, name interface{}) *MockSecretStore_Get_Call {
+func (_e *MockSecretStore_Expecter) Get(ctx any, tenant any, name any) *MockSecretStore_Get_Call {
 	return &MockSecretStore_Get_Call{Call: _e.mock.On("Get", ctx, tenant, name)}
 }
 

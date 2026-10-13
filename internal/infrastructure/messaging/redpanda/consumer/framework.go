@@ -32,7 +32,7 @@ import (
 // (delete the receipt) so a redelivery can re-run the handler; otherwise a
 // single transient handler failure would permanently swallow the event.
 type ReceiptStore interface {
-	Claim(ctx context.Context, consumer, eventID string) (duplicate bool, err error)
+	Claim(ctx context.Context, consumer, eventID string) (bool, error)
 	Release(ctx context.Context, consumer, eventID string) error
 }
 
@@ -67,7 +67,7 @@ func NewFramework(params FrameworkParams) (*Framework, error) {
 	}
 
 	if params.Receipts == nil {
-		return nil, fmt.Errorf("consumer: receipt store is required")
+		return nil, ErrConsumerReceiptStoreIsRequired
 	}
 
 	return &Framework{
@@ -88,7 +88,7 @@ func NewFramework(params FrameworkParams) (*Framework, error) {
 // failure path — including DLQ routing — because no side effect committed.
 // A replay after the operator fixes the poison must therefore re-run the
 // handler instead of being swallowed as a duplicate.
-func (f *Framework) Handle(ctx context.Context, msg appport.Message, handler appport.MessageHandler) (err error) {
+func (f *Framework) Handle(ctx context.Context, msg appport.Message, handler appport.MessageHandler) error {
 	if err := f.validateHandle(msg, handler); err != nil {
 		return err
 	}
@@ -107,8 +107,7 @@ func (f *Framework) Handle(ctx context.Context, msg appport.Message, handler app
 	}
 
 	if err := f.invoke(ctx, msg, handler); err != nil {
-		var rErr *receiptReleaseError
-		if errors.As(err, &rErr) {
+		if rErr, ok := errors.AsType[*receiptReleaseError](err); ok {
 			return rErr.err
 		}
 
@@ -132,35 +131,43 @@ func (f *Framework) release(ctx context.Context, eventID string, cause error) er
 
 func (f *Framework) validateHandle(msg appport.Message, handler appport.MessageHandler) error {
 	if f == nil || f.receipts == nil {
-		return fmt.Errorf("consumer: not initialized")
+		return ErrConsumerNotInitialized
 	}
 
 	if strings.TrimSpace(msg.ID) == "" {
-		return fmt.Errorf("consumer: message id is required")
+		return ErrConsumerMessageIDIsRequired
 	}
 
 	if handler == nil {
-		return fmt.Errorf("consumer: handler is required")
+		return ErrConsumerHandlerIsRequired
 	}
 
 	return nil
 }
 
-func (f *Framework) invoke(ctx context.Context, msg appport.Message, handler appport.MessageHandler) (err error) {
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			panicErr := fmt.Errorf("consumer: handler panic: %v", recovered)
-			err = f.routeFailure(ctx, msg, panicErr)
+func (f *Framework) invoke(ctx context.Context, msg appport.Message, handler appport.MessageHandler) error {
+	correlated := withEnvelopeCorrelation(ctx, msg.Payload)
+
+	var result error
+
+	func() {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				panicErr := fmt.Errorf("consumer: handler panic: %v: %w", recovered, ErrConsumerHandlerPanic)
+				result = f.routeFailure(correlated, msg, panicErr)
+			}
+		}()
+
+		if handlerErr := handler(correlated, msg); handlerErr != nil {
+			result = f.routeFailure(correlated, msg, handlerErr)
+
+			return
 		}
+
+		result = nil
 	}()
 
-	ctx = withEnvelopeCorrelation(ctx, msg.Payload)
-
-	if err := handler(ctx, msg); err != nil {
-		return f.routeFailure(ctx, msg, err)
-	}
-
-	return nil
+	return result
 }
 
 // withEnvelopeCorrelation restores trace/request IDs the publisher embedded
@@ -169,7 +176,7 @@ func (f *Framework) invoke(ctx context.Context, msg appport.Message, handler app
 func withEnvelopeCorrelation(ctx context.Context, payload []byte) context.Context {
 	traceID, requestID := envelopeCorrelation(payload)
 
-	fields := make(map[string]string, 2)
+	fields := make(map[string]string, correlationFieldCount)
 	if traceID != "" {
 		fields[log.FieldTraceID] = traceID
 	}
@@ -187,7 +194,9 @@ func withEnvelopeCorrelation(ctx context.Context, payload []byte) context.Contex
 
 // envelopeCorrelation extracts trace/request IDs from an envelope body.
 // Malformed or non-envelope payloads yield empty IDs.
-func envelopeCorrelation(payload []byte) (traceID, requestID string) {
+func envelopeCorrelation(payload []byte) (string, string) {
+	var traceID, requestID string
+
 	if len(payload) == 0 {
 		return "", ""
 	}

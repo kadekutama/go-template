@@ -4,7 +4,6 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"strconv"
 	"strings"
 	"testing"
@@ -58,6 +57,8 @@ func TestSignerMatchesContractVector(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			signer, err := webhook.NewSigner(webhook.SignerParams{
 				Secrets:   []string{tc.secret},
 				Tolerance: 365 * 24 * time.Hour,
@@ -115,7 +116,7 @@ func TestNewSigner(t *testing.T) {
 				Tolerance: 5 * time.Minute,
 			},
 			expectedResult: false,
-			expectedError:  errors.New("webhook: invalid signer params (1 violation(s)): Secrets: rule \"min\" on value []"),
+			expectedError:  webhook.ErrWebhookInvalidSignerParams1ViolationSSecretsRuleMinOnValu,
 		},
 		{
 			name: "whitespace only secrets rejected",
@@ -124,7 +125,7 @@ func TestNewSigner(t *testing.T) {
 				Tolerance: 5 * time.Minute,
 			},
 			expectedResult: false,
-			expectedError:  errors.New("webhook: at least one secret is required"),
+			expectedError:  webhook.ErrWebhookAtLeastOneSecretIsRequired,
 		},
 		{
 			name: "missing tolerance rejected",
@@ -132,7 +133,7 @@ func TestNewSigner(t *testing.T) {
 				Secrets: []string{"s1"},
 			},
 			expectedResult: false,
-			expectedError:  errors.New("webhook: invalid signer params (1 violation(s)): Tolerance: rule \"required\" on value 0s"),
+			expectedError:  webhook.ErrWebhookInvalidSignerParams1ViolationSToleranceRuleRequire,
 		},
 		{
 			name: "negative tolerance rejected",
@@ -141,12 +142,14 @@ func TestNewSigner(t *testing.T) {
 				Tolerance: -1 * time.Second,
 			},
 			expectedResult: false,
-			expectedError:  errors.New("webhook: invalid signer params (1 violation(s)): Tolerance: rule \"gt\" on value -1s"),
+			expectedError:  webhook.ErrWebhookInvalidSignerParams1ViolationSToleranceRuleGtOnVal,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			signer, err := webhook.NewSigner(tc.params)
 			assert.Equal(t, tc.expectedResult, signer != nil)
 
@@ -186,6 +189,7 @@ func TestSignerSign(t *testing.T) {
 			name: "valid payload produces v1 signature",
 			signer: func() *webhook.Signer {
 				s, _ := webhook.NewSigner(webhook.SignerParams{Secrets: []string{"s1"}, Tolerance: 5 * time.Minute})
+
 				return s
 			},
 			payload:           []byte(`{"type":"transfer.completed"}`),
@@ -197,6 +201,7 @@ func TestSignerSign(t *testing.T) {
 			name: "nil payload produces empty string",
 			signer: func() *webhook.Signer {
 				s, _ := webhook.NewSigner(webhook.SignerParams{Secrets: []string{"s1"}, Tolerance: 5 * time.Minute})
+
 				return s
 			},
 			payload:           nil,
@@ -208,6 +213,7 @@ func TestSignerSign(t *testing.T) {
 			name: "empty payload signs empty body",
 			signer: func() *webhook.Signer {
 				s, _ := webhook.NewSigner(webhook.SignerParams{Secrets: []string{"s1"}, Tolerance: 5 * time.Minute})
+
 				return s
 			},
 			payload:           []byte(`{}`),
@@ -219,6 +225,8 @@ func TestSignerSign(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			s := tc.signer()
 			signature := s.Sign(tc.payload, tc.timestamp)
 			assert.Len(t, signature, tc.expectedLength)
@@ -248,18 +256,20 @@ func TestSignerVerify(t *testing.T) {
 			payload:         []byte(`{"type":"x"}`),
 			timestamp:       time.Now().UTC(),
 			signatureHeader: "v1=abcd",
-			expectedError:   errors.New("webhook: signer is not initialized"),
+			expectedError:   webhook.ErrWebhookSignerIsNotInitialized,
 		},
 		{
 			name: "valid signature verifies",
 			signer: func() *webhook.Signer {
 				s, _ := webhook.NewSigner(webhook.SignerParams{Secrets: []string{"s1"}, Tolerance: 5 * time.Minute})
+
 				return s
 			},
 			payload:   []byte(`{"type":"x"}`),
 			timestamp: time.Now().UTC(),
 			signatureHeader: func() string {
 				s, _ := webhook.NewSigner(webhook.SignerParams{Secrets: []string{"s1"}, Tolerance: 5 * time.Minute})
+
 				return s.Sign([]byte(`{"type":"x"}`), time.Now().UTC())
 			}(),
 			expectedError: nil,
@@ -268,84 +278,94 @@ func TestSignerVerify(t *testing.T) {
 			name: "tampered body fails",
 			signer: func() *webhook.Signer {
 				s, _ := webhook.NewSigner(webhook.SignerParams{Secrets: []string{"s1"}, Tolerance: 5 * time.Minute})
+
 				return s
 			},
 			payload:   []byte(`{"type":"y"}`),
 			timestamp: time.Now().UTC(),
 			signatureHeader: func() string {
 				s, _ := webhook.NewSigner(webhook.SignerParams{Secrets: []string{"s1"}, Tolerance: 5 * time.Minute})
+
 				return s.Sign([]byte(`{"type":"x"}`), time.Now().UTC())
 			}(),
-			expectedError: errors.New("webhook: signature mismatch"),
+			expectedError: webhook.ErrWebhookSignatureMismatch,
 		},
 		{
 			name: "stale timestamp fails",
 			signer: func() *webhook.Signer {
 				s, _ := webhook.NewSigner(webhook.SignerParams{Secrets: []string{"s1"}, Tolerance: 5 * time.Minute})
+
 				return s
 			},
 			payload:   []byte(`{"type":"x"}`),
 			timestamp: time.Now().UTC().Add(-time.Hour),
 			signatureHeader: func() string {
 				s, _ := webhook.NewSigner(webhook.SignerParams{Secrets: []string{"s1"}, Tolerance: 5 * time.Minute})
+
 				return s.Sign([]byte(`{"type":"x"}`), time.Now().UTC().Add(-time.Hour))
 			}(),
-			expectedError: errors.New("webhook: timestamp outside tolerance"),
+			expectedError: webhook.ErrWebhookTimestampOutsideTolerance,
 		},
 		{
 			name: "malformed signature without v1 prefix fails",
 			signer: func() *webhook.Signer {
 				s, _ := webhook.NewSigner(webhook.SignerParams{Secrets: []string{"s1"}, Tolerance: 5 * time.Minute})
+
 				return s
 			},
 			payload:         []byte(`{"type":"x"}`),
 			timestamp:       time.Now().UTC(),
 			signatureHeader: "bad-signature",
-			expectedError:   errors.New("webhook: signature values must start with 'v1='"),
+			expectedError:   webhook.ErrWebhookSignatureValuesMustStartWithV1,
 		},
 		{
 			name: "malformed signature non-hex fails",
 			signer: func() *webhook.Signer {
 				s, _ := webhook.NewSigner(webhook.SignerParams{Secrets: []string{"s1"}, Tolerance: 5 * time.Minute})
+
 				return s
 			},
 			payload:         []byte(`{"type":"x"}`),
 			timestamp:       time.Now().UTC(),
 			signatureHeader: "v1=not-a-hex-string-zz",
-			expectedError:   errors.New("webhook: signature is not hex"),
+			expectedError:   webhook.ErrWebhookSignatureIsNotHex,
 		},
 		{
 			name: "empty signature fails",
 			signer: func() *webhook.Signer {
 				s, _ := webhook.NewSigner(webhook.SignerParams{Secrets: []string{"s1"}, Tolerance: 5 * time.Minute})
+
 				return s
 			},
 			payload:         []byte(`{"type":"x"}`),
 			timestamp:       time.Now().UTC(),
 			signatureHeader: "",
-			expectedError:   errors.New("webhook: signature is required"),
+			expectedError:   webhook.ErrWebhookSignatureIsRequired,
 		},
 		{
 			name: "nil payload fails",
 			signer: func() *webhook.Signer {
 				s, _ := webhook.NewSigner(webhook.SignerParams{Secrets: []string{"s1"}, Tolerance: 5 * time.Minute})
+
 				return s
 			},
 			payload:         nil,
 			timestamp:       time.Now().UTC(),
 			signatureHeader: "v1=1234",
-			expectedError:   errors.New("webhook: payload is required"),
+			expectedError:   webhook.ErrWebhookPayloadIsRequired,
 		},
 		{
 			name: "rotated signature verifies against rotated secrets",
 			signer: func() *webhook.Signer {
 				s, _ := webhook.NewSigner(webhook.SignerParams{Secrets: []string{"s1", "s2"}, Tolerance: 5 * time.Minute})
+
 				return s
 			},
 			payload:   []byte(`{"type":"x"}`),
 			timestamp: time.Now().UTC(),
 			signatureHeader: func() string {
 				oldSigner, _ := webhook.NewSigner(webhook.SignerParams{Secrets: []string{"s1"}, Tolerance: 5 * time.Minute})
+
 				return oldSigner.Sign([]byte(`{"type":"x"}`), time.Now().UTC())
 			}(),
 			expectedError: nil,
@@ -354,12 +374,17 @@ func TestSignerVerify(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			s := tc.signer()
+
 			err := s.Verify(tc.payload, tc.timestamp, tc.signatureHeader)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
+
 				return
 			}
+
 			assert.NoError(t, err)
 		})
 	}
@@ -398,6 +423,8 @@ func TestSignerRotation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			signer, err := webhook.NewSigner(webhook.SignerParams{Secrets: tc.signerSecrets, Tolerance: 5 * time.Minute})
 			require.NoError(t, err)
 

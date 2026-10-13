@@ -63,7 +63,7 @@ type MockRateLimiter_Allow_Call struct {
 //   - key string
 //   - budget int64
 //   - window time.Duration
-func (_e *MockRateLimiter_Expecter) Allow(ctx interface{}, key interface{}, budget interface{}, window interface{}) *MockRateLimiter_Allow_Call {
+func (_e *MockRateLimiter_Expecter) Allow(ctx any, key any, budget any, window any) *MockRateLimiter_Allow_Call {
 	return &MockRateLimiter_Allow_Call{Call: _e.mock.On("Allow", ctx, key, budget, window)}
 }
 

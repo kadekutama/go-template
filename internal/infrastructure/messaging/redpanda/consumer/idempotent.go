@@ -11,14 +11,14 @@ import (
 )
 
 // ReceiptKV is the narrow Valkey seam for inbox hints (DIP): the production
-// *valkey.ValkeyClient implements it and tests use Mockery mocks.
+// *valkey.Client implements it and tests use Mockery mocks.
 type ReceiptKV interface {
 	SetNX(ctx context.Context, key string, value []byte, ttl time.Duration) (bool, error)
 	Delete(ctx context.Context, key string) error
 }
 
 // Compile-time seam conformance for the production client.
-var _ ReceiptKV = (*valkey.ValkeyClient)(nil)
+var _ ReceiptKV = (*valkey.Client)(nil)
 
 // ValkeyReceiptParams carries constructor dependencies (Parameter Object pattern).
 type ValkeyReceiptParams struct {
@@ -41,11 +41,11 @@ func NewValkeyReceiptStore(params ValkeyReceiptParams) (*ValkeyReceiptStore, err
 	}
 
 	if params.Client == nil {
-		return nil, fmt.Errorf("consumer: valkey client is required")
+		return nil, ErrConsumerValkeyClientIsRequired
 	}
 
 	if params.TTL <= 0 {
-		return nil, fmt.Errorf("consumer: ttl must be positive")
+		return nil, ErrConsumerTTLMustBePositive
 	}
 
 	return &ValkeyReceiptStore{client: params.Client, ttl: params.TTL}, nil
@@ -54,11 +54,11 @@ func NewValkeyReceiptStore(params ValkeyReceiptParams) (*ValkeyReceiptStore, err
 // Claim sets inbox:{consumer}:{eventID} NX; losers are duplicates.
 func (s *ValkeyReceiptStore) Claim(ctx context.Context, consumer, eventID string) (bool, error) {
 	if s == nil || s.client == nil {
-		return false, fmt.Errorf("consumer: not initialized")
+		return false, ErrConsumerNotInitialized
 	}
 
 	if strings.TrimSpace(consumer) == "" || strings.TrimSpace(eventID) == "" {
-		return false, fmt.Errorf("consumer: consumer and event id are required")
+		return false, ErrConsumerConsumerAndEventIDAreRequired
 	}
 
 	if err := ctx.Err(); err != nil {
@@ -77,11 +77,11 @@ func (s *ValkeyReceiptStore) Claim(ctx context.Context, consumer, eventID string
 // Missing keys succeed (Valkey DEL is idempotent).
 func (s *ValkeyReceiptStore) Release(ctx context.Context, consumer, eventID string) error {
 	if s == nil || s.client == nil {
-		return fmt.Errorf("consumer: not initialized")
+		return ErrConsumerNotInitialized
 	}
 
 	if strings.TrimSpace(consumer) == "" || strings.TrimSpace(eventID) == "" {
-		return fmt.Errorf("consumer: consumer and event id are required")
+		return ErrConsumerConsumerAndEventIDAreRequired
 	}
 
 	if err := ctx.Err(); err != nil {

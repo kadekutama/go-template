@@ -111,6 +111,8 @@ func TestRefreshValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			_, err := jwt.NewRefreshStore(tc.params)
 			assert.ErrorIs(t, err, tc.expectedError)
 		})
@@ -118,6 +120,7 @@ func TestRefreshValidation(t *testing.T) {
 }
 
 func TestRefreshRotationDurable(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	clk := mockapplication.NewMockClock(t)
@@ -164,13 +167,16 @@ func TestRefreshRotationDurable(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			store := openReceipts(t, clk)
 
 			_, token, err := store.IssueRefresh(context.Background(), tc.subject, tc.tenant)
 			if tc.subject == "" || tc.tenant == "not-a-uuid" {
 				assert.ErrorIs(t, err, jwt.ErrInvalidClaims)
+
 				return
 			}
+
 			require.NoError(t, err)
 
 			claim, err := store.UseRefresh(context.Background(), token)
@@ -196,6 +202,7 @@ func TestRefreshRotationDurable(t *testing.T) {
 }
 
 func TestRefreshUnknownToken(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	clk := mockapplication.NewMockClock(t)
@@ -222,11 +229,14 @@ func TestRefreshUnknownToken(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			store := openReceipts(t, clk)
 
 			ctx := context.Background()
+
 			if tc.name == "canceled context" {
 				var cancel context.CancelFunc
+
 				ctx, cancel = context.WithCancel(context.Background())
 				cancel()
 			}
@@ -238,6 +248,7 @@ func TestRefreshUnknownToken(t *testing.T) {
 }
 
 func TestRefreshStaleFamilyExpires(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	base := time.Date(2026, 9, 23, 0, 0, 0, 0, time.UTC)
@@ -264,6 +275,7 @@ func TestRefreshStaleFamilyExpires(t *testing.T) {
 }
 
 func TestRefreshUseCanceledContext(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	clk := mockapplication.NewMockClock(t)

@@ -8,7 +8,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/knadh/koanf/parsers/yaml"
-	"github.com/knadh/koanf/providers/env"
+	"github.com/knadh/koanf/providers/env/v2"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
 )
@@ -45,8 +45,11 @@ func Load(base string, overlays ...string) (*Config, error) {
 		}
 	}
 
-	if err := k.Load(env.Provider(envPrefix, ".", func(s string) string {
-		return strings.ToLower(strings.ReplaceAll(strings.TrimPrefix(s, envPrefix), "__", "."))
+	if err := k.Load(env.Provider(".", env.Opt{
+		Prefix: envPrefix,
+		TransformFunc: func(k, v string) (string, any) {
+			return strings.ToLower(strings.ReplaceAll(strings.TrimPrefix(k, envPrefix), "__", ".")), v
+		},
 	}), nil); err != nil {
 		return nil, fmt.Errorf("load env overrides: %w", err)
 	}
@@ -89,12 +92,15 @@ func validate(cfg *Config) error {
 		if !errors.As(err, &verrs) {
 			return fmt.Errorf("validate config: %w", err)
 		}
+
 		parts := make([]string, 0, len(verrs))
 		for _, fe := range verrs {
 			parts = append(parts, fmt.Sprintf("%s: rule %q on value %v", fe.Namespace(), fe.Tag(), fe.Value()))
 		}
-		return fmt.Errorf("invalid config (%d violation(s)): %s", len(parts), strings.Join(parts, "; "))
+
+		return fmt.Errorf("invalid config (%d violation(s)): %s: %w", len(parts), strings.Join(parts, "; "), ErrInvalidConfigViolationS)
 	}
+
 	return nil
 }
 
@@ -103,12 +109,14 @@ func validate(cfg *Config) error {
 // shape can slip through an `any`-typed field later.
 func checkSecretRefs(raw map[string]any) error {
 	var walk func(prefix string, node map[string]any) error
+
 	walk = func(prefix string, node map[string]any) error {
 		for key, val := range node {
 			path := key
 			if prefix != "" {
 				path = prefix + "." + key
 			}
+
 			switch typed := val.(type) {
 			case string:
 				if strings.Contains(typed, secretMarker) {
@@ -124,8 +132,10 @@ func checkSecretRefs(raw map[string]any) error {
 				}
 			}
 		}
+
 		return nil
 	}
+
 	return walk("", raw)
 }
 
@@ -135,11 +145,13 @@ func checkSecretSlice(path string, items []any, walk func(string, map[string]any
 		if s, ok := elem.(string); ok && strings.Contains(s, secretMarker) {
 			return &SecretRefError{Key: itemPath}
 		}
+
 		if m, ok := elem.(map[string]any); ok {
 			if err := walk(itemPath, m); err != nil {
 				return err
 			}
 		}
 	}
+
 	return nil
 }

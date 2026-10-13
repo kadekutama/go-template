@@ -34,36 +34,6 @@ type Hasher struct {
 	historical    map[int]HasherParams
 }
 
-// IsZero reports whether the Hasher is uninitialized.
-func (h Hasher) IsZero() bool {
-	return h.activeVersion == 0
-}
-
-// validateParams checks one HasherParams block.
-func validateParams(params HasherParams) error {
-	if params.Time == 0 || params.Time > 16 {
-		return fmt.Errorf("%w: time 1..16", ErrConfigRequired)
-	}
-
-	if params.Memory < 8192 {
-		return fmt.Errorf("%w: memory >= 8192 KiB", ErrConfigRequired)
-	}
-
-	if params.Threads == 0 || params.Threads > 16 {
-		return fmt.Errorf("%w: threads 1..16", ErrConfigRequired)
-	}
-
-	if params.KeyLen < 16 || params.KeyLen > 64 {
-		return fmt.Errorf("%w: key length 16..64", ErrConfigRequired)
-	}
-
-	if params.SaltLen < 8 || params.SaltLen > 64 {
-		return fmt.Errorf("%w: salt length 8..64", ErrConfigRequired)
-	}
-
-	return nil
-}
-
 // NewHasher builds a Hasher with explicit cost parameters under version 1.
 func NewHasher(params HasherParams) (Hasher, error) {
 	return NewHasherWithHistory(hashVersion, params, nil)
@@ -86,11 +56,14 @@ func NewHasherWithHistory(activeVersion int, activeParams HasherParams, historic
 		if v <= 0 {
 			return Hasher{}, fmt.Errorf("%w: historical version must be positive", ErrConfigRequired)
 		}
+
 		if err := validateParams(p); err != nil {
 			return Hasher{}, fmt.Errorf("version %d: %w", v, err)
 		}
+
 		hist[v] = p
 	}
+
 	hist[activeVersion] = activeParams
 
 	return Hasher{
@@ -105,6 +78,36 @@ type Sealed struct {
 	Hash    []byte
 	Salt    []byte
 	Version int
+}
+
+// IsZero reports whether the Hasher is uninitialized.
+func (h Hasher) IsZero() bool {
+	return h.activeVersion == 0
+}
+
+// validateParams checks one HasherParams block.
+func validateParams(params HasherParams) error {
+	if params.Time == 0 || params.Time > 16 {
+		return fmt.Errorf("%w: time 1..16", ErrConfigRequired)
+	}
+
+	if params.Memory < minArgonMemoryKiB {
+		return fmt.Errorf("%w: memory >= 8192 KiB", ErrConfigRequired)
+	}
+
+	if params.Threads == 0 || params.Threads > 16 {
+		return fmt.Errorf("%w: threads 1..16", ErrConfigRequired)
+	}
+
+	if params.KeyLen < 16 || params.KeyLen > 64 {
+		return fmt.Errorf("%w: key length 16..64", ErrConfigRequired)
+	}
+
+	if params.SaltLen < 8 || params.SaltLen > 64 {
+		return fmt.Errorf("%w: salt length 8..64", ErrConfigRequired)
+	}
+
+	return nil
 }
 
 // Hash seals secret with a fresh random salt under active parameters.
@@ -130,6 +133,7 @@ func (h Hasher) Hash(secret string) (Sealed, error) {
 // verify under wrong parameters.
 func (h Hasher) Verify(sealed Sealed, secret string) bool {
 	valid, _ := h.VerifyWithUpgrade(sealed, secret)
+
 	return valid
 }
 
@@ -138,7 +142,7 @@ func (h Hasher) Verify(sealed Sealed, secret string) bool {
 // closed. If valid, needsUpgrade is true when the sealed version differs
 // from the active version, signaling callers to transparently re-hash and
 // persist the upgrade.
-func (h Hasher) VerifyWithUpgrade(sealed Sealed, secret string) (valid bool, needsUpgrade bool) {
+func (h Hasher) VerifyWithUpgrade(sealed Sealed, secret string) (bool, bool) {
 	p, ok := h.historical[sealed.Version]
 	if !ok {
 		return false, false

@@ -40,6 +40,7 @@ func TestEntryValidate(t *testing.T) {
 			entry: func() entity.Entry {
 				e := valid
 				e.ID = ""
+
 				return e
 			}(),
 			expectedError: nil,
@@ -49,6 +50,7 @@ func TestEntryValidate(t *testing.T) {
 			entry: func() entity.Entry {
 				e := valid
 				e.ID = "not-a-uuid"
+
 				return e
 			}(),
 			expectedError: entity.NewError("ENTRY_ID_INVALID", "entry id is invalid"),
@@ -58,6 +60,7 @@ func TestEntryValidate(t *testing.T) {
 			entry: func() entity.Entry {
 				e := valid
 				e.PostingID = ""
+
 				return e
 			}(),
 			expectedError: nil,
@@ -67,6 +70,7 @@ func TestEntryValidate(t *testing.T) {
 			entry: func() entity.Entry {
 				e := valid
 				e.PostingID = "not-a-uuid"
+
 				return e
 			}(),
 			expectedError: entity.NewError("ENTRY_POSTING_INVALID", "posting id is invalid"),
@@ -76,6 +80,7 @@ func TestEntryValidate(t *testing.T) {
 			entry: func() entity.Entry {
 				e := valid
 				e.AccountID = ""
+
 				return e
 			}(),
 			expectedError: entity.NewError("ENTRY_ACCOUNT_REQUIRED", "account id is required"),
@@ -85,6 +90,7 @@ func TestEntryValidate(t *testing.T) {
 			entry: func() entity.Entry {
 				e := valid
 				e.Side = "SIDEWAYS"
+
 				return e
 			}(),
 			expectedError: entity.NewError("ENTRY_SIDE_INVALID", "side must be DEBIT or CREDIT"),
@@ -94,6 +100,7 @@ func TestEntryValidate(t *testing.T) {
 			entry: func() entity.Entry {
 				e := valid
 				e.AmountMinor = 0
+
 				return e
 			}(),
 			expectedError: entity.NewError("INVALID_ENTRY_AMOUNT", "entry amount must be a positive minor-unit quantity"),
@@ -103,6 +110,7 @@ func TestEntryValidate(t *testing.T) {
 			entry: func() entity.Entry {
 				e := valid
 				e.AmountMinor = -5
+
 				return e
 			}(),
 			expectedError: entity.NewError("INVALID_ENTRY_AMOUNT", "entry amount must be a positive minor-unit quantity"),
@@ -112,6 +120,7 @@ func TestEntryValidate(t *testing.T) {
 			entry: func() entity.Entry {
 				e := valid
 				e.AssetCode = ""
+
 				return e
 			}(),
 			expectedError: entity.NewError("ENTRY_ASSET_REQUIRED", "asset code is required"),
@@ -121,6 +130,7 @@ func TestEntryValidate(t *testing.T) {
 			entry: func() entity.Entry {
 				e := valid
 				e.AccountSeq = 0
+
 				return e
 			}(),
 			expectedError: entity.NewError("ENTRY_SEQUENCE_REQUIRED", "account sequence must be at least 1"),
@@ -129,6 +139,8 @@ func TestEntryValidate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.entry.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -171,6 +183,7 @@ func TestPostingDataValidate(t *testing.T) {
 				rev := valueobject.PostingID("40000000-0000-4000-8000-000000000002")
 				p.ReversalOf = &rev
 				p.Reason = "fix"
+
 				return p
 			}(),
 			expectedError: nil,
@@ -180,6 +193,7 @@ func TestPostingDataValidate(t *testing.T) {
 			posting: func() entity.PostingData {
 				p := valid
 				p.ID = ""
+
 				return p
 			}(),
 			expectedError: nil,
@@ -189,6 +203,7 @@ func TestPostingDataValidate(t *testing.T) {
 			posting: func() entity.PostingData {
 				p := valid
 				p.ID = "not-a-uuid"
+
 				return p
 			}(),
 			expectedError: entity.NewError("POSTING_ID_INVALID", "posting id is invalid"),
@@ -198,6 +213,7 @@ func TestPostingDataValidate(t *testing.T) {
 			posting: func() entity.PostingData {
 				p := valid
 				p.TenantID = ""
+
 				return p
 			}(),
 			expectedError: entity.NewError("TENANT_REQUIRED", "tenant id is required"),
@@ -207,6 +223,7 @@ func TestPostingDataValidate(t *testing.T) {
 			posting: func() entity.PostingData {
 				p := valid
 				p.LedgerID = ""
+
 				return p
 			}(),
 			expectedError: entity.NewError("LEDGER_REQUIRED", "ledger id is required"),
@@ -216,6 +233,7 @@ func TestPostingDataValidate(t *testing.T) {
 			posting: func() entity.PostingData {
 				p := valid
 				p.Operation = ""
+
 				return p
 			}(),
 			expectedError: entity.NewError("POSTING_OPERATION_REQUIRED", "operation template name is required"),
@@ -225,6 +243,7 @@ func TestPostingDataValidate(t *testing.T) {
 			posting: func() entity.PostingData {
 				p := valid
 				p.Entries = p.Entries[:1]
+
 				return p
 			}(),
 			expectedError: entity.NewError("POSTING_ENTRIES_REQUIRED", "posting requires at least two entries"),
@@ -237,6 +256,7 @@ func TestPostingDataValidate(t *testing.T) {
 					{ID: "70000000-0000-4000-8000-000000000001", PostingID: testPosting1, AccountID: testAccount1, Side: valueobject.DirectionDebit, AmountMinor: 0, AssetCode: testUSD, AccountSeq: 1},
 					{ID: "70000000-0000-4000-8000-000000000002", PostingID: testPosting1, AccountID: testAccount2, Side: valueobject.DirectionCredit, AmountMinor: 100, AssetCode: testUSD, AccountSeq: 1},
 				}
+
 				return p
 			}(),
 			expectedError: entity.NewError("INVALID_ENTRY_AMOUNT", "entry amount must be a positive minor-unit quantity"),
@@ -246,6 +266,7 @@ func TestPostingDataValidate(t *testing.T) {
 			posting: func() entity.PostingData {
 				p := valid
 				p.EffectiveAt = time.Time{}
+
 				return p
 			}(),
 			expectedError: entity.NewError("POSTING_EFFECTIVE_REQUIRED", "effective_at is required"),
@@ -255,6 +276,7 @@ func TestPostingDataValidate(t *testing.T) {
 			posting: func() entity.PostingData {
 				p := valid
 				p.RecordedAt = time.Time{}
+
 				return p
 			}(),
 			expectedError: entity.NewError("POSTING_RECORDED_REQUIRED", "recorded_at is server-assigned and required"),
@@ -266,6 +288,7 @@ func TestPostingDataValidate(t *testing.T) {
 				rev := valueobject.PostingID("40000000-0000-4000-8000-000000000002")
 				p.ReversalOf = &rev
 				p.Reason = ""
+
 				return p
 			}(),
 			expectedError: entity.NewError("REVERSAL_REASON_REQUIRED", "reversal requires a reason"),
@@ -274,6 +297,8 @@ func TestPostingDataValidate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.posting.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -316,6 +341,7 @@ func TestHoldDataValidate(t *testing.T) {
 			hold: func() entity.HoldData {
 				h := valid
 				h.State = entity.HoldCaptured
+
 				return h
 			}(),
 			expectedError: nil,
@@ -325,6 +351,7 @@ func TestHoldDataValidate(t *testing.T) {
 			hold: func() entity.HoldData {
 				h := valid
 				h.State = entity.HoldReleased
+
 				return h
 			}(),
 			expectedError: nil,
@@ -334,6 +361,7 @@ func TestHoldDataValidate(t *testing.T) {
 			hold: func() entity.HoldData {
 				h := valid
 				h.State = entity.HoldExpired
+
 				return h
 			}(),
 			expectedError: nil,
@@ -343,6 +371,7 @@ func TestHoldDataValidate(t *testing.T) {
 			hold: func() entity.HoldData {
 				h := valid
 				h.ID = ""
+
 				return h
 			}(),
 			expectedError: nil,
@@ -352,6 +381,7 @@ func TestHoldDataValidate(t *testing.T) {
 			hold: func() entity.HoldData {
 				h := valid
 				h.ID = "not-a-uuid"
+
 				return h
 			}(),
 			expectedError: entity.NewError("HOLD_ID_INVALID", "hold id is invalid"),
@@ -361,6 +391,7 @@ func TestHoldDataValidate(t *testing.T) {
 			hold: func() entity.HoldData {
 				h := valid
 				h.TenantID = ""
+
 				return h
 			}(),
 			expectedError: entity.NewError("TENANT_REQUIRED", "tenant id is required"),
@@ -370,6 +401,7 @@ func TestHoldDataValidate(t *testing.T) {
 			hold: func() entity.HoldData {
 				h := valid
 				h.LedgerID = ""
+
 				return h
 			}(),
 			expectedError: entity.NewError("LEDGER_REQUIRED", "ledger id is required"),
@@ -379,6 +411,7 @@ func TestHoldDataValidate(t *testing.T) {
 			hold: func() entity.HoldData {
 				h := valid
 				h.AccountID = ""
+
 				return h
 			}(),
 			expectedError: entity.NewError("HOLD_ACCOUNT_REQUIRED", "account id is required"),
@@ -388,6 +421,7 @@ func TestHoldDataValidate(t *testing.T) {
 			hold: func() entity.HoldData {
 				h := valid
 				h.AssetCode = ""
+
 				return h
 			}(),
 			expectedError: entity.NewError("HOLD_ASSET_REQUIRED", "asset code is required"),
@@ -397,6 +431,7 @@ func TestHoldDataValidate(t *testing.T) {
 			hold: func() entity.HoldData {
 				h := valid
 				h.AmountMinor = 0
+
 				return h
 			}(),
 			expectedError: entity.NewError("HOLD_AMOUNT_INVALID", "hold amount must be positive"),
@@ -406,6 +441,7 @@ func TestHoldDataValidate(t *testing.T) {
 			hold: func() entity.HoldData {
 				h := valid
 				h.Kind = ""
+
 				return h
 			}(),
 			expectedError: entity.NewError("HOLD_KIND_REQUIRED", "hold kind is required"),
@@ -415,6 +451,7 @@ func TestHoldDataValidate(t *testing.T) {
 			hold: func() entity.HoldData {
 				h := valid
 				h.State = "MELTED"
+
 				return h
 			}(),
 			expectedError: entity.NewError("HOLD_STATE_INVALID", "hold state is invalid"),
@@ -424,6 +461,7 @@ func TestHoldDataValidate(t *testing.T) {
 			hold: func() entity.HoldData {
 				h := valid
 				h.ExpiresAt = time.Time{}
+
 				return h
 			}(),
 			expectedError: entity.NewError("HOLD_EXPIRY_REQUIRED", "expiry is required"),
@@ -433,6 +471,7 @@ func TestHoldDataValidate(t *testing.T) {
 			hold: func() entity.HoldData {
 				h := valid
 				h.Version = 0
+
 				return h
 			}(),
 			expectedError: entity.NewError("HOLD_VERSION_INVALID", "version starts at 1"),
@@ -441,6 +480,8 @@ func TestHoldDataValidate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.hold.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})

@@ -1,7 +1,6 @@
 package service_test
 
 import (
-	"errors"
 	"math"
 	"testing"
 	"time"
@@ -75,6 +74,7 @@ func TestConvert(t *testing.T) {
 			rate: func() valueobject.FxRate {
 				r := fresh
 				r.Numerator = 0
+
 				return r
 			}(),
 			at:             fresh.QuotedAt,
@@ -87,6 +87,7 @@ func TestConvert(t *testing.T) {
 			rate: func() valueobject.FxRate {
 				r := fresh
 				r.Numerator = math.MaxInt64
+
 				return r
 			}(),
 			at:             fresh.QuotedAt,
@@ -99,6 +100,7 @@ func TestConvert(t *testing.T) {
 			rate: func() valueobject.FxRate {
 				r := fresh
 				r.Numerator, r.Denominator = 1, 3
+
 				return r
 			}(),
 			at:             fresh.QuotedAt,
@@ -108,6 +110,8 @@ func TestConvert(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.Convert(tc.amountMinor, tc.rate, tc.at)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -117,12 +121,14 @@ func TestConvert(t *testing.T) {
 
 func TestGainLoss(t *testing.T) {
 	t.Parallel()
+
 	type testCase struct {
 		name                string
 		authorizeQuoteMinor int64
 		settleQuoteMinor    int64
 		expectedResult      int64
 	}
+
 	testCases := []testCase{
 		{
 			name:                "gain",
@@ -145,6 +151,8 @@ func TestGainLoss(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := service.GainLoss(tc.authorizeQuoteMinor, tc.settleQuoteMinor)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -153,11 +161,13 @@ func TestGainLoss(t *testing.T) {
 
 func TestLotsBalance(t *testing.T) {
 	t.Parallel()
+
 	type testCase struct {
 		name          string
 		lots          []service.LotTotals
 		expectedError error
 	}
+
 	testCases := []testCase{
 		{
 			name: "independent lots balance",
@@ -196,6 +206,8 @@ func TestLotsBalance(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := service.LotsBalance(tc.lots)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -204,6 +216,7 @@ func TestLotsBalance(t *testing.T) {
 
 func TestNewFxPair(t *testing.T) {
 	t.Parallel()
+
 	type testCase struct {
 		name           string
 		base           valueobject.AssetCode
@@ -211,6 +224,7 @@ func TestNewFxPair(t *testing.T) {
 		expectedResult valueobject.FxPair
 		expectedError  error
 	}
+
 	testCases := []testCase{
 		{
 			name:           "valid pair",
@@ -224,18 +238,20 @@ func TestNewFxPair(t *testing.T) {
 			base:           "USD",
 			quote:          "USD",
 			expectedResult: valueobject.FxPair{},
-			expectedError:  errors.New("fx: pair base and quote must differ"),
+			expectedError:  service.ErrFxPairBaseAndQuoteMustDiffer,
 		},
 		{
 			name:           "empty code",
 			base:           "",
 			quote:          "USD",
 			expectedResult: valueobject.FxPair{},
-			expectedError:  errors.New("fx: pair requires base and quote codes"),
+			expectedError:  service.ErrFxPairRequiresBaseAndQuoteCodes,
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := valueobject.NewFxPair(tc.base, tc.quote)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)

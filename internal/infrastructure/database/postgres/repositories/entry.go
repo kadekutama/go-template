@@ -27,7 +27,7 @@ type EntryStore struct {
 // NewEntryStore builds the adapter; DB must be non-nil.
 func NewEntryStore(params EntryStoreParams) (*EntryStore, error) {
 	if params.DB == nil {
-		return nil, fmt.Errorf("postgres: entry store needs DB")
+		return nil, ErrPostgresEntryStoreNeedsDB
 	}
 
 	return &EntryStore{db: params.DB}, nil
@@ -53,7 +53,7 @@ func (s *EntryStore) FindByAccount(
 	limit int,
 ) ([]entity.Entry, string, error) {
 	if tenant.String() == "" {
-		return nil, "", fmt.Errorf("postgres: tenant is required")
+		return nil, "", ErrPostgresTenantIsRequired
 	}
 
 	if limit <= 0 || limit > 100 {

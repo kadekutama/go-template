@@ -33,6 +33,7 @@ func (s *DisputeQueryService) GetDispute(ctx context.Context, query port.Dispute
 	if err != nil {
 		return port.DisputeResult{}, err
 	}
+
 	return port.DisputeResult{Dispute: dispute}, nil
 }
 
@@ -41,13 +42,16 @@ func (s *DisputeQueryService) ListDisputes(ctx context.Context, filter port.Disp
 	if filter.Limit <= 0 || filter.Limit > 100 {
 		return port.DisputePage{}, entity.NewError("INVALID_PAGE_LIMIT", "limit must be between 1 and 100")
 	}
+
 	disputes, next, err := s.disputes.ListDisputes(ctx, filter.Status, filter.From, filter.To, filter.Cursor, filter.Limit)
 	if err != nil {
 		return port.DisputePage{}, err
 	}
+
 	results := make([]port.DisputeResult, 0, len(disputes))
 	for _, dispute := range disputes {
 		results = append(results, port.DisputeResult{Dispute: dispute})
 	}
+
 	return port.DisputePage{Disputes: results, NextCursor: next}, nil
 }

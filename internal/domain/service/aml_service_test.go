@@ -11,7 +11,7 @@ import (
 	"github.com/kadekutama/go-template/internal/domain/service"
 )
 
-func TestScreenTransaction(t *testing.T) {
+func TestScreenTransactionDecisions(t *testing.T) {
 	t.Parallel()
 
 	baseReq := repository.ScreeningRequest{
@@ -54,6 +54,7 @@ func TestScreenTransaction(t *testing.T) {
 			req: func() repository.ScreeningRequest {
 				r := baseReq
 				r.Watchlisted = true
+
 				return r
 			}(),
 			policy:           basePolicy,
@@ -67,6 +68,7 @@ func TestScreenTransaction(t *testing.T) {
 				r := baseReq
 				r.Watchlisted = true
 				r.AmountMinor = 50000
+
 				return r
 			}(),
 			policy:           basePolicy,
@@ -80,6 +82,7 @@ func TestScreenTransaction(t *testing.T) {
 				r := baseReq
 				r.Watchlisted = true
 				r.DayCount = 20
+
 				return r
 			}(),
 			policy:           basePolicy,
@@ -93,6 +96,7 @@ func TestScreenTransaction(t *testing.T) {
 				r := baseReq
 				r.Watchlisted = true
 				r.DaySumMinor = 100000
+
 				return r
 			}(),
 			policy:           basePolicy,
@@ -105,6 +109,7 @@ func TestScreenTransaction(t *testing.T) {
 			req: func() repository.ScreeningRequest {
 				r := baseReq
 				r.AmountMinor = 20000
+
 				return r
 			}(),
 			policy:           basePolicy,
@@ -118,6 +123,7 @@ func TestScreenTransaction(t *testing.T) {
 				r := baseReq
 				r.AmountMinor = 20000
 				r.DayCount = 20
+
 				return r
 			}(),
 			policy:           basePolicy,
@@ -131,6 +137,7 @@ func TestScreenTransaction(t *testing.T) {
 				r := baseReq
 				r.AmountMinor = 20000
 				r.DaySumMinor = 50000
+
 				return r
 			}(),
 			policy:           basePolicy,
@@ -143,6 +150,7 @@ func TestScreenTransaction(t *testing.T) {
 			req: func() repository.ScreeningRequest {
 				r := baseReq
 				r.DayCount = 10
+
 				return r
 			}(),
 			policy:           basePolicy,
@@ -156,6 +164,7 @@ func TestScreenTransaction(t *testing.T) {
 				r := baseReq
 				r.DayCount = 10
 				r.DaySumMinor = 50000
+
 				return r
 			}(),
 			policy:           basePolicy,
@@ -168,6 +177,7 @@ func TestScreenTransaction(t *testing.T) {
 			req: func() repository.ScreeningRequest {
 				r := baseReq
 				r.DaySumMinor = 50000
+
 				return r
 			}(),
 			policy:           basePolicy,
@@ -197,6 +207,7 @@ func TestScreenTransaction(t *testing.T) {
 			req: func() repository.ScreeningRequest {
 				r := baseReq
 				r.AmountMinor = 10001
+
 				return r
 			}(),
 			policy:           basePolicy,
@@ -209,6 +220,7 @@ func TestScreenTransaction(t *testing.T) {
 			req: func() repository.ScreeningRequest {
 				r := baseReq
 				r.DayCount = 6
+
 				return r
 			}(),
 			policy:           basePolicy,
@@ -221,6 +233,7 @@ func TestScreenTransaction(t *testing.T) {
 			req: func() repository.ScreeningRequest {
 				r := baseReq
 				r.DaySumMinor = 20001
+
 				return r
 			}(),
 			policy:           basePolicy,
@@ -233,6 +246,7 @@ func TestScreenTransaction(t *testing.T) {
 			req: func() repository.ScreeningRequest {
 				r := baseReq
 				r.AmountMinor = 9223372036854775807
+
 				return r
 			}(),
 			policy:           basePolicy,
@@ -240,11 +254,55 @@ func TestScreenTransaction(t *testing.T) {
 			expectedReason:   "AMOUNT_THRESHOLD_EXCEEDED",
 			expectedError:    nil,
 		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			actualResult, reason, err := service.ScreenTransaction(tc.req, tc.policy)
+			assert.Equal(t, tc.expectedDecision, actualResult)
+			assert.Equal(t, tc.expectedReason, reason)
+			assert.Equal(t, tc.expectedError, err)
+		})
+	}
+}
+func TestScreenTransactionValidation(t *testing.T) {
+	t.Parallel()
+
+	baseReq := repository.ScreeningRequest{
+		TenantID:    "t-1",
+		AccountID:   "a-1",
+		AmountMinor: 1000,
+		AssetCode:   "USD",
+		DayCount:    2,
+		DaySumMinor: 3000,
+		Watchlisted: false,
+		RuleVersion: "v1",
+	}
+	basePolicy := service.ScreeningPolicy{
+		MaxAmountMinor: 10000,
+		MaxDayCount:    5,
+		MaxDaySumMinor: 20000,
+		RuleVersion:    "v1",
+	}
+
+	type testCase struct {
+		name             string
+		req              repository.ScreeningRequest
+		policy           service.ScreeningPolicy
+		expectedDecision repository.ScreeningDecision
+		expectedReason   string
+		expectedError    error
+	}
+
+	testCases := []testCase{
 		{
 			name: "zero amount rejected",
 			req: func() repository.ScreeningRequest {
 				r := baseReq
 				r.AmountMinor = 0
+
 				return r
 			}(),
 			policy:           basePolicy,
@@ -257,6 +315,7 @@ func TestScreenTransaction(t *testing.T) {
 			req: func() repository.ScreeningRequest {
 				r := baseReq
 				r.AmountMinor = -100
+
 				return r
 			}(),
 			policy:           basePolicy,
@@ -269,6 +328,7 @@ func TestScreenTransaction(t *testing.T) {
 			req: func() repository.ScreeningRequest {
 				r := baseReq
 				r.TenantID = ""
+
 				return r
 			}(),
 			policy:           basePolicy,
@@ -281,6 +341,7 @@ func TestScreenTransaction(t *testing.T) {
 			req: func() repository.ScreeningRequest {
 				r := baseReq
 				r.TenantID = "   "
+
 				return r
 			}(),
 			policy:           basePolicy,
@@ -293,6 +354,7 @@ func TestScreenTransaction(t *testing.T) {
 			req: func() repository.ScreeningRequest {
 				r := baseReq
 				r.AccountID = ""
+
 				return r
 			}(),
 			policy:           basePolicy,
@@ -305,6 +367,7 @@ func TestScreenTransaction(t *testing.T) {
 			req: func() repository.ScreeningRequest {
 				r := baseReq
 				r.AccountID = "   "
+
 				return r
 			}(),
 			policy:           basePolicy,
@@ -317,6 +380,7 @@ func TestScreenTransaction(t *testing.T) {
 			req: func() repository.ScreeningRequest {
 				r := baseReq
 				r.AssetCode = "  "
+
 				return r
 			}(),
 			policy:           basePolicy,
@@ -329,6 +393,7 @@ func TestScreenTransaction(t *testing.T) {
 			req: func() repository.ScreeningRequest {
 				r := baseReq
 				r.RuleVersion = ""
+
 				return r
 			}(),
 			policy:           basePolicy,
@@ -341,6 +406,7 @@ func TestScreenTransaction(t *testing.T) {
 			req: func() repository.ScreeningRequest {
 				r := baseReq
 				r.RuleVersion = "   "
+
 				return r
 			}(),
 			policy:           basePolicy,
@@ -354,6 +420,7 @@ func TestScreenTransaction(t *testing.T) {
 			policy: func() service.ScreeningPolicy {
 				p := basePolicy
 				p.RuleVersion = ""
+
 				return p
 			}(),
 			expectedDecision: repository.ScreeningDecision(""),
@@ -366,6 +433,7 @@ func TestScreenTransaction(t *testing.T) {
 			policy: func() service.ScreeningPolicy {
 				p := basePolicy
 				p.RuleVersion = "   "
+
 				return p
 			}(),
 			expectedDecision: repository.ScreeningDecision(""),
@@ -378,6 +446,7 @@ func TestScreenTransaction(t *testing.T) {
 			policy: func() service.ScreeningPolicy {
 				p := basePolicy
 				p.MaxAmountMinor = -1
+
 				return p
 			}(),
 			expectedDecision: repository.ScreeningDecision(""),
@@ -390,6 +459,7 @@ func TestScreenTransaction(t *testing.T) {
 			policy: func() service.ScreeningPolicy {
 				p := basePolicy
 				p.MaxDayCount = -1
+
 				return p
 			}(),
 			expectedDecision: repository.ScreeningDecision(""),
@@ -402,6 +472,7 @@ func TestScreenTransaction(t *testing.T) {
 			policy: func() service.ScreeningPolicy {
 				p := basePolicy
 				p.MaxDaySumMinor = -1
+
 				return p
 			}(),
 			expectedDecision: repository.ScreeningDecision(""),
@@ -413,6 +484,7 @@ func TestScreenTransaction(t *testing.T) {
 			req: func() repository.ScreeningRequest {
 				r := baseReq
 				r.DayCount = -1
+
 				return r
 			}(),
 			policy:           basePolicy,
@@ -425,6 +497,7 @@ func TestScreenTransaction(t *testing.T) {
 			req: func() repository.ScreeningRequest {
 				r := baseReq
 				r.DaySumMinor = -5
+
 				return r
 			}(),
 			policy:           basePolicy,
@@ -436,6 +509,8 @@ func TestScreenTransaction(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, reason, err := service.ScreenTransaction(tc.req, tc.policy)
 			assert.Equal(t, tc.expectedDecision, actualResult)
 			assert.Equal(t, tc.expectedReason, reason)
@@ -497,6 +572,7 @@ func TestBuildReviewEntry(t *testing.T) {
 			req: func() repository.ScreeningRequest {
 				r := baseReq
 				r.TenantID = ""
+
 				return r
 			}(),
 			reasonCode:     "VELOCITY_COUNT_EXCEEDED",
@@ -508,6 +584,7 @@ func TestBuildReviewEntry(t *testing.T) {
 			req: func() repository.ScreeningRequest {
 				r := baseReq
 				r.TenantID = "   "
+
 				return r
 			}(),
 			reasonCode:     "VELOCITY_COUNT_EXCEEDED",
@@ -519,6 +596,7 @@ func TestBuildReviewEntry(t *testing.T) {
 			req: func() repository.ScreeningRequest {
 				r := baseReq
 				r.AccountID = ""
+
 				return r
 			}(),
 			reasonCode:     "VELOCITY_COUNT_EXCEEDED",
@@ -530,6 +608,7 @@ func TestBuildReviewEntry(t *testing.T) {
 			req: func() repository.ScreeningRequest {
 				r := baseReq
 				r.AccountID = "   "
+
 				return r
 			}(),
 			reasonCode:     "VELOCITY_COUNT_EXCEEDED",
@@ -541,6 +620,7 @@ func TestBuildReviewEntry(t *testing.T) {
 			req: func() repository.ScreeningRequest {
 				r := baseReq
 				r.RuleVersion = ""
+
 				return r
 			}(),
 			reasonCode:     "VELOCITY_COUNT_EXCEEDED",
@@ -552,6 +632,7 @@ func TestBuildReviewEntry(t *testing.T) {
 			req: func() repository.ScreeningRequest {
 				r := baseReq
 				r.RuleVersion = "   "
+
 				return r
 			}(),
 			reasonCode:     "VELOCITY_COUNT_EXCEEDED",
@@ -562,6 +643,8 @@ func TestBuildReviewEntry(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.BuildReviewEntry(tc.req, tc.reasonCode)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -643,6 +726,8 @@ func TestScreenViaProviderPort(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualDecision, reason, err := service.ScreenTransaction(tc.req, service.ScreeningPolicy{
 				MaxAmountMinor: 1000, MaxDayCount: 10, MaxDaySumMinor: 10000, RuleVersion: "v1",
 			})

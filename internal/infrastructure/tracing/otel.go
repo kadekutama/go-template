@@ -44,7 +44,9 @@ func (p *Provider) IsExcludedRoute(route string) bool {
 	if p.excludedRoutes == nil {
 		return false
 	}
+
 	_, ok := p.excludedRoutes[strings.TrimSpace(route)]
+
 	return ok
 }
 
@@ -52,6 +54,7 @@ func (p *Provider) IsExcludedRoute(route string) bool {
 func (p *Provider) ExcludedRoutes() []string {
 	out := make([]string, len(p.routesList))
 	copy(out, p.routesList)
+
 	return out
 }
 
@@ -68,15 +71,19 @@ func Bootstrap(cfg Config) (*Provider, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
+
 	ratio := cfg.SampleRatio
 
 	var processor sdktrace.SpanProcessor
+
 	exporting := false
+
 	if strings.TrimSpace(cfg.OTLPEndpoint) != "" {
 		exporter, err := newOTLPExporter(context.Background(), cfg.OTLPEndpoint)
 		if err != nil {
 			return nil, err
 		}
+
 		processor = sdktrace.NewBatchSpanProcessor(exporter)
 		exporting = true
 	}
@@ -92,6 +99,7 @@ func Bootstrap(cfg Config) (*Provider, error) {
 	if processor != nil {
 		opts = append(opts, sdktrace.WithSpanProcessor(processor))
 	}
+
 	tp := sdktrace.NewTracerProvider(opts...)
 
 	otel.SetTracerProvider(tp)
@@ -116,16 +124,19 @@ func Bootstrap(cfg Config) (*Provider, error) {
 func newOTLPExporter(ctx context.Context, endpoint string) (*otlptrace.Exporter, error) {
 	parsed, err := url.Parse(endpoint)
 	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return nil, fmt.Errorf("tracing: invalid OTLPEndpoint %q (want https?://host:port)", endpoint)
+		return nil, fmt.Errorf("tracing: invalid OTLPEndpoint %q (want https?://host:port): %w", endpoint, ErrTracingInvalidOTLPEndpointWantHTTPSHostPort)
 	}
+
 	opts := []otlptracegrpc.Option{otlptracegrpc.WithEndpoint(parsed.Host)}
 	if parsed.Scheme == "http" {
 		opts = append(opts, otlptracegrpc.WithInsecure())
 	}
+
 	exporter, err := otlptracegrpc.New(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("tracing: build OTLP exporter: %w", err)
 	}
+
 	return exporter, nil
 }
 
@@ -137,6 +148,7 @@ type otelTracer struct {
 // Start implements trace.Tracer.
 func (t otelTracer) Start(ctx context.Context, name string, opts ...oteltrace.SpanStartOption) (context.Context, trace.Span) {
 	ctx, span := t.inner.Start(ctx, name, opts...)
+
 	return ctx, otelSpan{inner: span}
 }
 

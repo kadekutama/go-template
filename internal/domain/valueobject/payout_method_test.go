@@ -1,7 +1,7 @@
 package valueobject_test
 
 import (
-	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -55,18 +55,20 @@ func TestParsePayoutMethod(t *testing.T) {
 			name:           "unknown method",
 			s:              "CARD",
 			expectedResult: valueobject.PayoutMethod(""),
-			expectedError:  errors.New(`payout: invalid method "CARD"`),
+			expectedError:  fmt.Errorf("payout: invalid method %q: %w", "CARD", valueobject.ErrPayoutInvalidMethod2),
 		},
 		{
 			name:           "empty method",
 			s:              "",
 			expectedResult: valueobject.PayoutMethod(""),
-			expectedError:  errors.New(`payout: invalid method ""`),
+			expectedError:  fmt.Errorf("payout: invalid method %q: %w", "", valueobject.ErrPayoutInvalidMethod2),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := valueobject.ParsePayoutMethod(tc.s)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -119,12 +121,14 @@ func TestExpectedSettlementLag(t *testing.T) {
 			name:           "invalid method lag",
 			m:              valueobject.PayoutMethod("UNKNOWN"),
 			expectedResult: 0,
-			expectedError:  errors.New(`payout: invalid method "UNKNOWN"`),
+			expectedError:  fmt.Errorf("payout: invalid method %q: %w", "UNKNOWN", valueobject.ErrPayoutInvalidMethod2),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := valueobject.ExpectedSettlementLag(tc.m)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)

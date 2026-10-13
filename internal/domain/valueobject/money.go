@@ -4,7 +4,6 @@ package valueobject
 
 import (
 	"cmp"
-	"errors"
 	"fmt"
 	"math"
 	"slices"
@@ -24,8 +23,9 @@ type Money struct {
 // entry positivity is enforced by the posting aggregate, not here.
 func NewMoney(amountMinor int64, asset AssetCode) (Money, error) {
 	if asset == "" {
-		return Money{}, errors.New("money: asset code is required")
+		return Money{}, ErrMoneyAssetCodeIsRequired
 	}
+
 	return Money{amountMinor: amountMinor, asset: asset}, nil
 }
 
@@ -36,6 +36,7 @@ func MustMoney(amountMinor int64, asset AssetCode) Money {
 	if err != nil {
 		panic(err)
 	}
+
 	return m
 }
 
@@ -51,18 +52,25 @@ func (m Money) IsZero() bool { return m.amountMinor == 0 }
 // IsPositive reports whether the amount is strictly positive.
 func (m Money) IsPositive() bool { return m.amountMinor > 0 }
 
-// checkAsset rejects cross-asset arithmetic with CURRENCY_MISMATCH.
-func (m Money) checkAsset(o Money) error {
-	if m.asset != o.asset {
-		return fmt.Errorf("money: CURRENCY_MISMATCH %q vs %q", m.asset, o.asset)
+// Add returns m+o for the same asset, rejecting overflow and cross-asset use.
+func (m Money) Add(o Money) (Money, error) {
+	if err := m.checkAsset(o); err != nil {
+		return Money{}, err
 	}
-	return nil
+
+	sum, err := checkedAdd(m.amountMinor, o.amountMinor)
+	if err != nil {
+		return Money{}, err
+	}
+
+	return Money{amountMinor: sum, asset: m.asset}, nil
 }
 
 func checkedAdd(a, b int64) (int64, error) {
 	if (b > 0 && a > math.MaxInt64-b) || (b < 0 && a < math.MinInt64-b) {
-		return 0, errors.New("money: arithmetic overflow")
+		return 0, ErrMoneyArithmeticOverflow
 	}
+
 	return a + b, nil
 }
 
@@ -70,26 +78,17 @@ func checkedMul(a, b int64) (int64, error) {
 	if a == 0 || b == 0 {
 		return 0, nil
 	}
+
 	if a == math.MinInt64 && b == -1 || a == -1 && b == math.MinInt64 {
-		return 0, errors.New("money: arithmetic overflow")
+		return 0, ErrMoneyArithmeticOverflow
 	}
+
 	hi := a * b
 	if hi/b != a {
-		return 0, errors.New("money: arithmetic overflow")
+		return 0, ErrMoneyArithmeticOverflow
 	}
-	return hi, nil
-}
 
-// Add returns m+o for the same asset, rejecting overflow and cross-asset use.
-func (m Money) Add(o Money) (Money, error) {
-	if err := m.checkAsset(o); err != nil {
-		return Money{}, err
-	}
-	sum, err := checkedAdd(m.amountMinor, o.amountMinor)
-	if err != nil {
-		return Money{}, err
-	}
-	return Money{amountMinor: sum, asset: m.asset}, nil
+	return hi, nil
 }
 
 // Sub returns m-o for the same asset, rejecting overflow and cross-asset use.
@@ -97,13 +96,16 @@ func (m Money) Sub(o Money) (Money, error) {
 	if err := m.checkAsset(o); err != nil {
 		return Money{}, err
 	}
+
 	if o.amountMinor == math.MinInt64 {
-		return Money{}, errors.New("money: arithmetic overflow")
+		return Money{}, ErrMoneyArithmeticOverflow
 	}
+
 	diff, err := checkedAdd(m.amountMinor, -o.amountMinor)
 	if err != nil {
 		return Money{}, err
 	}
+
 	return Money{amountMinor: diff, asset: m.asset}, nil
 }
 
@@ -113,6 +115,7 @@ func (m Money) MulScalar(k int64) (Money, error) {
 	if err != nil {
 		return Money{}, err
 	}
+
 	return Money{amountMinor: prod, asset: m.asset}, nil
 }
 
@@ -121,11 +124,13 @@ func (m Money) MulScalar(k int64) (Money, error) {
 // AllocateLargestRemainder.
 func (m Money) DivScalar(k int64) (Money, error) {
 	if k == 0 {
-		return Money{}, errors.New("money: division by zero")
+		return Money{}, ErrMoneyDivisionByZero
 	}
+
 	if m.amountMinor == math.MinInt64 && k == -1 {
-		return Money{}, errors.New("money: arithmetic overflow")
+		return Money{}, ErrMoneyArithmeticOverflow
 	}
+
 	return Money{amountMinor: m.amountMinor / k, asset: m.asset}, nil
 }
 
@@ -135,6 +140,7 @@ func (m Money) Compare(o Money) (int, error) {
 	if err := m.checkAsset(o); err != nil {
 		return 0, err
 	}
+
 	switch {
 	case m.amountMinor < o.amountMinor:
 		return -1, nil
@@ -159,13 +165,6 @@ func (m Money) DTO() MoneyDTO {
 	return MoneyDTO{AmountMinor: m.amountMinor, AssetCode: m.asset}
 }
 
-// MoneyFromDTO validates a decoded DTO. Float quantities are rejected by the
-// codec before this point (non-integral JSON numbers do not decode into
-// int64); empty asset codes error here.
-func MoneyFromDTO(d MoneyDTO) (Money, error) {
-	return NewMoney(d.AmountMinor, d.AssetCode)
-}
-
 // Format renders human-readable major units using the registry exponent
 // (e.g. 1050 minor + exponent 2 → "10.50"). The registry is explicit: unknown
 // codes error.
@@ -176,6 +175,7 @@ func (m Money) Format(reg Registry) (string, error) {
 	}
 	// uint64 magnitude keeps MinInt64 renderable (negating it overflows int64).
 	var mag uint64
+
 	neg := false
 	if m.amountMinor < 0 {
 		neg = true
@@ -183,48 +183,79 @@ func (m Money) Format(reg Registry) (string, error) {
 	} else {
 		mag = uint64(m.amountMinor)
 	}
+
 	var scale uint64 = 1
-	for i := 0; i < info.Exponent; i++ {
+	for range info.Exponent {
 		scale *= 10
 	}
+
 	major, minor := mag/scale, mag%scale
+
 	var sb strings.Builder
 	if neg {
 		sb.WriteByte('-')
 	}
+
 	fmt.Fprintf(&sb, "%d", major)
+
 	if info.Exponent > 0 {
 		fmt.Fprintf(&sb, ".%0*d", info.Exponent, minor)
 	}
+
 	return sb.String(), nil
+}
+
+// MoneyFromDTO validates a decoded DTO. Float quantities are rejected by the
+// codec before this point (non-integral JSON numbers do not decode into
+// int64); empty asset codes error here.
+func MoneyFromDTO(d MoneyDTO) (Money, error) {
+	return NewMoney(d.AmountMinor, d.AssetCode)
+}
+
+// checkAsset rejects cross-asset arithmetic with CURRENCY_MISMATCH.
+func (m Money) checkAsset(o Money) error {
+	if m.asset != o.asset {
+		return fmt.Errorf("money: CURRENCY_MISMATCH %q vs %q: %w", m.asset, o.asset, ErrMoneyCURRENCYMISMATCHVs)
+	}
+
+	return nil
 }
 
 func normalizeAllocationWeights(weights []int64) ([]int64, int64, error) {
 	if len(weights) == 0 {
-		return nil, 0, errors.New("money: allocation requires at least one weight")
+		return nil, 0, ErrMoneyAllocationRequiresAtLeastOneWeight
 	}
+
 	var sum int64
+
 	allZero := true
+
 	for _, w := range weights {
 		if w < 0 {
-			return nil, 0, errors.New("money: allocation weights must not be negative")
+			return nil, 0, ErrMoneyAllocationWeightsMustNotBeNegative
 		}
+
 		if w != 0 {
 			allZero = false
 		}
+
 		var err error
+
 		sum, err = checkedAdd(sum, w)
 		if err != nil {
 			return nil, 0, err
 		}
 	}
+
 	if allZero {
 		eff := make([]int64, len(weights))
 		for i := range eff {
 			eff[i] = 1
 		}
+
 		return eff, int64(len(weights)), nil
 	}
+
 	return weights, sum, nil
 }
 
@@ -240,10 +271,13 @@ func distributeRemainders(shares []int64, remainders []fractionalRemainder, coun
 			if b.rem > a.rem {
 				return 1
 			}
+
 			return -1
 		}
+
 		return cmp.Compare(a.index, b.index)
 	})
+
 	for i := int64(0); i < count && int(i) < len(remainders); i++ {
 		shares[remainders[i].index]++
 	}
@@ -258,36 +292,46 @@ func distributeRemainders(shares []int64, remainders []fractionalRemainder, coun
 // math.MinInt64 or negative weights return an error.
 func AllocateLargestRemainder(total int64, weights []int64) ([]int64, error) {
 	if total == math.MinInt64 {
-		return nil, errors.New("money: arithmetic overflow")
+		return nil, ErrMoneyArithmeticOverflow
 	}
+
 	eff, sum, err := normalizeAllocationWeights(weights)
 	if err != nil {
 		return nil, err
 	}
+
 	absTotal := total
+
 	negative := total < 0
 	if negative {
 		absTotal = -absTotal
 	}
+
 	shares := make([]int64, len(eff))
 	remainders := make([]fractionalRemainder, len(eff))
+
 	var assigned int64
+
 	for i, w := range eff {
 		prod, err := checkedMul(absTotal, w)
 		if err != nil {
 			return nil, err
 		}
+
 		quotient := prod / sum
 		shares[i] = quotient
 		assigned += quotient
 		remainders[i] = fractionalRemainder{index: i, rem: prod % sum}
 	}
+
 	leftover := absTotal - assigned
 	distributeRemainders(shares, remainders, leftover)
+
 	if negative {
 		for i := range shares {
 			shares[i] = -shares[i]
 		}
 	}
+
 	return shares, nil
 }

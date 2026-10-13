@@ -2,8 +2,7 @@ package command_test
 
 import (
 	"context"
-	"errors"
-	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -16,16 +15,18 @@ import (
 )
 
 func newIntentService(t *testing.T, uow port.UnitOfWork, store command.IntentStore, processor port.PaymentProcessor, authz port.Authorizer) *command.IntentService {
+	t.Helper()
 	svc, err := command.NewIntentService(command.IntentServiceParams{
 		UoW:            uow,
 		Intents:        store,
 		Processor:      processor,
-		Clock:          newMockClock(t, tfrAt),
+		Clock:          newMockClock(t, tfrAt()),
 		IDs:            newMockIDGenerator(t, tfrTestIDs(40)...),
 		Authz:          authz,
 		AuthExpiryDays: 7,
 	})
 	require.NoError(t, err)
+
 	return svc
 }
 
@@ -70,7 +71,7 @@ func TestIntentCreate(t *testing.T) {
 					baseReq.IdempotencyKey,
 					string(baseReq.TenantID),
 					string(baseReq.LedgerID),
-					fmt.Sprintf("%d", baseReq.AmountMinor),
+					strconv.FormatInt(baseReq.AmountMinor, 10),
 					string(baseReq.AssetCode),
 					string(baseReq.Method),
 				)
@@ -84,6 +85,7 @@ func TestIntentCreate(t *testing.T) {
 			req: func() port.PaymentIntentRequest {
 				r := baseReq
 				r.TenantID = ""
+
 				return r
 			}(),
 			preload:       func(_ port.UnitOfWork) {},
@@ -95,6 +97,7 @@ func TestIntentCreate(t *testing.T) {
 			req: func() port.PaymentIntentRequest {
 				r := baseReq
 				r.LedgerID = ""
+
 				return r
 			}(),
 			preload:       func(_ port.UnitOfWork) {},
@@ -106,6 +109,7 @@ func TestIntentCreate(t *testing.T) {
 			req: func() port.PaymentIntentRequest {
 				r := baseReq
 				r.AmountMinor = 0
+
 				return r
 			}(),
 			preload:       func(_ port.UnitOfWork) {},
@@ -117,6 +121,7 @@ func TestIntentCreate(t *testing.T) {
 			req: func() port.PaymentIntentRequest {
 				r := baseReq
 				r.AmountMinor = -500
+
 				return r
 			}(),
 			preload:       func(_ port.UnitOfWork) {},
@@ -128,6 +133,7 @@ func TestIntentCreate(t *testing.T) {
 			req: func() port.PaymentIntentRequest {
 				r := baseReq
 				r.AssetCode = ""
+
 				return r
 			}(),
 			preload:       func(_ port.UnitOfWork) {},
@@ -139,6 +145,7 @@ func TestIntentCreate(t *testing.T) {
 			req: func() port.PaymentIntentRequest {
 				r := baseReq
 				r.Actor = ""
+
 				return r
 			}(),
 			preload:       func(_ port.UnitOfWork) {},
@@ -150,6 +157,7 @@ func TestIntentCreate(t *testing.T) {
 			req: func() port.PaymentIntentRequest {
 				r := baseReq
 				r.IdempotencyKey = ""
+
 				return r
 			}(),
 			preload:       func(_ port.UnitOfWork) {},
@@ -167,20 +175,26 @@ func TestIntentCreate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			uow := newMockUOW(t)
 			if tc.preload != nil {
 				tc.preload(uow)
 			}
+
 			store := newMockIntentStore(t)
 			processor := newMockPaymentProcessor(t)
+
 			authz := newMockAuthorizer(t)
 			if tc.denied {
 				setAuthzDenied(authz, tc.req.Actor+"|payment.create|ledger/"+string(tc.req.LedgerID))
 			}
+
 			svc := newIntentService(t, uow, store, processor, authz)
 
 			res, err := svc.CreateIntent(context.Background(), tc.req)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, command.IntentPending, res.Status)
 				assert.NotEmpty(t, res.IntentID)
@@ -243,16 +257,17 @@ func TestIntentConfirm(t *testing.T) {
 			req:            baseConfirm,
 			seedStatus:     command.IntentPending,
 			processorRes:   port.ChargeResult{},
-			processorErr:   errors.New("processor down"),
+			processorErr:   command.ErrProcessorDown,
 			denied:         false,
 			expectedStatus: "",
-			expectedError:  errors.New("processor down"),
+			expectedError:  command.ErrProcessorDown,
 		},
 		{
 			name: "over-capture exceeds authorized amount",
 			req: func() port.ConfirmIntentRequest {
 				r := baseConfirm
 				r.CaptureMinor = 6000
+
 				return r
 			}(),
 			seedStatus:     command.IntentPending,
@@ -267,6 +282,7 @@ func TestIntentConfirm(t *testing.T) {
 			req: func() port.ConfirmIntentRequest {
 				r := baseConfirm
 				r.IntentID = ""
+
 				return r
 			}(),
 			seedStatus:     command.IntentPending,
@@ -281,6 +297,7 @@ func TestIntentConfirm(t *testing.T) {
 			req: func() port.ConfirmIntentRequest {
 				r := baseConfirm
 				r.CaptureMinor = 0
+
 				return r
 			}(),
 			seedStatus:     command.IntentPending,
@@ -295,6 +312,7 @@ func TestIntentConfirm(t *testing.T) {
 			req: func() port.ConfirmIntentRequest {
 				r := baseConfirm
 				r.Actor = ""
+
 				return r
 			}(),
 			seedStatus:     command.IntentPending,
@@ -309,6 +327,7 @@ func TestIntentConfirm(t *testing.T) {
 			req: func() port.ConfirmIntentRequest {
 				r := baseConfirm
 				r.IdempotencyKey = ""
+
 				return r
 			}(),
 			seedStatus:     command.IntentPending,
@@ -323,6 +342,7 @@ func TestIntentConfirm(t *testing.T) {
 			req: func() port.ConfirmIntentRequest {
 				r := baseConfirm
 				r.IntentID = "non-existent"
+
 				return r
 			}(),
 			seedStatus:     command.IntentPending,
@@ -337,6 +357,7 @@ func TestIntentConfirm(t *testing.T) {
 			req: func() port.ConfirmIntentRequest {
 				r := baseConfirm
 				r.IdempotencyKey = "key-confirm-fresh"
+
 				return r
 			}(),
 			seedStatus:     command.IntentConfirmed,
@@ -371,8 +392,10 @@ func TestIntentConfirm(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t)
 			store := newMockIntentStore(t)
+
 			var onCharge func()
 			if tc.mutateOnCharge {
 				onCharge = func() {
@@ -383,11 +406,13 @@ func TestIntentConfirm(t *testing.T) {
 					})
 				}
 			}
+
 			processor := newMockPaymentProcessor(t, mockProcessorParams{
 				ChargeResult: tc.processorRes,
 				ChargeErr:    tc.processorErr,
 				OnCharge:     onCharge,
 			})
+
 			authz := newMockAuthorizer(t)
 			if tc.denied {
 				setAuthzDenied(authz, tc.req.Actor+"|payment.confirm|intent/"+tc.req.IntentID)
@@ -410,6 +435,7 @@ func TestIntentConfirm(t *testing.T) {
 
 			res, err := svc.ConfirmIntent(context.Background(), tc.req)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, tc.expectedStatus, res.Status)
 
@@ -462,6 +488,7 @@ func TestIntentCancel(t *testing.T) {
 			query: func() port.PaymentQuery {
 				q := baseQuery
 				q.Actor = ""
+
 				return q
 			}(),
 			seedStatus:    command.IntentPending,
@@ -497,9 +524,11 @@ func TestIntentCancel(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t)
 			store := newMockIntentStore(t)
 			processor := newMockPaymentProcessor(t)
+
 			authz := newMockAuthorizer(t)
 			if tc.denied {
 				setAuthzDenied(authz, tc.query.Actor+"|payment.cancel|intent/"+tc.query.ID)
@@ -521,6 +550,7 @@ func TestIntentCancel(t *testing.T) {
 
 			res, err := svc.CancelIntent(context.Background(), tc.query)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, command.IntentCanceled, res.Status)
 
@@ -614,12 +644,14 @@ func TestIntentCompleteChallenge(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t)
 			store := newMockIntentStore(t)
 			processor := newMockPaymentProcessor(t, mockProcessorParams{
 				ChallengeResult: tc.processorRes,
 				ChallengeErr:    tc.processorErr,
 			})
+
 			authz := newMockAuthorizer(t)
 			if tc.denied {
 				setAuthzDenied(authz, "u-1|payment.confirm|intent/"+tc.intentID)
@@ -643,6 +675,7 @@ func TestIntentCompleteChallenge(t *testing.T) {
 
 			res, err := svc.CompleteChallenge(context.Background(), tfrTenant, tc.intentID, tc.succeeded, "u-1", "key-chal-"+tc.intentID)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, tc.expectedStatus, res.Status)
 
@@ -696,6 +729,7 @@ func TestIntentGetAndList(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t)
 			store := newMockIntentStore(t)
 			processor := newMockPaymentProcessor(t)
@@ -718,6 +752,7 @@ func TestIntentGetAndList(t *testing.T) {
 			if tc.queryID != "" {
 				res, err := svc.GetIntent(context.Background(), port.PaymentQuery{TenantID: string(tfrTenant), ID: tc.queryID})
 				assert.Equal(t, tc.expectedError, err)
+
 				if tc.expectedError == nil {
 					assert.Equal(t, tc.queryID, res.IntentID)
 				}
@@ -748,17 +783,19 @@ func TestNewIntentServiceValidation(t *testing.T) {
 		{
 			name:           "zero expiry rejected",
 			authExpiryDays: 0,
-			expectedError:  errors.New("payment: auth expiry days must be positive"),
+			expectedError:  command.ErrPaymentAuthExpiryDaysMustBePositive,
 		},
 		{
 			name:           "negative expiry rejected",
 			authExpiryDays: -1,
-			expectedError:  errors.New("payment: auth expiry days must be positive"),
+			expectedError:  command.ErrPaymentAuthExpiryDaysMustBePositive,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			svc, err := command.NewIntentService(command.IntentServiceParams{
 				AuthExpiryDays: tc.authExpiryDays,
 			})

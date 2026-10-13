@@ -73,7 +73,7 @@ type MockEntryReader_FindByAccount_Call struct {
 //   - account valueobject.AccountID
 //   - cursor string
 //   - limit int
-func (_e *MockEntryReader_Expecter) FindByAccount(ctx interface{}, tenant interface{}, account interface{}, cursor interface{}, limit interface{}) *MockEntryReader_FindByAccount_Call {
+func (_e *MockEntryReader_Expecter) FindByAccount(ctx any, tenant any, account any, cursor any, limit any) *MockEntryReader_FindByAccount_Call {
 	return &MockEntryReader_FindByAccount_Call{Call: _e.mock.On("FindByAccount", ctx, tenant, account, cursor, limit)}
 }
 
@@ -133,7 +133,7 @@ type MockEntryReader_FindByPosting_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - posting valueobject.PostingID
-func (_e *MockEntryReader_Expecter) FindByPosting(ctx interface{}, tenant interface{}, posting interface{}) *MockEntryReader_FindByPosting_Call {
+func (_e *MockEntryReader_Expecter) FindByPosting(ctx any, tenant any, posting any) *MockEntryReader_FindByPosting_Call {
 	return &MockEntryReader_FindByPosting_Call{Call: _e.mock.On("FindByPosting", ctx, tenant, posting)}
 }
 

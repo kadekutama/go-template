@@ -37,22 +37,28 @@ func OpenDispute(req OpenDisputeRequest) (entity.Dispute, error) {
 	if req.DisputeID == "" || req.PaymentID == "" || req.OriginalPostingID == "" {
 		return entity.Dispute{}, entity.NewError("DISPUTE_ID_REQUIRED", "dispute requires id, payment, and original posting")
 	}
+
 	if req.AmountMinor <= 0 {
 		return entity.Dispute{}, entity.NewError("INVALID_DISPUTE_AMOUNT", "dispute amount must be positive")
 	}
+
 	if req.Policy.Network == "" || req.Policy.Version == "" {
 		return entity.Dispute{}, entity.NewError("DISPUTE_POLICY_REQUIRED", "dispute requires a versioned network policy")
 	}
+
 	if req.Policy.Network != req.Network {
 		return entity.Dispute{}, entity.NewError("DISPUTE_POLICY_MISMATCH", "network policy does not match dispute network")
 	}
+
 	if req.HoldID == "" {
 		return entity.Dispute{}, entity.NewError("DISPUTE_HOLD_REQUIRED", "dispute requires a durable hold reference")
 	}
-	window := time.Duration(req.Policy.DisputeWindowDays) * 24 * time.Hour
+
+	window := time.Duration(req.Policy.DisputeWindowDays) * hoursPerDay * time.Hour
 	if req.Now.Sub(req.PaymentAt) > window {
 		return entity.Dispute{}, entity.NewError("DISPUTE_WINDOW_EXPIRED", "dispute window has expired")
 	}
+
 	d := entity.Dispute{
 		ID:                req.DisputeID,
 		PaymentID:         req.PaymentID,
@@ -70,6 +76,7 @@ func OpenDispute(req OpenDisputeRequest) (entity.Dispute, error) {
 	if err := d.Validate(); err != nil {
 		return entity.Dispute{}, err
 	}
+
 	return d, nil
 }
 
@@ -78,7 +85,9 @@ func MarkEvidenceDue(d entity.Dispute) (entity.Dispute, error) {
 	if !valueobject.CanTransitionDispute(d.Status, valueobject.DisputeEvidenceDue) {
 		return d, entity.NewError("DISPUTE_STATUS_INVALID", "dispute cannot await evidence in its current status")
 	}
+
 	d.Status = valueobject.DisputeEvidenceDue
+
 	return d, nil
 }
 
@@ -87,10 +96,13 @@ func SubmitEvidence(d entity.Dispute, at time.Time) (entity.Dispute, error) {
 	if at.After(d.EvidenceDueAt) {
 		return d, entity.NewError("EVIDENCE_WINDOW_EXPIRED", "dispute evidence window has expired")
 	}
+
 	if !valueobject.CanTransitionDispute(d.Status, valueobject.DisputeUnderReview) {
 		return d, entity.NewError("DISPUTE_STATUS_INVALID", "dispute cannot accept evidence in its current status")
 	}
+
 	d.Status = valueobject.DisputeUnderReview
+
 	return d, nil
 }
 
@@ -99,9 +111,11 @@ func RepresentmentAllowed(d entity.Dispute, policy NetworkPolicy) error {
 	if d.PolicyVersion != policy.Version {
 		return entity.NewError("DISPUTE_POLICY_MISMATCH", "representment requires the dispute policy version")
 	}
+
 	if d.RepresentStage >= policy.MaxRepresentments {
 		return entity.NewError("REPRESENTMENT_EXHAUSTED", "representment allowance is exhausted")
 	}
+
 	return nil
 }
 
@@ -119,6 +133,7 @@ const (
 // review may close.
 func CloseDispute(d entity.Dispute, outcome DisputeOutcome) (entity.Dispute, error) {
 	var target valueobject.DisputeStatus
+
 	switch outcome {
 	case DisputeWon:
 		target = valueobject.DisputeWon
@@ -127,10 +142,13 @@ func CloseDispute(d entity.Dispute, outcome DisputeOutcome) (entity.Dispute, err
 	default:
 		return d, entity.NewError("DISPUTE_OUTCOME_INVALID", "dispute outcome must be WON or LOST")
 	}
+
 	if !valueobject.CanTransitionDispute(d.Status, target) {
 		return d, entity.NewError("DISPUTE_STATUS_INVALID", "dispute cannot close in its current status")
 	}
+
 	d.Status = target
+
 	return d, nil
 }
 
@@ -139,7 +157,9 @@ func SealDispute(d entity.Dispute) (entity.Dispute, error) {
 	if !valueobject.CanTransitionDispute(d.Status, valueobject.DisputeClosed) {
 		return d, entity.NewError("DISPUTE_STATUS_INVALID", "only a decided dispute can be sealed")
 	}
+
 	d.Status = valueobject.DisputeClosed
+
 	return d, nil
 }
 

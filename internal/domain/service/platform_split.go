@@ -78,13 +78,16 @@ func ValidateSplit(req SplitRequest, accounts map[valueobject.AccountID]entity.A
 	if err := validateSplitShape(req); err != nil {
 		return SplitLines{}, err
 	}
+
 	connected, err := lookupSplitAccounts(req, accounts)
 	if err != nil {
 		return SplitLines{}, err
 	}
+
 	if err := ValidateTransferGrant(req.Grants, string(connected.TenantID)); err != nil {
 		return SplitLines{}, err
 	}
+
 	lines := SplitLines{
 		DebitAccount:     req.ProcessorAccount,
 		DebitAmountMinor: req.GrossMinor,
@@ -94,6 +97,7 @@ func ValidateSplit(req SplitRequest, accounts map[valueobject.AccountID]entity.A
 		FeeMinor:         req.FeeMinor,
 		AssetCode:        req.AssetCode,
 	}
+
 	return settleSplitLegs(req, connected, lines)
 }
 
@@ -102,18 +106,23 @@ func validateSplitShape(req SplitRequest) error {
 	if req.GrossMinor <= 0 {
 		return entity.NewError("INVALID_SPLIT_AMOUNT", "split gross amount must be positive")
 	}
+
 	if req.FeeMinor < 0 || req.FeeMinor > req.GrossMinor {
 		return entity.NewError("SPLIT_MISMATCH", "split fee must satisfy 0 <= fee <= gross")
 	}
+
 	if strings.TrimSpace(string(req.AssetCode)) == "" {
 		return entity.NewError("SPLIT_ASSET_REQUIRED", "split requires an asset code")
 	}
+
 	if req.PlatformAccount == "" || req.ConnectedAccount == "" || req.ProcessorAccount == "" {
 		return entity.NewError("SPLIT_ACCOUNT_REQUIRED", "split requires platform, connected, and processor accounts")
 	}
+
 	if req.PlatformAccount == req.ConnectedAccount || req.PlatformAccount == req.ProcessorAccount || req.ConnectedAccount == req.ProcessorAccount {
 		return entity.NewError("SPLIT_ACCOUNT_INVALID", "split posting accounts must be distinct")
 	}
+
 	return nil
 }
 
@@ -126,26 +135,33 @@ func lookupSplitAccounts(req SplitRequest, accounts map[valueobject.AccountID]en
 	if !ok {
 		return entity.AccountData{}, entity.NewError("PLATFORM_ACCOUNT_NOT_FOUND", "platform account is unknown")
 	}
+
 	connected, ok := accounts[req.ConnectedAccount]
 	if !ok {
 		return entity.AccountData{}, entity.NewError("CONNECTED_ACCOUNT_NOT_FOUND", "connected account is unknown")
 	}
+
 	processor, ok := accounts[req.ProcessorAccount]
 	if !ok {
 		return entity.AccountData{}, entity.NewError("PROCESSOR_ACCOUNT_NOT_FOUND", "processor account is unknown")
 	}
+
 	if err := checkTransferAccountActive(platform); err != nil {
 		return entity.AccountData{}, err
 	}
+
 	if err := checkTransferAccountActive(connected); err != nil {
 		return entity.AccountData{}, err
 	}
+
 	if err := checkTransferAccountActive(processor); err != nil {
 		return entity.AccountData{}, err
 	}
+
 	if processor.AssetCode != req.AssetCode || platform.AssetCode != req.AssetCode {
 		return entity.AccountData{}, entity.NewError("CURRENCY_MISMATCH", "split processor and platform legs must post in the charge asset")
 	}
+
 	return connected, nil
 }
 
@@ -158,36 +174,45 @@ func settleSplitLegs(req SplitRequest, connected entity.AccountData, lines Split
 		lines.ConvertedGrossMinor = lines.DebitAmountMinor
 		lines.ConvertedNetMinor = lines.NetMinor
 		lines.ConvertedFeeMinor = lines.FeeMinor
+
 		return lines, nil
 	}
+
 	if !req.FXRatePresent {
 		return SplitLines{}, entity.NewError("FX_RATE_MISSING", "split requires an FX rate for the settlement asset")
 	}
+
 	if req.FXRate.Pair.Base != req.AssetCode || req.FXRate.Pair.Quote != connected.AssetCode {
 		return SplitLines{}, entity.NewError("FX_RATE_MISMATCH", "fx rate pair must convert charge asset to settlement asset")
 	}
+
 	convertedGross, err := Convert(lines.DebitAmountMinor, req.FXRate, req.At)
 	if err != nil {
 		return SplitLines{}, err
 	}
+
 	convertedNet, err := Convert(lines.NetMinor, req.FXRate, req.At)
 	if err != nil {
 		return SplitLines{}, err
 	}
+
 	convertedFee, err := Convert(lines.FeeMinor, req.FXRate, req.At)
 	if err != nil {
 		return SplitLines{}, err
 	}
+
 	drift, err := splitDrift(convertedGross, convertedNet, convertedFee)
 	if err != nil {
 		return SplitLines{}, err
 	}
+
 	lines.SettlementAsset = connected.AssetCode
 	lines.ConvertedGrossMinor = convertedGross
 	lines.ConvertedNetMinor = convertedNet
 	lines.ConvertedFeeMinor = convertedFee
 	lines.GainLossMinor = drift
 	lines.FXRateID = req.FXRate.ID
+
 	return lines, nil
 }
 
@@ -199,10 +224,12 @@ func splitDrift(convertedGross, convertedNet, convertedFee int64) (int64, error)
 	if !ok {
 		return 0, entity.NewError("SPLIT_FX_UNBALANCED", "split settlement legs overflowed")
 	}
+
 	gain, ok := CheckedSub(convertedGross, sum)
 	if !ok {
 		return 0, entity.NewError("SPLIT_FX_UNBALANCED", "split settlement legs overflowed")
 	}
+
 	return gain, nil
 }
 
@@ -212,6 +239,7 @@ func ValidateSplitRefund(req SplitRefundRequest) (SplitRefundLines, error) {
 	if err := validateSplitRefundShape(req); err != nil {
 		return SplitRefundLines{}, err
 	}
+
 	lines := SplitRefundLines{
 		ProcessorAccount: req.Original.DebitAccount,
 		MerchantAccount:  req.Original.ConnectedAccount,
@@ -221,6 +249,7 @@ func ValidateSplitRefund(req SplitRefundRequest) (SplitRefundLines, error) {
 		FeeRefundMinor:   req.FeeRefundMinor,
 		AssetCode:        req.Original.AssetCode,
 	}
+
 	return settleSplitRefundLegs(req, lines)
 }
 
@@ -231,18 +260,23 @@ func validateSplitRefundShape(req SplitRefundRequest) error {
 	if orig.DebitAmountMinor != orig.FeeMinor+orig.NetMinor {
 		return entity.NewError("SPLIT_MISMATCH", "original split lines are inconsistent")
 	}
+
 	if orig.FXRateID != "" && orig.ConvertedGrossMinor != orig.ConvertedNetMinor+orig.ConvertedFeeMinor+orig.GainLossMinor {
 		return entity.NewError("SPLIT_MISMATCH", "original split settlement legs are inconsistent")
 	}
+
 	if req.RefundGrossMinor <= 0 {
 		return entity.NewError("INVALID_REFUND_AMOUNT", "split refund gross must be positive")
 	}
+
 	if req.RefundGrossMinor > orig.DebitAmountMinor {
 		return entity.NewError("REFUND_EXCEEDS_ORIGINAL", "split refund exceeds the original gross")
 	}
+
 	if req.FeeRefundMinor < 0 || req.FeeRefundMinor > req.RefundGrossMinor || req.FeeRefundMinor > orig.FeeMinor {
 		return entity.NewError("FEE_REFUND_INVALID", "split fee refund must satisfy 0 <= fee <= min(refund gross, original fee)")
 	}
+
 	return nil
 }
 
@@ -255,37 +289,47 @@ func settleSplitRefundLegs(req SplitRefundRequest, lines SplitRefundLines) (Spli
 		if lines.SettlementAsset == "" {
 			lines.SettlementAsset = req.Original.AssetCode
 		}
+
 		lines.ConvertedRefundGrossMinor = lines.RefundGrossMinor
 		lines.ConvertedRefundNetMinor = lines.RefundNetMinor
 		lines.ConvertedFeeRefundMinor = lines.FeeRefundMinor
+
 		return lines, nil
 	}
+
 	if !req.FXRatePresent {
 		return SplitRefundLines{}, entity.NewError("FX_RATE_MISSING", "split refund requires an FX rate for the settlement asset")
 	}
+
 	if req.FXRate.Pair.Base != req.Original.AssetCode || req.FXRate.Pair.Quote != req.Original.SettlementAsset {
 		return SplitRefundLines{}, entity.NewError("FX_RATE_MISMATCH", "fx rate pair must convert charge asset to settlement asset")
 	}
+
 	convertedGross, err := Convert(lines.RefundGrossMinor, req.FXRate, req.At)
 	if err != nil {
 		return SplitRefundLines{}, err
 	}
+
 	convertedNet, err := Convert(lines.RefundNetMinor, req.FXRate, req.At)
 	if err != nil {
 		return SplitRefundLines{}, err
 	}
+
 	convertedFee, err := Convert(lines.FeeRefundMinor, req.FXRate, req.At)
 	if err != nil {
 		return SplitRefundLines{}, err
 	}
+
 	drift, err := splitDrift(convertedGross, convertedNet, convertedFee)
 	if err != nil {
 		return SplitRefundLines{}, err
 	}
+
 	lines.SettlementAsset = req.Original.SettlementAsset
 	lines.ConvertedRefundGrossMinor = convertedGross
 	lines.ConvertedRefundNetMinor = convertedNet
 	lines.ConvertedFeeRefundMinor = convertedFee
 	lines.GainLossMinor = drift
+
 	return lines, nil
 }

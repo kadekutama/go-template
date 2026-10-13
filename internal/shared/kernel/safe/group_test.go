@@ -34,8 +34,8 @@ func TestGroupWaitsForGoroutines(t *testing.T) {
 func TestGroupContainsPanic(t *testing.T) {
 	t.Parallel()
 
-	panics := make(chan safe.Panic, 1)
-	group := safe.NewGroup(nil, func(p safe.Panic) { panics <- p })
+	panics := make(chan safe.PanicError, 1)
+	group := safe.NewGroup(nil, func(p safe.PanicError) { panics <- p })
 
 	group.Go(context.Background(), func(context.Context) {
 		panic("renewal exploded")
@@ -45,13 +45,14 @@ func TestGroupContainsPanic(t *testing.T) {
 	p := <-panics
 
 	assert.Equal(t, "renewal exploded", p.Value)
-	assert.Equal(t, true, len(p.Stack) > 0)
+	assert.NotEmpty(t, p.Stack)
 }
 
 func TestGroupZeroValueAndNil(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, false, func() (panicked bool) {
+	assert.False(t, func() bool {
+		var panicked bool
 		defer func() { panicked = recover() != nil }()
 
 		var zeroGroup safe.Group

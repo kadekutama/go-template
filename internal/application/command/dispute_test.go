@@ -2,7 +2,7 @@ package command_test
 
 import (
 	"context"
-	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -16,7 +16,9 @@ import (
 	mockapplication "github.com/kadekutama/go-template/test/mock/application"
 )
 
-var disputeAt = time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
+func disputeAt() time.Time {
+	return time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
+}
 
 func disputePolicies() map[string]service.NetworkPolicy {
 	return map[string]service.NetworkPolicy{
@@ -28,6 +30,8 @@ func disputePolicies() map[string]service.NetworkPolicy {
 }
 
 func newDisputeService(t *testing.T, uow port.UnitOfWork, store command.DisputeStore, authz port.Authorizer, clock port.Clock) *command.DisputeService {
+	t.Helper()
+
 	return command.NewDisputeService(command.DisputeServiceParams{
 		UoW:               uow,
 		Disputes:          store,
@@ -45,7 +49,7 @@ func openDisputeCommand() port.OpenDisputeCommand {
 		OriginalPostingID: "p-1",
 		Network:           "VISA",
 		AmountMinor:       50000,
-		PaymentAt:         disputeAt,
+		PaymentAt:         disputeAt(),
 		Actor:             "u-1",
 		IdempotencyKey:    "key-dispute-1",
 	}
@@ -80,7 +84,7 @@ func TestDisputeOpen(t *testing.T) {
 			preload: func(uow port.UnitOfWork) {
 				fp := command.Fingerprint(
 					baseCmd.IdempotencyKey, baseCmd.PaymentID, baseCmd.OriginalPostingID,
-					baseCmd.Network, fmt.Sprintf("%d", baseCmd.AmountMinor),
+					baseCmd.Network, strconv.FormatInt(baseCmd.AmountMinor, 10),
 				)
 				setUOWIdem(uow, baseCmd.IdempotencyKey, fp, []byte("{corrupt-json"))
 			},
@@ -93,6 +97,7 @@ func TestDisputeOpen(t *testing.T) {
 			cmd: func() port.OpenDisputeCommand {
 				c := baseCmd
 				c.PaymentID = ""
+
 				return c
 			}(),
 			denied:         false,
@@ -104,6 +109,7 @@ func TestDisputeOpen(t *testing.T) {
 			cmd: func() port.OpenDisputeCommand {
 				c := baseCmd
 				c.OriginalPostingID = ""
+
 				return c
 			}(),
 			denied:         false,
@@ -115,6 +121,7 @@ func TestDisputeOpen(t *testing.T) {
 			cmd: func() port.OpenDisputeCommand {
 				c := baseCmd
 				c.Network = ""
+
 				return c
 			}(),
 			denied:         false,
@@ -126,6 +133,7 @@ func TestDisputeOpen(t *testing.T) {
 			cmd: func() port.OpenDisputeCommand {
 				c := baseCmd
 				c.AmountMinor = 0
+
 				return c
 			}(),
 			denied:         false,
@@ -137,6 +145,7 @@ func TestDisputeOpen(t *testing.T) {
 			cmd: func() port.OpenDisputeCommand {
 				c := baseCmd
 				c.Actor = ""
+
 				return c
 			}(),
 			denied:         false,
@@ -148,6 +157,7 @@ func TestDisputeOpen(t *testing.T) {
 			cmd: func() port.OpenDisputeCommand {
 				c := baseCmd
 				c.IdempotencyKey = ""
+
 				return c
 			}(),
 			denied:         false,
@@ -159,6 +169,7 @@ func TestDisputeOpen(t *testing.T) {
 			cmd: func() port.OpenDisputeCommand {
 				c := baseCmd
 				c.Network = "UNKNOWN"
+
 				return c
 			}(),
 			denied:         false,
@@ -169,7 +180,8 @@ func TestDisputeOpen(t *testing.T) {
 			name: "dispute window expired rejected",
 			cmd: func() port.OpenDisputeCommand {
 				c := baseCmd
-				c.PaymentAt = disputeAt.Add(-130 * 24 * time.Hour)
+				c.PaymentAt = disputeAt().Add(-130 * 24 * time.Hour)
+
 				return c
 			}(),
 			denied:         false,
@@ -187,20 +199,26 @@ func TestDisputeOpen(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			uow := newMockUOW(t)
 			if tc.preload != nil {
 				tc.preload(uow)
 			}
+
 			store := newMockDisputeStore(t)
+
 			authz := newMockAuthorizer(t)
 			if tc.denied {
 				setAuthzDenied(authz, tc.cmd.Actor+"|dispute.open|payment/"+tc.cmd.PaymentID)
 			}
-			clock := newMockClock(t, disputeAt)
+
+			clock := newMockClock(t, disputeAt())
 			svc := newDisputeService(t, uow, store, authz, clock)
 
 			res, err := svc.OpenDispute(context.Background(), tc.cmd)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, tc.expectedStatus, string(res.Dispute.Status))
 				assert.Equal(t, int64(1500), res.Dispute.FeeMinor)
@@ -248,6 +266,7 @@ func TestDisputeSubmitEvidence(t *testing.T) {
 			cmd: func() port.EvidenceCommand {
 				c := baseEvidence
 				c.DisputeID = ""
+
 				return c
 			}(),
 			advanceTime:    0,
@@ -261,6 +280,7 @@ func TestDisputeSubmitEvidence(t *testing.T) {
 			cmd: func() port.EvidenceCommand {
 				c := baseEvidence
 				c.Actor = ""
+
 				return c
 			}(),
 			advanceTime:    0,
@@ -274,6 +294,7 @@ func TestDisputeSubmitEvidence(t *testing.T) {
 			cmd: func() port.EvidenceCommand {
 				c := baseEvidence
 				c.IdempotencyKey = ""
+
 				return c
 			}(),
 			advanceTime:    0,
@@ -313,18 +334,21 @@ func TestDisputeSubmitEvidence(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t)
 			store := newMockDisputeStore(t)
 			authz := newMockAuthorizer(t)
-			currentNow := disputeAt
+			currentNow := disputeAt()
 			clock := mockapplication.NewMockClock(t)
 			clock.EXPECT().Now().RunAndReturn(func() time.Time {
 				return currentNow
 			}).Maybe()
+
 			svc := newDisputeService(t, uow, store, authz, clock)
 			if tc.seedDispute {
 				opened, err := svc.OpenDispute(context.Background(), openDisputeCommand())
 				require.NoError(t, err)
+
 				if tc.cmd.DisputeID == "disp-1" {
 					tc.cmd.DisputeID = opened.Dispute.ID
 				}
@@ -335,11 +359,12 @@ func TestDisputeSubmitEvidence(t *testing.T) {
 			}
 
 			if tc.advanceTime > 0 {
-				currentNow = disputeAt.Add(tc.advanceTime)
+				currentNow = disputeAt().Add(tc.advanceTime)
 			}
 
 			res, err := svc.SubmitEvidence(context.Background(), tc.cmd)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, tc.expectedStatus, string(res.Dispute.Status))
 
@@ -438,10 +463,11 @@ func TestDisputeRepresentAndClose(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t)
 			store := newMockDisputeStore(t)
 			authz := newMockAuthorizer(t)
-			clock := newMockClock(t, disputeAt)
+			clock := newMockClock(t, disputeAt())
 			svc := newDisputeService(t, uow, store, authz, clock)
 
 			// Setup an under_review dispute
@@ -463,6 +489,7 @@ func TestDisputeRepresentAndClose(t *testing.T) {
 					DisputeID: disputeID, Actor: tc.actor, IdempotencyKey: tc.key,
 				})
 				assert.Equal(t, tc.expectedError, err)
+
 				if tc.expectedError == nil {
 					assert.Equal(t, 1, res.Dispute.RepresentStage)
 
@@ -477,6 +504,7 @@ func TestDisputeRepresentAndClose(t *testing.T) {
 					DisputeID: disputeID, Outcome: tc.outcome, Actor: tc.actor, Approver: tc.approver, IdempotencyKey: tc.key,
 				})
 				assert.Equal(t, tc.expectedError, err)
+
 				if tc.expectedError == nil {
 					assert.Equal(t, tc.expectedStatus, string(res.Dispute.Status))
 

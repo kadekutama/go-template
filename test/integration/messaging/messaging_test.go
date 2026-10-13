@@ -7,7 +7,6 @@ package messaging
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -49,13 +48,16 @@ func testLedger(t *testing.T) valueobject.LedgerID {
 }
 
 func TestPublishConsumeIdempotent(t *testing.T) {
+	t.Parallel()
 	broker := mockredpanda.NewMockBroker(t)
+
 	var recordedPayload []byte
+
 	broker.EXPECT().Publish(mock.Anything, "outbox.facts.v1", mock.Anything, mock.Anything, mock.Anything).Run(func(_ context.Context, _ string, _ string, _ map[string]string, payload []byte) {
 		recordedPayload = append([]byte(nil), payload...)
 	}).Return(nil).Once()
 
-	relay, err := publisher.NewPublisher(publisher.PublisherParams{Broker: broker, Topic: "outbox.facts.v1"})
+	relay, err := publisher.NewPublisher(publisher.Params{Broker: broker, Topic: "outbox.facts.v1"})
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -71,11 +73,13 @@ func TestPublishConsumeIdempotent(t *testing.T) {
 
 	receipts := mockconsumer.NewMockReceiptStore(t)
 	claims := &doubles.DedupSet{}
+
 	receipts.EXPECT().Claim(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, c, id string) (bool, error) {
 		return claims.Claim(c, id), nil
 	}).Maybe()
 	receipts.EXPECT().Release(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, c, id string) error {
 		claims.Release(c, id)
+
 		return nil
 	}).Maybe()
 
@@ -92,6 +96,7 @@ func TestPublishConsumeIdempotent(t *testing.T) {
 	runs := 0
 	handler := func(_ context.Context, _ appport.Message) error {
 		runs++
+
 		return nil
 	}
 
@@ -108,6 +113,7 @@ func TestPublishConsumeIdempotent(t *testing.T) {
 }
 
 func TestConsumerDLQAfterMaxDelivers(t *testing.T) {
+	t.Parallel()
 	dlq := mockconsumer.NewMockDLQSink(t)
 	dlq.EXPECT().Record(mock.Anything, mock.Anything).Return(nil).Once()
 
@@ -145,6 +151,7 @@ func mustTestPolicy(t *testing.T) *webhook.RetryPolicy {
 }
 
 func TestNATSFanout(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	handle, err := testcontainers.StartNATS(t)
@@ -152,23 +159,26 @@ func TestNATSFanout(t *testing.T) {
 
 	conn, err := natsgo.Connect(handle.URL())
 	require.NoError(t, err)
+
 	defer conn.Close()
 
 	received := make(chan []byte, 1)
 	_, err = conn.Subscribe("ledger.t1.account.balance.changed.v1", func(msg *natsgo.Msg) {
 		cp := make([]byte, len(msg.Data))
 		copy(cp, msg.Data)
+
 		received <- cp
 	})
 	require.NoError(t, err)
 	require.NoError(t, conn.Flush())
 
-	publisher, err := edgenats.NewPublisher(edgenats.PublisherParams{
+	publisher, err := edgenats.NewPublisher(edgenats.Params{
 		URL:            handle.URL(),
 		ConnectTimeout: 5 * time.Second,
 		RequestTimeout: 3 * time.Second,
 	})
 	require.NoError(t, err)
+
 	defer func() { _ = publisher.Close() }()
 
 	assert.Equal(t, handle.URL(), publisher.URL())
@@ -187,29 +197,33 @@ func TestNATSFanout(t *testing.T) {
 }
 
 func TestPublisherPublishLive(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	handle, err := testcontainers.StartNATS(t)
 	require.NoError(t, err)
 
-	edgepublisher, err := edgenats.NewPublisher(edgenats.PublisherParams{
+	edgepublisher, err := edgenats.NewPublisher(edgenats.Params{
 		URL:            handle.URL(),
 		ConnectTimeout: 5 * time.Second,
 		RequestTimeout: 3 * time.Second,
 	})
 	require.NoError(t, err)
+
 	defer func() { _ = edgepublisher.Close() }()
 
 	ctx := context.Background()
 
 	raw, err := natsgo.Connect(handle.URL())
 	require.NoError(t, err)
+
 	defer raw.Close()
 
 	received := make(chan []byte, 1)
 	_, err = raw.Subscribe("ledger.t9.account.balance.changed.v1", func(msg *natsgo.Msg) {
 		cp := make([]byte, len(msg.Data))
 		copy(cp, msg.Data)
+
 		received <- cp
 	})
 	require.NoError(t, err)
@@ -226,18 +240,20 @@ func TestPublisherPublishLive(t *testing.T) {
 }
 
 func TestPublisherPublishEventValidation(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	handle, err := testcontainers.StartNATS(t)
 	require.NoError(t, err)
 
-	publisher, err := edgenats.NewPublisher(edgenats.PublisherParams{
+	publisher, err := edgenats.NewPublisher(edgenats.Params{
 		URL:            handle.URL(),
 		ConnectTimeout: 5 * time.Second,
 		RequestTimeout: 3 * time.Second,
 	})
 	require.NoError(t, err)
-	defer func() { _ = publisher.Close() }()
+
+	t.Cleanup(func() { _ = publisher.Close() })
 
 	ctx := context.Background()
 
@@ -255,7 +271,7 @@ func TestPublisherPublishEventValidation(t *testing.T) {
 			tenant:        "t1",
 			eventType:     "account.balance.changed.v1",
 			payload:       nil,
-			expectedError: errors.New("nats: payload is required"),
+			expectedError: edgenats.ErrNatsPayloadIsRequired,
 		},
 		{
 			name:          "unversioned event rejected",
@@ -282,6 +298,8 @@ func TestPublisherPublishEventValidation(t *testing.T) {
 }
 
 func TestWebhookIsolation(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	registry := webhook.NewRegistry(webhook.RegistryParams{})
 
@@ -302,7 +320,9 @@ func TestWebhookIsolation(t *testing.T) {
 	}))
 
 	sender := mockconsumer.NewMockHTTPSender(t)
+
 	var delivered []string
+
 	sender.EXPECT().Send(mock.Anything, "https://good.example.com/hook", mock.Anything, mock.Anything).Run(func(_ context.Context, u string, _ map[string]string, _ []byte) {
 		delivered = append(delivered, u)
 	}).Return(nil).Once()

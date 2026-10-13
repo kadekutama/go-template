@@ -22,6 +22,10 @@ For architectural patterns, layers, and DDD structure, see the [Clean Architectu
 | [ADR-017](./ADR-017-distributed-coordination-etcd.md) | Distributed consensus, dynamic config & leader election via etcd | Proposed |
 | [ADR-018](./ADR-018-database-migrations-goose-and-atlas.md) | Hybrid database migrations via Goose v3, Atlas CI linter & UTC timestamps | Proposed |
 | [ADR-019](./ADR-019-uuidv7-composite-identity.md) | DB-generated UUIDv7 identity with composite tenant PKs | Proposed |
+| [ADR-022](./ADR-022-gocron-v2.md) | gocron v1.5.0 → v2.22.0 upgrade + E14 construction contract | Proposed |
+| [ADR-023](./ADR-023-gocron-ui-security.md) | gocron-ui read-only security boundary | Proposed |
+| [ADR-024](./ADR-024-provider-egress-rate-limits.md) | Provider egress rate limits over the shared token bucket | Proposed |
+| [ADR-025](./ADR-025-casbin-v3.md) | Casbin v2.8.0 → v3 authorization pin (path-only major) | Proposed |
 
 ## How to add an ADR
 

@@ -59,7 +59,7 @@ type MockPostLedgerPosting_Execute_Call struct {
 // Execute is a helper method to define mock.On call
 //   - ctx context.Context
 //   - cmd port.PostPostingCommand
-func (_e *MockPostLedgerPosting_Expecter) Execute(ctx interface{}, cmd interface{}) *MockPostLedgerPosting_Execute_Call {
+func (_e *MockPostLedgerPosting_Expecter) Execute(ctx any, cmd any) *MockPostLedgerPosting_Execute_Call {
 	return &MockPostLedgerPosting_Execute_Call{Call: _e.mock.On("Execute", ctx, cmd)}
 }
 

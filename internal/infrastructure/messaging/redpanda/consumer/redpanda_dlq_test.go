@@ -2,7 +2,7 @@ package consumer_test
 
 import (
 	"context"
-	"errors"
+	"maps"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -64,7 +64,7 @@ func TestNewRedpandaMessageDLQ(t *testing.T) {
 				Topics: topics,
 			},
 			expectedResult: false,
-			expectedError:  errors.New("dlq: broker is required"),
+			expectedError:  consumer.ErrDlqBrokerIsRequired,
 		},
 		{
 			name: "nil topics rejected",
@@ -73,18 +73,22 @@ func TestNewRedpandaMessageDLQ(t *testing.T) {
 				Topics: nil,
 			},
 			expectedResult: false,
-			expectedError:  errors.New("dlq: topic registry is required"),
+			expectedError:  consumer.ErrDlqTopicRegistryIsRequired,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			sink, err := consumer.NewRedpandaMessageDLQ(tc.params)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
 				assert.Nil(t, sink)
+
 				return
 			}
+
 			require.NoError(t, err)
 			require.NotNil(t, sink)
 			assert.Equal(t, tc.expectedResult, sink != nil)
@@ -119,7 +123,7 @@ func TestRedpandaMessageDLQRecord(t *testing.T) {
 			expectedTopic:  "",
 			expectedKey:    "",
 			expectedSource: "",
-			expectedError:  errors.New("dlq: not initialized"),
+			expectedError:  consumer.ErrDlqNotInitialized,
 		},
 		{
 			name: "records message to dlq",
@@ -128,6 +132,7 @@ func TestRedpandaMessageDLQRecord(t *testing.T) {
 					Broker: b,
 					Topics: newTestTopicRegistry(t),
 				})
+
 				return s
 			},
 			ctx: context.Background(),
@@ -135,6 +140,7 @@ func TestRedpandaMessageDLQRecord(t *testing.T) {
 				ID: "dlq-msg-1",
 				TenantID: func() valueobject.TenantID {
 					t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000040")
+
 					return t
 				}(),
 				Subject:     "ledger.t1.transfer.completed.v1",
@@ -150,29 +156,36 @@ func TestRedpandaMessageDLQRecord(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			broker := mockredpanda.NewMockBroker(t)
-			var recordedTopic string
-			var recordedKey string
-			var recordedHeaders map[string]string
-			var recordedPayload []byte
+
+			var (
+				recordedTopic   string
+				recordedKey     string
+				recordedHeaders map[string]string
+				recordedPayload []byte
+			)
 
 			broker.EXPECT().Publish(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, topic, key string, headers map[string]string, payload []byte) error {
 				recordedTopic = topic
 				recordedKey = key
 				recordedHeaders = make(map[string]string, len(headers))
-				for k, v := range headers {
-					recordedHeaders[k] = v
-				}
+				maps.Copy(recordedHeaders, headers)
+
 				recordedPayload = append([]byte(nil), payload...)
+
 				return nil
 			}).Maybe()
 
 			sink := tc.sink(broker)
+
 			err := sink.Record(tc.ctx, tc.msg)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
+
 				return
 			}
+
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedTopic, recordedTopic)
 			assert.Equal(t, tc.expectedKey, recordedKey)
@@ -212,7 +225,7 @@ func TestNewRedpandaWebhookDLQ(t *testing.T) {
 				Topics: topics,
 			},
 			expectedResult: false,
-			expectedError:  errors.New("dlq: broker is required"),
+			expectedError:  consumer.ErrDlqBrokerIsRequired,
 		},
 		{
 			name: "nil topics rejected",
@@ -221,18 +234,22 @@ func TestNewRedpandaWebhookDLQ(t *testing.T) {
 				Topics: nil,
 			},
 			expectedResult: false,
-			expectedError:  errors.New("dlq: topic registry is required"),
+			expectedError:  consumer.ErrDlqTopicRegistryIsRequired,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			sink, err := consumer.NewRedpandaWebhookDLQ(tc.params)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
 				assert.Nil(t, sink)
+
 				return
 			}
+
 			require.NoError(t, err)
 			require.NotNil(t, sink)
 			assert.Equal(t, tc.expectedResult, sink != nil)
@@ -265,7 +282,7 @@ func TestRedpandaWebhookDLQRecord(t *testing.T) {
 			},
 			expectedTopic:  "",
 			expectedSource: "",
-			expectedError:  errors.New("dlq: not initialized"),
+			expectedError:  consumer.ErrDlqNotInitialized,
 		},
 		{
 			name: "records webhook delivery to dlq",
@@ -274,6 +291,7 @@ func TestRedpandaWebhookDLQRecord(t *testing.T) {
 					Broker: b,
 					Topics: newTestTopicRegistry(t),
 				})
+
 				return s
 			},
 			ctx: context.Background(),
@@ -292,27 +310,34 @@ func TestRedpandaWebhookDLQRecord(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			broker := mockredpanda.NewMockBroker(t)
-			var recordedTopic string
-			var recordedHeaders map[string]string
-			var recordedPayload []byte
 
-			broker.EXPECT().Publish(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, topic, key string, headers map[string]string, payload []byte) error {
+			var (
+				recordedTopic   string
+				recordedHeaders map[string]string
+				recordedPayload []byte
+			)
+
+			broker.EXPECT().Publish(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, topic, _ string, headers map[string]string, payload []byte) error {
 				recordedTopic = topic
 				recordedHeaders = make(map[string]string, len(headers))
-				for k, v := range headers {
-					recordedHeaders[k] = v
-				}
+				maps.Copy(recordedHeaders, headers)
+
 				recordedPayload = append([]byte(nil), payload...)
+
 				return nil
 			}).Maybe()
 
 			sink := tc.sink(broker)
+
 			err := sink.Record(tc.ctx, tc.msg)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
+
 				return
 			}
+
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedTopic, recordedTopic)
 			assert.Contains(t, string(recordedPayload), `"attempts":8`)

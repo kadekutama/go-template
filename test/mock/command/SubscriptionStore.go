@@ -53,7 +53,7 @@ type MockSubscriptionStore_CreateSubscription_Call struct {
 // CreateSubscription is a helper method to define mock.On call
 //   - ctx context.Context
 //   - sub command.Subscription
-func (_e *MockSubscriptionStore_Expecter) CreateSubscription(ctx interface{}, sub interface{}) *MockSubscriptionStore_CreateSubscription_Call {
+func (_e *MockSubscriptionStore_Expecter) CreateSubscription(ctx any, sub any) *MockSubscriptionStore_CreateSubscription_Call {
 	return &MockSubscriptionStore_CreateSubscription_Call{Call: _e.mock.On("CreateSubscription", ctx, sub)}
 }
 
@@ -101,7 +101,7 @@ type MockSubscriptionStore_DeleteSubscription_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - id string
-func (_e *MockSubscriptionStore_Expecter) DeleteSubscription(ctx interface{}, tenant interface{}, id interface{}) *MockSubscriptionStore_DeleteSubscription_Call {
+func (_e *MockSubscriptionStore_Expecter) DeleteSubscription(ctx any, tenant any, id any) *MockSubscriptionStore_DeleteSubscription_Call {
 	return &MockSubscriptionStore_DeleteSubscription_Call{Call: _e.mock.On("DeleteSubscription", ctx, tenant, id)}
 }
 
@@ -159,7 +159,7 @@ type MockSubscriptionStore_FindSubscription_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - id string
-func (_e *MockSubscriptionStore_Expecter) FindSubscription(ctx interface{}, tenant interface{}, id interface{}) *MockSubscriptionStore_FindSubscription_Call {
+func (_e *MockSubscriptionStore_Expecter) FindSubscription(ctx any, tenant any, id any) *MockSubscriptionStore_FindSubscription_Call {
 	return &MockSubscriptionStore_FindSubscription_Call{Call: _e.mock.On("FindSubscription", ctx, tenant, id)}
 }
 
@@ -219,7 +219,7 @@ type MockSubscriptionStore_ListDueSubscriptions_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - now time.Time
-func (_e *MockSubscriptionStore_Expecter) ListDueSubscriptions(ctx interface{}, tenant interface{}, now interface{}) *MockSubscriptionStore_ListDueSubscriptions_Call {
+func (_e *MockSubscriptionStore_Expecter) ListDueSubscriptions(ctx any, tenant any, now any) *MockSubscriptionStore_ListDueSubscriptions_Call {
 	return &MockSubscriptionStore_ListDueSubscriptions_Call{Call: _e.mock.On("ListDueSubscriptions", ctx, tenant, now)}
 }
 
@@ -266,7 +266,7 @@ type MockSubscriptionStore_UpdateSubscription_Call struct {
 // UpdateSubscription is a helper method to define mock.On call
 //   - ctx context.Context
 //   - sub command.Subscription
-func (_e *MockSubscriptionStore_Expecter) UpdateSubscription(ctx interface{}, sub interface{}) *MockSubscriptionStore_UpdateSubscription_Call {
+func (_e *MockSubscriptionStore_Expecter) UpdateSubscription(ctx any, sub any) *MockSubscriptionStore_UpdateSubscription_Call {
 	return &MockSubscriptionStore_UpdateSubscription_Call{Call: _e.mock.On("UpdateSubscription", ctx, sub)}
 }
 

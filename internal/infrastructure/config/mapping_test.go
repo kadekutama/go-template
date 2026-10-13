@@ -1,7 +1,6 @@
 package config_test
 
 import (
-	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -62,27 +61,32 @@ func TestCacheTTLsConfigHybridTTLs(t *testing.T) {
 			name:           "zero config rejected",
 			ttls:           config.CacheTTLsConfig{},
 			expectedResult: hybrid.TTLSet{},
-			expectedError:  errors.New("cache: ttl balance must be positive"),
+			expectedError:  config.ErrCacheTTLBalanceMustBePositive,
 		},
 		{
 			name: "negative override rejected",
 			ttls: func() config.CacheTTLsConfig {
 				c := validConfig
 				c.BalanceSec = -1
+
 				return c
 			}(),
 			expectedResult: hybrid.TTLSet{},
-			expectedError:  errors.New("cache: ttl balance must be positive"),
+			expectedError:  config.ErrCacheTTLBalanceMustBePositive,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			ttl, err := tc.ttls.HybridTTLs()
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
+
 				return
 			}
+
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedResult, ttl)
 		})
@@ -133,49 +137,56 @@ func TestRedpandaConfigTopics(t *testing.T) {
 			name:           "zero config rejected",
 			redpanda:       config.RedpandaConfig{},
 			expectedResult: redpanda.TopicsConfig{},
-			expectedError:  errors.New("redpanda: ledger events topic is required"),
+			expectedError:  config.ErrRedpandaLedgerEventsTopicIsRequired,
 		},
 		{
 			name: "missing outbox facts rejected",
 			redpanda: func() config.RedpandaConfig {
 				c := validRedpanda
 				c.OutboxFacts = ""
+
 				return c
 			}(),
 			expectedResult: redpanda.TopicsConfig{},
-			expectedError:  errors.New("redpanda: outbox facts topic is required"),
+			expectedError:  config.ErrRedpandaOutboxFactsTopicIsRequired,
 		},
 		{
 			name: "missing partition keys rejected",
 			redpanda: func() config.RedpandaConfig {
 				c := validRedpanda
 				c.PartitionKeys = ""
+
 				return c
 			}(),
 			expectedResult: redpanda.TopicsConfig{},
-			expectedError:  errors.New("redpanda: partition keys is required"),
+			expectedError:  config.ErrRedpandaPartitionKeysIsRequired,
 		},
 		{
 			name: "missing dlq suffix rejected",
 			redpanda: func() config.RedpandaConfig {
 				c := validRedpanda
 				c.DLQSuffix = ""
+
 				return c
 			}(),
 			expectedResult: redpanda.TopicsConfig{},
-			expectedError:  errors.New("redpanda: dlq suffix is required"),
+			expectedError:  config.ErrRedpandaDlqSuffixIsRequired,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			topics, err := tc.redpanda.Topics()
 			if tc.expectedError != nil {
 				require.Error(t, err)
 				assert.EqualError(t, err, tc.expectedError.Error())
 				assert.Equal(t, tc.expectedResult, topics)
+
 				return
 			}
+
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedResult, topics)
 		})
@@ -199,7 +210,7 @@ func TestWebhookConfigRetryPolicy(t *testing.T) {
 			webhook:          config.WebhookConfig{},
 			expectedSteps:    nil,
 			expectedAttempts: 0,
-			expectedError:    errors.New("webhook: retry steps are required (see config.yaml)"),
+			expectedError:    config.ErrWebhookRetryStepsAreRequiredSeeConfigYaml,
 		},
 		{
 			name: "custom steps map and bound attempts",
@@ -217,17 +228,21 @@ func TestWebhookConfigRetryPolicy(t *testing.T) {
 			},
 			expectedSteps:    nil,
 			expectedAttempts: 0,
-			expectedError:    errors.New("webhook: retry steps must be positive"),
+			expectedError:    config.ErrWebhookRetryStepsMustBePositive,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			policy, err := tc.webhook.RetryPolicy()
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
+
 				return
 			}
+
 			require.NoError(t, err)
 			require.NotNil(t, policy)
 			assert.Equal(t, tc.expectedAttempts, policy.MaxAttempts())
@@ -276,29 +291,34 @@ func TestCoordinationConfigCoordination(t *testing.T) {
 			name:           "zero coordination rejected",
 			coord:          config.CoordinationConfig{},
 			expectedResult: etcd.Config{},
-			expectedError:  errors.New("etcd: at least one endpoint is required"),
+			expectedError:  config.ErrEtcdAtLeastOneEndpointIsRequired,
 		},
 		{
 			name: "missing prefix rejected",
 			coord: func() config.CoordinationConfig {
 				c := validCoord
 				c.LeaderKeyPrefix = ""
+
 				return c
 			}(),
 			expectedResult: etcd.Config{},
-			expectedError:  errors.New("etcd: leader key prefix must not be blank"),
+			expectedError:  config.ErrEtcdLeaderKeyPrefixMustNotBeBlank,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			cfg, err := tc.coord.Coordination()
 			if tc.expectedError != nil {
 				require.Error(t, err)
 				assert.EqualError(t, err, tc.expectedError.Error())
 				assert.Equal(t, tc.expectedResult, cfg)
+
 				return
 			}
+
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedResult, cfg)
 		})
@@ -340,19 +360,23 @@ func TestHTTPClientConfig(t *testing.T) {
 			name:           "zero http client rejected",
 			cfg:            config.HTTPClientConfig{},
 			expectedResult: httpclient.Params{},
-			expectedError:  errors.New("httpclient: all parameters must be positive"),
+			expectedError:  config.ErrHttpclientAllParametersMustBePositive,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			params, err := tc.cfg.HTTPClientParams()
 			if tc.expectedError != nil {
 				require.Error(t, err)
 				assert.EqualError(t, err, tc.expectedError.Error())
 				assert.Equal(t, tc.expectedResult, params)
+
 				return
 			}
+
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedResult, params)
 		})
@@ -396,29 +420,34 @@ func TestAPIKeyConfig(t *testing.T) {
 			name:           "zero api key rejected",
 			cfg:            config.APIKeyConfig{},
 			expectedResult: apikey.HasherParams{},
-			expectedError:  errors.New("apikey: all parameters must be positive (threads 1-16)"),
+			expectedError:  config.ErrApikeyAllParametersMustBePositiveThreads116,
 		},
 		{
 			name: "threads above file ceiling rejected",
 			cfg: func() config.APIKeyConfig {
 				c := validConfig
 				c.Threads = 17
+
 				return c
 			}(),
 			expectedResult: apikey.HasherParams{},
-			expectedError:  errors.New("apikey: all parameters must be positive (threads 1-16)"),
+			expectedError:  config.ErrApikeyAllParametersMustBePositiveThreads116,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			params, err := tc.cfg.HasherParams()
 			if tc.expectedError != nil {
 				require.Error(t, err)
 				assert.EqualError(t, err, tc.expectedError.Error())
 				assert.Equal(t, tc.expectedResult, params)
+
 				return
 			}
+
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedResult, params)
 		})
@@ -450,7 +479,7 @@ func TestObservabilityConfigLogging(t *testing.T) {
 				LogLevel: "",
 			},
 			expectedResult: logging.Config{},
-			expectedError:  errors.New("logging: log_level is required"),
+			expectedError:  config.ErrLoggingLogLevelIsRequired,
 		},
 		{
 			name: "invalid log level rejected",
@@ -458,19 +487,23 @@ func TestObservabilityConfigLogging(t *testing.T) {
 				LogLevel: "verbose",
 			},
 			expectedResult: logging.Config{},
-			expectedError:  errors.New("logging: unknown log level \"verbose\""),
+			expectedError:  config.ErrLoggingUnknownLogLevelVerbose,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			result, err := tc.cfg.Logging()
 			if tc.expectedError != nil {
 				require.Error(t, err)
 				assert.EqualError(t, err, tc.expectedError.Error())
 				assert.Equal(t, tc.expectedResult, result)
+
 				return
 			}
+
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedResult, result)
 		})
@@ -525,6 +558,7 @@ func TestRedpandaTopicsDLQParity(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Equal(t, tc.expectedKnown, registry.IsKnownTopic(tc.topic))
 
 			dlq, err := registry.DLQFor(tc.topic)
@@ -532,17 +566,21 @@ func TestRedpandaTopicsDLQParity(t *testing.T) {
 
 			if !tc.expectedKnown {
 				assert.Equal(t, tc.topic+topics.DLQSuffix, dlq)
+
 				return
 			}
 
 			specs := registry.Registry()
 			matched := false
+
 			for _, spec := range specs {
 				if spec.Name == tc.topic {
 					assert.Equal(t, spec.DLQ, dlq)
+
 					matched = true
 				}
 			}
+
 			assert.True(t, matched)
 		})
 	}
@@ -569,24 +607,28 @@ func TestTenancyConfigAssetCap(t *testing.T) {
 			name:           "zero cap rejected",
 			maxAssets:      0,
 			expectedResult: 0,
-			expectedError:  errors.New("tenancy: max_onboarding_assets must be positive (see config.yaml)"),
+			expectedError:  config.ErrTenancyMaxOnboardingAssetsMustBePositiveSeeConfigYaml,
 		},
 		{
 			name:           "negative cap rejected",
 			maxAssets:      -2,
 			expectedResult: 0,
-			expectedError:  errors.New("tenancy: max_onboarding_assets must be positive (see config.yaml)"),
+			expectedError:  config.ErrTenancyMaxOnboardingAssetsMustBePositiveSeeConfigYaml,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			result, err := config.TenancyConfig{MaxOnboardingAssets: tc.maxAssets}.AssetCap()
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
 				assert.Equal(t, 0, result)
+
 				return
 			}
+
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedResult, result)
 		})
@@ -634,51 +676,58 @@ func TestConfigTracing(t *testing.T) {
 			cfg: func() config.Config {
 				c := baseConfig
 				c.Observability.ExcludedRoutes = nil
+
 				return c
 			}(),
 			serviceVersion: "v1.2.3",
 			expectedResult: tracing.Config{},
-			expectedError:  errors.New("tracing: ExcludedRoutes is required"),
+			expectedError:  config.ErrTracingExcludedRoutesIsRequired,
 		},
 		{
 			name: "blank route rejected",
 			cfg: func() config.Config {
 				c := baseConfig
 				c.Observability.ExcludedRoutes = []string{"/healthz", "   "}
+
 				return c
 			}(),
 			serviceVersion: "v1.2.3",
 			expectedResult: tracing.Config{},
-			expectedError:  errors.New("tracing: excluded route must not be blank"),
+			expectedError:  config.ErrTracingExcludedRouteMustNotBeBlank,
 		},
 		{
 			name: "zero sample ratio rejected",
 			cfg: func() config.Config {
 				c := baseConfig
 				c.Observability.SampleRatio = 0
+
 				return c
 			}(),
 			serviceVersion: "v1.2.3",
 			expectedResult: tracing.Config{},
-			expectedError:  errors.New("tracing: SampleRatio 0 out of (0,1]"),
+			expectedError:  config.ErrTracingSampleRatio0OutOf01,
 		},
 		{
 			name:           "missing service version rejected",
 			cfg:            baseConfig,
 			serviceVersion: "",
 			expectedResult: tracing.Config{},
-			expectedError:  errors.New("tracing: ServiceVersion is required"),
+			expectedError:  config.ErrTracingServiceVersionIsRequired,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			result, err := tc.cfg.Tracing(tc.serviceVersion)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
 				assert.Equal(t, tracing.Config{}, result)
+
 				return
 			}
+
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedResult, result)
 		})

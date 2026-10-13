@@ -1,7 +1,7 @@
 package valueobject_test
 
 import (
-	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -36,30 +36,32 @@ func TestParseMatchDecision(t *testing.T) {
 			name:           "invalid decision",
 			s:              "PARTIAL",
 			expectedResult: valueobject.MatchDecision(""),
-			expectedError:  errors.New(`reconciliation: invalid match decision "PARTIAL"`),
+			expectedError:  fmt.Errorf("reconciliation: invalid match decision %q: %w", "PARTIAL", valueobject.ErrReconciliationInvalidMatchDecision),
 		},
 		{
 			name:           "empty decision",
 			s:              "",
 			expectedResult: valueobject.MatchDecision(""),
-			expectedError:  errors.New(`reconciliation: invalid match decision ""`),
+			expectedError:  fmt.Errorf("reconciliation: invalid match decision %q: %w", "", valueobject.ErrReconciliationInvalidMatchDecision),
 		},
 		{
 			name:           "whitespace decision",
 			s:              "   ",
 			expectedResult: valueobject.MatchDecision(""),
-			expectedError:  errors.New(`reconciliation: invalid match decision "   "`),
+			expectedError:  fmt.Errorf("reconciliation: invalid match decision %q: %w", "   ", valueobject.ErrReconciliationInvalidMatchDecision),
 		},
 		{
 			name:           "lowercase decision rejected",
 			s:              "matched",
 			expectedResult: valueobject.MatchDecision(""),
-			expectedError:  errors.New(`reconciliation: invalid match decision "matched"`),
+			expectedError:  fmt.Errorf("reconciliation: invalid match decision %q: %w", "matched", valueobject.ErrReconciliationInvalidMatchDecision),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := valueobject.ParseMatchDecision(tc.s)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)

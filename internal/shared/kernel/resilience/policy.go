@@ -1,7 +1,6 @@
 package resilience
 
 import (
-	"errors"
 	"time"
 )
 
@@ -16,17 +15,21 @@ type RetryPolicy struct {
 // Validate ensures all policy parameters are explicitly positive and valid.
 func (p RetryPolicy) Validate() error {
 	if p.MaxAttempts <= 0 {
-		return errors.New("resilience: max attempts must be positive")
+		return ErrResilienceMaxAttemptsMustBePositive
 	}
+
 	if p.InitialBackoff <= 0 {
-		return errors.New("resilience: initial backoff must be positive")
+		return ErrResilienceInitialBackoffMustBePositive
 	}
+
 	if p.MaxBackoff < p.InitialBackoff {
-		return errors.New("resilience: max backoff must be greater than or equal to initial backoff")
+		return ErrResilienceMaxBackoffMustBeGreaterThanOrEqualToInitialBack
 	}
+
 	if p.Multiplier < 1.0 {
-		return errors.New("resilience: multiplier must be at least 1.0")
+		return ErrResilienceMultiplierMustBeAtLeast10
 	}
+
 	return nil
 }
 
@@ -36,9 +39,11 @@ func (p RetryPolicy) BackoffFor(retryNumber int) (time.Duration, error) {
 	if err := p.Validate(); err != nil {
 		return 0, err
 	}
+
 	if retryNumber <= 0 {
 		retryNumber = 1
 	}
+
 	wait := float64(p.InitialBackoff)
 	for i := 1; i < retryNumber; i++ {
 		wait *= p.Multiplier
@@ -46,9 +51,11 @@ func (p RetryPolicy) BackoffFor(retryNumber int) (time.Duration, error) {
 			return p.MaxBackoff, nil
 		}
 	}
+
 	if wait >= float64(p.MaxBackoff) {
 		return p.MaxBackoff, nil
 	}
+
 	return time.Duration(wait), nil
 }
 
@@ -59,5 +66,6 @@ func ShouldRetry(class Class, idempotent bool, idempotencyKey string) bool {
 	if class == Permanent {
 		return false
 	}
+
 	return idempotent || idempotencyKey != ""
 }

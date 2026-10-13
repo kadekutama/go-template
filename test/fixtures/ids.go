@@ -28,7 +28,7 @@ const (
 	PostingFee01 = "40000000-0000-4000-8000-000000000003"
 	// PostingRefund01 is the stable refund posting.
 	PostingRefund01 = "40000000-0000-4000-8000-000000000004"
-	// Stable chart account IDs (single source of truth for builders).
+	// AcctOperatingUSD starts the stable chart account IDs (single source of truth for builders).
 	AcctOperatingUSD = "30000000-0000-4000-8000-000000000001"
 	AcctOperatingEUR = "30000000-0000-4000-8000-000000000002"
 	AcctOperatingIDR = "30000000-0000-4000-8000-000000000003"

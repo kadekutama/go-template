@@ -9,7 +9,7 @@ import (
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
 )
 
-func TestReconciliationBreakValidate(t *testing.T) {
+func TestReconciliationBreakValidateValid(t *testing.T) {
 	t.Parallel()
 
 	baseBreak := entity.ReconciliationBreak{
@@ -46,6 +46,7 @@ func TestReconciliationBreakValidate(t *testing.T) {
 				brk.Type = valueobject.BreakMissingInBank
 				brk.LedgerRef = "post-1"
 				brk.ExternalRef = ""
+
 				return brk
 			}(),
 			expectedError: nil,
@@ -57,6 +58,7 @@ func TestReconciliationBreakValidate(t *testing.T) {
 				brk.Type = valueobject.BreakAmountMismatch
 				brk.LedgerRef = "post-1"
 				brk.ExternalRef = "ext-line-1"
+
 				return brk
 			}(),
 			expectedError: nil,
@@ -68,6 +70,7 @@ func TestReconciliationBreakValidate(t *testing.T) {
 				brk.Type = valueobject.BreakDateMismatch
 				brk.LedgerRef = "post-1"
 				brk.ExternalRef = "ext-line-1"
+
 				return brk
 			}(),
 			expectedError: nil,
@@ -81,15 +84,53 @@ func TestReconciliationBreakValidate(t *testing.T) {
 				brk.Evidence = map[string]string{
 					"duplicate_of": "ref-xyz",
 				}
+
 				return brk
 			}(),
 			expectedError: nil,
 		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := tc.b.Validate()
+			assert.Equal(t, tc.expectedError, err)
+		})
+	}
+}
+func TestReconciliationBreakValidateFields(t *testing.T) {
+	t.Parallel()
+
+	baseBreak := entity.ReconciliationBreak{
+		BreakID:       "brk-100",
+		RunID:         "run-200",
+		TenantID:      "tenant-300",
+		Type:          valueobject.BreakMissingInLedger,
+		LedgerRef:     "",
+		ExternalRef:   "ext-line-1",
+		ExpectedMinor: 0,
+		ActualMinor:   5000,
+		Evidence: map[string]string{
+			"reference": "ref-xyz",
+		},
+		RuleVersion: "v1",
+	}
+
+	type testCase struct {
+		name          string
+		b             entity.ReconciliationBreak
+		expectedError error
+	}
+
+	testCases := []testCase{
 		{
 			name: "missing break id",
 			b: func() entity.ReconciliationBreak {
 				brk := baseBreak
 				brk.BreakID = ""
+
 				return brk
 			}(),
 			expectedError: entity.NewError("BREAK_ID_REQUIRED", "break id is required"),
@@ -99,6 +140,7 @@ func TestReconciliationBreakValidate(t *testing.T) {
 			b: func() entity.ReconciliationBreak {
 				brk := baseBreak
 				brk.BreakID = "   "
+
 				return brk
 			}(),
 			expectedError: entity.NewError("BREAK_ID_REQUIRED", "break id is required"),
@@ -108,6 +150,7 @@ func TestReconciliationBreakValidate(t *testing.T) {
 			b: func() entity.ReconciliationBreak {
 				brk := baseBreak
 				brk.RunID = ""
+
 				return brk
 			}(),
 			expectedError: entity.NewError("RUN_ID_REQUIRED", "run id is required"),
@@ -117,6 +160,7 @@ func TestReconciliationBreakValidate(t *testing.T) {
 			b: func() entity.ReconciliationBreak {
 				brk := baseBreak
 				brk.RunID = "   "
+
 				return brk
 			}(),
 			expectedError: entity.NewError("RUN_ID_REQUIRED", "run id is required"),
@@ -126,6 +170,7 @@ func TestReconciliationBreakValidate(t *testing.T) {
 			b: func() entity.ReconciliationBreak {
 				brk := baseBreak
 				brk.TenantID = ""
+
 				return brk
 			}(),
 			expectedError: entity.NewError("TENANT_REQUIRED", "tenant id is required"),
@@ -135,6 +180,7 @@ func TestReconciliationBreakValidate(t *testing.T) {
 			b: func() entity.ReconciliationBreak {
 				brk := baseBreak
 				brk.TenantID = "   "
+
 				return brk
 			}(),
 			expectedError: entity.NewError("TENANT_REQUIRED", "tenant id is required"),
@@ -144,6 +190,7 @@ func TestReconciliationBreakValidate(t *testing.T) {
 			b: func() entity.ReconciliationBreak {
 				brk := baseBreak
 				brk.Type = valueobject.BreakType("INVALID_TYPE")
+
 				return brk
 			}(),
 			expectedError: entity.NewError("BREAK_TYPE_INVALID", "break type is invalid"),
@@ -153,6 +200,7 @@ func TestReconciliationBreakValidate(t *testing.T) {
 			b: func() entity.ReconciliationBreak {
 				brk := baseBreak
 				brk.Type = valueobject.BreakType("")
+
 				return brk
 			}(),
 			expectedError: entity.NewError("BREAK_TYPE_INVALID", "break type is invalid"),
@@ -162,6 +210,7 @@ func TestReconciliationBreakValidate(t *testing.T) {
 			b: func() entity.ReconciliationBreak {
 				brk := baseBreak
 				brk.RuleVersion = ""
+
 				return brk
 			}(),
 			expectedError: entity.NewError("RULE_VERSION_REQUIRED", "rule version is required"),
@@ -171,15 +220,53 @@ func TestReconciliationBreakValidate(t *testing.T) {
 			b: func() entity.ReconciliationBreak {
 				brk := baseBreak
 				brk.RuleVersion = "   "
+
 				return brk
 			}(),
 			expectedError: entity.NewError("RULE_VERSION_REQUIRED", "rule version is required"),
 		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := tc.b.Validate()
+			assert.Equal(t, tc.expectedError, err)
+		})
+	}
+}
+func TestReconciliationBreakValidateReferences(t *testing.T) {
+	t.Parallel()
+
+	baseBreak := entity.ReconciliationBreak{
+		BreakID:       "brk-100",
+		RunID:         "run-200",
+		TenantID:      "tenant-300",
+		Type:          valueobject.BreakMissingInLedger,
+		LedgerRef:     "",
+		ExternalRef:   "ext-line-1",
+		ExpectedMinor: 0,
+		ActualMinor:   5000,
+		Evidence: map[string]string{
+			"reference": "ref-xyz",
+		},
+		RuleVersion: "v1",
+	}
+
+	type testCase struct {
+		name          string
+		b             entity.ReconciliationBreak
+		expectedError error
+	}
+
+	testCases := []testCase{
 		{
 			name: "missing in ledger missing external ref",
 			b: func() entity.ReconciliationBreak {
 				brk := baseBreak
 				brk.ExternalRef = ""
+
 				return brk
 			}(),
 			expectedError: entity.NewError("BREAK_EVIDENCE_REQUIRED", "missing-in-ledger requires the external reference"),
@@ -189,6 +276,7 @@ func TestReconciliationBreakValidate(t *testing.T) {
 			b: func() entity.ReconciliationBreak {
 				brk := baseBreak
 				brk.ExternalRef = "   "
+
 				return brk
 			}(),
 			expectedError: entity.NewError("BREAK_EVIDENCE_REQUIRED", "missing-in-ledger requires the external reference"),
@@ -199,6 +287,7 @@ func TestReconciliationBreakValidate(t *testing.T) {
 				brk := baseBreak
 				brk.Type = valueobject.BreakMissingInBank
 				brk.LedgerRef = ""
+
 				return brk
 			}(),
 			expectedError: entity.NewError("BREAK_EVIDENCE_REQUIRED", "missing-in-bank requires the ledger reference"),
@@ -209,6 +298,7 @@ func TestReconciliationBreakValidate(t *testing.T) {
 				brk := baseBreak
 				brk.Type = valueobject.BreakMissingInBank
 				brk.LedgerRef = "   "
+
 				return brk
 			}(),
 			expectedError: entity.NewError("BREAK_EVIDENCE_REQUIRED", "missing-in-bank requires the ledger reference"),
@@ -220,6 +310,7 @@ func TestReconciliationBreakValidate(t *testing.T) {
 				brk.Type = valueobject.BreakAmountMismatch
 				brk.LedgerRef = ""
 				brk.ExternalRef = "ext-1"
+
 				return brk
 			}(),
 			expectedError: entity.NewError("BREAK_EVIDENCE_REQUIRED", "mismatch requires both references"),
@@ -231,6 +322,7 @@ func TestReconciliationBreakValidate(t *testing.T) {
 				brk.Type = valueobject.BreakAmountMismatch
 				brk.LedgerRef = "post-1"
 				brk.ExternalRef = ""
+
 				return brk
 			}(),
 			expectedError: entity.NewError("BREAK_EVIDENCE_REQUIRED", "mismatch requires both references"),
@@ -242,6 +334,7 @@ func TestReconciliationBreakValidate(t *testing.T) {
 				brk.Type = valueobject.BreakDateMismatch
 				brk.LedgerRef = "post-1"
 				brk.ExternalRef = ""
+
 				return brk
 			}(),
 			expectedError: entity.NewError("BREAK_EVIDENCE_REQUIRED", "mismatch requires both references"),
@@ -253,6 +346,7 @@ func TestReconciliationBreakValidate(t *testing.T) {
 				brk.Type = valueobject.BreakDuplicate
 				brk.ExternalRef = ""
 				brk.Evidence = map[string]string{"duplicate_of": "ref-1"}
+
 				return brk
 			}(),
 			expectedError: entity.NewError("BREAK_EVIDENCE_REQUIRED", "duplicate requires the external reference"),
@@ -264,6 +358,7 @@ func TestReconciliationBreakValidate(t *testing.T) {
 				brk.Type = valueobject.BreakDuplicate
 				brk.ExternalRef = "ext-1"
 				brk.Evidence = nil
+
 				return brk
 			}(),
 			expectedError: entity.NewError("BREAK_EVIDENCE_REQUIRED", "duplicate requires duplicate_of evidence"),
@@ -275,6 +370,7 @@ func TestReconciliationBreakValidate(t *testing.T) {
 				brk.Type = valueobject.BreakDuplicate
 				brk.ExternalRef = "ext-1"
 				brk.Evidence = map[string]string{}
+
 				return brk
 			}(),
 			expectedError: entity.NewError("BREAK_EVIDENCE_REQUIRED", "duplicate requires duplicate_of evidence"),
@@ -286,6 +382,7 @@ func TestReconciliationBreakValidate(t *testing.T) {
 				brk.Type = valueobject.BreakDuplicate
 				brk.ExternalRef = "ext-1"
 				brk.Evidence = map[string]string{"duplicate_of": "   "}
+
 				return brk
 			}(),
 			expectedError: entity.NewError("BREAK_EVIDENCE_REQUIRED", "duplicate requires duplicate_of evidence"),
@@ -294,6 +391,8 @@ func TestReconciliationBreakValidate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.b.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})

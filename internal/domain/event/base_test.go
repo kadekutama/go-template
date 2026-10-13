@@ -41,35 +41,44 @@ const (
 
 func verifyBaseAccessors(t *testing.T, evt event.BaseEvent, eventID, aggregateID, aggregateType, eventType string, at time.Time, version, seq int64) {
 	t.Helper()
+
 	if evt.EventID() != eventID {
 		t.Errorf("EventID = %q, want %q", evt.EventID(), eventID)
 	}
+
 	if evt.AggregateID() != aggregateID {
 		t.Errorf("AggregateID = %q, want %q", evt.AggregateID(), aggregateID)
 	}
+
 	if evt.AggregateType() != aggregateType {
 		t.Errorf("AggregateType = %q, want %q", evt.AggregateType(), aggregateType)
 	}
+
 	if evt.EventType() != eventType {
 		t.Errorf("EventType = %q, want %q", evt.EventType(), eventType)
 	}
+
 	if !evt.OccurredAt().Equal(at) || evt.OccurredAt().Location() != time.UTC {
 		t.Errorf("OccurredAt = %v, want %v in UTC", evt.OccurredAt(), at)
 	}
+
 	if evt.AggregateVersion() != version {
 		t.Errorf("AggregateVersion = %d, want %d", evt.AggregateVersion(), version)
 	}
+
 	if evt.Sequence() != seq {
 		t.Errorf("Sequence = %d, want %d", evt.Sequence(), seq)
 	}
 }
 
-func verifyBaseMetadata(t *testing.T, got event.EventMetadata) {
+func verifyBaseMetadata(t *testing.T, got event.Metadata) {
 	t.Helper()
+
 	if got.TenantID != testTenantID || got.LedgerID != testLedgerID || got.CausationID != testCmdID ||
 		got.CorrelationID != testCorrID || got.UserID != testUserID || got.TraceID != testTraceID {
 		t.Errorf("Metadata = %+v, want causation/correlation/user/trace preserved", got)
 	}
+
 	if got.Custom["k"] != "v" {
 		t.Errorf("Metadata.Custom = %v, want map[k:v]", got.Custom)
 	}
@@ -79,7 +88,7 @@ func TestNewBaseEventAccessors(t *testing.T) {
 	t.Parallel()
 
 	at := time.Date(2026, 9, 14, 3, 0, 0, 0, time.UTC)
-	baseMeta := event.EventMetadata{
+	baseMeta := event.Metadata{
 		TenantID:      testTenantID,
 		LedgerID:      testLedgerID,
 		CausationID:   testCmdID,
@@ -99,7 +108,7 @@ func TestNewBaseEventAccessors(t *testing.T) {
 		aggregateVersion int64
 		sequence         int64
 		payload          any
-		meta             event.EventMetadata
+		meta             event.Metadata
 		expectedError    error
 	}
 
@@ -121,6 +130,8 @@ func TestNewBaseEventAccessors(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			evt, err := event.NewBaseEvent(
 				tc.eventID,
 				tc.aggregateID,
@@ -136,14 +147,18 @@ func TestNewBaseEventAccessors(t *testing.T) {
 				if err == nil || err.Error() != tc.expectedError.Error() {
 					t.Fatalf("expected error %v, got %v", tc.expectedError, err)
 				}
+
 				return
 			}
+
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
+
 			var _ event.DomainEvent = evt
 			verifyBaseAccessors(t, evt, tc.eventID, tc.aggregateID, tc.aggregateType, tc.eventType, tc.occurredAt, tc.aggregateVersion, tc.sequence)
 			verifyBaseMetadata(t, evt.Metadata())
+
 			if payload, ok := evt.Payload().(map[string]string); !ok || payload["field"] != "value" {
 				t.Errorf("Payload = %v, want map[field:value]", evt.Payload())
 			}
@@ -155,7 +170,7 @@ func TestNewBaseEventValidationMatrix(t *testing.T) {
 	t.Parallel()
 
 	at := time.Date(2026, 9, 14, 3, 0, 0, 0, time.UTC)
-	baseMeta := event.EventMetadata{TenantID: testTenantID, Custom: map[string]string{"k": "v"}}
+	baseMeta := event.Metadata{TenantID: testTenantID, Custom: map[string]string{"k": "v"}}
 
 	type testCase struct {
 		name             string
@@ -167,7 +182,7 @@ func TestNewBaseEventValidationMatrix(t *testing.T) {
 		aggregateVersion int64
 		sequence         int64
 		payload          any
-		meta             event.EventMetadata
+		meta             event.Metadata
 		expectedError    string
 	}
 
@@ -234,9 +249,10 @@ func TestNewBaseEventValidationMatrix(t *testing.T) {
 			aggregateVersion: 1,
 			sequence:         0,
 			payload:          nil,
-			meta: func() event.EventMetadata {
+			meta: func() event.Metadata {
 				m := baseMeta
 				m.TenantID = ""
+
 				return m
 			}(),
 			expectedError: "event: metadata tenant_id is required",
@@ -284,6 +300,8 @@ func TestNewBaseEventValidationMatrix(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			_, err := event.NewBaseEvent(
 				tc.eventID,
 				tc.aggregateID,
@@ -306,7 +324,7 @@ func TestBaseEventImmutability(t *testing.T) {
 	t.Parallel()
 
 	at := time.Date(2026, 9, 14, 3, 0, 0, 0, time.UTC)
-	input := event.EventMetadata{TenantID: testTenantID, Custom: map[string]string{"k": "v"}}
+	input := event.Metadata{TenantID: testTenantID, Custom: map[string]string{"k": "v"}}
 
 	evt, err := event.NewBaseEvent("evt-01", "agg-01", "Account", "account.created.v1", at, 1, 0, nil, input)
 	if err != nil {
@@ -315,12 +333,14 @@ func TestBaseEventImmutability(t *testing.T) {
 	// Mutating the caller's map must not affect the envelope.
 	input.Custom["k"] = "mutated"
 	input.Custom["evil"] = "injected"
+
 	got := evt.Metadata()
 	if got.Custom["k"] != "v" || len(got.Custom) != 1 {
 		t.Fatalf("construction copy failed: %v", got.Custom)
 	}
 	// Mutating a returned Metadata copy must not affect the envelope.
 	got.Custom["k"] = "mutated-again"
+
 	again := evt.Metadata()
 	if again.Custom["k"] != "v" || len(again.Custom) != 1 {
 		t.Fatalf("accessor copy failed: %v", again.Custom)
@@ -332,7 +352,7 @@ func TestBaseEventOccurredAtNormalizedUTC(t *testing.T) {
 
 	eastern := time.FixedZone("EST", -5*60*60)
 	local := time.Date(2026, 9, 14, 10, 0, 0, 0, eastern)
-	meta := event.EventMetadata{TenantID: testTenantID}
+	meta := event.Metadata{TenantID: testTenantID}
 
 	type testCase struct {
 		name       string
@@ -348,13 +368,17 @@ func TestBaseEventOccurredAtNormalizedUTC(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			evt, err := event.NewBaseEvent("evt-01", "agg-01", "Account", "account.created.v1", tc.occurredAt, 1, 0, nil, meta)
 			if err != nil {
 				t.Fatalf("NewBaseEvent returned error: %v", err)
 			}
+
 			if evt.OccurredAt().Location() != time.UTC {
 				t.Errorf("OccurredAt location = %v, want UTC", evt.OccurredAt().Location())
 			}
+
 			if !evt.OccurredAt().Equal(tc.occurredAt) {
 				t.Errorf("OccurredAt = %v, want instant %v", evt.OccurredAt(), tc.occurredAt)
 			}

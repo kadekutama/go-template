@@ -3,7 +3,6 @@ package logging
 import (
 	"bytes"
 	"context"
-	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +19,7 @@ func TestLineCarriesCorrelationIDs(t *testing.T) {
 	t.Parallel()
 
 	var buf bytes.Buffer
+
 	logger := New(&buf, Config{Level: testDebugLevel})
 
 	ctx := log.WithRequestID(log.WithTraceID(context.Background(), "trace-1"), "req-1")
@@ -37,6 +37,7 @@ func TestWithChildKeepsParentClean(t *testing.T) {
 	t.Parallel()
 
 	var buf bytes.Buffer
+
 	parent := New(&buf, Config{Level: testDebugLevel})
 	child := parent.With("k", "v")
 	child.Warn(context.Background(), "child-line")
@@ -48,6 +49,7 @@ func TestWithChildKeepsParentClean(t *testing.T) {
 
 	buf.Reset()
 	parent.Warn(context.Background(), "parent-line")
+
 	if strings.Contains(buf.String(), `"k":"v"`) {
 		t.Errorf("parent logger leaked child attr: %s", buf.String())
 	}
@@ -57,12 +59,16 @@ func TestLevelFilters(t *testing.T) {
 	t.Parallel()
 
 	var buf bytes.Buffer
+
 	logger := New(&buf, Config{Level: "error"})
 	logger.Debug(context.Background(), "quiet")
+
 	if buf.Len() != 0 {
 		t.Errorf("debug line emitted at error level: %s", buf.String())
 	}
+
 	logger.Error(context.Background(), "loud")
+
 	if !strings.Contains(buf.String(), "loud") {
 		t.Errorf("error line missing at error level: %s", buf.String())
 	}
@@ -72,8 +78,10 @@ func TestUnknownLevelFallsBackToInfo(t *testing.T) {
 	t.Parallel()
 
 	var buf bytes.Buffer
+
 	logger := New(&buf, Config{Level: "nonsense"})
 	logger.Info(context.Background(), "still-here")
+
 	if !strings.Contains(buf.String(), "still-here") {
 		t.Error("unknown level should fail open to info")
 	}
@@ -84,12 +92,14 @@ func TestTraceFiltering(t *testing.T) {
 
 	var buf bytes.Buffer
 	New(&buf, Config{Level: "trace"}).Trace(context.Background(), "deep")
+
 	if !strings.Contains(buf.String(), `"level":"trace"`) {
 		t.Errorf("trace line missing at trace level: %s", buf.String())
 	}
 
 	buf.Reset()
 	New(&buf, Config{Level: "info"}).Trace(context.Background(), "deep")
+
 	if buf.Len() != 0 {
 		t.Errorf("trace line emitted at info level: %s", buf.String())
 	}
@@ -99,6 +109,7 @@ func TestPanicEmitsThenPanics(t *testing.T) {
 	t.Parallel()
 
 	var buf bytes.Buffer
+
 	logger := New(&buf, Config{Level: testDebugLevel})
 
 	func() {
@@ -108,6 +119,7 @@ func TestPanicEmitsThenPanics(t *testing.T) {
 				t.Errorf("want panic value %q, got %v", "boom-log", recovered)
 			}
 		}()
+
 		logger.Panic(context.Background(), "boom-log", "k", "v")
 	}()
 
@@ -121,13 +133,16 @@ func TestPanicRecoverableViaSafeGo(t *testing.T) {
 	t.Parallel()
 
 	var buf bytes.Buffer
+
 	logger := New(&buf, Config{Level: testDebugLevel})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	reported := make(chan safe.Panic, 1)
-	safe.Go(ctx, logger, func(p safe.Panic) { reported <- p }, func(context.Context) {
-		logger.Panic(context.Background(), "via-safe-go")
+
+	reported := make(chan safe.PanicError, 1)
+
+	safe.Go(ctx, logger, func(p safe.PanicError) { reported <- p }, func(ctx context.Context) {
+		logger.Panic(ctx, "via-safe-go")
 	})
 
 	select {
@@ -141,22 +156,24 @@ func TestPanicRecoverableViaSafeGo(t *testing.T) {
 }
 
 func TestFatalStubsExit(t *testing.T) {
-	// Do NOT call t.Parallel() here: this test mutates global osExit.
+	t.Parallel()
 
-	oldExit := osExit
-	defer func() { osExit = oldExit }()
+	var (
+		buf  bytes.Buffer
+		code int
+	)
 
-	var buf bytes.Buffer
-	var code int
 	calls := 0
-	osExit = func(c int) { code = c; calls++ }
 
-	New(&buf, Config{Level: testDebugLevel}).Fatal(context.Background(), "no-return", "k", "v")
+	logger := New(&buf, Config{Level: testDebugLevel}).(*zerologLogger)
+	logger.exit = func(c int) { code = c; calls++ }
+	logger.Fatal(context.Background(), "no-return", "k", "v")
 
 	out := buf.String()
 	if !strings.Contains(out, `"level":"fatal"`) || !strings.Contains(out, "no-return") {
 		t.Errorf("fatal line missing: %s", out)
 	}
+
 	if calls != 1 || code != 1 {
 		t.Errorf("want one exit(1), got calls=%d code=%d", calls, code)
 	}
@@ -166,6 +183,7 @@ func TestOddArgsPreserved(t *testing.T) {
 	t.Parallel()
 
 	var buf bytes.Buffer
+
 	logger := New(&buf, Config{Level: testDebugLevel})
 	logger.Info(context.Background(), "odd-check", "k1", "v1", "orphan")
 
@@ -184,7 +202,7 @@ func TestStandardizedFields(t *testing.T) {
 	}
 
 	req := sampleRequest{AccountID: "acc-100", Amount: 5000}
-	sampleErr := errors.New("network failure")
+	sampleErr := ErrNetworkFailure
 
 	type testCase struct {
 		name          string
@@ -239,13 +257,18 @@ func TestStandardizedFields(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			var buf bytes.Buffer
+
 			logger := New(&buf, Config{Level: testDebugLevel})
 			tc.logAction(logger, context.Background())
+
 			out := buf.String()
 			for _, exp := range tc.expectedParts {
 				assert.Contains(t, out, exp)
 			}
+
 			for _, rej := range tc.rejectedParts {
 				assert.NotContains(t, out, rej)
 			}

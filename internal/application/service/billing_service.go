@@ -6,8 +6,8 @@ package service
 import (
 	"context"
 	"encoding/csv"
-	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -85,6 +85,7 @@ func (s *BillingService) Record(ctx context.Context, event UsageEvent) (bool, er
 	if err := validateUsageEvent(event); err != nil {
 		return false, err
 	}
+
 	return s.store.AppendEvent(ctx, event)
 }
 
@@ -93,9 +94,11 @@ func (s *BillingService) DayTotals(ctx context.Context, tenantID, day string) (m
 	if strings.TrimSpace(tenantID) == "" {
 		return nil, entity.NewError("TENANT_ID_REQUIRED", "tenant id is required")
 	}
+
 	if _, err := time.Parse(usageDayFormat, day); err != nil {
 		return nil, entity.NewError("BILLING_DAY_INVALID", "day must be YYYY-MM-DD")
 	}
+
 	return s.store.DayTotals(ctx, tenantID, day)
 }
 
@@ -105,44 +108,56 @@ func (s *BillingService) ExportCSV(ctx context.Context, tenantID, fromDay, toDay
 	if strings.TrimSpace(tenantID) == "" {
 		return nil, entity.NewError("TENANT_ID_REQUIRED", "tenant id is required")
 	}
+
 	from, err := time.Parse(usageDayFormat, fromDay)
 	if err != nil {
 		return nil, entity.NewError("BILLING_DAY_INVALID", "from day must be YYYY-MM-DD")
 	}
+
 	to, err := time.Parse(usageDayFormat, toDay)
 	if err != nil {
 		return nil, entity.NewError("BILLING_DAY_INVALID", "to day must be YYYY-MM-DD")
 	}
+
 	if to.Before(from) {
 		return nil, entity.NewError("BILLING_RANGE_INVALID", "to day must not precede from day")
 	}
+
 	lines, err := s.store.PeriodLines(ctx, tenantID, fromDay, toDay)
 	if err != nil {
 		return nil, err
 	}
+
 	ordered := append([]DailyUsage(nil), lines...)
 	sort.Slice(ordered, func(i, j int) bool {
 		if ordered[i].Day != ordered[j].Day {
 			return ordered[i].Day < ordered[j].Day
 		}
+
 		return ordered[i].Kind < ordered[j].Kind
 	})
+
 	var buf strings.Builder
+
 	writer := csv.NewWriter(&buf)
 	if err := writer.Write([]string{"tenant", "day", "kind", "quantity"}); err != nil {
 		return nil, err
 	}
+
 	var total int64
 	for _, line := range ordered {
 		total += line.Quantity
-		if err := writer.Write([]string{line.TenantID, line.Day, string(line.Kind), fmt.Sprintf("%d", line.Quantity)}); err != nil {
+		if err := writer.Write([]string{line.TenantID, line.Day, string(line.Kind), strconv.FormatInt(line.Quantity, 10)}); err != nil {
 			return nil, err
 		}
 	}
-	if err := writer.Write([]string{tenantID, toDay, "TOTAL", fmt.Sprintf("%d", total)}); err != nil {
+
+	if err := writer.Write([]string{tenantID, toDay, "TOTAL", strconv.FormatInt(total, 10)}); err != nil {
 		return nil, err
 	}
+
 	writer.Flush()
+
 	return []byte(buf.String()), writer.Error()
 }
 
@@ -151,19 +166,24 @@ func validateUsageEvent(event UsageEvent) error {
 	if strings.TrimSpace(event.EventID) == "" {
 		return entity.NewError("USAGE_EVENT_REQUIRED", "usage event id is required")
 	}
+
 	if strings.TrimSpace(event.TenantID) == "" {
 		return entity.NewError("TENANT_ID_REQUIRED", "tenant id is required")
 	}
+
 	switch event.Kind {
 	case UsageTransactionsPosted, UsageAPICalls, UsagePayouts, UsageReportsGenerated:
 	default:
 		return entity.NewError("USAGE_KIND_UNKNOWN", "usage kind is unknown")
 	}
+
 	if event.Quantity <= 0 {
 		return entity.NewError("USAGE_QUANTITY_INVALID", "usage quantity must be positive")
 	}
+
 	if event.OccurredAt.IsZero() {
 		return entity.NewError("USAGE_TIME_REQUIRED", "usage time is required")
 	}
+
 	return nil
 }

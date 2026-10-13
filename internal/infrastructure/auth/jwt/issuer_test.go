@@ -22,6 +22,7 @@ func newMockClock(t *testing.T, now time.Time) *mockapplication.MockClock {
 	t.Helper()
 	clk := mockapplication.NewMockClock(t)
 	clk.EXPECT().Now().Return(now).Maybe()
+
 	return clk
 }
 
@@ -47,8 +48,8 @@ func testProvider(t *testing.T, clk appport.Clock, kid string) *jwt.SnapshotProv
 	return provider
 }
 
-func testParams(clk appport.Clock, keys jwt.KeyProvider) jwt.JWTParams {
-	return jwt.JWTParams{
+func testParams(clk appport.Clock, keys jwt.KeyProvider) jwt.Params {
+	return jwt.Params{
 		Issuer:        "ledger-test",
 		Audience:      "ledger-api",
 		AccessTTL:     15 * time.Minute,
@@ -67,7 +68,7 @@ func TestNewIssuer(t *testing.T) {
 
 	type testCase struct {
 		name          string
-		params        jwt.JWTParams
+		params        jwt.Params
 		expectedError error
 	}
 
@@ -79,36 +80,40 @@ func TestNewIssuer(t *testing.T) {
 		},
 		{
 			name: "missing keys",
-			params: func() jwt.JWTParams {
+			params: func() jwt.Params {
 				p := testParams(clk, keys)
 				p.Keys = nil
+
 				return p
 			}(),
 			expectedError: jwt.ErrKeyRequired,
 		},
 		{
 			name: "missing clock",
-			params: func() jwt.JWTParams {
+			params: func() jwt.Params {
 				p := testParams(clk, keys)
 				p.Clock = nil
+
 				return p
 			}(),
 			expectedError: jwt.ErrClockRequired,
 		},
 		{
 			name: "blank issuer",
-			params: func() jwt.JWTParams {
+			params: func() jwt.Params {
 				p := testParams(clk, keys)
 				p.Issuer = ""
+
 				return p
 			}(),
 			expectedError: nil,
 		},
 		{
 			name: "zero access ttl",
-			params: func() jwt.JWTParams {
+			params: func() jwt.Params {
 				p := testParams(clk, keys)
 				p.AccessTTL = 0
+
 				return p
 			}(),
 			expectedError: nil,
@@ -117,14 +122,18 @@ func TestNewIssuer(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			_, err := jwt.NewIssuer(tc.params)
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
+
 				return
 			}
 
 			if tc.name == "blank issuer" || tc.name == "zero access ttl" {
 				assert.Error(t, err)
+
 				return
 			}
 
@@ -137,7 +146,6 @@ func TestIssuerIssueVerify(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 9, 23, 0, 0, 0, 0, time.UTC)
-	clk := newMockClock(t, now)
 
 	baseClaims := appport.TokenClaims{
 		Subject:  "user-123",
@@ -179,6 +187,7 @@ func TestIssuerIssueVerify(t *testing.T) {
 			claims: func() appport.TokenClaims {
 				c := baseClaims
 				c.Subject = ""
+
 				return c
 			}(),
 			mutateToken:    nil,
@@ -191,6 +200,7 @@ func TestIssuerIssueVerify(t *testing.T) {
 			claims: func() appport.TokenClaims {
 				c := baseClaims
 				c.TenantID = ""
+
 				return c
 			}(),
 			mutateToken:    nil,
@@ -202,6 +212,7 @@ func TestIssuerIssueVerify(t *testing.T) {
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			}(),
 			claims:         baseClaims,
@@ -221,6 +232,8 @@ func TestIssuerIssueVerify(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			clk := newMockClock(t, now)
 			provider := testProvider(t, clk, "k1")
 			issuer, err := jwt.NewIssuer(testParams(clk, provider))
 			require.NoError(t, err)
@@ -228,8 +241,10 @@ func TestIssuerIssueVerify(t *testing.T) {
 			token, err := issuer.Issue(tc.ctx, tc.claims)
 			if tc.name == "empty subject" || tc.name == "empty tenant" || tc.name == "canceled context on issue" {
 				assert.Error(t, err)
+
 				return
 			}
+
 			require.NoError(t, err)
 
 			if tc.mutateToken != nil {
@@ -239,6 +254,7 @@ func TestIssuerIssueVerify(t *testing.T) {
 			got, err := issuer.Verify(context.Background(), token)
 			if !tc.expectVerified {
 				assert.Error(t, err)
+
 				return
 			}
 
@@ -254,7 +270,6 @@ func TestIssuerRotationOverlap(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 9, 23, 0, 0, 0, 0, time.UTC)
-	clk := newMockClock(t, now)
 
 	type testCase struct {
 		name           string
@@ -283,6 +298,8 @@ func TestIssuerRotationOverlap(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			clk := newMockClock(t, now)
 			k1 := mustKey(t)
 			provider, err := jwt.NewSnapshotProvider(jwt.SnapshotParams{
 				Clock:  clk,
@@ -293,8 +310,8 @@ func TestIssuerRotationOverlap(t *testing.T) {
 
 			// Long access TTL isolates the kid/grace dimension: temporal
 			// expiry must never be the reason these cases pass or fail.
-			issuerParams := func(c appport.Clock) jwt.JWTParams {
-				return jwt.JWTParams{
+			issuerParams := func(c appport.Clock) jwt.Params {
+				return jwt.Params{
 					Issuer:        "ledger-test",
 					Audience:      "ledger-api",
 					AccessTTL:     4 * time.Hour,
@@ -329,16 +346,20 @@ func TestIssuerRotationOverlap(t *testing.T) {
 
 				set := laterIssuer.JWKS()
 				found := false
+
 				for _, k := range set.Keys {
 					if k.Kid == "k1" {
 						found = true
 					}
 				}
+
 				assert.True(t, found)
+
 				return
 			}
 
 			assert.ErrorIs(t, err, tc.expectedError)
+
 			set := laterIssuer.JWKS()
 			for _, k := range set.Keys {
 				assert.NotEqual(t, "k1", k.Kid)
@@ -392,9 +413,12 @@ func TestSnapshotValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			provider, err := jwt.NewSnapshotProvider(tc.params)
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
+
 				return
 			}
 
@@ -422,28 +446,34 @@ func TestSnapshotProviderConcurrentSwap(t *testing.T) {
 	require.NoError(t, err)
 
 	var wg sync.WaitGroup
+
 	prekeys := make([]*rsa.PrivateKey, 8)
 	for i := range prekeys {
 		prekeys[i] = mustKey(t)
 	}
-	for i := 0; i < 8; i++ {
+
+	for i := range 8 {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
+
 			kid := "kx-" + strconv.Itoa(i)
 			provider.Swap(map[string]jwt.KeyEntry{kid: {Private: prekeys[i], NotAfter: now.Add(time.Hour)}}, kid)
 		}(i)
 	}
+
 	wg.Wait()
 
 	set := provider.ActiveSet()
+
 	kids := make(map[string]bool, len(set))
 	for _, entry := range set {
 		kids[entry.KID] = true
 	}
 
 	assert.True(t, kids["k1"])
-	for i := 0; i < 8; i++ {
+
+	for i := range 8 {
 		assert.True(t, kids["kx-"+strconv.Itoa(i)], "concurrent swap dropped a key")
 	}
 }
@@ -509,10 +539,11 @@ func TestIssuerVerifyRejects(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			clk := newMockClock(t, now)
 			provider := testProvider(t, clk, "k1")
 
-			issuer, err := jwt.NewIssuer(jwt.JWTParams{
+			issuer, err := jwt.NewIssuer(jwt.Params{
 				Issuer:        "ledger-test",
 				Audience:      "ledger-api",
 				AccessTTL:     tc.issueTTL,
@@ -529,7 +560,7 @@ func TestIssuerVerifyRejects(t *testing.T) {
 			})
 			require.NoError(t, err)
 
-			verifier, err := jwt.NewIssuer(jwt.JWTParams{
+			verifier, err := jwt.NewIssuer(jwt.Params{
 				Issuer:        tc.verifyIssuer,
 				Audience:      tc.verifyAudience,
 				AccessTTL:     tc.issueTTL,
@@ -541,8 +572,10 @@ func TestIssuerVerifyRejects(t *testing.T) {
 			require.NoError(t, err)
 
 			ctx := context.Background()
+
 			if tc.cancelCtx {
 				var cancel context.CancelFunc
+
 				ctx, cancel = context.WithCancel(context.Background())
 				cancel()
 			}
@@ -550,6 +583,7 @@ func TestIssuerVerifyRejects(t *testing.T) {
 			_, err = verifier.Verify(ctx, token)
 			require.Error(t, err)
 			assert.ErrorIs(t, err, tc.expectedError)
+
 			if tc.expectedContains != "" {
 				assert.Contains(t, err.Error(), tc.expectedContains)
 			}

@@ -42,6 +42,7 @@ func openCitus(t *testing.T, dbname string) (*testcontainers.CitusHandle, *sql.D
 }
 
 func TestCitusShardingMetadata(t *testing.T) {
+	t.Parallel()
 	_, sqlDB := openCitus(t, "ledger_citus_meta")
 	ctx := context.Background()
 
@@ -96,6 +97,7 @@ func TestCitusShardingMetadata(t *testing.T) {
 		rows, err := sqlDB.QueryContext(ctx, `SELECT colocationid FROM pg_dist_partition
 WHERE logicalrelid IN ('shard_probe_a'::regclass, 'shard_probe_b'::regclass)`)
 		require.NoError(t, err)
+
 		defer func() { _ = rows.Close() }()
 
 		groups := make(map[uint32]bool)
@@ -115,6 +117,7 @@ WHERE logicalrelid IN ('shard_probe_a'::regclass, 'shard_probe_b'::regclass)`)
 FROM pg_dist_partition
 WHERE logicalrelid::regclass::text IN ('ledgers','accounts','postings','entries','holds','idempotency_records','outbox_events','assets','audit_refs')`)
 		require.NoError(t, err)
+
 		defer func() { _ = rows.Close() }()
 
 		distributed := make(map[string]string)
@@ -131,6 +134,7 @@ WHERE logicalrelid::regclass::text IN ('ledgers','accounts','postings','entries'
 }
 
 func TestCitusTenantAggregation(t *testing.T) {
+	t.Parallel()
 	_, sqlDB := openCitus(t, "ledger_citus_agg")
 	ctx := context.Background()
 
@@ -209,6 +213,7 @@ FROM entries WHERE tenant_id = $1`, tc.tenantID).Scan(&debit, &credit))
 }
 
 func TestCitusCrashRecovery(t *testing.T) {
+	t.Parallel()
 	handle, sqlDB := openCitus(t, "ledger_citus_crash")
 	ctx := context.Background()
 

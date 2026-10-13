@@ -33,6 +33,7 @@ func BelongsToSubLedger(entry entity.Entry, accounts map[valueobject.AccountID]e
 	if !ok {
 		return false
 	}
+
 	return key.Matches(acct.TenantID, acct.LedgerID, entry.AssetCode) && acct.AssetCode == entry.AssetCode
 }
 
@@ -60,16 +61,20 @@ func ValidateOpeningBalance(period entity.PeriodData, lines []OpeningBalanceLine
 	if period.Status != entity.PeriodOpen {
 		return entity.NewError("PERIOD_CLOSED", "opening balances require an open period")
 	}
+
 	if len(lines) == 0 {
 		return entity.NewError("OPENING_LINES_REQUIRED", "opening balance requires at least one line")
 	}
+
 	if ev.Source == "" || ev.URI == "" || ev.ApprovedBy == "" {
 		return entity.NewError("EVIDENCE_REQUIRED", "opening balance requires source, evidence URI, and approver")
 	}
+
 	totals, err := accumulateOpeningTotals(lines)
 	if err != nil {
 		return err
 	}
+
 	return verifyOpeningTotals(totals)
 }
 
@@ -77,32 +82,40 @@ func validateOpeningLine(l OpeningBalanceLine) error {
 	if l.AccountID.String() == "" {
 		return entity.NewError("OPENING_ACCOUNT_REQUIRED", "opening line account is required")
 	}
+
 	if l.Side != valueobject.DirectionDebit && l.Side != valueobject.DirectionCredit {
 		return entity.NewError("OPENING_SIDE_INVALID", "opening line side must be DEBIT or CREDIT")
 	}
+
 	if l.AmountMinor <= 0 {
 		return entity.NewError("INVALID_ENTRY_AMOUNT", "opening line amount must be positive")
 	}
+
 	if l.AssetCode == "" {
 		return entity.NewError("OPENING_ASSET_REQUIRED", "opening line asset is required")
 	}
+
 	return nil
 }
 
 func accumulateOpeningTotals(lines []OpeningBalanceLine) (map[valueobject.AssetCode][2]int64, error) {
 	totals := make(map[valueobject.AssetCode][2]int64)
+
 	for _, l := range lines {
 		if err := validateOpeningLine(l); err != nil {
 			return nil, err
 		}
+
 		t := totals[l.AssetCode]
 		if l.Side == valueobject.DirectionDebit {
 			t[0] += l.AmountMinor
 		} else {
 			t[1] += l.AmountMinor
 		}
+
 		totals[l.AssetCode] = t
 	}
+
 	return totals, nil
 }
 
@@ -112,5 +125,6 @@ func verifyOpeningTotals(totals map[valueobject.AssetCode][2]int64) error {
 			return entity.Errorf("UNBALANCED_TRANSACTION", "opening lines unbalanced for asset %s", asset)
 		}
 	}
+
 	return nil
 }

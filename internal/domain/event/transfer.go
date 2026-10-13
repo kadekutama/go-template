@@ -1,7 +1,6 @@
 package event
 
 import (
-	"errors"
 	"time"
 )
 
@@ -16,13 +15,15 @@ type TransferCreatedPayload struct {
 }
 
 // NewTransferCreated builds transfer.created.v1.
-func NewTransferCreated(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TransferCreatedPayload, meta EventMetadata) (TypedEvent[TransferCreatedPayload], error) {
+func NewTransferCreated(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TransferCreatedPayload, meta Metadata) (TypedEvent[TransferCreatedPayload], error) {
 	if err := requireIDs(map[string]string{fieldTransferID: payload.TransferID, fieldTenantID: payload.TenantID}); err != nil {
 		return TypedEvent[TransferCreatedPayload]{}, err
 	}
+
 	if payload.AmountMinor <= 0 {
-		return TypedEvent[TransferCreatedPayload]{}, errors.New("event: amount_minor must be positive")
+		return TypedEvent[TransferCreatedPayload]{}, ErrEventAmountMinorMustBePositive
 	}
+
 	return newTyped("transfer.created.v1", eventID, aggregateID, "Transfer", occurredAt, version, seq, payload, meta)
 }
 
@@ -34,10 +35,11 @@ type TransferCompletedPayload struct {
 }
 
 // NewTransferCompleted builds transfer.completed.v1.
-func NewTransferCompleted(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TransferCompletedPayload, meta EventMetadata) (TypedEvent[TransferCompletedPayload], error) {
+func NewTransferCompleted(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TransferCompletedPayload, meta Metadata) (TypedEvent[TransferCompletedPayload], error) {
 	if err := requireIDs(map[string]string{fieldTransferID: payload.TransferID, fieldTenantID: payload.TenantID, fieldPostingID: payload.PostingID}); err != nil {
 		return TypedEvent[TransferCompletedPayload]{}, err
 	}
+
 	return newTyped("transfer.completed.v1", eventID, aggregateID, "Transfer", occurredAt, version, seq, payload, meta)
 }
 
@@ -50,10 +52,11 @@ type TransferFailedPayload struct {
 }
 
 // NewTransferFailed builds transfer.failed.v1.
-func NewTransferFailed(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TransferFailedPayload, meta EventMetadata) (TypedEvent[TransferFailedPayload], error) {
+func NewTransferFailed(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TransferFailedPayload, meta Metadata) (TypedEvent[TransferFailedPayload], error) {
 	if err := requireIDs(map[string]string{fieldTransferID: payload.TransferID, fieldTenantID: payload.TenantID, fieldCode: payload.Code}); err != nil {
 		return TypedEvent[TransferFailedPayload]{}, err
 	}
+
 	return newTyped("transfer.failed.v1", eventID, aggregateID, "Transfer", occurredAt, version, seq, payload, meta)
 }
 
@@ -65,10 +68,11 @@ type TransferCanceledPayload struct {
 }
 
 // NewTransferCanceled builds transfer.canceled.v1 (American spelling).
-func NewTransferCanceled(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TransferCanceledPayload, meta EventMetadata) (TypedEvent[TransferCanceledPayload], error) {
+func NewTransferCanceled(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TransferCanceledPayload, meta Metadata) (TypedEvent[TransferCanceledPayload], error) {
 	if err := requireIDs(map[string]string{fieldTransferID: payload.TransferID, fieldTenantID: payload.TenantID}); err != nil {
 		return TypedEvent[TransferCanceledPayload]{}, err
 	}
+
 	return newTyped("transfer.canceled.v1", eventID, aggregateID, "Transfer", occurredAt, version, seq, payload, meta)
 }
 
@@ -80,13 +84,15 @@ type TransferBatchReceivedPayload struct {
 }
 
 // NewTransferBatchReceived builds transfer.batch.received.v1.
-func NewTransferBatchReceived(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TransferBatchReceivedPayload, meta EventMetadata) (TypedEvent[TransferBatchReceivedPayload], error) {
+func NewTransferBatchReceived(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TransferBatchReceivedPayload, meta Metadata) (TypedEvent[TransferBatchReceivedPayload], error) {
 	if err := requireIDs(map[string]string{"batch_id": payload.BatchID, fieldTenantID: payload.TenantID}); err != nil {
 		return TypedEvent[TransferBatchReceivedPayload]{}, err
 	}
+
 	if payload.ItemCount <= 0 {
-		return TypedEvent[TransferBatchReceivedPayload]{}, errors.New("event: item_count must be positive")
+		return TypedEvent[TransferBatchReceivedPayload]{}, ErrEventItemCountMustBePositive
 	}
+
 	return newTyped("transfer.batch.received.v1", eventID, aggregateID, "TransferBatch", occurredAt, version, seq, payload, meta)
 }
 
@@ -99,9 +105,10 @@ type TransferBatchCompletedPayload struct {
 }
 
 // NewTransferBatchCompleted builds transfer.batch.completed.v1.
-func NewTransferBatchCompleted(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TransferBatchCompletedPayload, meta EventMetadata) (TypedEvent[TransferBatchCompletedPayload], error) {
+func NewTransferBatchCompleted(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TransferBatchCompletedPayload, meta Metadata) (TypedEvent[TransferBatchCompletedPayload], error) {
 	if err := requireIDs(map[string]string{"batch_id": payload.BatchID, fieldTenantID: payload.TenantID}); err != nil {
 		return TypedEvent[TransferBatchCompletedPayload]{}, err
 	}
+
 	return newTyped("transfer.batch.completed.v1", eventID, aggregateID, "TransferBatch", occurredAt, version, seq, payload, meta)
 }

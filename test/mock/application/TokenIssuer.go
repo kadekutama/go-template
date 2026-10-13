@@ -59,7 +59,7 @@ type MockTokenIssuer_Issue_Call struct {
 // Issue is a helper method to define mock.On call
 //   - ctx context.Context
 //   - claims port.TokenClaims
-func (_e *MockTokenIssuer_Expecter) Issue(ctx interface{}, claims interface{}) *MockTokenIssuer_Issue_Call {
+func (_e *MockTokenIssuer_Expecter) Issue(ctx any, claims any) *MockTokenIssuer_Issue_Call {
 	return &MockTokenIssuer_Issue_Call{Call: _e.mock.On("Issue", ctx, claims)}
 }
 
@@ -116,7 +116,7 @@ type MockTokenIssuer_Verify_Call struct {
 // Verify is a helper method to define mock.On call
 //   - ctx context.Context
 //   - token string
-func (_e *MockTokenIssuer_Expecter) Verify(ctx interface{}, token interface{}) *MockTokenIssuer_Verify_Call {
+func (_e *MockTokenIssuer_Expecter) Verify(ctx any, token any) *MockTokenIssuer_Verify_Call {
 	return &MockTokenIssuer_Verify_Call{Call: _e.mock.On("Verify", ctx, token)}
 }
 

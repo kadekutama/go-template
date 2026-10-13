@@ -47,7 +47,7 @@ type MockLeaderElector_Campaign_Call struct {
 // Campaign is a helper method to define mock.On call
 //   - ctx context.Context
 //   - candidateID string
-func (_e *MockLeaderElector_Expecter) Campaign(ctx interface{}, candidateID interface{}) *MockLeaderElector_Campaign_Call {
+func (_e *MockLeaderElector_Expecter) Campaign(ctx any, candidateID any) *MockLeaderElector_Campaign_Call {
 	return &MockLeaderElector_Campaign_Call{Call: _e.mock.On("Campaign", ctx, candidateID)}
 }
 
@@ -103,7 +103,7 @@ type MockLeaderElector_Leader_Call struct {
 
 // Leader is a helper method to define mock.On call
 //   - ctx context.Context
-func (_e *MockLeaderElector_Expecter) Leader(ctx interface{}) *MockLeaderElector_Leader_Call {
+func (_e *MockLeaderElector_Expecter) Leader(ctx any) *MockLeaderElector_Leader_Call {
 	return &MockLeaderElector_Leader_Call{Call: _e.mock.On("Leader", ctx)}
 }
 
@@ -194,7 +194,7 @@ type MockLeaderElector_Resign_Call struct {
 
 // Resign is a helper method to define mock.On call
 //   - ctx context.Context
-func (_e *MockLeaderElector_Expecter) Resign(ctx interface{}) *MockLeaderElector_Resign_Call {
+func (_e *MockLeaderElector_Expecter) Resign(ctx any) *MockLeaderElector_Resign_Call {
 	return &MockLeaderElector_Resign_Call{Call: _e.mock.On("Resign", ctx)}
 }
 

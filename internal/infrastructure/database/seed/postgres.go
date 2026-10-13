@@ -30,10 +30,12 @@ type pgLedgerStore struct {
 
 func (s *pgLedgerStore) Exists(ctx context.Context, id string) (bool, error) {
 	var count int64
+
 	err := s.db.WithContext(ctx).Model(&models.LedgerModel{}).Where("id = ?", id).Count(&count).Error
 	if err != nil {
 		return false, fmt.Errorf("postgres seed: check ledger %s: %w", id, err)
 	}
+
 	return count > 0, nil
 }
 
@@ -60,6 +62,7 @@ func (s *pgLedgerStore) Create(ctx context.Context, ledger LedgerSeed) error {
 		if errors.Is(err, repos.ErrConflict) {
 			return nil
 		}
+
 		return fmt.Errorf("postgres seed: create ledger: %w", err)
 	}
 
@@ -72,10 +75,12 @@ type pgAccountStore struct {
 
 func (s *pgAccountStore) Exists(ctx context.Context, id string) (bool, error) {
 	var count int64
+
 	err := s.db.WithContext(ctx).Model(&models.AccountModel{}).Where("id = ?", id).Count(&count).Error
 	if err != nil {
 		return false, fmt.Errorf("postgres seed: check account %s: %w", id, err)
 	}
+
 	return count > 0, nil
 }
 
@@ -102,6 +107,7 @@ func (s *pgAccountStore) Create(ctx context.Context, account AccountSeed) error 
 		if errors.Is(err, repos.ErrConflict) {
 			return nil
 		}
+
 		return fmt.Errorf("postgres seed: create account %s: %w", account.ID, err)
 	}
 
@@ -122,10 +128,12 @@ func seedEntryID(postingID, side string) string {
 
 func (s *pgPostingStore) Exists(ctx context.Context, id string) (bool, error) {
 	var count int64
+
 	err := s.db.WithContext(ctx).Model(&models.PostingModel{}).Where("id = ?", id).Count(&count).Error
 	if err != nil {
 		return false, fmt.Errorf("postgres seed: check posting %s: %w", id, err)
 	}
+
 	return count > 0, nil
 }
 
@@ -169,6 +177,7 @@ func (s *pgPostingStore) Create(ctx context.Context, posting PostingSeed) error 
 		if errors.Is(err, repos.ErrConflict) {
 			return nil
 		}
+
 		return fmt.Errorf("postgres seed: commit posting %s: %w", posting.ID, err)
 	}
 
@@ -179,14 +188,14 @@ func (s *pgPostingStore) Create(ctx context.Context, posting PostingSeed) error 
 // It ensures referenced assets and the tenant row exist before applying chart accounts and postings.
 func ApplyPostgres(ctx context.Context, db *gorm.DB, plan Plan) error {
 	if db == nil {
-		return fmt.Errorf("postgres seed: DB is required")
+		return ErrPostgresSeedDBIsRequired
 	}
 
 	// 1. Ensure assets exist
 	for _, assetCode := range []string{AssetUSD, AssetEUR, AssetIDR} {
 		asset := models.AssetModel{
 			Code:      assetCode,
-			Precision: 2,
+			Precision: precision2,
 			Status:    "ACTIVE",
 		}
 		if err := db.WithContext(ctx).Where("code = ?", assetCode).FirstOrCreate(&asset).Error; err != nil {
@@ -210,5 +219,6 @@ func ApplyPostgres(ctx context.Context, db *gorm.DB, plan Plan) error {
 
 	// 3. Apply ledgers, accounts, postings
 	stores := PostgresStores(db)
+
 	return Apply(ctx, plan, stores)
 }

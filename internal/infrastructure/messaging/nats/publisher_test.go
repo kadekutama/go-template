@@ -13,10 +13,13 @@ import (
 	edgenats "github.com/kadekutama/go-template/internal/infrastructure/messaging/nats"
 )
 
+// errInvalidNkeySeed mirrors nkeys library detail for the fixed bad-seed input.
+var errInvalidNkeySeed = errors.New("nats: invalid nkey seed: illegal base32 data at input byte 2")
+
 func TestNewPublisher(t *testing.T) {
 	t.Parallel()
 
-	baseParams := edgenats.PublisherParams{
+	baseParams := edgenats.Params{
 		URL:            "nats://127.0.0.1:4222",
 		ConnectTimeout: 5 * time.Second,
 		RequestTimeout: 3 * time.Second,
@@ -24,79 +27,84 @@ func TestNewPublisher(t *testing.T) {
 
 	type testCase struct {
 		name          string
-		params        edgenats.PublisherParams
+		params        edgenats.Params
 		expectedError error
 	}
 
 	testCases := []testCase{
 		{
 			name: "blank url rejected",
-			params: func() edgenats.PublisherParams {
+			params: func() edgenats.Params {
 				p := baseParams
 				p.URL = ""
+
 				return p
 			}(),
-			expectedError: errors.New("nats: invalid params (1 violation(s)): URL: rule \"required\" on value "),
+			expectedError: edgenats.ErrNatsInvalidParams1ViolationSURLRuleRequiredOnValue,
 		},
 		{
 			name: "whitespace url rejected",
-			params: func() edgenats.PublisherParams {
+			params: func() edgenats.Params {
 				p := baseParams
 				p.URL = "   "
+
 				return p
 			}(),
-			expectedError: errors.New("nats: url is required"),
+			expectedError: edgenats.ErrNatsURLIsRequired,
 		},
 		{
 			name: "missing connect timeout rejected",
-			params: func() edgenats.PublisherParams {
+			params: func() edgenats.Params {
 				p := baseParams
 				p.ConnectTimeout = 0
+
 				return p
 			}(),
-			expectedError: errors.New("nats: invalid params (1 violation(s)): ConnectTimeout: rule \"required\" on value 0s"),
+			expectedError: edgenats.ErrNatsInvalidParams1ViolationSConnectTimeoutRuleRequiredOnV,
 		},
 		{
 			name: "negative connect timeout rejected",
-			params: func() edgenats.PublisherParams {
+			params: func() edgenats.Params {
 				p := baseParams
 				p.ConnectTimeout = -time.Second
+
 				return p
 			}(),
-			expectedError: errors.New("nats: invalid params (1 violation(s)): ConnectTimeout: rule \"gt\" on value -1s"),
+			expectedError: edgenats.ErrNatsInvalidParams1ViolationSConnectTimeoutRuleGtOnValue1s,
 		},
 		{
 			name: "missing request timeout rejected",
-			params: func() edgenats.PublisherParams {
+			params: func() edgenats.Params {
 				p := baseParams
 				p.RequestTimeout = 0
+
 				return p
 			}(),
-			expectedError: errors.New("nats: invalid params (1 violation(s)): RequestTimeout: rule \"required\" on value 0s"),
+			expectedError: edgenats.ErrNatsInvalidParams1ViolationSRequestTimeoutRuleRequiredOnV,
 		},
 		{
 			name: "negative request timeout rejected",
-			params: func() edgenats.PublisherParams {
+			params: func() edgenats.Params {
 				p := baseParams
 				p.RequestTimeout = -time.Second
+
 				return p
 			}(),
-			expectedError: errors.New("nats: invalid params (1 violation(s)): RequestTimeout: rule \"gt\" on value -1s"),
+			expectedError: edgenats.ErrNatsInvalidParams1ViolationSRequestTimeoutRuleGtOnValue1s,
 		},
 		{
 			name: "invalid seed rejected before dialing",
-			params: func() edgenats.PublisherParams {
+			params: func() edgenats.Params {
 				p := baseParams
 				p.NKeySeed = "SU-not-a-seed"
+
 				return p
 			}(),
-			expectedError: errors.New(
-				"nats: invalid nkey seed: illegal base32 data at input byte 2",
-			),
+			expectedError: errInvalidNkeySeed,
 		},
 		{
 			name: "account seed rejected (not a user key)",
-			params: func() edgenats.PublisherParams {
+			params: func() edgenats.Params {
 				account := func() []byte {
 					key, _ := nkeys.CreateAccount()
 					seed, _ := key.Seed()
@@ -106,24 +114,28 @@ func TestNewPublisher(t *testing.T) {
 
 				p := baseParams
 				p.NKeySeed = string(account)
+
 				return p
 			}(),
-			expectedError: errors.New("nats: seed is not a user nkey"),
+			expectedError: edgenats.ErrNatsSeedIsNotAUserNkey,
 		},
 		{
 			name: "unreachable broker fails fast",
-			params: func() edgenats.PublisherParams {
+			params: func() edgenats.Params {
 				p := baseParams
 				p.URL = "nats://127.0.0.1:1"
 				p.ConnectTimeout = time.Second
+
 				return p
 			}(),
-			expectedError: errors.New("nats: connect: nats: no servers available for connection"),
+			expectedError: edgenats.ErrNatsConnectNatsNoServersAvailableForConnection,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			publisher, err := edgenats.NewPublisher(tc.params)
 			assert.EqualError(t, err, tc.expectedError.Error())
 			assert.Nil(t, publisher)
@@ -152,7 +164,7 @@ func TestPublisherPublishValidation(t *testing.T) {
 			ctx:           context.Background(),
 			subject:       "ledger.t1.transfer.completed.v1",
 			payload:       []byte(`{}`),
-			expectedError: errors.New("nats: publisher is not initialized"),
+			expectedError: edgenats.ErrNatsPublisherIsNotInitialized,
 		},
 		{
 			name: "uninitialized connection rejected",
@@ -162,18 +174,23 @@ func TestPublisherPublishValidation(t *testing.T) {
 			ctx:           context.Background(),
 			subject:       "ledger.t1.transfer.completed.v1",
 			payload:       []byte(`{}`),
-			expectedError: errors.New("nats: publisher is not initialized"),
+			expectedError: edgenats.ErrNatsPublisherIsNotInitialized,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			p := tc.publisher()
+
 			err := p.Publish(tc.ctx, tc.subject, tc.payload)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
+
 				return
 			}
+
 			assert.NoError(t, err)
 		})
 	}
@@ -202,7 +219,7 @@ func TestPublisherPublishEventValidation(t *testing.T) {
 			tenant:        "t1",
 			eventType:     "transfer.completed.v1",
 			payload:       []byte(`{}`),
-			expectedError: errors.New("nats: publisher is not initialized"),
+			expectedError: edgenats.ErrNatsPublisherIsNotInitialized,
 		},
 		{
 			name: "nil payload rejected",
@@ -213,7 +230,7 @@ func TestPublisherPublishEventValidation(t *testing.T) {
 			tenant:        "t1",
 			eventType:     "transfer.completed.v1",
 			payload:       nil,
-			expectedError: errors.New("nats: payload is required"),
+			expectedError: edgenats.ErrNatsPayloadIsRequired,
 		},
 		{
 			name: "empty tenant rejected",
@@ -230,12 +247,17 @@ func TestPublisherPublishEventValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			p := tc.publisher()
+
 			err := p.PublishEvent(tc.ctx, tc.tenant, tc.eventType, tc.payload)
 			if tc.expectedError != nil {
 				assert.Equal(t, tc.expectedError, err)
+
 				return
 			}
+
 			assert.NoError(t, err)
 		})
 	}
@@ -269,12 +291,17 @@ func TestPublisherClose(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			p := tc.publisher()
+
 			err := p.Close()
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
+
 				return
 			}
+
 			assert.NoError(t, err)
 		})
 	}

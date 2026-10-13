@@ -54,7 +54,7 @@ type MockMessageConsumer_Run_Call struct {
 //   - group string
 //   - subject string
 //   - handler port.MessageHandler
-func (_e *MockMessageConsumer_Expecter) Run(ctx interface{}, tenant interface{}, group interface{}, subject interface{}, handler interface{}) *MockMessageConsumer_Run_Call {
+func (_e *MockMessageConsumer_Expecter) Run(ctx any, tenant any, group any, subject any, handler any) *MockMessageConsumer_Run_Call {
 	return &MockMessageConsumer_Run_Call{Call: _e.mock.On("Run", ctx, tenant, group, subject, handler)}
 }
 

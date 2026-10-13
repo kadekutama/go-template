@@ -68,6 +68,7 @@ func TestNewJournal(t *testing.T) {
 			postings: func() []entity.PostingData {
 				p := append([]entity.PostingData(nil), basePostings...)
 				p[1].TenantID = "t-2"
+
 				return p
 			}(),
 			nameField:     "daily",
@@ -84,6 +85,7 @@ func TestNewJournal(t *testing.T) {
 			postings: func() []entity.PostingData {
 				p := append([]entity.PostingData(nil), basePostings...)
 				p[1].LedgerID = "l-2"
+
 				return p
 			}(),
 			nameField:     "daily",
@@ -131,10 +133,13 @@ func TestNewJournal(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			j, err := entity.NewJournal(tc.id, tc.tenantID, tc.ledgerID, tc.periodID, tc.postings, tc.nameField, tc.metadata, tc.createdAt)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
-				assert.Equal(t, len(tc.postings), len(j.PostingIDs))
+				assert.Len(t, j.PostingIDs, len(tc.postings))
 				assert.Equal(t, tc.periodID, j.PeriodID)
 			}
 		})
@@ -175,6 +180,7 @@ func TestPeriodDataValidate(t *testing.T) {
 				p := valid
 				p.Start = end
 				p.End = start
+
 				return p
 			}(),
 			expectedError: entity.NewError("PERIOD_BOUNDS_INVALID", "period start must precede end"),
@@ -184,6 +190,7 @@ func TestPeriodDataValidate(t *testing.T) {
 			period: func() entity.PeriodData {
 				p := valid
 				p.Timezone = ""
+
 				return p
 			}(),
 			expectedError: entity.NewError("PERIOD_TIMEZONE_REQUIRED", "accounting timezone is required"),
@@ -193,6 +200,7 @@ func TestPeriodDataValidate(t *testing.T) {
 			period: func() entity.PeriodData {
 				p := valid
 				p.Status = "AJAR"
+
 				return p
 			}(),
 			expectedError: entity.NewError("PERIOD_STATUS_INVALID", "period status must be OPEN or CLOSED"),
@@ -202,6 +210,7 @@ func TestPeriodDataValidate(t *testing.T) {
 			period: func() entity.PeriodData {
 				p := valid
 				p.Version = 0
+
 				return p
 			}(),
 			expectedError: entity.NewError("PERIOD_VERSION_INVALID", "version starts at 1"),
@@ -210,6 +219,8 @@ func TestPeriodDataValidate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.period.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -262,6 +273,7 @@ func TestPeriodDataContains(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			actualResult := tc.period.Contains(tc.t)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})

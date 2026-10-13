@@ -30,6 +30,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "seed: "+err.Error())
 		os.Exit(1)
 	}
+
 	logger, err := di.ProvideLoggerWithConfig(cfg)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "seed: "+err.Error())
@@ -83,14 +84,14 @@ func (r *seedRunner) run(ctx context.Context) error {
 func providePool(lc fx.Lifecycle) (*gorm.DB, error) {
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		return nil, fmt.Errorf("seed: DATABASE_URL is required")
+		return nil, ErrSeedDATABASEURLIsRequired
 	}
 
 	db, err := postgres.Open(postgres.Config{
 		DSN:             dsn,
-		MaxOpen:         25,
-		MaxIdle:         5,
-		ConnMaxLifetime: 30 * time.Minute,
+		MaxOpen:         maxOpen25,
+		MaxIdle:         maxIdle5,
+		ConnMaxLifetime: connMaxLifetime30 * time.Minute,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("seed: open database: %w", err)

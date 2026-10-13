@@ -59,7 +59,7 @@ type MockPostingQuery_Search_Call struct {
 // Search is a helper method to define mock.On call
 //   - ctx context.Context
 //   - filter port.PostingFilter
-func (_e *MockPostingQuery_Expecter) Search(ctx interface{}, filter interface{}) *MockPostingQuery_Search_Call {
+func (_e *MockPostingQuery_Expecter) Search(ctx any, filter any) *MockPostingQuery_Search_Call {
 	return &MockPostingQuery_Search_Call{Call: _e.mock.On("Search", ctx, filter)}
 }
 

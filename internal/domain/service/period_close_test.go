@@ -52,6 +52,7 @@ func TestValidateClose(t *testing.T) {
 				in.OpenBreakCount = 1
 				in.SubledgerDeltas = map[string]int64{"USD": 5}
 				in.FXRevalued = false
+
 				return in
 			}(),
 			expectedErrors: []error{
@@ -66,6 +67,7 @@ func TestValidateClose(t *testing.T) {
 			in: func() service.CloseInput {
 				in := baseInput
 				in.SubledgerDeltas = nil
+
 				return in
 			}(),
 			expectedErrors: nil,
@@ -75,6 +77,7 @@ func TestValidateClose(t *testing.T) {
 			in: func() service.CloseInput {
 				in := baseInput
 				in.UnresolvedWorkflowCount = 1
+
 				return in
 			}(),
 			expectedErrors: []error{
@@ -88,8 +91,10 @@ func TestValidateClose(t *testing.T) {
 				in.Period = func() entity.PeriodData {
 					p := basePeriod
 					p.Status = entity.PeriodClosed
+
 					return p
 				}()
+
 				return in
 			}(),
 			expectedErrors: []error{
@@ -101,6 +106,7 @@ func TestValidateClose(t *testing.T) {
 			in: func() service.CloseInput {
 				in := baseInput
 				in.UnresolvedWorkflowCount = -1
+
 				return in
 			}(),
 			expectedErrors: []error{
@@ -114,12 +120,14 @@ func TestValidateClose(t *testing.T) {
 				in.Period = func() entity.PeriodData {
 					p := basePeriod
 					p.Status = entity.PeriodClosed
+
 					return p
 				}()
 				in.UnresolvedWorkflowCount = 1
 				in.OpenBreakCount = 1
 				in.SubledgerDeltas = map[string]int64{"USD": 1}
 				in.FXRevalued = false
+
 				return in
 			}(),
 			expectedErrors: []error{
@@ -134,6 +142,8 @@ func TestValidateClose(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			errs := service.ValidateClose(tc.in)
 			assert.Equal(t, tc.expectedErrors, errs)
 		})
@@ -257,6 +267,8 @@ func TestBuildClosingEntries(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.BuildClosingEntries(tc.incomeSummaryAccount, tc.retainedEarningsAccount, tc.amountMinor, tc.assetCode)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -329,6 +341,8 @@ func TestValidateReopen(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := service.ValidateReopen(tc.maker, tc.checker, tc.reason)
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -372,6 +386,7 @@ func TestValidateLateCorrection(t *testing.T) {
 			targetPeriod: func() entity.PeriodData {
 				p := baseTargetPeriod
 				p.Status = entity.PeriodClosed
+
 				return p
 			}(),
 			originalDateRetained: true,
@@ -402,6 +417,8 @@ func TestValidateLateCorrection(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := service.ValidateLateCorrection(tc.originalEffectiveAt, tc.targetPeriod, tc.originalDateRetained)
 			assert.Equal(t, tc.expectedError, err)
 		})

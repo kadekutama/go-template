@@ -60,6 +60,7 @@ func TestNewRunner(t *testing.T) {
 				db, err := sql.Open("pgx", "postgres://localhost:5432/test?sslmode=disable")
 				require.NoError(t, err)
 				t.Cleanup(func() { _ = db.Close() })
+
 				return migration.RunnerParams{
 					DB:      db,
 					Timeout: 0,
@@ -73,6 +74,7 @@ func TestNewRunner(t *testing.T) {
 				db, err := sql.Open("pgx", "postgres://localhost:5432/test?sslmode=disable")
 				require.NoError(t, err)
 				t.Cleanup(func() { _ = db.Close() })
+
 				return migration.RunnerParams{
 					DB:      db,
 					Timeout: -time.Second,
@@ -86,6 +88,7 @@ func TestNewRunner(t *testing.T) {
 				db, err := sql.Open("pgx", "postgres://localhost:5432/test?sslmode=disable")
 				require.NoError(t, err)
 				t.Cleanup(func() { _ = db.Close() })
+
 				return migration.RunnerParams{
 					DB:      db,
 					FS:      fstest.MapFS{},
@@ -101,6 +104,7 @@ func TestNewRunner(t *testing.T) {
 				db, err := sql.Open("pgx", "postgres://postgres:pw@192.0.2.1:5432/test?sslmode=disable")
 				require.NoError(t, err)
 				t.Cleanup(func() { _ = db.Close() })
+
 				return migration.RunnerParams{
 					DB:      db,
 					Timeout: 3 * time.Second,
@@ -112,6 +116,8 @@ func TestNewRunner(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			runner, err := migration.NewRunner(tc.params)
 			require.Error(t, err)
 			assert.Nil(t, runner)
@@ -139,6 +145,8 @@ func TestMigrationListVersions(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			migrations, err := migration.List(migration.Versions, "versions")
 			require.NoError(t, err)
 			require.Len(t, migrations, tc.expectedCount)
@@ -209,10 +217,13 @@ func TestMigrationListInvalid(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			mapFS := fstest.MapFS{}
 			for name, content := range tc.files {
 				mapFS[name] = &fstest.MapFile{Data: []byte(content)}
 			}
+
 			if len(tc.files) == 0 {
 				mapFS["versions"] = &fstest.MapFile{Mode: fs.ModeDir}
 			}
@@ -325,6 +336,8 @@ func TestMigrationSQLContent(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			raw, err := migration.Versions.ReadFile(tc.file)
 			require.NoError(t, err)
 
@@ -384,6 +397,8 @@ func TestMigrationDownReversible(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			raw, err := migration.Versions.ReadFile(tc.file)
 			require.NoError(t, err)
 
@@ -399,6 +414,7 @@ func TestMigrationDownReversible(t *testing.T) {
 }
 
 func TestLegacyBootstrap(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	ctx := context.Background()
@@ -430,6 +446,7 @@ func TestLegacyBootstrap(t *testing.T) {
 
 	rows, err := sqlDB.QueryContext(ctx, `SELECT version_id FROM goose_db_version ORDER BY version_id`)
 	require.NoError(t, err)
+
 	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {

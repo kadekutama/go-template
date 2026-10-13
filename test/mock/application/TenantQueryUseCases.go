@@ -61,7 +61,7 @@ type MockTenantQueryUseCases_GetTenant_Call struct {
 // GetTenant is a helper method to define mock.On call
 //   - ctx context.Context
 //   - query port.TenantQuery
-func (_e *MockTenantQueryUseCases_Expecter) GetTenant(ctx interface{}, query interface{}) *MockTenantQueryUseCases_GetTenant_Call {
+func (_e *MockTenantQueryUseCases_Expecter) GetTenant(ctx any, query any) *MockTenantQueryUseCases_GetTenant_Call {
 	return &MockTenantQueryUseCases_GetTenant_Call{Call: _e.mock.On("GetTenant", ctx, query)}
 }
 
@@ -119,7 +119,7 @@ type MockTenantQueryUseCases_ListTenants_Call struct {
 
 // ListTenants is a helper method to define mock.On call
 //   - ctx context.Context
-func (_e *MockTenantQueryUseCases_Expecter) ListTenants(ctx interface{}) *MockTenantQueryUseCases_ListTenants_Call {
+func (_e *MockTenantQueryUseCases_Expecter) ListTenants(ctx any) *MockTenantQueryUseCases_ListTenants_Call {
 	return &MockTenantQueryUseCases_ListTenants_Call{Call: _e.mock.On("ListTenants", ctx)}
 }
 

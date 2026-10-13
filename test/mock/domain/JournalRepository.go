@@ -61,7 +61,7 @@ type MockJournalRepository_Create_Call struct {
 // Create is a helper method to define mock.On call
 //   - ctx context.Context
 //   - journal entity.Journal
-func (_e *MockJournalRepository_Expecter) Create(ctx interface{}, journal interface{}) *MockJournalRepository_Create_Call {
+func (_e *MockJournalRepository_Expecter) Create(ctx any, journal any) *MockJournalRepository_Create_Call {
 	return &MockJournalRepository_Create_Call{Call: _e.mock.On("Create", ctx, journal)}
 }
 
@@ -119,7 +119,7 @@ type MockJournalRepository_FindByID_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - id valueobject.JournalID
-func (_e *MockJournalRepository_Expecter) FindByID(ctx interface{}, tenant interface{}, id interface{}) *MockJournalRepository_FindByID_Call {
+func (_e *MockJournalRepository_Expecter) FindByID(ctx any, tenant any, id any) *MockJournalRepository_FindByID_Call {
 	return &MockJournalRepository_FindByID_Call{Call: _e.mock.On("FindByID", ctx, tenant, id)}
 }
 
@@ -179,7 +179,7 @@ type MockJournalRepository_FindByPeriod_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - period valueobject.PeriodID
-func (_e *MockJournalRepository_Expecter) FindByPeriod(ctx interface{}, tenant interface{}, period interface{}) *MockJournalRepository_FindByPeriod_Call {
+func (_e *MockJournalRepository_Expecter) FindByPeriod(ctx any, tenant any, period any) *MockJournalRepository_FindByPeriod_Call {
 	return &MockJournalRepository_FindByPeriod_Call{Call: _e.mock.On("FindByPeriod", ctx, tenant, period)}
 }
 

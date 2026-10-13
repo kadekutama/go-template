@@ -37,6 +37,7 @@ func TestFromContext(t *testing.T) {
 				ctx = log.WithTraceID(ctx, "trace-456")
 				ctx = log.WithTenantID(ctx, "tenant-789")
 				ctx = log.WithUserID(ctx, "user-001")
+
 				return ctx
 			}(),
 			expectedFields: map[string]string{
@@ -52,6 +53,7 @@ func TestFromContext(t *testing.T) {
 				ctx := context.Background()
 				ctx = log.WithRequestID(ctx, "req-initial")
 				ctx = log.WithTraceID(ctx, "trace-456")
+
 				return log.WithContext(ctx, map[string]string{
 					log.FieldRequestID: "req-overridden",
 					"custom_key":       "custom_val",
@@ -67,6 +69,8 @@ func TestFromContext(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			got := log.FromContext(tc.ctx)
 			assert.NotNil(t, got)
 			assert.Equal(t, tc.expectedFields, got)
@@ -104,6 +108,8 @@ func TestWithContext(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			resCtx := log.WithContext(tc.ctx, tc.fields)
 			assert.NotNil(t, resCtx)
 			extracted := log.FromContext(resCtx)

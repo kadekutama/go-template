@@ -60,7 +60,7 @@ func openManager(t *testing.T, clk appport.Clock) (*apikey.Manager, valueobject.
 	})
 	require.NoError(t, err)
 
-	manager, err := apikey.NewManager(apikey.APIKeyParams{
+	manager, err := apikey.NewManager(apikey.Params{
 		DB:             gormDB,
 		Hasher:         hasher,
 		RotationWindow: time.Hour,
@@ -88,7 +88,7 @@ func openManagerOnDB(t *testing.T, gormDB *gorm.DB, clk appport.Clock, window ti
 	})
 	require.NoError(t, err)
 
-	manager, err := apikey.NewManager(apikey.APIKeyParams{
+	manager, err := apikey.NewManager(apikey.Params{
 		DB:             gormDB,
 		Hasher:         hasher,
 		RotationWindow: window,
@@ -103,6 +103,7 @@ func openManagerOnDB(t *testing.T, gormDB *gorm.DB, clk appport.Clock, window ti
 }
 
 func TestAPIKeyDurableLifecycle(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	clk := mockapplication.NewMockClock(t)
@@ -142,11 +143,13 @@ func TestAPIKeyDurableLifecycle(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			manager, tenant, _, _ := openManager(t, clk)
 
 			secret, err := manager.Create(context.Background(), tenant, tc.keyName, tc.scopes, tc.ttl)
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
+
 				return
 			}
 
@@ -164,6 +167,7 @@ func TestAPIKeyDurableLifecycle(t *testing.T) {
 }
 
 func TestAPIKeyRotationRevokeDurable(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	clk := mockapplication.NewMockClock(t)
@@ -190,6 +194,7 @@ func TestAPIKeyRotationRevokeDurable(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			manager, tenant, _, _ := openManager(t, clk)
 
 			old, err := manager.Create(context.Background(), tenant, "rot", []string{"ledger:read"}, 24*time.Hour)
@@ -215,6 +220,7 @@ func TestAPIKeyRotationRevokeDurable(t *testing.T) {
 }
 
 func TestAPIKeyRejectsBadPlaintext(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	clk := mockapplication.NewMockClock(t)
@@ -251,6 +257,7 @@ func TestAPIKeyRejectsBadPlaintext(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			manager, tenant, _, _ := openManager(t, clk)
 
 			plaintext := tc.plaintext
@@ -259,9 +266,11 @@ func TestAPIKeyRejectsBadPlaintext(t *testing.T) {
 			if tc.name == "canceled context" {
 				secret, err := manager.Create(context.Background(), tenant, "ctx", nil, time.Hour)
 				require.NoError(t, err)
+
 				plaintext = secret.Plaintext
 
 				var cancel context.CancelFunc
+
 				ctx, cancel = context.WithCancel(context.Background())
 				cancel()
 			}
@@ -273,6 +282,7 @@ func TestAPIKeyRejectsBadPlaintext(t *testing.T) {
 }
 
 func TestAPIKeyRotationWindowExpiry(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	base := time.Date(2026, 9, 23, 0, 0, 0, 0, time.UTC)
@@ -303,6 +313,7 @@ func TestAPIKeyRotationWindowExpiry(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			manager, tenant, db, _ := openManager(t, clk)
 
 			old, err := manager.Create(context.Background(), tenant, "rot", []string{"ledger:read"}, 24*time.Hour)
@@ -333,6 +344,7 @@ func TestAPIKeyRotationWindowExpiry(t *testing.T) {
 }
 
 func TestAPIKeyRevokeIdempotent(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	clk := mockapplication.NewMockClock(t)
@@ -356,12 +368,13 @@ func TestAPIKeyRevokeIdempotent(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			manager, tenant, _, _ := openManager(t, clk)
 
 			secret, err := manager.Create(context.Background(), tenant, "rev", []string{"ledger:read"}, 24*time.Hour)
 			require.NoError(t, err)
 
-			for i := 0; i < tc.revocations; i++ {
+			for range tc.revocations {
 				assert.NoError(t, manager.Revoke(context.Background(), tenant, secret.Key.ID))
 			}
 
@@ -372,6 +385,7 @@ func TestAPIKeyRevokeIdempotent(t *testing.T) {
 }
 
 func TestAPIKeyVerifyEnforcesRLSForAppRole(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	clk := mockapplication.NewMockClock(t)
@@ -425,11 +439,14 @@ func appRoleDSN(t *testing.T, superDSN string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	parsed.User = url.UserPassword("app_test", "app_test_pw")
+
 	return parsed.String(), nil
 }
 
 func TestAPIKeyVerifyPersistsHashUpgrade(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	clk := mockapplication.NewMockClock(t)
@@ -445,7 +462,7 @@ func TestAPIKeyVerifyPersistsHashUpgrade(t *testing.T) {
 
 	_, tenant, db, _ := openManager(t, clk)
 
-	oldManager, err := apikey.NewManager(apikey.APIKeyParams{
+	oldManager, err := apikey.NewManager(apikey.Params{
 		DB:             db,
 		Hasher:         oldHasher,
 		RotationWindow: time.Hour,
@@ -457,7 +474,7 @@ func TestAPIKeyVerifyPersistsHashUpgrade(t *testing.T) {
 	require.NoError(t, err)
 	assertStoredVersion(t, db, 1)
 
-	newManager, err := apikey.NewManager(apikey.APIKeyParams{
+	newManager, err := apikey.NewManager(apikey.Params{
 		DB:             db,
 		Hasher:         newHasher,
 		RotationWindow: time.Hour,

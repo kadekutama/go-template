@@ -51,7 +51,7 @@ type MockAuthorizer_Authorize_Call struct {
 //   - subject port.Subject
 //   - action string
 //   - resource string
-func (_e *MockAuthorizer_Expecter) Authorize(ctx interface{}, subject interface{}, action interface{}, resource interface{}) *MockAuthorizer_Authorize_Call {
+func (_e *MockAuthorizer_Expecter) Authorize(ctx any, subject any, action any, resource any) *MockAuthorizer_Authorize_Call {
 	return &MockAuthorizer_Authorize_Call{Call: _e.mock.On("Authorize", ctx, subject, action, resource)}
 }
 

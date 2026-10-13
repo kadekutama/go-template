@@ -43,9 +43,12 @@ complete (`tasks/SDD.md` §3.4).
 The phrase **Specification-Driven Delivery** refers to this repository workflow.
 The **Specification pattern** refers only to executable domain business rules.
 
-## Agent Roles & Responsibilities
+## Specialist Ownership Areas (Harness-Neutral)
 
-### 1. Domain Expert (`domain-expert`)
+The following are responsibility areas for assigning work across people or
+harnesses; they are not a list of selectable OpenCode profile files.
+
+### 1. Domain Expertise
 - **Focus**: `internal/domain/` - Pure domain logic, no external dependencies
 - **Tasks**: Entities, Value Objects, Aggregates, Domain Events, domain Specifications, Domain Services
 - **Rules**: 
@@ -54,7 +57,7 @@ The **Specification pattern** refers only to executable domain business rules.
   - Domain Events record facts; application handlers dispatch side effects
   - Aggregate roots enforce invariants
 
-### 2. API Designer (`api-designer`)
+### 2. API Design
 - **Focus**: `api/`, `cmd/*/`, `internal/interface/{rest,grpc}/`, `pkg/httpserver/`, `pkg/grpcserver/`, `pkg/graphql/`
 - **Tasks**: REST (Echo), gRPC, GraphQL (gqlgen), WebSocket, API versioning, OpenAPI docs
 - **Rules**:
@@ -63,7 +66,7 @@ The **Specification pattern** refers only to executable domain business rules.
   - Standardized error envelope
   - Correlation ID propagation
 
-### 3. Database Engineer (`db-engineer`)
+### 3. Database Engineering
 - **Focus**: `internal/infrastructure/database/`, `internal/infrastructure/cache/`
 - **Tasks**: PostgreSQL & Citus 14.0 (GORM), Migrations (Goose v3 + Atlas), Valkey Cluster, Otter L1 Cache, Hybrid Cache
 - **Rules**: 
@@ -72,7 +75,7 @@ The **Specification pattern** refers only to executable domain business rules.
   - Connection pooling configured
   - Cache-aside pattern with L1/L2 (Otter W-TinyLFU → Valkey Cluster)
 
-### 4. DevOps Engineer (`devops-engineer`)
+### 4. DevOps Engineering
 - **Focus**: `deployments/`, `.github/workflows/`, `scripts/`, Docker, K8s
 - **Tasks**: Docker Compose (all variants), CI/CD, Traefik, Observability Stack, GitOps
 - **Rules**:
@@ -81,7 +84,7 @@ The **Specification pattern** refers only to executable domain business rules.
   - Testcontainers for integration tests
   - SBOM, security scanning in CI
 
-### 5. Test Engineer (`test-engineer`)
+### 5. Testing and Verification
 - **Focus**: `test/`, `scripts/test/`
 - **Tasks**: Unit, Integration (Testcontainers), Performance (k6), Contract (Pact), Chaos
 - **Rules**:
@@ -104,7 +107,7 @@ decisions on 2026-09-13; their permanent records live under
 reviewed and accepted.
 The audit and open risks are recorded in `docs/repository-audit.md`.
 
-### Epic Ownership Coverage
+### Epic Ownership Coverage by Specialty
 
 - Domain Expert: E02–E05
 - API Designer: E06 and E11–E14
@@ -115,8 +118,11 @@ The audit and open risks are recorded in `docs/repository-audit.md`.
   and each specialist owns docs/ADRs for its changes.
 
 ### Code Standards
-- **Go Version**: 1.27.1 (current stable patch at the audit date; pin in `go.mod` and CI)
-- **Linting**: `golangci-lint` strict mode (`.golangci.yml`)
+- **Go Version**: 1.27.2 (owner ruled latest-Go on 2026-10-13; pin in `go.mod` and CI)
+- **Linting**: `golangci-lint` strict mode (`.golangci.yml`); keep the complete
+  `modernize` suite enabled. `make lint` also requests Hint-level diagnostics
+  from `gopls`, including modernization suggestions; do not disable analyzers to
+  silence findings.
 - **Formatting**: `gofmt` / `goimports`
 - **Dependencies**: Reproducible target pins in `SPEC.md`; verify/update through Renovate/Dependabot and evidence
 - **Go idioms**: Follow [`docs/development/go-conventions.md`](docs/development/go-conventions.md); structured logging uses `rs/zerolog` (ADR-012)
@@ -163,8 +169,9 @@ All unit tests across this repository must follow our strict table-driven patter
      },
      ```
 4. **Multi-Line Formatting**: Every test case entry in `testCases` must span multiple lines with standard indentation. Never write dense one-liners.
-5. **Parallel Safety & Modern Loop Scoping**: Invoke `t.Parallel()` at the top of parent test functions. Do NOT include `tc := tc` (obsolete in Go 1.22+) and do NOT invoke `t.Parallel()` inside subtest loops (`t.Run`), keeping subtests clean, sequential, and deterministic.
+5. **Parallel Safety & Modern Loop Scoping**: Invoke `t.Parallel()` as the first statement of a parent test when it is independent and safe. For table tests, invoke `t.Parallel()` as the first statement in each `t.Run` callback whose case is independent and safe to run concurrently. Check that fixtures, database keys, ports, files, and other external resources do not overlap; keep a case sequential only when ordering or shared state requires it, and document that concrete reason. Use `t.Cleanup` rather than parent `defer` when cleanup must wait for parallel subtests. Use the range value in `t.Run(tc.name, ...)`. Do NOT include `tc := tc`: the repository's Go 1.27 language version has per-iteration range variables, so the upstream README's reinitialization workaround is unnecessary here.
 6. **Edge-Case Rigor**: Thoroughly cover zero, negative, maximum boundary values (`math.MaxInt64`, arithmetic overflow), empty/whitespace strings, and illegal state transitions.
+7. **Return-Value Assertions and Placement**: In every table case, assert each value returned by the function under test exactly once: a `(result, error)` function gets two assertions; a function returning five values gets five. Assertions must correspond to the returned values (compare a returned struct as one value, not a series of field assertions), and all behavior assertions for the function under test belong inside its table-driven subtest. Do not duplicate an assertion, add extra assertions about implementation details/test-double internals, or assert function-under-test behavior outside the table loop. If a required side effect cannot be verified through returned values, resolve an explicit exception in the task packet before writing the test.
 
 #### Complete Unit Test Examples
 
@@ -237,6 +244,7 @@ func TestSettlementBatchValidate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			err := tc.batch.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})
@@ -314,6 +322,7 @@ func TestAssessTransactionFee(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			actualResult, err := service.AssessTransactionFee(tc.amountMinor, tc.bps, tc.floorMinor, tc.capMinor)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -379,6 +388,7 @@ func TestPaymentServiceAuthorize(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			svc := NewPaymentService()
 			res, err := svc.Authorize(tc.ctx, tc.req)
 			assert.Equal(t, tc.expectedResult, res)
@@ -426,7 +436,7 @@ No task claim may be released (`Status: released`) and no work may be considered
 2. **Formatting**:
    - Run `gofmt -s -w .` and `goimports -l -w .`.
 3. **Strict Linting**:
-   - Run `make lint` (executes `golangci-lint run ./...` with strict rules: `gocyclo <= 12`, `goconst`, `unparam`, `revive`, etc., and `shellcheck`).
+   - Run `make lint` (executes `gopls check -severity=hint`, `golangci-lint run ./...` with the complete configured analyzer set including `modernize`, and `shellcheck`). Do not disable analyzers to silence findings; fix those in the active change surface and report findings owned by other tasks.
    - Must exit with **0 issues**.
 4. **Race-Detector Test Suite**:
    - Run `go test -v -race ./...` (or `make test-race`).

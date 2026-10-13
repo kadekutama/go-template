@@ -2,7 +2,6 @@ package outbox_test
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -34,14 +33,17 @@ func TestNewWriterRequiresDB(t *testing.T) {
 				DB: nil,
 			},
 			expectedResult: nil,
-			expectedError:  errors.New("outbox: writer needs DB"),
+			expectedError:  outbox.ErrOutboxWriterNeedsDB,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			writer, err := outbox.NewWriter(tc.params)
 			assert.Equal(t, tc.expectedResult, writer)
+
 			if tc.expectedError != nil {
 				require.Error(t, err)
 				assert.Equal(t, tc.expectedError.Error(), err.Error())
@@ -74,12 +76,14 @@ func TestAppendTxRequiresTx(t *testing.T) {
 					AggregateID: "agg-01",
 				},
 			},
-			expectedError: errors.New("outbox: transaction is required"),
+			expectedError: outbox.ErrOutboxTransactionIsRequired,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			writer, err := outbox.NewWriter(outbox.WriterParams{DB: &gorm.DB{}})
 			require.NoError(t, err)
 			require.NotNil(t, writer)
@@ -113,7 +117,7 @@ func TestNewPollerRequiresPublisher(t *testing.T) {
 			},
 			expectedMaxBatch:     0,
 			expectedClaimTimeout: 0,
-			expectedError:        errors.New("outbox: poller needs a publisher"),
+			expectedError:        outbox.ErrOutboxPollerNeedsAPublisher,
 		},
 		{
 			name: "non-positive max batch rejected",
@@ -125,7 +129,7 @@ func TestNewPollerRequiresPublisher(t *testing.T) {
 			},
 			expectedMaxBatch:     0,
 			expectedClaimTimeout: 0,
-			expectedError:        errors.New("outbox: max batch must be positive"),
+			expectedError:        outbox.ErrOutboxMaxBatchMustBePositive,
 		},
 		{
 			name: "non-positive base backoff rejected",
@@ -137,7 +141,7 @@ func TestNewPollerRequiresPublisher(t *testing.T) {
 			},
 			expectedMaxBatch:     0,
 			expectedClaimTimeout: 0,
-			expectedError:        errors.New("outbox: base backoff must be positive"),
+			expectedError:        outbox.ErrOutboxBaseBackoffMustBePositive,
 		},
 		{
 			name: "non-positive claim timeout rejected",
@@ -149,7 +153,7 @@ func TestNewPollerRequiresPublisher(t *testing.T) {
 			},
 			expectedMaxBatch:     0,
 			expectedClaimTimeout: 0,
-			expectedError:        errors.New("outbox: claim timeout must be positive"),
+			expectedError:        outbox.ErrOutboxClaimTimeoutMustBePositive,
 		},
 		{
 			name: "valid explicit params accepted",
@@ -167,6 +171,8 @@ func TestNewPollerRequiresPublisher(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			poller, err := outbox.NewPoller(tc.params)
 			if tc.expectedError != nil {
 				require.Error(t, err)
@@ -211,6 +217,7 @@ func TestClaimSQLShape(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Contains(t, strings.ToUpper(outbox.ClaimSQL), strings.ToUpper(tc.fragment))
 		})
 	}
@@ -247,6 +254,7 @@ func TestBackoffGrowsWithJitterBound(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			poller, err := outbox.NewPoller(outbox.PollerParams{
 				Publisher:    mockapplication.NewMockEventPublisher(t),
 				MaxBatch:     100,
@@ -279,12 +287,13 @@ func TestRunOnceRequiresDB(t *testing.T) {
 			ctx:               context.Background(),
 			db:                nil,
 			expectedDelivered: 0,
-			expectedError:     errors.New("outbox: DB is required"),
+			expectedError:     outbox.ErrOutboxDBIsRequired,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			poller, err := outbox.NewPoller(outbox.PollerParams{
 				Publisher:    mockapplication.NewMockEventPublisher(t),
 				MaxBatch:     100,
@@ -330,14 +339,16 @@ func TestMockPublisherContract(t *testing.T) {
 			facts: []appport.OutboxFact{
 				{EventType: "transfer.completed.v1"},
 			},
-			fail:          errors.New("broker down"),
+			fail:          outbox.ErrBrokerDown,
 			expectedCalls: 0,
-			expectedError: errors.New("broker down"),
+			expectedError: outbox.ErrBrokerDown,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			pub := mockapplication.NewMockEventPublisher(t)
 			if tc.fail != nil {
 				pub.EXPECT().Publish(tc.ctx, mock.Anything).Return(tc.fail).Once()

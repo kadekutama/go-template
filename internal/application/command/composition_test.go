@@ -36,32 +36,37 @@ type createAccountHandler struct {
 	executions int
 }
 
-var _ command.CommandHandler[createAccountCmd, createAccountRes] = (*createAccountHandler)(nil)
+var _ command.Handler[createAccountCmd, createAccountRes] = (*createAccountHandler)(nil)
 
 func (h *createAccountHandler) Handle(ctx context.Context, cmd createAccountCmd) (createAccountRes, error) {
 	if strings.TrimSpace(cmd.name) == "" {
 		return createAccountRes{}, entity.NewError("ACCOUNT_NAME_REQUIRED", "account name is required")
 	}
+
 	if err := command.RequireAuthz(ctx, h.authz, cmd.subject, "account.open", "tenant/"+string(cmd.subject.TenantID)); err != nil {
 		return createAccountRes{}, err
 	}
+
 	response, _, err := command.RunIdempotent(ctx, h.store, port.IdempotencyRecord{
 		Key:         cmd.key,
 		Fingerprint: cmd.fingerprint,
 		TenantID:    cmd.subject.TenantID,
 	}, func(context.Context) ([]byte, error) {
 		h.executions++
+
 		return []byte(`{"id":"a-1"}`), nil
 	})
 	if err != nil {
 		return createAccountRes{}, err
 	}
+
 	var payload struct {
 		ID string `json:"id"`
 	}
 	if unmarshalErr := json.Unmarshal(response, &payload); unmarshalErr != nil {
 		return createAccountRes{}, unmarshalErr
 	}
+
 	return createAccountRes{id: payload.ID}, nil
 }
 
@@ -171,14 +176,19 @@ func TestCreateAccountPipeline(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			authorizer := mockapplication.NewMockAuthorizer(t)
+
 			var authzCalls int
+
 			authorizer.EXPECT().Authorize(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 				RunAndReturn(func(_ context.Context, subject port.Subject, action, resource string) error {
 					authzCalls++
+
 					if subject.ID == "u-9" && action == "account.open" && resource == "tenant/t-1" {
 						return entity.NewError("FORBIDDEN", "subject is not authorized for this action")
 					}
+
 					return nil
 				}).Maybe()
 
@@ -195,9 +205,12 @@ func TestCreateAccountPipeline(t *testing.T) {
 				})
 				require.NoError(t, firstErr)
 			}
-			var actualResult createAccountRes
-			var err error
-			for i := 0; i < tc.submits; i++ {
+
+			var (
+				actualResult createAccountRes
+				err          error
+			)
+			for range tc.submits {
 				actualResult, err = handler.Handle(context.Background(), createAccountCmd{
 					name:        tc.accountName,
 					subject:     tc.subject,
@@ -205,6 +218,7 @@ func TestCreateAccountPipeline(t *testing.T) {
 					fingerprint: tc.fingerprint,
 				})
 			}
+
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
 			assert.Equal(t, tc.expectedExecutions, handler.executions)

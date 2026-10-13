@@ -63,7 +63,7 @@ type MockOAuthProvider_AuthURL_Call struct {
 //   - tenant valueobject.TenantID
 //   - provider string
 //   - redirectURL string
-func (_e *MockOAuthProvider_Expecter) AuthURL(ctx interface{}, tenant interface{}, provider interface{}, redirectURL interface{}) *MockOAuthProvider_AuthURL_Call {
+func (_e *MockOAuthProvider_Expecter) AuthURL(ctx any, tenant any, provider any, redirectURL any) *MockOAuthProvider_AuthURL_Call {
 	return &MockOAuthProvider_AuthURL_Call{Call: _e.mock.On("AuthURL", ctx, tenant, provider, redirectURL)}
 }
 
@@ -123,7 +123,7 @@ type MockOAuthProvider_Exchange_Call struct {
 //   - provider string
 //   - code string
 //   - state string
-func (_e *MockOAuthProvider_Expecter) Exchange(ctx interface{}, tenant interface{}, provider interface{}, code interface{}, state interface{}) *MockOAuthProvider_Exchange_Call {
+func (_e *MockOAuthProvider_Expecter) Exchange(ctx any, tenant any, provider any, code any, state any) *MockOAuthProvider_Exchange_Call {
 	return &MockOAuthProvider_Exchange_Call{Call: _e.mock.On("Exchange", ctx, tenant, provider, code, state)}
 }
 

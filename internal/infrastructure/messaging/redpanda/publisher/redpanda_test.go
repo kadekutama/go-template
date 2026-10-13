@@ -2,7 +2,6 @@ package publisher_test
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -25,7 +24,7 @@ func TestNewPublisher(t *testing.T) {
 
 	type testCase struct {
 		name           string
-		params         publisher.PublisherParams
+		params         publisher.Params
 		expectedResult bool
 		expectedError  error
 	}
@@ -33,7 +32,7 @@ func TestNewPublisher(t *testing.T) {
 	testCases := []testCase{
 		{
 			name: "broker accepted",
-			params: publisher.PublisherParams{
+			params: publisher.Params{
 				Broker: mockredpanda.NewMockBroker(t),
 				Topic:  "outbox.facts.v1",
 			},
@@ -42,32 +41,36 @@ func TestNewPublisher(t *testing.T) {
 		},
 		{
 			name: "empty topic rejected",
-			params: publisher.PublisherParams{
+			params: publisher.Params{
 				Broker: mockredpanda.NewMockBroker(t),
 				Topic:  "",
 			},
 			expectedResult: false,
-			expectedError:  errors.New("publisher: topic is required"),
+			expectedError:  publisher.ErrPublisherTopicIsRequired,
 		},
 		{
 			name: "nil broker rejected",
-			params: publisher.PublisherParams{
+			params: publisher.Params{
 				Broker: nil,
 				Topic:  "outbox.facts.v1",
 			},
 			expectedResult: false,
-			expectedError:  errors.New("publisher: broker is required"),
+			expectedError:  publisher.ErrPublisherBrokerIsRequired,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			instance, err := publisher.NewPublisher(tc.params)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
 				assert.Nil(t, instance)
+
 				return
 			}
+
 			require.NoError(t, err)
 			require.NotNil(t, instance)
 			assert.Equal(t, tc.expectedResult, instance != nil)
@@ -75,7 +78,153 @@ func TestNewPublisher(t *testing.T) {
 	}
 }
 
-func TestPublisherPublish(t *testing.T) {
+func TestPublisherPublishOutcomes(t *testing.T) {
+	t.Parallel()
+
+	type testCase struct {
+		name              string
+		publisher         func(broker redpanda.Broker) *publisher.Publisher
+		armBrokerFail     error
+		ctx               context.Context
+		facts             []appport.OutboxFact
+		expectedRecords   int
+		expectedEventType string
+		expectedError     error
+	}
+
+	testCases := []testCase{
+		{
+			name: "relays valid fact",
+			publisher: func(b redpanda.Broker) *publisher.Publisher {
+				p, _ := publisher.NewPublisher(publisher.Params{Broker: b, Topic: "outbox.facts.v1"})
+
+				return p
+			},
+			armBrokerFail: nil,
+			ctx:           context.Background(),
+			facts: []appport.OutboxFact{
+				{
+					TenantID: func() valueobject.TenantID {
+						t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000010")
+
+						return t
+					}(),
+					LedgerID: func() valueobject.LedgerID {
+						l, _ := valueobject.ParseLedgerID("01950000-0000-7000-8000-000000000020")
+
+						return l
+					}(),
+					EventType:   "transfer.completed.v1",
+					AggregateID: "01950000-0000-7000-8000-000000000030",
+					Payload:     []byte(`{"minor":100}`),
+					OccurredAt:  time.Date(2026, 9, 18, 0, 0, 0, 0, time.UTC),
+				},
+			},
+			expectedRecords:   1,
+			expectedEventType: "transfer.completed.v1",
+			expectedError:     nil,
+		},
+		{
+			name: "broker failure surfaces",
+			publisher: func(b redpanda.Broker) *publisher.Publisher {
+				p, _ := publisher.NewPublisher(publisher.Params{Broker: b, Topic: "outbox.facts.v1"})
+
+				return p
+			},
+			armBrokerFail: publisher.ErrBrokerDown,
+			ctx:           context.Background(),
+			facts: []appport.OutboxFact{
+				{
+					TenantID: func() valueobject.TenantID {
+						t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000010")
+
+						return t
+					}(),
+					LedgerID: func() valueobject.LedgerID {
+						l, _ := valueobject.ParseLedgerID("01950000-0000-7000-8000-000000000020")
+
+						return l
+					}(),
+					EventType:   "transfer.completed.v1",
+					AggregateID: "01950000-0000-7000-8000-000000000030",
+					Payload:     []byte(`{"minor":100}`),
+					OccurredAt:  time.Date(2026, 9, 18, 0, 0, 0, 0, time.UTC),
+				},
+			},
+			expectedRecords:   0,
+			expectedEventType: "",
+			expectedError:     publisher.ErrPublisherPublishTransferCompletedV1BrokerDown,
+		},
+		{
+			name: "zero occurred at defaults to current time",
+			publisher: func(b redpanda.Broker) *publisher.Publisher {
+				p, _ := publisher.NewPublisher(publisher.Params{Broker: b, Topic: "outbox.facts.v1"})
+
+				return p
+			},
+			armBrokerFail: nil,
+			ctx:           context.Background(),
+			facts: []appport.OutboxFact{
+				{
+					TenantID: func() valueobject.TenantID {
+						t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000010")
+
+						return t
+					}(),
+					LedgerID: func() valueobject.LedgerID {
+						l, _ := valueobject.ParseLedgerID("01950000-0000-7000-8000-000000000020")
+
+						return l
+					}(),
+					EventType:   "transfer.completed.v1",
+					AggregateID: "01950000-0000-7000-8000-000000000030",
+					Payload:     []byte(`{"minor":100}`),
+					OccurredAt:  time.Time{},
+				},
+			},
+			expectedRecords:   1,
+			expectedEventType: "transfer.completed.v1",
+			expectedError:     nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			broker := mockredpanda.NewMockBroker(t)
+
+			var records []doubles.PublishRecord
+
+			broker.EXPECT().Publish(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+				RunAndReturn(func(_ context.Context, topic, key string, headers map[string]string, payload []byte) error {
+					if tc.armBrokerFail != nil {
+						return tc.armBrokerFail
+					}
+
+					records = append(records, doubles.SnapshotPublish(topic, key, headers, payload))
+
+					return nil
+				}).Maybe()
+
+			p := tc.publisher(broker)
+
+			err := p.Publish(tc.ctx, tc.facts...)
+			if tc.expectedError != nil {
+				assert.EqualError(t, err, tc.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Len(t, records, tc.expectedRecords)
+
+			if tc.expectedRecords > 0 {
+				assert.Equal(t, tc.expectedEventType, records[0].Headers["event_type"])
+			}
+		})
+	}
+}
+func TestPublisherPublishValidation(t *testing.T) {
 	t.Parallel()
 
 	type testCase struct {
@@ -101,10 +250,12 @@ func TestPublisherPublish(t *testing.T) {
 				{
 					TenantID: func() valueobject.TenantID {
 						t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000010")
+
 						return t
 					}(),
 					LedgerID: func() valueobject.LedgerID {
 						l, _ := valueobject.ParseLedgerID("01950000-0000-7000-8000-000000000020")
+
 						return l
 					}(),
 					EventType:   "transfer.completed.v1",
@@ -115,40 +266,13 @@ func TestPublisherPublish(t *testing.T) {
 			},
 			expectedRecords:   0,
 			expectedEventType: "",
-			expectedError:     errors.New("publisher: not initialized"),
-		},
-		{
-			name: "relays valid fact",
-			publisher: func(b redpanda.Broker) *publisher.Publisher {
-				p, _ := publisher.NewPublisher(publisher.PublisherParams{Broker: b, Topic: "outbox.facts.v1"})
-				return p
-			},
-			armBrokerFail: nil,
-			ctx:           context.Background(),
-			facts: []appport.OutboxFact{
-				{
-					TenantID: func() valueobject.TenantID {
-						t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000010")
-						return t
-					}(),
-					LedgerID: func() valueobject.LedgerID {
-						l, _ := valueobject.ParseLedgerID("01950000-0000-7000-8000-000000000020")
-						return l
-					}(),
-					EventType:   "transfer.completed.v1",
-					AggregateID: "01950000-0000-7000-8000-000000000030",
-					Payload:     []byte(`{"minor":100}`),
-					OccurredAt:  time.Date(2026, 9, 18, 0, 0, 0, 0, time.UTC),
-				},
-			},
-			expectedRecords:   1,
-			expectedEventType: "transfer.completed.v1",
-			expectedError:     nil,
+			expectedError:     publisher.ErrPublisherNotInitialized,
 		},
 		{
 			name: "missing tenant rejected",
 			publisher: func(b redpanda.Broker) *publisher.Publisher {
-				p, _ := publisher.NewPublisher(publisher.PublisherParams{Broker: b, Topic: "outbox.facts.v1"})
+				p, _ := publisher.NewPublisher(publisher.Params{Broker: b, Topic: "outbox.facts.v1"})
+
 				return p
 			},
 			armBrokerFail: nil,
@@ -158,6 +282,7 @@ func TestPublisherPublish(t *testing.T) {
 					TenantID: valueobject.TenantID(""),
 					LedgerID: func() valueobject.LedgerID {
 						l, _ := valueobject.ParseLedgerID("01950000-0000-7000-8000-000000000020")
+
 						return l
 					}(),
 					EventType:   "transfer.completed.v1",
@@ -168,12 +293,13 @@ func TestPublisherPublish(t *testing.T) {
 			},
 			expectedRecords:   0,
 			expectedEventType: "",
-			expectedError:     errors.New("publisher: tenant is required"),
+			expectedError:     publisher.ErrPublisherTenantIsRequired,
 		},
 		{
 			name: "missing event type rejected",
 			publisher: func(b redpanda.Broker) *publisher.Publisher {
-				p, _ := publisher.NewPublisher(publisher.PublisherParams{Broker: b, Topic: "outbox.facts.v1"})
+				p, _ := publisher.NewPublisher(publisher.Params{Broker: b, Topic: "outbox.facts.v1"})
+
 				return p
 			},
 			armBrokerFail: nil,
@@ -182,10 +308,12 @@ func TestPublisherPublish(t *testing.T) {
 				{
 					TenantID: func() valueobject.TenantID {
 						t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000010")
+
 						return t
 					}(),
 					LedgerID: func() valueobject.LedgerID {
 						l, _ := valueobject.ParseLedgerID("01950000-0000-7000-8000-000000000020")
+
 						return l
 					}(),
 					EventType:   "",
@@ -196,12 +324,13 @@ func TestPublisherPublish(t *testing.T) {
 			},
 			expectedRecords:   0,
 			expectedEventType: "",
-			expectedError:     errors.New("publisher: event type is required"),
+			expectedError:     publisher.ErrPublisherEventTypeIsRequired,
 		},
 		{
 			name: "missing aggregate rejected",
 			publisher: func(b redpanda.Broker) *publisher.Publisher {
-				p, _ := publisher.NewPublisher(publisher.PublisherParams{Broker: b, Topic: "outbox.facts.v1"})
+				p, _ := publisher.NewPublisher(publisher.Params{Broker: b, Topic: "outbox.facts.v1"})
+
 				return p
 			},
 			armBrokerFail: nil,
@@ -210,10 +339,12 @@ func TestPublisherPublish(t *testing.T) {
 				{
 					TenantID: func() valueobject.TenantID {
 						t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000010")
+
 						return t
 					}(),
 					LedgerID: func() valueobject.LedgerID {
 						l, _ := valueobject.ParseLedgerID("01950000-0000-7000-8000-000000000020")
+
 						return l
 					}(),
 					EventType:   "transfer.completed.v1",
@@ -224,12 +355,13 @@ func TestPublisherPublish(t *testing.T) {
 			},
 			expectedRecords:   0,
 			expectedEventType: "",
-			expectedError:     errors.New("publisher: aggregate id is required"),
+			expectedError:     publisher.ErrPublisherAggregateIDIsRequired,
 		},
 		{
 			name: "nil payload rejected",
 			publisher: func(b redpanda.Broker) *publisher.Publisher {
-				p, _ := publisher.NewPublisher(publisher.PublisherParams{Broker: b, Topic: "outbox.facts.v1"})
+				p, _ := publisher.NewPublisher(publisher.Params{Broker: b, Topic: "outbox.facts.v1"})
+
 				return p
 			},
 			armBrokerFail: nil,
@@ -238,10 +370,12 @@ func TestPublisherPublish(t *testing.T) {
 				{
 					TenantID: func() valueobject.TenantID {
 						t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000010")
+
 						return t
 					}(),
 					LedgerID: func() valueobject.LedgerID {
 						l, _ := valueobject.ParseLedgerID("01950000-0000-7000-8000-000000000020")
+
 						return l
 					}(),
 					EventType:   "transfer.completed.v1",
@@ -252,87 +386,40 @@ func TestPublisherPublish(t *testing.T) {
 			},
 			expectedRecords:   0,
 			expectedEventType: "",
-			expectedError:     errors.New("publisher: payload is required"),
-		},
-		{
-			name: "broker failure surfaces",
-			publisher: func(b redpanda.Broker) *publisher.Publisher {
-				p, _ := publisher.NewPublisher(publisher.PublisherParams{Broker: b, Topic: "outbox.facts.v1"})
-				return p
-			},
-			armBrokerFail: errors.New("broker down"),
-			ctx:           context.Background(),
-			facts: []appport.OutboxFact{
-				{
-					TenantID: func() valueobject.TenantID {
-						t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000010")
-						return t
-					}(),
-					LedgerID: func() valueobject.LedgerID {
-						l, _ := valueobject.ParseLedgerID("01950000-0000-7000-8000-000000000020")
-						return l
-					}(),
-					EventType:   "transfer.completed.v1",
-					AggregateID: "01950000-0000-7000-8000-000000000030",
-					Payload:     []byte(`{"minor":100}`),
-					OccurredAt:  time.Date(2026, 9, 18, 0, 0, 0, 0, time.UTC),
-				},
-			},
-			expectedRecords:   0,
-			expectedEventType: "",
-			expectedError:     errors.New("publisher: publish transfer.completed.v1: broker down"),
-		},
-		{
-			name: "zero occurred at defaults to current time",
-			publisher: func(b redpanda.Broker) *publisher.Publisher {
-				p, _ := publisher.NewPublisher(publisher.PublisherParams{Broker: b, Topic: "outbox.facts.v1"})
-				return p
-			},
-			armBrokerFail: nil,
-			ctx:           context.Background(),
-			facts: []appport.OutboxFact{
-				{
-					TenantID: func() valueobject.TenantID {
-						t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000010")
-						return t
-					}(),
-					LedgerID: func() valueobject.LedgerID {
-						l, _ := valueobject.ParseLedgerID("01950000-0000-7000-8000-000000000020")
-						return l
-					}(),
-					EventType:   "transfer.completed.v1",
-					AggregateID: "01950000-0000-7000-8000-000000000030",
-					Payload:     []byte(`{"minor":100}`),
-					OccurredAt:  time.Time{},
-				},
-			},
-			expectedRecords:   1,
-			expectedEventType: "transfer.completed.v1",
-			expectedError:     nil,
+			expectedError:     publisher.ErrPublisherPayloadIsRequired,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			broker := mockredpanda.NewMockBroker(t)
+
 			var records []doubles.PublishRecord
+
 			broker.EXPECT().Publish(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 				RunAndReturn(func(_ context.Context, topic, key string, headers map[string]string, payload []byte) error {
 					if tc.armBrokerFail != nil {
 						return tc.armBrokerFail
 					}
+
 					records = append(records, doubles.SnapshotPublish(topic, key, headers, payload))
+
 					return nil
 				}).Maybe()
 
 			p := tc.publisher(broker)
+
 			err := p.Publish(tc.ctx, tc.facts...)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
+
 				return
 			}
+
 			require.NoError(t, err)
 			assert.Len(t, records, tc.expectedRecords)
+
 			if tc.expectedRecords > 0 {
 				assert.Equal(t, tc.expectedEventType, records[0].Headers["event_type"])
 			}
@@ -373,25 +460,31 @@ func TestPublisherPropagatesCorrelation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			broker := mockredpanda.NewMockBroker(t)
+
 			var records []doubles.PublishRecord
+
 			broker.EXPECT().Publish(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 				RunAndReturn(func(_ context.Context, topic, key string, headers map[string]string, payload []byte) error {
 					records = append(records, doubles.SnapshotPublish(topic, key, headers, payload))
+
 					return nil
 				}).Maybe()
 
-			instance, err := publisher.NewPublisher(publisher.PublisherParams{Broker: broker, Topic: "outbox.facts.v1"})
+			instance, err := publisher.NewPublisher(publisher.Params{Broker: broker, Topic: "outbox.facts.v1"})
 			require.NoError(t, err)
 
 			ctx := log.WithTraceID(log.WithRequestID(context.Background(), tc.requestID), tc.traceID)
 			fact := appport.OutboxFact{
 				TenantID: func() valueobject.TenantID {
 					t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000010")
+
 					return t
 				}(),
 				LedgerID: func() valueobject.LedgerID {
 					l, _ := valueobject.ParseLedgerID("01950000-0000-7000-8000-000000000020")
+
 					return l
 				}(),
 				EventType:   "transfer.completed.v1",
@@ -437,15 +530,19 @@ func TestPublisherConfiguredTopic(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			broker := mockredpanda.NewMockBroker(t)
+
 			var records []doubles.PublishRecord
+
 			broker.EXPECT().Publish(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 				RunAndReturn(func(_ context.Context, topic, key string, headers map[string]string, payload []byte) error {
 					records = append(records, doubles.SnapshotPublish(topic, key, headers, payload))
+
 					return nil
 				}).Maybe()
 
-			instance, err := publisher.NewPublisher(publisher.PublisherParams{
+			instance, err := publisher.NewPublisher(publisher.Params{
 				Broker: broker,
 				Topic:  tc.topic,
 			})
@@ -454,10 +551,12 @@ func TestPublisherConfiguredTopic(t *testing.T) {
 			fact := appport.OutboxFact{
 				TenantID: func() valueobject.TenantID {
 					t, _ := valueobject.ParseTenantID("01950000-0000-7000-8000-000000000010")
+
 					return t
 				}(),
 				LedgerID: func() valueobject.LedgerID {
 					l, _ := valueobject.ParseLedgerID("01950000-0000-7000-8000-000000000020")
+
 					return l
 				}(),
 				EventType:   "transfer.completed.v1",
@@ -500,15 +599,18 @@ func TestPublisherEmptyBatch(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			broker := mockredpanda.NewMockBroker(t)
-			instance, err := publisher.NewPublisher(publisher.PublisherParams{Broker: broker, Topic: "outbox.facts.v1"})
+			instance, err := publisher.NewPublisher(publisher.Params{Broker: broker, Topic: "outbox.facts.v1"})
 			require.NoError(t, err)
 
 			err = instance.Publish(context.Background(), tc.facts...)
 			if tc.expectedError != nil {
 				assert.EqualError(t, err, tc.expectedError.Error())
+
 				return
 			}
+
 			require.NoError(t, err)
 		})
 	}

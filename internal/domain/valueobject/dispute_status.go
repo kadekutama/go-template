@@ -23,7 +23,7 @@ func ParseDisputeStatus(s string) (DisputeStatus, error) {
 	case DisputeOpen, DisputeEvidenceDue, DisputeUnderReview, DisputeWon, DisputeLost, DisputeClosed:
 		return DisputeStatus(s), nil
 	default:
-		return "", fmt.Errorf("dispute: invalid status %q", s)
+		return "", fmt.Errorf("dispute: invalid status %q: %w", s, ErrDisputeInvalidStatus)
 	}
 }
 
@@ -38,6 +38,8 @@ func CanTransitionDispute(from, to DisputeStatus) bool {
 		return to == DisputeWon || to == DisputeLost
 	case DisputeWon, DisputeLost:
 		return to == DisputeClosed
+	case DisputeClosed:
+		return false
 	default:
 		return false
 	}

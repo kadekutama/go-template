@@ -59,7 +59,7 @@ type MockGetPosting_Execute_Call struct {
 // Execute is a helper method to define mock.On call
 //   - ctx context.Context
 //   - query port.GetPostingQuery
-func (_e *MockGetPosting_Expecter) Execute(ctx interface{}, query interface{}) *MockGetPosting_Execute_Call {
+func (_e *MockGetPosting_Expecter) Execute(ctx any, query any) *MockGetPosting_Execute_Call {
 	return &MockGetPosting_Execute_Call{Call: _e.mock.On("Execute", ctx, query)}
 }
 

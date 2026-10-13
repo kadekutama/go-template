@@ -14,6 +14,8 @@ import (
 // version-independent across these images.
 const redpandaTestImage = "docker.redpanda.com/redpandadata/redpanda:v23.3.3"
 
+// RedpandaHandle owns the Redpanda testcontainer and its seed broker address
+// for integration suites. It is test-only: production code never imports it.
 type RedpandaHandle struct {
 	container *redpanda.Container
 	seed      string
@@ -35,6 +37,7 @@ func StartRedpanda(t *testing.T) (*RedpandaHandle, error) {
 	}
 
 	h := &RedpandaHandle{container: container}
+
 	t.Cleanup(func() {
 		_ = h.Terminate(context.Background())
 	})
@@ -42,6 +45,7 @@ func StartRedpanda(t *testing.T) (*RedpandaHandle, error) {
 	seed, err := container.KafkaSeedBroker(ctx)
 	if err != nil {
 		_ = h.Terminate(context.Background())
+
 		return nil, fmt.Errorf("redpanda seed broker: %w", err)
 	}
 

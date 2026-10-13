@@ -19,13 +19,16 @@ import (
 	mockcommand "github.com/kadekutama/go-template/test/mock/command"
 )
 
-var dashAt = time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
+func dashAt() time.Time {
+	return time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
+}
 
 func dashPosting(id string, at time.Time, legs int64) entity.PostingData {
 	entries := []entity.Entry{
 		{ID: valueobject.EntryID("e-" + id + "-d"), PostingID: valueobject.PostingID(id), AccountID: "a-src", Side: valueobject.DirectionDebit, AmountMinor: legs, AssetCode: "USD", AccountSeq: 1},
 		{ID: valueobject.EntryID("e-" + id + "-c"), PostingID: valueobject.PostingID(id), AccountID: "a-dst", Side: valueobject.DirectionCredit, AmountMinor: legs, AssetCode: "USD", AccountSeq: 1},
 	}
+
 	return entity.PostingData{
 		ID: valueobject.PostingID("p-" + id), TenantID: "t-1", LedgerID: "l-1", Operation: "transfer",
 		Entries: entries, EffectiveAt: at, RecordedAt: at,
@@ -36,13 +39,14 @@ func TestDashboardVolume(t *testing.T) {
 	t.Parallel()
 
 	t.Run("day buckets sum legs", func(t *testing.T) {
+		t.Parallel()
 		postings := mockapplication.NewMockPostingQuery(t)
 		postings.EXPECT().
 			Search(mock.Anything, mock.Anything).
 			Return(port.PostingSearchPage{
 				Postings: []entity.PostingData{
-					dashPosting("1", dashAt, 5000),
-					dashPosting("2", dashAt.Add(24*time.Hour), 3000),
+					dashPosting("1", dashAt(), 5000),
+					dashPosting("2", dashAt().Add(24*time.Hour), 3000),
 				},
 				NextCursor: "",
 			}, nil).
@@ -54,7 +58,7 @@ func TestDashboardVolume(t *testing.T) {
 			Postings:  postings,
 			Transfers: transfers,
 		})
-		buckets, err := svc.AggregateVolume(context.Background(), "t-1", dashAt.Add(-time.Hour), dashAt.Add(48*time.Hour), "day")
+		buckets, err := svc.AggregateVolume(context.Background(), "t-1", dashAt().Add(-time.Hour), dashAt().Add(48*time.Hour), "day")
 		require.NoError(t, err)
 		require.Len(t, buckets, 2)
 		assert.Equal(t, "2026-09-15", buckets[0].Bucket)
@@ -64,13 +68,14 @@ func TestDashboardVolume(t *testing.T) {
 	})
 
 	t.Run("week buckets group seven days", func(t *testing.T) {
+		t.Parallel()
 		postings := mockapplication.NewMockPostingQuery(t)
 		postings.EXPECT().
 			Search(mock.Anything, mock.Anything).
 			Return(port.PostingSearchPage{
 				Postings: []entity.PostingData{
-					dashPosting("1", dashAt, 5000),
-					dashPosting("2", dashAt.Add(24*time.Hour), 3000),
+					dashPosting("1", dashAt(), 5000),
+					dashPosting("2", dashAt().Add(24*time.Hour), 3000),
 				},
 				NextCursor: "",
 			}, nil).
@@ -82,7 +87,7 @@ func TestDashboardVolume(t *testing.T) {
 			Postings:  postings,
 			Transfers: transfers,
 		})
-		buckets, err := svc.AggregateVolume(context.Background(), "t-1", dashAt.Add(-time.Hour), dashAt.Add(48*time.Hour), "week")
+		buckets, err := svc.AggregateVolume(context.Background(), "t-1", dashAt().Add(-time.Hour), dashAt().Add(48*time.Hour), "week")
 		require.NoError(t, err)
 		require.Len(t, buckets, 1)
 		assert.Equal(t, int64(2), buckets[0].Count)
@@ -90,21 +95,25 @@ func TestDashboardVolume(t *testing.T) {
 	})
 
 	t.Run("bad granularity rejected", func(t *testing.T) {
+		t.Parallel()
 		postings := mockapplication.NewMockPostingQuery(t)
 		transfers := mockcommand.NewMockTransferStore(t)
 
 		svc := query.NewDashboardService(query.DashboardServiceParams{Postings: postings, Transfers: transfers})
-		_, err := svc.AggregateVolume(context.Background(), "t-1", dashAt, dashAt, "fortnight")
+		_, err := svc.AggregateVolume(context.Background(), "t-1", dashAt(), dashAt(), "fortnight")
 		assert.Equal(t, entity.NewError("DASHBOARD_GRANULARITY_INVALID", "granularity must be day or week"), err)
 	})
 
 	t.Run("unbounded scan fails loudly", func(t *testing.T) {
+		t.Parallel()
 		postings := mockapplication.NewMockPostingQuery(t)
-		for i := 0; i < 20; i++ {
+
+		for i := range 20 {
 			cursor := ""
 			if i > 0 {
 				cursor = fmt.Sprintf("c-%d", i)
 			}
+
 			next := fmt.Sprintf("c-%d", i+1)
 			postings.EXPECT().
 				Search(mock.Anything, port.PostingFilter{
@@ -119,11 +128,12 @@ func TestDashboardVolume(t *testing.T) {
 		transfers := mockcommand.NewMockTransferStore(t)
 
 		svc := query.NewDashboardService(query.DashboardServiceParams{Postings: postings, Transfers: transfers})
-		_, err := svc.AggregateVolume(context.Background(), "t-1", dashAt.Add(-time.Hour), dashAt.Add(time.Hour), "day")
+		_, err := svc.AggregateVolume(context.Background(), "t-1", dashAt().Add(-time.Hour), dashAt().Add(time.Hour), "day")
 		assert.Equal(t, entity.NewError("DASHBOARD_TOO_LARGE", "aggregation exceeds the bounded scan"), err)
 	})
 
 	t.Run("transfer status counts tally", func(t *testing.T) {
+		t.Parallel()
 		postings := mockapplication.NewMockPostingQuery(t)
 		transfers := mockcommand.NewMockTransferStore(t)
 		transfers.EXPECT().
@@ -151,6 +161,7 @@ func TestReconReports(t *testing.T) {
 	t.Parallel()
 
 	t.Run("summary tallies by status", func(t *testing.T) {
+		t.Parallel()
 		store := mockcommand.NewMockReconStore(t)
 		store.EXPECT().
 			FindRun(mock.Anything, valueobject.TenantID("t-1"), "run-1").
@@ -182,6 +193,8 @@ func TestRegulatorySupportedTypes(t *testing.T) {
 	t.Parallel()
 
 	t.Run("four regulatory types supported", func(t *testing.T) {
+		t.Parallel()
+
 		svc := query.NewRegulatoryQueryService(query.RegulatoryQueryServiceParams{})
 		assert.Len(t, svc.SupportedTypes(), 4)
 	})

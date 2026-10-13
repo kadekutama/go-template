@@ -42,6 +42,7 @@ func (s *TransferQueryService) GetTransfer(ctx context.Context, query port.Trans
 	if err != nil {
 		return port.TransferView{}, err
 	}
+
 	return port.TransferView{TransferID: record.ID, Status: record.Status, PostingID: record.PostingID}, nil
 }
 
@@ -51,10 +52,12 @@ func (s *TransferQueryService) ListTransfers(ctx context.Context, filter port.Tr
 	if err != nil {
 		return port.TransferPage{}, err
 	}
+
 	views := make([]port.TransferView, 0, len(records))
 	for _, record := range records {
 		views = append(views, port.TransferView{TransferID: record.ID, Status: record.Status, PostingID: record.PostingID})
 	}
+
 	return port.TransferPage{Transfers: views, NextCursor: next}, nil
 }
 
@@ -64,13 +67,16 @@ func (s *TransferQueryService) GetBatchStatus(ctx context.Context, query port.Ba
 	if err != nil {
 		return port.BatchStatusResult{}, err
 	}
+
 	items, err := s.transfers.ListBatchItems(ctx, query.TenantID, query.BatchID)
 	if err != nil {
 		return port.BatchStatusResult{}, err
 	}
+
 	statuses := make([]port.BatchItemStatus, 0, len(items))
 	succeeded := 0
 	failed := 0
+
 	for _, item := range items {
 		switch item.Status {
 		case port.TransferCompleted:
@@ -78,10 +84,12 @@ func (s *TransferQueryService) GetBatchStatus(ctx context.Context, query port.Ba
 		case port.TransferFailed:
 			failed++
 		}
+
 		statuses = append(statuses, port.BatchItemStatus{
 			Index: item.Index, TransferID: item.TransferID, Status: item.Status, ErrorCode: item.ErrorCode,
 		})
 	}
+
 	return port.BatchStatusResult{
 		BatchID: batch.ID, State: batch.State, Succeeded: succeeded, Failed: failed, Items: statuses,
 	}, nil

@@ -1,7 +1,6 @@
 package event
 
 import (
-	"errors"
 	"time"
 )
 
@@ -18,13 +17,15 @@ type DisputeOpenedPayload struct {
 }
 
 // NewDisputeOpened builds dispute.opened.v1.
-func NewDisputeOpened(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload DisputeOpenedPayload, meta EventMetadata) (TypedEvent[DisputeOpenedPayload], error) {
+func NewDisputeOpened(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload DisputeOpenedPayload, meta Metadata) (TypedEvent[DisputeOpenedPayload], error) {
 	if err := requireIDs(map[string]string{"dispute_id": payload.DisputeID, fieldTenantID: payload.TenantID, "transaction_id": payload.TransactionID, "network": payload.Network}); err != nil {
 		return TypedEvent[DisputeOpenedPayload]{}, err
 	}
+
 	if payload.AmountMinor <= 0 {
-		return TypedEvent[DisputeOpenedPayload]{}, errors.New("event: amount_minor must be positive")
+		return TypedEvent[DisputeOpenedPayload]{}, ErrEventAmountMinorMustBePositive
 	}
+
 	return newTyped("dispute.opened.v1", eventID, aggregateID, "Dispute", occurredAt, version, seq, payload, meta)
 }
 
@@ -38,12 +39,14 @@ type DisputeClosedPayload struct {
 }
 
 // NewDisputeClosed builds dispute.closed.v1.
-func NewDisputeClosed(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload DisputeClosedPayload, meta EventMetadata) (TypedEvent[DisputeClosedPayload], error) {
+func NewDisputeClosed(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload DisputeClosedPayload, meta Metadata) (TypedEvent[DisputeClosedPayload], error) {
 	if err := requireIDs(map[string]string{"dispute_id": payload.DisputeID, fieldTenantID: payload.TenantID}); err != nil {
 		return TypedEvent[DisputeClosedPayload]{}, err
 	}
+
 	if payload.Outcome != "WON" && payload.Outcome != "LOST" {
-		return TypedEvent[DisputeClosedPayload]{}, errors.New("event: outcome must be WON or LOST")
+		return TypedEvent[DisputeClosedPayload]{}, ErrEventOutcomeMustBeWONOrLOST
 	}
+
 	return newTyped("dispute.closed.v1", eventID, aggregateID, "Dispute", occurredAt, version, seq, payload, meta)
 }

@@ -14,7 +14,7 @@ import (
 //go:embed ratelimit.lua
 var rateLimitScript string
 
-// ScriptRunner is the Lua-eval seam (DIP): the production *ValkeyClient
+// ScriptRunner is the Lua-eval seam (DIP): the production *Client
 // implements it and tests use a canned fake, so Allow decisions are
 // unit-testable without Docker.
 type ScriptRunner interface {
@@ -22,7 +22,7 @@ type ScriptRunner interface {
 }
 
 // Compile-time seam conformance for the production client.
-var _ ScriptRunner = (*ValkeyClient)(nil)
+var _ ScriptRunner = (*Client)(nil)
 
 // LimiterParams carries constructor dependencies (Parameter Object pattern).
 type LimiterParams struct {
@@ -47,11 +47,11 @@ var _ appport.RateLimiter = (*RateLimiter)(nil)
 // NewRateLimiter builds the limiter; Client must be non-nil.
 func NewRateLimiter(params LimiterParams) (*RateLimiter, error) {
 	if params.Client == nil {
-		return nil, fmt.Errorf("ratelimit: valkey client is required")
+		return nil, ErrRatelimitValkeyClientIsRequired
 	}
 
 	if rateLimitScript == "" {
-		return nil, fmt.Errorf("ratelimit: lua script is not embedded")
+		return nil, ErrRatelimitLuaScriptIsNotEmbedded
 	}
 
 	return &RateLimiter{
@@ -65,19 +65,19 @@ func NewRateLimiter(params LimiterParams) (*RateLimiter, error) {
 // Allow checks one key against budget per window.
 func (l *RateLimiter) Allow(ctx context.Context, key string, budget int64, window time.Duration) (appport.RateLimitDecision, error) {
 	if l == nil || l.client == nil {
-		return appport.RateLimitDecision{}, fmt.Errorf("ratelimit: not initialized")
+		return appport.RateLimitDecision{}, ErrRatelimitNotInitialized
 	}
 
 	if key == "" {
-		return appport.RateLimitDecision{}, fmt.Errorf("ratelimit: key is required")
+		return appport.RateLimitDecision{}, ErrRatelimitKeyIsRequired
 	}
 
 	if budget <= 0 {
-		return appport.RateLimitDecision{}, fmt.Errorf("ratelimit: budget must be positive")
+		return appport.RateLimitDecision{}, ErrRatelimitBudgetMustBePositive
 	}
 
 	if window <= 0 {
-		return appport.RateLimitDecision{}, fmt.Errorf("ratelimit: window must be positive")
+		return appport.RateLimitDecision{}, ErrRatelimitWindowMustBePositive
 	}
 
 	if err := ctx.Err(); err != nil {
@@ -123,7 +123,7 @@ func (l *RateLimiter) Allow(ctx context.Context, key string, budget int64, windo
 func parseDecision(raw any) (bool, int64, int64, error) {
 	parts, ok := raw.([]any)
 	if !ok || len(parts) != 3 {
-		return false, 0, 0, fmt.Errorf("ratelimit: unexpected script result %T", raw)
+		return false, 0, 0, fmt.Errorf("ratelimit: unexpected script result %T: %w", raw, ErrRatelimitUnexpectedScriptResult)
 	}
 
 	allowedNum, err := toInt64(parts[0])
@@ -162,6 +162,6 @@ func toInt64(value any) (int64, error) {
 
 		return parsed, nil
 	default:
-		return 0, fmt.Errorf("unexpected number %T", value)
+		return 0, fmt.Errorf("unexpected number %T: %w", value, ErrUnexpectedNumber)
 	}
 }

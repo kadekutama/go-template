@@ -1,7 +1,6 @@
 package valueobject
 
 import (
-	"errors"
 	"fmt"
 	"time"
 )
@@ -43,6 +42,7 @@ func NewRegistry(infos ...AssetInfo) (Registry, error) {
 			return Registry{}, err
 		}
 	}
+
 	return r, nil
 }
 
@@ -50,26 +50,32 @@ func NewRegistry(infos ...AssetInfo) (Registry, error) {
 // exponents, and duplicates.
 func (r *Registry) Register(info AssetInfo) error {
 	if info.Code == "" {
-		return errors.New("currency: asset code is required")
+		return ErrCurrencyAssetCodeIsRequired
 	}
+
 	if info.Exponent < 0 {
-		return fmt.Errorf("currency: negative exponent for %q", info.Code)
+		return fmt.Errorf("currency: negative exponent for %q: %w", info.Code, ErrCurrencyNegativeExponentFor)
 	}
+
 	if r.assets == nil {
 		r.assets = make(map[AssetCode]AssetInfo)
 	}
+
 	if _, exists := r.assets[info.Code]; exists {
-		return fmt.Errorf("currency: duplicate asset code %q", info.Code)
+		return fmt.Errorf("currency: duplicate asset code %q: %w", info.Code, ErrCurrencyDuplicateAssetCode)
 	}
+
 	r.assets[info.Code] = info
+
 	return nil
 }
 
 // Lookup returns the registry entry for code or an error when unknown.
-func (r Registry) Lookup(code AssetCode) (AssetInfo, error) {
+func (r *Registry) Lookup(code AssetCode) (AssetInfo, error) {
 	info, ok := r.assets[code]
 	if !ok {
-		return AssetInfo{}, fmt.Errorf("currency: unknown asset code %q", code)
+		return AssetInfo{}, fmt.Errorf("currency: unknown asset code %q: %w", code, ErrCurrencyUnknownAssetCode)
 	}
+
 	return info, nil
 }

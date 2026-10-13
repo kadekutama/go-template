@@ -1,7 +1,7 @@
 package valueobject_test
 
 import (
-	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -54,30 +54,32 @@ func TestParseApproval(t *testing.T) {
 			name:           "invalid status",
 			s:              "PENDING",
 			expectedResult: valueobject.BreakStatus(""),
-			expectedError:  errors.New(`reconciliation: invalid break status "PENDING"`),
+			expectedError:  fmt.Errorf("reconciliation: invalid break status %q: %w", "PENDING", valueobject.ErrReconciliationInvalidBreakStatus),
 		},
 		{
 			name:           "empty status",
 			s:              "",
 			expectedResult: valueobject.BreakStatus(""),
-			expectedError:  errors.New(`reconciliation: invalid break status ""`),
+			expectedError:  fmt.Errorf("reconciliation: invalid break status %q: %w", "", valueobject.ErrReconciliationInvalidBreakStatus),
 		},
 		{
 			name:           "whitespace status",
 			s:              "   ",
 			expectedResult: valueobject.BreakStatus(""),
-			expectedError:  errors.New(`reconciliation: invalid break status "   "`),
+			expectedError:  fmt.Errorf("reconciliation: invalid break status %q: %w", "   ", valueobject.ErrReconciliationInvalidBreakStatus),
 		},
 		{
 			name:           "lowercase status rejected",
 			s:              "open",
 			expectedResult: valueobject.BreakStatus(""),
-			expectedError:  errors.New(`reconciliation: invalid break status "open"`),
+			expectedError:  fmt.Errorf("reconciliation: invalid break status %q: %w", "open", valueobject.ErrReconciliationInvalidBreakStatus),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := valueobject.ParseBreakStatus(tc.s)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -124,30 +126,32 @@ func TestParseResolutionAction(t *testing.T) {
 			name:           "invalid action",
 			s:              "DELETE",
 			expectedResult: valueobject.ResolutionAction(""),
-			expectedError:  errors.New(`reconciliation: invalid resolution action "DELETE"`),
+			expectedError:  fmt.Errorf("reconciliation: invalid resolution action %q: %w", "DELETE", valueobject.ErrReconciliationInvalidResolutionAction),
 		},
 		{
 			name:           "empty action",
 			s:              "",
 			expectedResult: valueobject.ResolutionAction(""),
-			expectedError:  errors.New(`reconciliation: invalid resolution action ""`),
+			expectedError:  fmt.Errorf("reconciliation: invalid resolution action %q: %w", "", valueobject.ErrReconciliationInvalidResolutionAction),
 		},
 		{
 			name:           "whitespace action",
 			s:              "   ",
 			expectedResult: valueobject.ResolutionAction(""),
-			expectedError:  errors.New(`reconciliation: invalid resolution action "   "`),
+			expectedError:  fmt.Errorf("reconciliation: invalid resolution action %q: %w", "   ", valueobject.ErrReconciliationInvalidResolutionAction),
 		},
 		{
 			name:           "lowercase action rejected",
 			s:              "acknowledge",
 			expectedResult: valueobject.ResolutionAction(""),
-			expectedError:  errors.New(`reconciliation: invalid resolution action "acknowledge"`),
+			expectedError:  fmt.Errorf("reconciliation: invalid resolution action %q: %w", "acknowledge", valueobject.ErrReconciliationInvalidResolutionAction),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := valueobject.ParseResolutionAction(tc.s)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -278,6 +282,8 @@ func TestCanTransitionBreak(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := valueobject.CanTransitionBreak(tc.from, tc.action)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})

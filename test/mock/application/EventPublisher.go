@@ -25,11 +25,11 @@ func (_m *MockEventPublisher) EXPECT() *MockEventPublisher_Expecter {
 
 // Publish provides a mock function with given fields: ctx, facts
 func (_m *MockEventPublisher) Publish(ctx context.Context, facts ...port.OutboxFact) error {
-	_va := make([]interface{}, len(facts))
+	_va := make([]any, len(facts))
 	for _i := range facts {
 		_va[_i] = facts[_i]
 	}
-	var _ca []interface{}
+	var _ca []any
 	_ca = append(_ca, ctx)
 	_ca = append(_ca, _va...)
 	ret := _m.Called(_ca...)
@@ -56,9 +56,9 @@ type MockEventPublisher_Publish_Call struct {
 // Publish is a helper method to define mock.On call
 //   - ctx context.Context
 //   - facts ...port.OutboxFact
-func (_e *MockEventPublisher_Expecter) Publish(ctx interface{}, facts ...interface{}) *MockEventPublisher_Publish_Call {
+func (_e *MockEventPublisher_Expecter) Publish(ctx any, facts ...any) *MockEventPublisher_Publish_Call {
 	return &MockEventPublisher_Publish_Call{Call: _e.mock.On("Publish",
-		append([]interface{}{ctx}, facts...)...)}
+		append([]any{ctx}, facts...)...)}
 }
 
 func (_c *MockEventPublisher_Publish_Call) Run(run func(ctx context.Context, facts ...port.OutboxFact)) *MockEventPublisher_Publish_Call {

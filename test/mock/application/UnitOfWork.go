@@ -49,7 +49,7 @@ type MockUnitOfWork_Do_Call struct {
 // Do is a helper method to define mock.On call
 //   - ctx context.Context
 //   - fn func(context.Context , port.Tx) error
-func (_e *MockUnitOfWork_Expecter) Do(ctx interface{}, fn interface{}) *MockUnitOfWork_Do_Call {
+func (_e *MockUnitOfWork_Expecter) Do(ctx any, fn any) *MockUnitOfWork_Do_Call {
 	return &MockUnitOfWork_Do_Call{Call: _e.mock.On("Do", ctx, fn)}
 }
 

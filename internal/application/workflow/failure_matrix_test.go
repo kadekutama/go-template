@@ -2,7 +2,6 @@ package workflow_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,12 +26,29 @@ func TestSagaFailureDBCrashMidTransaction(t *testing.T) {
 		ReserveFunds: func(context.Context) error {
 			effects.apply("saga-db:reserve-funds")
 			cancel()
+
 			return nil
 		},
-		ReleaseReservation: func(context.Context) error { effects.apply("saga-db:release"); return nil },
-		PostTransfer:       func(context.Context) error { effects.apply("saga-db:post"); return nil },
-		VoidPosting:        func(context.Context) error { effects.apply("saga-db:void"); return nil },
-		Notify:             func(context.Context) error { effects.apply("saga-db:notify"); return nil },
+		ReleaseReservation: func(context.Context) error {
+			effects.apply("saga-db:release")
+
+			return nil
+		},
+		PostTransfer: func(context.Context) error {
+			effects.apply("saga-db:post")
+
+			return nil
+		},
+		VoidPosting: func(context.Context) error {
+			effects.apply("saga-db:void")
+
+			return nil
+		},
+		Notify: func(context.Context) error {
+			effects.apply("saga-db:notify")
+
+			return nil
+		},
 	})
 
 	_, err := runner.Start(ctx, "t-1", "transfer", "saga-db", steps)
@@ -41,9 +57,11 @@ func TestSagaFailureDBCrashMidTransaction(t *testing.T) {
 	resumed, err := runner.Resume(context.Background(), "t-1", "saga-db", steps)
 	require.NoError(t, err)
 	assert.Equal(t, workflow.SagaCompleted, resumed.State)
+
 	for _, key := range []string{"saga-db:reserve-funds", "saga-db:post", "saga-db:notify"} {
 		assert.Equal(t, 1, effects.count(key), "effect %s applied once", key)
 	}
+
 	assert.Equal(t, 0, effects.count("saga-db:void"))
 	assert.Equal(t, 0, effects.count("saga-db:release"))
 }
@@ -59,16 +77,27 @@ func TestSagaFailureCacheDown(t *testing.T) {
 	cacheAvailable := false
 
 	steps := workflow.TransferSteps(workflow.TransferActions{
-		ReserveFunds:       func(context.Context) error { effects.apply("saga-cache:reserve"); return nil },
+		ReserveFunds: func(context.Context) error {
+			effects.apply("saga-cache:reserve")
+
+			return nil
+		},
 		ReleaseReservation: func(context.Context) error { return nil },
-		PostTransfer:       func(context.Context) error { effects.apply("saga-cache:post"); return nil },
-		VoidPosting:        func(context.Context) error { return nil },
+		PostTransfer: func(context.Context) error {
+			effects.apply("saga-cache:post")
+
+			return nil
+		},
+		VoidPosting: func(context.Context) error { return nil },
 		Notify: func(context.Context) error {
 			if !cacheAvailable {
 				effects.apply("saga-cache:notify-direct")
+
 				return nil
 			}
+
 			effects.apply("saga-cache:notify-cached")
+
 			return nil
 		},
 	})
@@ -91,11 +120,27 @@ func TestSagaFailureNatsDown(t *testing.T) {
 	holds := &keyedEffects{}
 
 	steps := workflow.PayoutSettlementSteps(workflow.PayoutSettlementActions{
-		SubmitPayout:   func(context.Context) error { ledgerWrites.apply("submit"); return nil },
-		HoldForFailure: func(context.Context) error { holds.apply("hold"); return nil },
-		SettlePayout:   func(context.Context) error { ledgerWrites.apply("settle"); return nil },
-		MarkUnsettled:  func(context.Context) error { holds.apply("unsettled"); return nil },
-		Notify:         func(context.Context) error { return errors.New("nats: ack timeout") },
+		SubmitPayout: func(context.Context) error {
+			ledgerWrites.apply("submit")
+
+			return nil
+		},
+		HoldForFailure: func(context.Context) error {
+			holds.apply("hold")
+
+			return nil
+		},
+		SettlePayout: func(context.Context) error {
+			ledgerWrites.apply("settle")
+
+			return nil
+		},
+		MarkUnsettled: func(context.Context) error {
+			holds.apply("unsettled")
+
+			return nil
+		},
+		Notify: func(context.Context) error { return workflow.ErrNatsAckTimeout },
 	})
 
 	record, err := runner.Start(context.Background(), "t-1", "payout-settlement", "saga-nats", steps)
@@ -115,7 +160,7 @@ func TestSagaFailureProcessorTimeout(t *testing.T) {
 	store := newMockSagaStore(t)
 	runner := newRunner(t, store)
 	charges := map[string]int{}
-	timeout := errors.New("processor timeout")
+	timeout := workflow.ErrProcessorTimeout
 
 	steps := workflow.RefundSteps(workflow.RefundActions{
 		ValidateWindow: func(context.Context) error { return nil },
@@ -124,6 +169,7 @@ func TestSagaFailureProcessorTimeout(t *testing.T) {
 			if charges["refund:saga-proc"] == 1 {
 				return timeout
 			}
+
 			return nil
 		},
 		LinkReversal: func(context.Context) error { return nil },
@@ -172,8 +218,16 @@ func TestSagaFailureReconBreak(t *testing.T) {
 	breaks := &keyedEffects{}
 
 	steps := workflow.ReconciliationSteps(workflow.ReconciliationActions{
-		MatchStatements: func(context.Context) error { breaks.apply("break:ref-9"); return nil },
-		ResolveBreaks:   func(context.Context) error { breaks.apply("resolved:ref-9"); return nil },
+		MatchStatements: func(context.Context) error {
+			breaks.apply("break:ref-9")
+
+			return nil
+		},
+		ResolveBreaks: func(context.Context) error {
+			breaks.apply("resolved:ref-9")
+
+			return nil
+		},
 	})
 
 	record, err := runner.Start(context.Background(), "t-1", "reconciliation", "saga-recon", steps)
@@ -193,9 +247,21 @@ func TestSagaFailureDuplicateSubmit(t *testing.T) {
 	effects := &keyedEffects{}
 
 	steps := workflow.BatchSteps(workflow.BatchActions{
-		IntakeBatch:  func(context.Context) error { effects.apply("saga-dup:intake"); return nil },
-		ExecuteItems: func(context.Context) error { effects.apply("saga-dup:items"); return nil },
-		CloseBatch:   func(context.Context) error { effects.apply("saga-dup:close"); return nil },
+		IntakeBatch: func(context.Context) error {
+			effects.apply("saga-dup:intake")
+
+			return nil
+		},
+		ExecuteItems: func(context.Context) error {
+			effects.apply("saga-dup:items")
+
+			return nil
+		},
+		CloseBatch: func(context.Context) error {
+			effects.apply("saga-dup:close")
+
+			return nil
+		},
 	})
 
 	first, err := runner.Start(context.Background(), "t-1", "batch", "saga-dup", steps)
@@ -220,12 +286,17 @@ func TestSagaFailureAuthExpiry(t *testing.T) {
 			Name: "capture-or-void", MaxAttempts: 1,
 			Run: func(context.Context) error {
 				effects.apply("void+notify-pending")
+
 				return nil
 			},
 		},
 		{
 			Name: "notify", MaxAttempts: 1,
-			Run: func(context.Context) error { effects.apply("void+notify"); return nil },
+			Run: func(context.Context) error {
+				effects.apply("void+notify")
+
+				return nil
+			},
 		},
 	}
 
@@ -246,13 +317,25 @@ func TestSagaFailureOverCapture(t *testing.T) {
 	effects := &keyedEffects{}
 
 	steps := workflow.TransferSteps(workflow.TransferActions{
-		ReserveFunds:       func(context.Context) error { effects.apply("saga-cap:reserve"); return nil },
-		ReleaseReservation: func(context.Context) error { effects.apply("saga-cap:release"); return nil },
+		ReserveFunds: func(context.Context) error {
+			effects.apply("saga-cap:reserve")
+
+			return nil
+		},
+		ReleaseReservation: func(context.Context) error {
+			effects.apply("saga-cap:release")
+
+			return nil
+		},
 		PostTransfer: func(context.Context) error {
 			return &entity.Error{Code: "CAPTURE_EXCEEDS_AUTHORIZED", Message: "capture exceeds authorized amount; remaining=2000"}
 		},
-		VoidPosting: func(context.Context) error { effects.apply("saga-cap:void"); return nil },
-		Notify:      func(context.Context) error { return nil },
+		VoidPosting: func(context.Context) error {
+			effects.apply("saga-cap:void")
+
+			return nil
+		},
+		Notify: func(context.Context) error { return nil },
 	})
 
 	_, err := runner.Start(context.Background(), "t-1", "transfer", "saga-cap", steps)
@@ -273,9 +356,17 @@ func TestSagaFailureDisputeLost(t *testing.T) {
 
 	steps := workflow.RefundSteps(workflow.RefundActions{
 		ValidateWindow: func(context.Context) error { return nil },
-		ExecuteRefund:  func(context.Context) error { effects.apply("reversal-linked"); return nil },
-		LinkReversal:   func(context.Context) error { return nil },
-		Notify:         func(context.Context) error { effects.apply("notify"); return nil },
+		ExecuteRefund: func(context.Context) error {
+			effects.apply("reversal-linked")
+
+			return nil
+		},
+		LinkReversal: func(context.Context) error { return nil },
+		Notify: func(context.Context) error {
+			effects.apply("notify")
+
+			return nil
+		},
 	})
 
 	record, err := runner.Start(context.Background(), "t-1", "refund", "saga-dispute", steps)
@@ -297,7 +388,11 @@ func TestSagaFailurePeriodGates(t *testing.T) {
 		ValidateGates: func(context.Context) error {
 			return entity.NewError("BREAKS_OPEN", "period has open reconciliation breaks")
 		},
-		ClosePeriod: func(context.Context) error { effects.apply("close"); return nil },
+		ClosePeriod: func(context.Context) error {
+			effects.apply("close")
+
+			return nil
+		},
 	})
 
 	record, err := runner.Start(context.Background(), "t-1", "period-close", "saga-period", steps)

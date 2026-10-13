@@ -8,10 +8,10 @@ import (
 	"context"
 )
 
-// QueryHandler answers one read-model question with an ordinary Go return.
+// Handler answers one read-model question with an ordinary Go return.
 // Pagination uses opaque cursors owned by the adapter; strong reads name
 // their consistency in the concrete contract.
-type QueryHandler[Q any, R any] interface {
+type Handler[Q any, R any] interface {
 	// Handle answers query without business side effects.
 	Handle(ctx context.Context, query Q) (R, error)
 }

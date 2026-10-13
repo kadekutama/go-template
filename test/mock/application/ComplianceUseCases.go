@@ -51,7 +51,7 @@ type MockComplianceUseCases_AcknowledgeBreak_Call struct {
 // AcknowledgeBreak is a helper method to define mock.On call
 //   - ctx context.Context
 //   - req port.BreakResolutionRequest
-func (_e *MockComplianceUseCases_Expecter) AcknowledgeBreak(ctx interface{}, req interface{}) *MockComplianceUseCases_AcknowledgeBreak_Call {
+func (_e *MockComplianceUseCases_Expecter) AcknowledgeBreak(ctx any, req any) *MockComplianceUseCases_AcknowledgeBreak_Call {
 	return &MockComplianceUseCases_AcknowledgeBreak_Call{Call: _e.mock.On("AcknowledgeBreak", ctx, req)}
 }
 
@@ -98,7 +98,7 @@ type MockComplianceUseCases_ClosePeriod_Call struct {
 // ClosePeriod is a helper method to define mock.On call
 //   - ctx context.Context
 //   - req port.PeriodRequest
-func (_e *MockComplianceUseCases_Expecter) ClosePeriod(ctx interface{}, req interface{}) *MockComplianceUseCases_ClosePeriod_Call {
+func (_e *MockComplianceUseCases_Expecter) ClosePeriod(ctx any, req any) *MockComplianceUseCases_ClosePeriod_Call {
 	return &MockComplianceUseCases_ClosePeriod_Call{Call: _e.mock.On("ClosePeriod", ctx, req)}
 }
 
@@ -155,7 +155,7 @@ type MockComplianceUseCases_ExportRegulatoryReport_Call struct {
 // ExportRegulatoryReport is a helper method to define mock.On call
 //   - ctx context.Context
 //   - req port.RegulatoryExportRequest
-func (_e *MockComplianceUseCases_Expecter) ExportRegulatoryReport(ctx interface{}, req interface{}) *MockComplianceUseCases_ExportRegulatoryReport_Call {
+func (_e *MockComplianceUseCases_Expecter) ExportRegulatoryReport(ctx any, req any) *MockComplianceUseCases_ExportRegulatoryReport_Call {
 	return &MockComplianceUseCases_ExportRegulatoryReport_Call{Call: _e.mock.On("ExportRegulatoryReport", ctx, req)}
 }
 
@@ -212,7 +212,7 @@ type MockComplianceUseCases_GenerateReport_Call struct {
 // GenerateReport is a helper method to define mock.On call
 //   - ctx context.Context
 //   - req port.ReportRequest
-func (_e *MockComplianceUseCases_Expecter) GenerateReport(ctx interface{}, req interface{}) *MockComplianceUseCases_GenerateReport_Call {
+func (_e *MockComplianceUseCases_Expecter) GenerateReport(ctx any, req any) *MockComplianceUseCases_GenerateReport_Call {
 	return &MockComplianceUseCases_GenerateReport_Call{Call: _e.mock.On("GenerateReport", ctx, req)}
 }
 
@@ -259,7 +259,7 @@ type MockComplianceUseCases_OpenPeriod_Call struct {
 // OpenPeriod is a helper method to define mock.On call
 //   - ctx context.Context
 //   - req port.PeriodRequest
-func (_e *MockComplianceUseCases_Expecter) OpenPeriod(ctx interface{}, req interface{}) *MockComplianceUseCases_OpenPeriod_Call {
+func (_e *MockComplianceUseCases_Expecter) OpenPeriod(ctx any, req any) *MockComplianceUseCases_OpenPeriod_Call {
 	return &MockComplianceUseCases_OpenPeriod_Call{Call: _e.mock.On("OpenPeriod", ctx, req)}
 }
 
@@ -306,7 +306,7 @@ type MockComplianceUseCases_RecordScreeningDecision_Call struct {
 // RecordScreeningDecision is a helper method to define mock.On call
 //   - ctx context.Context
 //   - req port.ScreeningRequest
-func (_e *MockComplianceUseCases_Expecter) RecordScreeningDecision(ctx interface{}, req interface{}) *MockComplianceUseCases_RecordScreeningDecision_Call {
+func (_e *MockComplianceUseCases_Expecter) RecordScreeningDecision(ctx any, req any) *MockComplianceUseCases_RecordScreeningDecision_Call {
 	return &MockComplianceUseCases_RecordScreeningDecision_Call{Call: _e.mock.On("RecordScreeningDecision", ctx, req)}
 }
 
@@ -353,7 +353,7 @@ type MockComplianceUseCases_ReopenPeriod_Call struct {
 // ReopenPeriod is a helper method to define mock.On call
 //   - ctx context.Context
 //   - req port.PeriodRequest
-func (_e *MockComplianceUseCases_Expecter) ReopenPeriod(ctx interface{}, req interface{}) *MockComplianceUseCases_ReopenPeriod_Call {
+func (_e *MockComplianceUseCases_Expecter) ReopenPeriod(ctx any, req any) *MockComplianceUseCases_ReopenPeriod_Call {
 	return &MockComplianceUseCases_ReopenPeriod_Call{Call: _e.mock.On("ReopenPeriod", ctx, req)}
 }
 
@@ -411,7 +411,7 @@ type MockComplianceUseCases_ReportStatus_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - reportID string
-func (_e *MockComplianceUseCases_Expecter) ReportStatus(ctx interface{}, tenant interface{}, reportID interface{}) *MockComplianceUseCases_ReportStatus_Call {
+func (_e *MockComplianceUseCases_Expecter) ReportStatus(ctx any, tenant any, reportID any) *MockComplianceUseCases_ReportStatus_Call {
 	return &MockComplianceUseCases_ReportStatus_Call{Call: _e.mock.On("ReportStatus", ctx, tenant, reportID)}
 }
 
@@ -458,7 +458,7 @@ type MockComplianceUseCases_ResolveBreak_Call struct {
 // ResolveBreak is a helper method to define mock.On call
 //   - ctx context.Context
 //   - req port.BreakResolutionRequest
-func (_e *MockComplianceUseCases_Expecter) ResolveBreak(ctx interface{}, req interface{}) *MockComplianceUseCases_ResolveBreak_Call {
+func (_e *MockComplianceUseCases_Expecter) ResolveBreak(ctx any, req any) *MockComplianceUseCases_ResolveBreak_Call {
 	return &MockComplianceUseCases_ResolveBreak_Call{Call: _e.mock.On("ResolveBreak", ctx, req)}
 }
 
@@ -515,7 +515,7 @@ type MockComplianceUseCases_TriggerReconRun_Call struct {
 // TriggerReconRun is a helper method to define mock.On call
 //   - ctx context.Context
 //   - req port.ReconRunRequest
-func (_e *MockComplianceUseCases_Expecter) TriggerReconRun(ctx interface{}, req interface{}) *MockComplianceUseCases_TriggerReconRun_Call {
+func (_e *MockComplianceUseCases_Expecter) TriggerReconRun(ctx any, req any) *MockComplianceUseCases_TriggerReconRun_Call {
 	return &MockComplianceUseCases_TriggerReconRun_Call{Call: _e.mock.On("TriggerReconRun", ctx, req)}
 }
 

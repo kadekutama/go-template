@@ -2,7 +2,7 @@ package command_test
 
 import (
 	"context"
-	"fmt"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -25,7 +25,9 @@ const (
 	postCurrency = valueobject.AssetCode("USD")
 )
 
-var postAt = time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
+func postAt() time.Time {
+	return time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
+}
 
 func postTestAccounts() map[valueobject.AccountID]entity.AccountData {
 	return map[valueobject.AccountID]entity.AccountData{
@@ -51,10 +53,12 @@ func postTestCommand() port.PostPostingCommand {
 }
 
 func newPostingService(t *testing.T, uow port.UnitOfWork, authz port.Authorizer, idCount int) *command.PostingService {
+	t.Helper()
+
 	return command.NewPostingService(command.PostingServiceParams{
 		UoW:      uow,
 		Accounts: newMockAccountRepository(t, postTestAccounts()),
-		Clock:    newMockClock(t, postAt),
+		Clock:    newMockClock(t, postAt()),
 		IDs:      newMockIDGenerator(t, postTestIDs(idCount)...),
 		Authz:    authz,
 	})
@@ -97,10 +101,14 @@ func TestPostingServiceExecute(t *testing.T) {
 			cmd:  postTestCommand(),
 			preload: func(_ *command.PostingService, uow port.UnitOfWork) {
 				cmd := postTestCommand()
-				parts := []string{cmd.IdempotencyKey, string(cmd.TenantID), string(cmd.LedgerID), cmd.Operation, cmd.ExternalReference}
+
+				parts := make([]string, 0, 5+4*len(cmd.Entries))
+
+				parts = append(parts, cmd.IdempotencyKey, string(cmd.TenantID), string(cmd.LedgerID), cmd.Operation, cmd.ExternalReference)
 				for _, line := range cmd.Entries {
-					parts = append(parts, string(line.AccountID), string(line.Side), fmt.Sprintf("%d", line.AmountMinor), string(line.AssetCode))
+					parts = append(parts, string(line.AccountID), string(line.Side), strconv.FormatInt(line.AmountMinor, 10), string(line.AssetCode))
 				}
+
 				setUOWIdem(uow, cmd.IdempotencyKey, command.Fingerprint(parts...), []byte("{corrupt-json"))
 			},
 			expectedResult:     port.PostingResult{},
@@ -114,6 +122,7 @@ func TestPostingServiceExecute(t *testing.T) {
 			cmd: func() port.PostPostingCommand {
 				c := postTestCommand()
 				c.Entries[0].AccountID = "a-ghost"
+
 				return c
 			}(),
 			preload:            func(_ *command.PostingService, _ port.UnitOfWork) {},
@@ -129,6 +138,7 @@ func TestPostingServiceExecute(t *testing.T) {
 			cmd: func() port.PostPostingCommand {
 				c := postTestCommand()
 				c.Entries[1].AmountMinor = 4000
+
 				return c
 			}(),
 			preload:            func(_ *command.PostingService, _ port.UnitOfWork) {},
@@ -164,6 +174,7 @@ func TestPostingServiceExecute(t *testing.T) {
 				c := postTestCommand()
 				c.Entries[1].AmountMinor = 4000
 				c.Description = "changed"
+
 				return c
 			}(),
 			preload: func(svc *command.PostingService, _ port.UnitOfWork) {
@@ -193,6 +204,7 @@ func TestPostingServiceExecute(t *testing.T) {
 			cmd: func() port.PostPostingCommand {
 				c := postTestCommand()
 				c.IdempotencyKey = ""
+
 				return c
 			}(),
 			preload:            func(_ *command.PostingService, _ port.UnitOfWork) {},
@@ -208,6 +220,7 @@ func TestPostingServiceExecute(t *testing.T) {
 			cmd: func() port.PostPostingCommand {
 				c := postTestCommand()
 				c.Actor = "  "
+
 				return c
 			}(),
 			preload:            func(_ *command.PostingService, _ port.UnitOfWork) {},
@@ -222,11 +235,14 @@ func TestPostingServiceExecute(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t, "cursor-7")
+
 			authz := newMockAuthorizer(t)
 			if tc.denied {
 				setAuthzDenied(authz, "u-1|ledger.post|ledger/"+string(postLedger))
 			}
+
 			svc := newPostingService(t, uow, authz, 20)
 			tc.preload(svc, uow)
 			actualResult, err := svc.Execute(context.Background(), tc.cmd)
@@ -244,6 +260,7 @@ func TestPostingServiceUnknownOutcome(t *testing.T) {
 
 	uow := newMockUOW(t, "cursor-7")
 	setUOWFailAfterCommit(uow, true)
+
 	authz := newMockAuthorizer(t)
 	svc := newPostingService(t, uow, authz, 20)
 
@@ -253,6 +270,7 @@ func TestPostingServiceUnknownOutcome(t *testing.T) {
 	assert.Equal(t, 1, uowCommitCount(uow))
 
 	setUOWFailAfterCommit(uow, false)
+
 	actualResult, err = svc.Execute(context.Background(), postTestCommand())
 	assert.NoError(t, err)
 	assert.Equal(t, port.PostingResult{
@@ -272,22 +290,27 @@ func TestPostingServiceConcurrent(t *testing.T) {
 	svc := newPostingService(t, uow, authz, 100)
 
 	const callers = 8
+
 	results := make([]port.PostingResult, callers)
 	errs := make([]error, callers)
+
 	var wg sync.WaitGroup
-	for i := 0; i < callers; i++ {
+	for i := range callers {
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
+
 			results[index], errs[index] = svc.Execute(context.Background(), postTestCommand())
 		}(i)
 	}
+
 	wg.Wait()
 
-	for i := 0; i < callers; i++ {
+	for i := range callers {
 		assert.NoError(t, errs[i])
 		assert.Equal(t, results[0], results[i])
 	}
+
 	assert.NotEmpty(t, results[0].PostingID)
 	assert.Equal(t, 1, uowCommitCount(uow))
 	assert.Equal(t, 1, uowOutboxLen(uow))

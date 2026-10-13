@@ -2,7 +2,7 @@ package command_test
 
 import (
 	"context"
-	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -23,12 +23,14 @@ func eligiblePolicy() valueobject.PayoutPolicy {
 }
 
 func newPayoutService(t *testing.T, uow port.UnitOfWork, store command.PayoutStore, available int64, authz port.Authorizer) *command.PayoutService {
+	t.Helper()
+
 	return command.NewPayoutService(command.PayoutServiceParams{
 		UoW:            uow,
 		Payouts:        store,
 		Balances:       newMockBalances(t, map[valueobject.AccountID]int64{tfrSrc: available}),
 		TransitAccount: "a-transit",
-		Clock:          newMockClock(t, tfrAt),
+		Clock:          newMockClock(t, tfrAt()),
 		IDs:            newMockIDGenerator(t, tfrTestIDs(40)...),
 		Authz:          authz,
 	})
@@ -80,7 +82,7 @@ func TestPayoutCreate(t *testing.T) {
 				req := payoutTestCommand()
 				fp := command.Fingerprint(
 					req.IdempotencyKey, string(req.TenantID), string(req.AccountID),
-					fmt.Sprintf("%d", req.AmountMinor), string(req.AssetCode), string(req.Method),
+					strconv.FormatInt(req.AmountMinor, 10), string(req.AssetCode), string(req.Method),
 				)
 				setUOWIdem(uow, req.IdempotencyKey, fp, []byte("{corrupt-json"))
 			},
@@ -214,6 +216,7 @@ func TestPayoutCreate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t)
 			store := newMockPayoutStore(t, eligiblePolicy())
 			authz := newMockAuthorizer(t)
@@ -223,9 +226,11 @@ func TestPayoutCreate(t *testing.T) {
 			tc.preload(uow, svc)
 			actualResult, err := svc.CreatePayout(context.Background(), cmd)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, tc.expectedStatus, actualResult.Status)
 			}
+
 			store.AssertNumberOfCalls(t, "CreatePayout", tc.expectedRecords)
 		})
 	}
@@ -236,8 +241,10 @@ func TestPayoutCancel(t *testing.T) {
 
 	seedPending := func(t *testing.T, svc *command.PayoutService) string {
 		t.Helper()
+
 		res, err := svc.CreatePayout(context.Background(), payoutTestCommand())
 		require.NoError(t, err)
+
 		return res.PayoutID
 	}
 
@@ -277,6 +284,8 @@ func TestPayoutCancel(t *testing.T) {
 				return port.PaymentQuery{TenantID: string(tfrTenant), ID: id, Actor: "u-1"}
 			},
 			preload: func(t *testing.T, svc *command.PayoutService, id string) {
+				t.Helper()
+
 				_, err := svc.CancelPayout(context.Background(), port.PaymentQuery{TenantID: string(tfrTenant), ID: id, Actor: "u-1"})
 				require.NoError(t, err)
 			},
@@ -308,18 +317,22 @@ func TestPayoutCancel(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t)
 			store := newMockPayoutStore(t, eligiblePolicy())
 			authz := newMockAuthorizer(t)
 			svc := newPayoutService(t, uow, store, 9000, authz)
 			id := seedPending(t, svc)
+
 			query := tc.query(id)
 			if tc.denied {
 				setAuthzDenied(authz, "u-1|payout.cancel|payout/"+id)
 			}
+
 			tc.preload(t, svc, id)
 			actualResult, err := svc.CancelPayout(context.Background(), query)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, tc.expectedStatus, actualResult.Status)
 			}
@@ -331,13 +344,15 @@ func TestTopupCreate(t *testing.T) {
 	t.Parallel()
 
 	newSvc := func(t *testing.T) (port.UnitOfWork, *mockcommand.MockTopupStore, port.Authorizer, *command.TopupService) {
+		t.Helper()
 		uow := newMockUOW(t)
 		store := newMockTopupStore(t)
 		authz := newMockAuthorizer(t)
 		svc := command.NewTopupService(command.TopupServiceParams{
-			UoW: uow, Topups: store, Clock: newMockClock(t, tfrAt),
+			UoW: uow, Topups: store, Clock: newMockClock(t, tfrAt()),
 			IDs: newMockIDGenerator(t, tfrTestIDs(40)...), Authz: authz,
 		})
+
 		return uow, store, authz, svc
 	}
 
@@ -373,8 +388,10 @@ func TestTopupCreate(t *testing.T) {
 			name: "corrupt idempotency replay returns IDEMPOTENCY_RECORD_INVALID",
 			req:  topupCommand(),
 			preload: func(t *testing.T, uow port.UnitOfWork, _ *command.TopupService) {
+				t.Helper()
+
 				req := topupCommand()
-				fp := command.Fingerprint(req.IdempotencyKey, string(req.TenantID), fmt.Sprintf("%d", req.AmountMinor))
+				fp := command.Fingerprint(req.IdempotencyKey, string(req.TenantID), strconv.FormatInt(req.AmountMinor, 10))
 				setUOWIdem(uow, req.IdempotencyKey, fp, []byte("{corrupt-json"))
 			},
 			denied:         false,
@@ -386,6 +403,8 @@ func TestTopupCreate(t *testing.T) {
 			name: "duplicate replay returns original topup",
 			req:  topupCommand(),
 			preload: func(t *testing.T, _ port.UnitOfWork, svc *command.TopupService) {
+				t.Helper()
+
 				_, err := svc.CreateTopup(context.Background(), topupCommand())
 				require.NoError(t, err)
 			},
@@ -399,6 +418,7 @@ func TestTopupCreate(t *testing.T) {
 			req: func() port.TopupRequest {
 				c := topupCommand()
 				c.InstrumentVerified = false
+
 				return c
 			}(),
 			preload:        func(_ *testing.T, _ port.UnitOfWork, _ *command.TopupService) {},
@@ -412,6 +432,7 @@ func TestTopupCreate(t *testing.T) {
 			req: func() port.TopupRequest {
 				c := topupCommand()
 				c.IdempotencyKey = "key-topup-denied"
+
 				return c
 			}(),
 			preload:        func(_ *testing.T, _ port.UnitOfWork, _ *command.TopupService) {},
@@ -424,16 +445,21 @@ func TestTopupCreate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			uow, store, authz, svc := newSvc(t)
 			if tc.denied {
 				setAuthzDenied(authz, "u-1|topup.create|ledger/"+string(tfrLedger))
 			}
+
 			tc.preload(t, uow, svc)
 			actualResult, err := svc.CreateTopup(context.Background(), tc.req)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, tc.expectedStatus, actualResult.Status)
 			}
+
 			store.AssertNumberOfCalls(t, "CreateTopup", tc.expectedStore)
 		})
 	}
@@ -443,13 +469,15 @@ func TestTopupCancel(t *testing.T) {
 	t.Parallel()
 
 	newSvc := func(t *testing.T) (*mockcommand.MockTopupStore, port.Authorizer, *command.TopupService) {
+		t.Helper()
 		uow := newMockUOW(t)
 		store := newMockTopupStore(t)
 		authz := newMockAuthorizer(t)
 		svc := command.NewTopupService(command.TopupServiceParams{
-			UoW: uow, Topups: store, Clock: newMockClock(t, tfrAt),
+			UoW: uow, Topups: store, Clock: newMockClock(t, tfrAt()),
 			IDs: newMockIDGenerator(t, tfrTestIDs(40)...), Authz: authz,
 		})
+
 		return store, authz, svc
 	}
 
@@ -463,8 +491,10 @@ func TestTopupCancel(t *testing.T) {
 
 	seedPending := func(t *testing.T, svc *command.TopupService) string {
 		t.Helper()
+
 		res, err := svc.CreateTopup(context.Background(), topupCommand())
 		require.NoError(t, err)
+
 		return res.TopupID
 	}
 
@@ -497,6 +527,8 @@ func TestTopupCancel(t *testing.T) {
 			},
 			actor: "u-1",
 			preload: func(t *testing.T, svc *command.TopupService, id string) {
+				t.Helper()
+
 				_, err := svc.CancelTopup(context.Background(), tfrTenant, id, "u-1")
 				require.NoError(t, err)
 			},
@@ -530,15 +562,19 @@ func TestTopupCancel(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			_, authz, svc := newSvc(t)
 			id := seedPending(t, svc)
+
 			targetID := tc.topupID(id)
 			if tc.denied {
 				setAuthzDenied(authz, "u-1|topup.cancel|ledger/"+targetID)
 			}
+
 			tc.preload(t, svc, id)
 			actualResult, err := svc.CancelTopup(context.Background(), tfrTenant, targetID, tc.actor)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, tc.expectedStatus, actualResult.Status)
 			}
@@ -574,7 +610,7 @@ func TestWebhookEventNames(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	original := seedIntent(t, intentStore, tfrAt)
+	original := seedIntent(t, intentStore, tfrAt())
 	_, err = refunds.CreateRefund(context.Background(), refundTestCommand(original))
 	require.NoError(t, err)
 
@@ -606,6 +642,8 @@ func TestWebhookEventNames(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			payload := outboxPayload(t, uow, tc.eventType)
 			for _, key := range tc.expectedKeys {
 				assert.Contains(t, payload, key)
@@ -655,6 +693,7 @@ func TestPayoutGetAndList(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t)
 			store := newMockPayoutStore(t, eligiblePolicy())
 			authz := newMockAuthorizer(t)
@@ -677,6 +716,7 @@ func TestPayoutGetAndList(t *testing.T) {
 			if tc.queryID != "" {
 				res, err := svc.GetPayout(context.Background(), port.PaymentQuery{TenantID: string(tfrTenant), ID: tc.queryID})
 				assert.Equal(t, tc.expectedError, err)
+
 				if tc.expectedError == nil {
 					assert.Equal(t, tc.queryID, res.PayoutID)
 				}
@@ -717,6 +757,7 @@ func TestPayoutSchedule(t *testing.T) {
 			policy: func() valueobject.PayoutPolicy {
 				p := basePolicy
 				p.MinimumMinor = -100
+
 				return p
 			}(),
 			actor:         "u-1",
@@ -736,16 +777,20 @@ func TestPayoutSchedule(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t)
 			store := newMockPayoutStore(t, basePolicy)
+
 			authz := newMockAuthorizer(t)
 			if tc.denied {
 				setAuthzDenied(authz, tc.actor+"|payout.schedule|tenant/"+string(tfrTenant))
 			}
+
 			svc := newPayoutService(t, uow, store, 90000, authz)
 
 			res, err := svc.UpdateSchedule(context.Background(), tfrTenant, tc.policy, tc.actor, tc.key)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, tc.policy.MinimumMinor, res.MinimumMinor)
 
@@ -804,6 +849,7 @@ func TestTopupGetAndList(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t)
 			store := newMockTopupStore(t)
 			authz := newMockAuthorizer(t)
@@ -823,7 +869,7 @@ func TestTopupGetAndList(t *testing.T) {
 			svc := command.NewTopupService(command.TopupServiceParams{
 				UoW:    uow,
 				Topups: store,
-				Clock:  newMockClock(t, tfrAt),
+				Clock:  newMockClock(t, tfrAt()),
 				IDs:    newMockIDGenerator(t, tfrTestIDs(40)...),
 				Authz:  authz,
 			})
@@ -831,6 +877,7 @@ func TestTopupGetAndList(t *testing.T) {
 			if tc.queryID != "" {
 				res, err := svc.GetTopup(context.Background(), tfrTenant, tc.queryID)
 				assert.Equal(t, tc.expectedError, err)
+
 				if tc.expectedError == nil {
 					assert.Equal(t, tc.queryID, res.TopupID)
 				}
@@ -860,7 +907,7 @@ func TestPaymentUseCasesComposite(t *testing.T) {
 	topups := command.NewTopupService(command.TopupServiceParams{
 		UoW:    uow,
 		Topups: topupStore,
-		Clock:  newMockClock(t, tfrAt),
+		Clock:  newMockClock(t, tfrAt()),
 		IDs:    newMockIDGenerator(t, tfrTestIDs(40)...),
 		Authz:  authz,
 	})

@@ -8,6 +8,7 @@ package local
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/maypok86/otter/v2"
@@ -39,10 +40,11 @@ var _ store.Store = (*OtterCache)(nil)
 // cost and write-based expiry.
 func NewOtterCache(params OtterParams) (*OtterCache, error) {
 	if params.MaximumWeight == 0 {
-		return nil, fmt.Errorf("otter: maximum weight must be positive")
+		return nil, ErrOtterMaximumWeightMustBePositive
 	}
+
 	if params.DefaultTTL <= 0 {
-		return nil, fmt.Errorf("otter: default TTL must be positive")
+		return nil, ErrOtterDefaultTTLMustBePositive
 	}
 
 	cache, err := otter.New(&otter.Options[string, []byte]{
@@ -62,11 +64,11 @@ func NewOtterCache(params OtterParams) (*OtterCache, error) {
 // cannot block.
 func (c *OtterCache) Get(_ context.Context, key string) ([]byte, error) {
 	if c == nil || c.cache == nil {
-		return nil, fmt.Errorf("otter: cache is not initialized")
+		return nil, ErrOtterCacheIsNotInitialized
 	}
 
 	if key == "" {
-		return nil, fmt.Errorf("otter: key is required")
+		return nil, ErrOtterKeyIsRequired
 	}
 
 	value, ok := c.cache.GetIfPresent(key)
@@ -81,15 +83,15 @@ func (c *OtterCache) Get(_ context.Context, key string) ([]byte, error) {
 // synchronously visible to the next Get.
 func (c *OtterCache) Set(_ context.Context, key string, value []byte, ttl time.Duration) error {
 	if c == nil || c.cache == nil {
-		return fmt.Errorf("otter: cache is not initialized")
+		return ErrOtterCacheIsNotInitialized
 	}
 
 	if key == "" {
-		return fmt.Errorf("otter: key is required")
+		return ErrOtterKeyIsRequired
 	}
 
 	if ttl <= 0 {
-		return fmt.Errorf("otter: ttl must be positive")
+		return ErrOtterTTLMustBePositive
 	}
 
 	c.cache.Set(key, cloneBytes(value))
@@ -101,11 +103,11 @@ func (c *OtterCache) Set(_ context.Context, key string, value []byte, ttl time.D
 // Delete invalidates one key. Missing keys succeed.
 func (c *OtterCache) Delete(_ context.Context, key string) error {
 	if c == nil || c.cache == nil {
-		return fmt.Errorf("otter: cache is not initialized")
+		return ErrOtterCacheIsNotInitialized
 	}
 
 	if key == "" {
-		return fmt.Errorf("otter: key is required")
+		return ErrOtterKeyIsRequired
 	}
 
 	c.cache.Invalidate(key)
@@ -152,13 +154,11 @@ func (c *OtterCache) DefaultTTLValue() time.Duration {
 // weighBytes costs entries by payload length so the weight budget means
 // memory. Lengths past the uint32 range saturate instead of wrapping.
 func weighBytes(_ string, value []byte) uint32 {
-	const maxUint32 = ^uint32(0)
-
-	if uint64(len(value)) > uint64(maxUint32) {
-		return maxUint32
+	if len(value) > math.MaxUint32 {
+		return math.MaxUint32
 	}
 
-	return uint32(len(value)) //nolint:gosec // guarded by the range check above
+	return uint32(len(value))
 }
 
 // cloneBytes deep-copies payloads so caller mutations can never corrupt

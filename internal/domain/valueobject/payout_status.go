@@ -22,7 +22,7 @@ func ParsePayoutStatus(s string) (PayoutStatus, error) {
 	case PayoutPending, PayoutInTransit, PayoutPaid, PayoutFailed, PayoutCanceled:
 		return PayoutStatus(s), nil
 	default:
-		return "", fmt.Errorf("payout: invalid status %q", s)
+		return "", fmt.Errorf("payout: invalid status %q: %w", s, ErrPayoutInvalidStatus)
 	}
 }
 
@@ -34,6 +34,8 @@ func CanTransition(from, to PayoutStatus) bool {
 		return to == PayoutInTransit || to == PayoutCanceled
 	case PayoutInTransit:
 		return to == PayoutPaid || to == PayoutFailed
+	case PayoutPaid, PayoutFailed, PayoutCanceled:
+		return false
 	default:
 		return false
 	}

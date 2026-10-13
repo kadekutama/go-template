@@ -6,7 +6,7 @@ import (
 
 // ResolveReference parses "{{ secret:path }}" into path. It reports false
 // when ref is not a secret reference (plain config values pass through).
-func ResolveReference(ref string) (path string, ok bool) {
+func ResolveReference(ref string) (string, bool) {
 	trimmed := strings.TrimSpace(ref)
 	if !strings.HasPrefix(trimmed, "{{ secret:") || !strings.HasSuffix(trimmed, "}}") {
 		return "", false

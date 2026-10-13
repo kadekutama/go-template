@@ -1,7 +1,6 @@
 package valueobject_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -39,68 +38,77 @@ func TestPayoutPolicyValidate(t *testing.T) {
 			policy: func() valueobject.PayoutPolicy {
 				p := valid
 				p.TenantID = ""
+
 				return p
 			}(),
-			expectedError: errors.New("payout policy: tenant is required"),
+			expectedError: valueobject.ErrPayoutPolicyTenantIsRequired,
 		},
 		{
 			name: "missing asset code",
 			policy: func() valueobject.PayoutPolicy {
 				p := valid
 				p.AssetCode = ""
+
 				return p
 			}(),
-			expectedError: errors.New("payout policy: asset code is required"),
+			expectedError: valueobject.ErrPayoutPolicyAssetCodeIsRequired,
 		},
 		{
 			name: "negative minimum minor",
 			policy: func() valueobject.PayoutPolicy {
 				p := valid
 				p.MinimumMinor = -1
+
 				return p
 			}(),
-			expectedError: errors.New("payout policy: minimum must be non-negative"),
+			expectedError: valueobject.ErrPayoutPolicyMinimumMustBeNonNegative,
 		},
 		{
 			name: "negative first payout hold days",
 			policy: func() valueobject.PayoutPolicy {
 				p := valid
 				p.FirstPayoutHoldDays = -1
+
 				return p
 			}(),
-			expectedError: errors.New("payout policy: first-payout hold must be non-negative"),
+			expectedError: valueobject.ErrPayoutPolicyFirstPayoutHoldMustBeNonNegative,
 		},
 		{
 			name: "negative reserve bps",
 			policy: func() valueobject.PayoutPolicy {
 				p := valid
 				p.ReserveBPS = -1
+
 				return p
 			}(),
-			expectedError: errors.New("payout policy: reserve bps must be within [0,10000]"),
+			expectedError: valueobject.ErrPayoutPolicyReserveBpsMustBeWithin010000,
 		},
 		{
 			name: "reserve bps above 10000",
 			policy: func() valueobject.PayoutPolicy {
 				p := valid
 				p.ReserveBPS = 10001
+
 				return p
 			}(),
-			expectedError: errors.New("payout policy: reserve bps must be within [0,10000]"),
+			expectedError: valueobject.ErrPayoutPolicyReserveBpsMustBeWithin010000,
 		},
 		{
 			name: "missing version",
 			policy: func() valueobject.PayoutPolicy {
 				p := valid
 				p.Version = ""
+
 				return p
 			}(),
-			expectedError: errors.New("payout policy: version is required"),
+			expectedError: valueobject.ErrPayoutPolicyVersionIsRequired,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.policy.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})

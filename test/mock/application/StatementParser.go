@@ -60,7 +60,7 @@ type MockStatementParser_Parse_Call struct {
 //   - ctx context.Context
 //   - format port.StatementFormat
 //   - data []byte
-func (_e *MockStatementParser_Expecter) Parse(ctx interface{}, format interface{}, data interface{}) *MockStatementParser_Parse_Call {
+func (_e *MockStatementParser_Expecter) Parse(ctx any, format any, data any) *MockStatementParser_Parse_Call {
 	return &MockStatementParser_Parse_Call{Call: _e.mock.On("Parse", ctx, format, data)}
 }
 

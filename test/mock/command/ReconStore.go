@@ -62,7 +62,7 @@ type MockReconStore_CountOpenBreaks_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - ledger valueobject.LedgerID
-func (_e *MockReconStore_Expecter) CountOpenBreaks(ctx interface{}, tenant interface{}, ledger interface{}) *MockReconStore_CountOpenBreaks_Call {
+func (_e *MockReconStore_Expecter) CountOpenBreaks(ctx any, tenant any, ledger any) *MockReconStore_CountOpenBreaks_Call {
 	return &MockReconStore_CountOpenBreaks_Call{Call: _e.mock.On("CountOpenBreaks", ctx, tenant, ledger)}
 }
 
@@ -109,7 +109,7 @@ type MockReconStore_CreateBreaks_Call struct {
 // CreateBreaks is a helper method to define mock.On call
 //   - ctx context.Context
 //   - breaks []command.BreakRecord
-func (_e *MockReconStore_Expecter) CreateBreaks(ctx interface{}, breaks interface{}) *MockReconStore_CreateBreaks_Call {
+func (_e *MockReconStore_Expecter) CreateBreaks(ctx any, breaks any) *MockReconStore_CreateBreaks_Call {
 	return &MockReconStore_CreateBreaks_Call{Call: _e.mock.On("CreateBreaks", ctx, breaks)}
 }
 
@@ -156,7 +156,7 @@ type MockReconStore_CreateRun_Call struct {
 // CreateRun is a helper method to define mock.On call
 //   - ctx context.Context
 //   - run command.ReconRunRecord
-func (_e *MockReconStore_Expecter) CreateRun(ctx interface{}, run interface{}) *MockReconStore_CreateRun_Call {
+func (_e *MockReconStore_Expecter) CreateRun(ctx any, run any) *MockReconStore_CreateRun_Call {
 	return &MockReconStore_CreateRun_Call{Call: _e.mock.On("CreateRun", ctx, run)}
 }
 
@@ -214,7 +214,7 @@ type MockReconStore_FindBreak_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - id string
-func (_e *MockReconStore_Expecter) FindBreak(ctx interface{}, tenant interface{}, id interface{}) *MockReconStore_FindBreak_Call {
+func (_e *MockReconStore_Expecter) FindBreak(ctx any, tenant any, id any) *MockReconStore_FindBreak_Call {
 	return &MockReconStore_FindBreak_Call{Call: _e.mock.On("FindBreak", ctx, tenant, id)}
 }
 
@@ -272,7 +272,7 @@ type MockReconStore_FindRun_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - id string
-func (_e *MockReconStore_Expecter) FindRun(ctx interface{}, tenant interface{}, id interface{}) *MockReconStore_FindRun_Call {
+func (_e *MockReconStore_Expecter) FindRun(ctx any, tenant any, id any) *MockReconStore_FindRun_Call {
 	return &MockReconStore_FindRun_Call{Call: _e.mock.On("FindRun", ctx, tenant, id)}
 }
 
@@ -333,7 +333,7 @@ type MockReconStore_ListBreaks_Call struct {
 //   - tenant valueobject.TenantID
 //   - status string
 //   - limit int
-func (_e *MockReconStore_Expecter) ListBreaks(ctx interface{}, tenant interface{}, status interface{}, limit interface{}) *MockReconStore_ListBreaks_Call {
+func (_e *MockReconStore_Expecter) ListBreaks(ctx any, tenant any, status any, limit any) *MockReconStore_ListBreaks_Call {
 	return &MockReconStore_ListBreaks_Call{Call: _e.mock.On("ListBreaks", ctx, tenant, status, limit)}
 }
 
@@ -393,7 +393,7 @@ type MockReconStore_ListBreaksByRun_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - runID string
-func (_e *MockReconStore_Expecter) ListBreaksByRun(ctx interface{}, tenant interface{}, runID interface{}) *MockReconStore_ListBreaksByRun_Call {
+func (_e *MockReconStore_Expecter) ListBreaksByRun(ctx any, tenant any, runID any) *MockReconStore_ListBreaksByRun_Call {
 	return &MockReconStore_ListBreaksByRun_Call{Call: _e.mock.On("ListBreaksByRun", ctx, tenant, runID)}
 }
 
@@ -453,7 +453,7 @@ type MockReconStore_ListRuns_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - limit int
-func (_e *MockReconStore_Expecter) ListRuns(ctx interface{}, tenant interface{}, limit interface{}) *MockReconStore_ListRuns_Call {
+func (_e *MockReconStore_Expecter) ListRuns(ctx any, tenant any, limit any) *MockReconStore_ListRuns_Call {
 	return &MockReconStore_ListRuns_Call{Call: _e.mock.On("ListRuns", ctx, tenant, limit)}
 }
 
@@ -500,7 +500,7 @@ type MockReconStore_UpdateBreak_Call struct {
 // UpdateBreak is a helper method to define mock.On call
 //   - ctx context.Context
 //   - record command.BreakRecord
-func (_e *MockReconStore_Expecter) UpdateBreak(ctx interface{}, record interface{}) *MockReconStore_UpdateBreak_Call {
+func (_e *MockReconStore_Expecter) UpdateBreak(ctx any, record any) *MockReconStore_UpdateBreak_Call {
 	return &MockReconStore_UpdateBreak_Call{Call: _e.mock.On("UpdateBreak", ctx, record)}
 }
 
@@ -547,7 +547,7 @@ type MockReconStore_UpdateRun_Call struct {
 // UpdateRun is a helper method to define mock.On call
 //   - ctx context.Context
 //   - run command.ReconRunRecord
-func (_e *MockReconStore_Expecter) UpdateRun(ctx interface{}, run interface{}) *MockReconStore_UpdateRun_Call {
+func (_e *MockReconStore_Expecter) UpdateRun(ctx any, run any) *MockReconStore_UpdateRun_Call {
 	return &MockReconStore_UpdateRun_Call{Call: _e.mock.On("UpdateRun", ctx, run)}
 }
 

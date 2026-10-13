@@ -28,6 +28,7 @@ func (m *TenantModel) BeforeCreate(_ *gorm.DB) error {
 	if m.Settings == "" {
 		m.Settings = "{}"
 	}
+
 	return nil
 }
 
@@ -36,6 +37,7 @@ func (m *TenantModel) BeforeUpdate(_ *gorm.DB) error {
 	if m.Settings == "" {
 		m.Settings = "{}"
 	}
+
 	return nil
 }
 

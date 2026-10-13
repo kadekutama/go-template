@@ -46,6 +46,7 @@ func TestSettlementBatchValidate(t *testing.T) {
 				b.Items = []entity.SettlementItem{
 					{PaymentID: "p-1", Status: entity.SettleItemFailed, AmountMinor: 100},
 				}
+
 				return b
 			}(),
 			expectedError: nil,
@@ -55,6 +56,7 @@ func TestSettlementBatchValidate(t *testing.T) {
 			batch: func() entity.SettlementBatch {
 				b := baseBatch
 				b.BatchID = ""
+
 				return b
 			}(),
 			expectedError: entity.NewError("BATCH_ID_REQUIRED", "settlement batch requires batch and provider batch ids"),
@@ -64,6 +66,7 @@ func TestSettlementBatchValidate(t *testing.T) {
 			batch: func() entity.SettlementBatch {
 				b := baseBatch
 				b.ProviderBatchID = ""
+
 				return b
 			}(),
 			expectedError: entity.NewError("BATCH_ID_REQUIRED", "settlement batch requires batch and provider batch ids"),
@@ -73,6 +76,7 @@ func TestSettlementBatchValidate(t *testing.T) {
 			batch: func() entity.SettlementBatch {
 				b := baseBatch
 				b.ProviderTraceID = ""
+
 				return b
 			}(),
 			expectedError: entity.NewError("TRACE_ID_REQUIRED", "settlement batch requires a provider trace id"),
@@ -82,6 +86,7 @@ func TestSettlementBatchValidate(t *testing.T) {
 			batch: func() entity.SettlementBatch {
 				b := baseBatch
 				b.AssetCode = ""
+
 				return b
 			}(),
 			expectedError: entity.NewError("BATCH_ASSET_REQUIRED", "settlement batch requires an asset code"),
@@ -91,6 +96,7 @@ func TestSettlementBatchValidate(t *testing.T) {
 			batch: func() entity.SettlementBatch {
 				b := baseBatch
 				b.GrossMinor = -1
+
 				return b
 			}(),
 			expectedError: entity.NewError("BATCH_TOTAL_INVALID", "settlement batch totals must be non-negative"),
@@ -100,6 +106,7 @@ func TestSettlementBatchValidate(t *testing.T) {
 			batch: func() entity.SettlementBatch {
 				b := baseBatch
 				b.FeeMinor = -1
+
 				return b
 			}(),
 			expectedError: entity.NewError("BATCH_TOTAL_INVALID", "settlement batch totals must be non-negative"),
@@ -109,6 +116,7 @@ func TestSettlementBatchValidate(t *testing.T) {
 			batch: func() entity.SettlementBatch {
 				b := baseBatch
 				b.NetMinor = -1
+
 				return b
 			}(),
 			expectedError: entity.NewError("BATCH_TOTAL_INVALID", "settlement batch totals must be non-negative"),
@@ -118,6 +126,7 @@ func TestSettlementBatchValidate(t *testing.T) {
 			batch: func() entity.SettlementBatch {
 				b := baseBatch
 				b.GrossMinor = 9999
+
 				return b
 			}(),
 			expectedError: entity.NewError("BATCH_TOTAL_MISMATCH", "settlement batch gross must equal fee plus net"),
@@ -127,6 +136,7 @@ func TestSettlementBatchValidate(t *testing.T) {
 			batch: func() entity.SettlementBatch {
 				b := baseBatch
 				b.CoverageStart = ""
+
 				return b
 			}(),
 			expectedError: entity.NewError("BATCH_WINDOW_REQUIRED", "settlement batch requires a coverage window"),
@@ -136,6 +146,7 @@ func TestSettlementBatchValidate(t *testing.T) {
 			batch: func() entity.SettlementBatch {
 				b := baseBatch
 				b.CoverageEnd = ""
+
 				return b
 			}(),
 			expectedError: entity.NewError("BATCH_WINDOW_REQUIRED", "settlement batch requires a coverage window"),
@@ -145,6 +156,7 @@ func TestSettlementBatchValidate(t *testing.T) {
 			batch: func() entity.SettlementBatch {
 				b := baseBatch
 				b.Items = nil
+
 				return b
 			}(),
 			expectedError: entity.NewError("BATCH_ITEMS_REQUIRED", "settlement batch requires at least one item"),
@@ -154,6 +166,7 @@ func TestSettlementBatchValidate(t *testing.T) {
 			batch: func() entity.SettlementBatch {
 				b := baseBatch
 				b.Items = []entity.SettlementItem{}
+
 				return b
 			}(),
 			expectedError: entity.NewError("BATCH_ITEMS_REQUIRED", "settlement batch requires at least one item"),
@@ -165,6 +178,7 @@ func TestSettlementBatchValidate(t *testing.T) {
 				b.Items = []entity.SettlementItem{
 					{PaymentID: "", Status: entity.SettleItemSettled, AmountMinor: 100},
 				}
+
 				return b
 			}(),
 			expectedError: entity.NewError("BATCH_ITEM_PAYMENT_REQUIRED", "settlement item requires a payment id"),
@@ -176,6 +190,7 @@ func TestSettlementBatchValidate(t *testing.T) {
 				b.Items = []entity.SettlementItem{
 					{PaymentID: "p-1", Status: entity.SettleItemSettled, AmountMinor: 0},
 				}
+
 				return b
 			}(),
 			expectedError: entity.NewError("INVALID_ENTRY_AMOUNT", "settlement item amount must be positive"),
@@ -187,6 +202,7 @@ func TestSettlementBatchValidate(t *testing.T) {
 				b.Items = []entity.SettlementItem{
 					{PaymentID: "p-1", Status: entity.SettleItemSettled, AmountMinor: -50},
 				}
+
 				return b
 			}(),
 			expectedError: entity.NewError("INVALID_ENTRY_AMOUNT", "settlement item amount must be positive"),
@@ -198,6 +214,7 @@ func TestSettlementBatchValidate(t *testing.T) {
 				b.Items = []entity.SettlementItem{
 					{PaymentID: "p-1", Status: "UNKNOWN_STATUS", AmountMinor: 100},
 				}
+
 				return b
 			}(),
 			expectedError: entity.NewError("BATCH_ITEM_STATUS_INVALID", "settlement item status is invalid"),
@@ -206,6 +223,8 @@ func TestSettlementBatchValidate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.batch.Validate()
 			assert.Equal(t, tc.expectedError, err)
 		})

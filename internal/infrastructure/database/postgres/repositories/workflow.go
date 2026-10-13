@@ -37,7 +37,7 @@ type WorkflowStore struct {
 // NewWorkflowStore builds the store; DB must be non-nil.
 func NewWorkflowStore(params WorkflowStoreParams) (*WorkflowStore, error) {
 	if params.DB == nil {
-		return nil, fmt.Errorf("postgres: workflow store needs DB")
+		return nil, ErrPostgresWorkflowStoreNeedsDB
 	}
 
 	return &WorkflowStore{db: params.DB}, nil
@@ -48,7 +48,7 @@ func NewWorkflowStore(params WorkflowStoreParams) (*WorkflowStore, error) {
 // caller contract (tenant always required).
 func (s *WorkflowStore) Create(ctx context.Context, record WorkflowRecord) (WorkflowRecord, error) {
 	if record.TenantID == "" {
-		return WorkflowRecord{}, fmt.Errorf("postgres: tenant is required")
+		return WorkflowRecord{}, ErrPostgresTenantIsRequired
 	}
 
 	if err := scopeTenant(ctx, s.db, valueobject.TenantID(record.TenantID)); err != nil {
@@ -71,7 +71,7 @@ func (s *WorkflowStore) Create(ctx context.Context, record WorkflowRecord) (Work
 // FindByID returns one workflow by tenant + ID (strong read).
 func (s *WorkflowStore) FindByID(ctx context.Context, tenant string, id string) (WorkflowRecord, error) {
 	if tenant == "" {
-		return WorkflowRecord{}, fmt.Errorf("postgres: tenant is required")
+		return WorkflowRecord{}, ErrPostgresTenantIsRequired
 	}
 
 	if err := scopeTenant(ctx, s.db, valueobject.TenantID(tenant)); err != nil {
@@ -95,7 +95,7 @@ func (s *WorkflowStore) FindByID(ctx context.Context, tenant string, id string) 
 // UpdateStatus transitions status guarded by the expected version.
 func (s *WorkflowStore) UpdateStatus(ctx context.Context, tenant string, id string, status string, expectedVersion int64) error {
 	if tenant == "" {
-		return fmt.Errorf("postgres: tenant is required")
+		return ErrPostgresTenantIsRequired
 	}
 
 	if err := scopeTenant(ctx, s.db, valueobject.TenantID(tenant)); err != nil {
@@ -134,11 +134,11 @@ type ReconSourceRecord struct {
 // database-assigned ID; identical tenant+hash dedupes.
 func (s *WorkflowStore) StoreReconSource(ctx context.Context, record ReconSourceRecord) (ReconSourceRecord, error) {
 	if record.TenantID == "" {
-		return ReconSourceRecord{}, fmt.Errorf("postgres: tenant is required")
+		return ReconSourceRecord{}, ErrPostgresTenantIsRequired
 	}
 
 	if record.PayloadHash == "" {
-		return ReconSourceRecord{}, fmt.Errorf("postgres: payload hash is required")
+		return ReconSourceRecord{}, ErrPostgresPayloadHashIsRequired
 	}
 
 	if err := scopeTenant(ctx, s.db, valueobject.TenantID(record.TenantID)); err != nil {
@@ -170,11 +170,11 @@ func (s *WorkflowStore) StoreReconSource(ctx context.Context, record ReconSource
 // InboxReceipt records a consumed event key; replays dedupe on (tenant, key).
 func (s *WorkflowStore) InboxReceipt(ctx context.Context, tenant string, key string, eventType string) error {
 	if tenant == "" {
-		return fmt.Errorf("postgres: tenant is required")
+		return ErrPostgresTenantIsRequired
 	}
 
 	if key == "" {
-		return fmt.Errorf("postgres: inbox key is required")
+		return ErrPostgresInboxKeyIsRequired
 	}
 
 	if err := scopeTenant(ctx, s.db, valueobject.TenantID(tenant)); err != nil {

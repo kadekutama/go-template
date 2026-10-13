@@ -67,7 +67,7 @@ type MockDistributedLock_Acquire_Call struct {
 //   - tenant valueobject.TenantID
 //   - key string
 //   - ttl time.Duration
-func (_e *MockDistributedLock_Expecter) Acquire(ctx interface{}, tenant interface{}, key interface{}, ttl interface{}) *MockDistributedLock_Acquire_Call {
+func (_e *MockDistributedLock_Expecter) Acquire(ctx any, tenant any, key any, ttl any) *MockDistributedLock_Acquire_Call {
 	return &MockDistributedLock_Acquire_Call{Call: _e.mock.On("Acquire", ctx, tenant, key, ttl)}
 }
 

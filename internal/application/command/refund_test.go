@@ -2,8 +2,7 @@ package command_test
 
 import (
 	"context"
-	"errors"
-	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -27,10 +26,12 @@ func payTestAccounts() map[valueobject.AccountID]entity.AccountData {
 	accounts[payMerchant] = entity.AccountData{ID: payMerchant, TenantID: tfrTenant, LedgerID: tfrLedger, Number: "8000", Name: "merchant", Class: valueobject.ClassLiability, AssetCode: tfrAsset, Status: valueobject.StatusActive, Version: 1}
 	accounts[payRefunds] = entity.AccountData{ID: payRefunds, TenantID: tfrTenant, LedgerID: tfrLedger, Number: "8001", Name: "refunds", Class: valueobject.ClassLiability, AssetCode: tfrAsset, Status: valueobject.StatusActive, Version: 1}
 	accounts[payCash] = entity.AccountData{ID: payCash, TenantID: tfrTenant, LedgerID: tfrLedger, Number: "8002", Name: "cash", Class: valueobject.ClassAsset, AssetCode: tfrAsset, Status: valueobject.StatusActive, Version: 1}
+
 	return accounts
 }
 
 func newRefundService(t *testing.T, uow port.UnitOfWork, refunds command.RefundStore, intents command.IntentStore, processor port.PaymentProcessor, authz port.Authorizer) *command.RefundService {
+	t.Helper()
 	svc, err := command.NewRefundService(command.RefundServiceParams{
 		UoW:       uow,
 		Refunds:   refunds,
@@ -41,16 +42,18 @@ func newRefundService(t *testing.T, uow port.UnitOfWork, refunds command.RefundS
 			MerchantPayable: payMerchant, RefundsPayable: payRefunds, CashAccount: payCash,
 		},
 		WindowDays: 90,
-		Clock:      newMockClock(t, tfrAt),
+		Clock:      newMockClock(t, tfrAt()),
 		IDs:        newMockIDGenerator(t, tfrTestIDs(40)...),
 		Authz:      authz,
 	})
 	require.NoError(t, err)
+
 	return svc
 }
 
 func seedIntent(t *testing.T, store command.IntentStore, createdAt time.Time) string {
 	t.Helper()
+
 	id := "intent-00"
 	err := store.CreateIntent(context.Background(), command.IntentRecord{
 		ID: id, TenantID: tfrTenant, LedgerID: tfrLedger, AmountMinor: 5000,
@@ -58,6 +61,7 @@ func seedIntent(t *testing.T, store command.IntentStore, createdAt time.Time) st
 		CreatedAt: createdAt,
 	})
 	require.NoError(t, err)
+
 	return id
 }
 
@@ -107,7 +111,7 @@ func TestRefundCreate(t *testing.T) {
 			seedOriginal: true,
 			preload: func(uow port.UnitOfWork) {
 				fp := command.Fingerprint(
-					baseCmd.IdempotencyKey, string(baseCmd.TenantID), baseCmd.OriginalTxn, fmt.Sprintf("%d", baseCmd.AmountMinor),
+					baseCmd.IdempotencyKey, string(baseCmd.TenantID), baseCmd.OriginalTxn, strconv.FormatInt(baseCmd.AmountMinor, 10),
 				)
 				setUOWIdem(uow, baseCmd.IdempotencyKey, fp, []byte("{corrupt-json"))
 			},
@@ -120,6 +124,7 @@ func TestRefundCreate(t *testing.T) {
 			req: func() port.RefundRequest {
 				r := baseCmd
 				r.TenantID = ""
+
 				return r
 			}(),
 			seedOriginal:   false,
@@ -132,6 +137,7 @@ func TestRefundCreate(t *testing.T) {
 			req: func() port.RefundRequest {
 				r := baseCmd
 				r.OriginalTxn = ""
+
 				return r
 			}(),
 			seedOriginal:   false,
@@ -144,6 +150,7 @@ func TestRefundCreate(t *testing.T) {
 			req: func() port.RefundRequest {
 				r := baseCmd
 				r.AmountMinor = 0
+
 				return r
 			}(),
 			seedOriginal:   false,
@@ -156,6 +163,7 @@ func TestRefundCreate(t *testing.T) {
 			req: func() port.RefundRequest {
 				r := baseCmd
 				r.AmountMinor = -100
+
 				return r
 			}(),
 			seedOriginal:   false,
@@ -168,6 +176,7 @@ func TestRefundCreate(t *testing.T) {
 			req: func() port.RefundRequest {
 				r := baseCmd
 				r.Actor = ""
+
 				return r
 			}(),
 			seedOriginal:   false,
@@ -180,6 +189,7 @@ func TestRefundCreate(t *testing.T) {
 			req: func() port.RefundRequest {
 				r := baseCmd
 				r.IdempotencyKey = ""
+
 				return r
 			}(),
 			seedOriginal:   false,
@@ -200,6 +210,7 @@ func TestRefundCreate(t *testing.T) {
 			req: func() port.RefundRequest {
 				r := baseCmd
 				r.AmountMinor = 6000
+
 				return r
 			}(),
 			seedOriginal:   true,
@@ -247,21 +258,26 @@ func TestRefundCreate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			uow := newMockUOW(t)
 			if tc.preload != nil {
 				tc.preload(uow)
 			}
+
 			intents := newMockIntentStore(t)
 			refunds := newMockRefundStore(t)
 			processor := newMockPaymentProcessor(t, mockProcessorParams{RefundErr: tc.processorErr})
+
 			authz := newMockAuthorizer(t)
 			if tc.denied {
 				setAuthzDenied(authz, tc.req.Actor+"|refund.create|payment/"+tc.req.OriginalTxn)
 			}
 
 			if tc.seedOriginal {
-				_ = seedIntent(t, intents, tfrAt.Add(-tc.originalAge))
+				_ = seedIntent(t, intents, tfrAt().Add(-tc.originalAge))
 			}
+
 			if tc.priorRefund > 0 {
 				_ = refunds.CreateRefund(context.Background(), command.RefundRecord{
 					ID:          "prior-ref-1",
@@ -276,6 +292,7 @@ func TestRefundCreate(t *testing.T) {
 
 			res, err := svc.CreateRefund(context.Background(), tc.req)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Equal(t, tc.expectedStatus, res.Status)
 				assert.Equal(t, tc.req.OriginalTxn, res.OriginalID)
@@ -330,6 +347,7 @@ func TestRefundGetAndList(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t)
 			intents := newMockIntentStore(t)
 			refunds := newMockRefundStore(t)
@@ -351,6 +369,7 @@ func TestRefundGetAndList(t *testing.T) {
 			if tc.queryID != "" {
 				res, err := svc.GetRefund(context.Background(), port.PaymentQuery{TenantID: string(tfrTenant), ID: tc.queryID})
 				assert.Equal(t, tc.expectedError, err)
+
 				if tc.expectedError == nil {
 					assert.Equal(t, tc.queryID, res.RefundID)
 					assert.Equal(t, "intent-00", res.OriginalID)
@@ -382,17 +401,19 @@ func TestNewRefundServiceValidation(t *testing.T) {
 		{
 			name:          "zero window rejected",
 			windowDays:    0,
-			expectedError: errors.New("refund: window days must be positive"),
+			expectedError: command.ErrRefundWindowDaysMustBePositive,
 		},
 		{
 			name:          "negative window rejected",
 			windowDays:    -3,
-			expectedError: errors.New("refund: window days must be positive"),
+			expectedError: command.ErrRefundWindowDaysMustBePositive,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			svc, err := command.NewRefundService(command.RefundServiceParams{
 				WindowDays: tc.windowDays,
 			})

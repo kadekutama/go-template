@@ -74,18 +74,18 @@ func NewProducer(params ProducerParams) (*Producer, error) {
 	}
 
 	if len(seeds) == 0 {
-		return nil, fmt.Errorf("redpanda: at least one seed is required")
+		return nil, ErrRedpandaAtLeastOneSeedIsRequired
 	}
 
 	if params.DialTimeout <= 0 {
-		return nil, fmt.Errorf("redpanda: dial timeout must be positive")
+		return nil, ErrRedpandaDialTimeoutMustBePositive
 	}
 
 	opts := []kgo.Opt{
 		kgo.SeedBrokers(seeds...),
 		kgo.ClientID(strings.TrimSpace(params.ClientID)),
 		kgo.DialTimeout(params.DialTimeout),
-		kgo.ProduceRequestTimeout(30 * time.Second),
+		kgo.ProduceRequestTimeout(produceRequestTimeoutSecs * time.Second),
 	}
 
 	if maxBytes := params.MaxBufferedBytes; maxBytes > 0 {
@@ -118,7 +118,7 @@ func NewProducer(params ProducerParams) (*Producer, error) {
 // never at publish time.
 func saslMechanism(mechanism, user, pass string) (sasl.Mechanism, error) {
 	if mechanism == "" {
-		return nil, fmt.Errorf("redpanda: sasl mechanism is required when sasl credentials are provided")
+		return nil, ErrRedpandaSaslMechanismIsRequiredWhenSaslCredentialsAreProv
 	}
 
 	switch mechanism {
@@ -129,7 +129,7 @@ func saslMechanism(mechanism, user, pass string) (sasl.Mechanism, error) {
 	case SASLMechanismPlain:
 		return plain.Auth{User: user, Pass: pass}.AsMechanism(), nil
 	default:
-		return nil, fmt.Errorf("redpanda: unknown sasl mechanism %q", mechanism)
+		return nil, fmt.Errorf("redpanda: unknown sasl mechanism %q: %w", mechanism, ErrRedpandaUnknownSaslMechanism)
 	}
 }
 
@@ -137,11 +137,11 @@ func saslMechanism(mechanism, user, pass string) (sasl.Mechanism, error) {
 // acknowledged it, anything else stays an error (at-least-once relay).
 func (p *Producer) Publish(ctx context.Context, topic, key string, headers map[string]string, payload []byte) error {
 	if p == nil || p.client == nil {
-		return fmt.Errorf("redpanda: producer is not initialized")
+		return ErrRedpandaProducerIsNotInitialized
 	}
 
 	if strings.TrimSpace(topic) == "" {
-		return fmt.Errorf("redpanda: topic is required")
+		return ErrRedpandaTopicIsRequired
 	}
 
 	if err := ctx.Err(); err != nil {

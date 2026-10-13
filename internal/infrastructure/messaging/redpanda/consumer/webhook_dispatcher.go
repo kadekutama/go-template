@@ -73,27 +73,27 @@ var _ appport.WebhookDispatcher = (*Dispatcher)(nil)
 // NewDispatcher builds the delivery group consumer.
 func NewDispatcher(params DispatcherParams) (*Dispatcher, error) {
 	if params.Endpoints == nil {
-		return nil, fmt.Errorf("dispatcher: endpoint lookup is required")
+		return nil, ErrDispatcherEndpointLookupIsRequired
 	}
 
 	if params.Sender == nil {
-		return nil, fmt.Errorf("dispatcher: sender is required")
+		return nil, ErrDispatcherSenderIsRequired
 	}
 
 	if params.Receipts == nil {
-		return nil, fmt.Errorf("dispatcher: receipt store is required")
+		return nil, ErrDispatcherReceiptStoreIsRequired
 	}
 
 	if params.DLQ == nil {
-		return nil, fmt.Errorf("dispatcher: dlq sink is required")
+		return nil, ErrDispatcherDlqSinkIsRequired
 	}
 
 	if params.RetryPolicy == nil {
-		return nil, fmt.Errorf("dispatcher: retry policy is required")
+		return nil, ErrDispatcherRetryPolicyIsRequired
 	}
 
 	if params.Tolerance <= 0 {
-		return nil, fmt.Errorf("dispatcher: tolerance must be positive")
+		return nil, ErrDispatcherToleranceMustBePositive
 	}
 
 	return &Dispatcher{
@@ -136,22 +136,22 @@ func (d *Dispatcher) Dispatch(ctx context.Context, message appport.WebhookMessag
 
 func validateDispatch(d *Dispatcher, message appport.WebhookMessage) (string, string, error) {
 	if d == nil || d.endpoints == nil || d.sender == nil || d.receipts == nil {
-		return "", "", fmt.Errorf("dispatcher: not initialized")
+		return "", "", ErrDispatcherNotInitialized
 	}
 
 	tenant := strings.TrimSpace(message.TenantID.String())
 	event := strings.TrimSpace(message.EventType)
 
 	if tenant == "" {
-		return "", "", fmt.Errorf("dispatcher: tenant is required")
+		return "", "", ErrDispatcherTenantIsRequired
 	}
 
 	if event == "" {
-		return "", "", fmt.Errorf("dispatcher: event type is required")
+		return "", "", ErrDispatcherEventTypeIsRequired
 	}
 
 	if message.Payload == nil {
-		return "", "", fmt.Errorf("dispatcher: payload is required")
+		return "", "", ErrDispatcherPayloadIsRequired
 	}
 
 	return tenant, event, nil

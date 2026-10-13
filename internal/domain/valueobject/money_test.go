@@ -2,7 +2,6 @@ package valueobject_test
 
 import (
 	"encoding/json"
-	"errors"
 	"math"
 	"math/rand/v2"
 	"testing"
@@ -14,10 +13,12 @@ import (
 
 func usd(t *testing.T, minor int64) valueobject.Money {
 	t.Helper()
+
 	m, err := valueobject.NewMoney(minor, testUSD)
 	if err != nil {
 		t.Fatalf("NewMoney: %v", err)
 	}
+
 	return m
 }
 
@@ -52,22 +53,25 @@ func TestMoneyAdd(t *testing.T) {
 			a:    usd(t, 100),
 			b: func() valueobject.Money {
 				m, _ := valueobject.NewMoney(50, testEUR)
+
 				return m
 			}(),
 			expectedResult: valueobject.Money{},
-			expectedError:  errors.New("money: CURRENCY_MISMATCH"),
+			expectedError:  valueobject.ErrMoneyCURRENCYMISMATCH,
 		},
 		{
 			name:           "overflow on add",
 			a:              usd(t, math.MaxInt64),
 			b:              usd(t, 1),
 			expectedResult: valueobject.Money{},
-			expectedError:  errors.New("money: arithmetic overflow"),
+			expectedError:  valueobject.ErrMoneyArithmeticOverflow,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, err := tc.a.Add(tc.b)
 			if tc.expectedError != nil {
 				assert.Error(t, err)
@@ -97,6 +101,7 @@ func TestCrossCurrencyMismatch(t *testing.T) {
 			name: "Add cross-currency",
 			op: func(a, b valueobject.Money) error {
 				_, opErr := a.Add(b)
+
 				return opErr
 			},
 			expectedError: "CURRENCY_MISMATCH",
@@ -105,6 +110,7 @@ func TestCrossCurrencyMismatch(t *testing.T) {
 			name: "Sub cross-currency",
 			op: func(a, b valueobject.Money) error {
 				_, opErr := a.Sub(b)
+
 				return opErr
 			},
 			expectedError: "CURRENCY_MISMATCH",
@@ -113,6 +119,7 @@ func TestCrossCurrencyMismatch(t *testing.T) {
 			name: "Compare cross-currency",
 			op: func(a, b valueobject.Money) error {
 				_, opErr := a.Compare(b)
+
 				return opErr
 			},
 			expectedError: "CURRENCY_MISMATCH",
@@ -121,6 +128,7 @@ func TestCrossCurrencyMismatch(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			opErr := tc.op(usd(t, 100), eurMoney)
 			assert.Error(t, opErr)
 			assert.Contains(t, opErr.Error(), tc.expectedError)
@@ -141,6 +149,7 @@ func TestOverflowRejected(t *testing.T) {
 			name: "MaxInt64+1 overflow",
 			op: func() error {
 				_, err := usd(t, math.MaxInt64).Add(usd(t, 1))
+
 				return err
 			},
 		},
@@ -148,6 +157,7 @@ func TestOverflowRejected(t *testing.T) {
 			name: "MaxInt64*2 overflow",
 			op: func() error {
 				_, err := usd(t, math.MaxInt64).MulScalar(2)
+
 				return err
 			},
 		},
@@ -155,6 +165,7 @@ func TestOverflowRejected(t *testing.T) {
 			name: "MinInt64-1 overflow",
 			op: func() error {
 				_, err := usd(t, math.MinInt64).Sub(usd(t, 1))
+
 				return err
 			},
 		},
@@ -162,6 +173,7 @@ func TestOverflowRejected(t *testing.T) {
 			name: "division by zero",
 			op: func() error {
 				_, err := usd(t, 1).DivScalar(0)
+
 				return err
 			},
 		},
@@ -169,6 +181,8 @@ func TestOverflowRejected(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.op()
 			assert.Error(t, err)
 		})
@@ -180,11 +194,13 @@ func TestArithmeticProperties(t *testing.T) {
 
 	// #nosec G404 -- deterministic pseudo-random generator for property testing
 	rng := rand.New(rand.NewPCG(42, 100))
+
 	vals := make([]int64, 0, 64)
-	for i := 0; i < 64; i++ {
+	for range 64 {
 		vals = append(vals, rng.Int64N(1_000_000_000)-500_000_000)
 	}
-	for i := 0; i < 1000; i++ {
+
+	for range 1000 {
 		a, b, c := vals[rng.IntN(len(vals))], vals[rng.IntN(len(vals))], vals[rng.IntN(len(vals))]
 		ma, mb, mc := usd(t, a), usd(t, b), usd(t, c)
 		ab, _ := ma.Add(mb)
@@ -222,12 +238,14 @@ func TestMoneyJSONShape(t *testing.T) {
 				AmountMinor: 10,
 				AssetCode:   "",
 			},
-			expectedError: errors.New("money: asset required"),
+			expectedError: valueobject.ErrMoneyAssetRequired,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			money, err := valueobject.MoneyFromDTO(tc.dto)
 			if tc.expectedError != nil {
 				assert.Error(t, err)
@@ -246,6 +264,7 @@ func TestMoneyJSONShape(t *testing.T) {
 	assert.Contains(t, string(data), `"asset_code":"`+testUSD+`"`)
 
 	var bad valueobject.MoneyDTO
+
 	err = json.Unmarshal([]byte(`{"amount_minor":10.5,"asset_code":"`+testUSD+`"}`), &bad)
 	assert.Error(t, err, "float quantity must not decode into int64")
 }
@@ -283,12 +302,14 @@ func TestMoneyFormat(t *testing.T) {
 			name:           "unregistered currency format fails",
 			money:          valueobject.MustMoney(1, "EUR"),
 			expectedResult: "",
-			expectedError:  errors.New("format: unregistered currency"),
+			expectedError:  valueobject.ErrFormatUnregisteredCurrency,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, formatErr := tc.money.Format(reg)
 			if tc.expectedError != nil {
 				assert.Error(t, formatErr)
@@ -372,16 +393,20 @@ func TestAllocateLargestRemainder(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, err := valueobject.AllocateLargestRemainder(tc.total, tc.weights)
 			if tc.expectedError {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
 				assert.Equal(t, tc.expectedResult, got)
+
 				var sum int64
 				for _, s := range got {
 					sum += s
 				}
+
 				assert.Equal(t, tc.total, sum)
 			}
 		})

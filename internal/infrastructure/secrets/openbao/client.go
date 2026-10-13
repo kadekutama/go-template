@@ -1,3 +1,4 @@
+// Package openbao reads secrets from OpenBao KV and mints dynamic database credentials.
 package openbao
 
 import (
@@ -14,11 +15,11 @@ import (
 	"github.com/kadekutama/go-template/pkg/jsonparser"
 )
 
-// OpenBaoParams carries constructor dependencies (Parameter Object pattern).
+// Params carries constructor dependencies (Parameter Object pattern).
 // DefaultTTL bounds the ExpiresAt hint returned with each secret; values are
 // never cached in the adapter (every Get is a strong read against OpenBao),
 // so rotation lands on the next read without restart.
-type OpenBaoParams struct {
+type Params struct {
 	Address    string        `validate:"required,url"`
 	Token      string        `validate:"required,min=8"`
 	KVMount    string        `validate:"required,max=64"`
@@ -45,7 +46,7 @@ var _ appport.SecretStore = (*Store)(nil)
 
 // NewStore builds the OpenBao adapter; HTTP and Clock must be non-nil and
 // DBMount must be explicit (no silent "database" default per ADR-021).
-func NewStore(params OpenBaoParams) (*Store, error) {
+func NewStore(params Params) (*Store, error) {
 	if params.Address == "" || params.Token == "" || params.KVMount == "" || params.DBMount == "" {
 		return nil, ErrConfigRequired
 	}
@@ -75,18 +76,6 @@ func NewStore(params OpenBaoParams) (*Store, error) {
 	}, nil
 }
 
-// now returns the current UTC time through the injected clock.
-func (s *Store) now() time.Time {
-	return s.clock.Now().UTC()
-}
-
-// kvResponse is the minimal KVv2 read payload we consume.
-type kvResponse struct {
-	Data struct {
-		Data map[string]any `json:"data"`
-	} `json:"data"`
-}
-
 // Get returns one secret by tenant + name. Every call is a strong read
 // against OpenBao: nothing is cached, so rotation is visible on the next
 // read and a restart loses nothing.
@@ -109,6 +98,18 @@ func (s *Store) Get(ctx context.Context, tenant valueobject.TenantID, name strin
 	}
 
 	return appport.Secret{Name: name, Value: value, ExpiresAt: s.now().Add(s.defaultTTL)}, nil
+}
+
+// now returns the current UTC time through the injected clock.
+func (s *Store) now() time.Time {
+	return s.clock.Now().UTC()
+}
+
+// kvResponse is the minimal KVv2 read payload we consume.
+type kvResponse struct {
+	Data struct {
+		Data map[string]any `json:"data"`
+	} `json:"data"`
 }
 
 // fetchKV reads one KVv2 secret (tenant-scoped path). A missing secret maps
@@ -140,7 +141,7 @@ func (s *Store) fetchKV(ctx context.Context, tenant, name string) ([]byte, error
 		return nil, fmt.Errorf("%w: %s status %d", ErrSecretUnavailable, name, resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<httpMaxBodyShift))
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s", ErrSecretUnavailable, name)
 	}

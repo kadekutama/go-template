@@ -59,7 +59,7 @@ type MockTenantCommandUseCases_ProvisionTenant_Call struct {
 // ProvisionTenant is a helper method to define mock.On call
 //   - ctx context.Context
 //   - req port.ProvisionTenantRequest
-func (_e *MockTenantCommandUseCases_Expecter) ProvisionTenant(ctx interface{}, req interface{}) *MockTenantCommandUseCases_ProvisionTenant_Call {
+func (_e *MockTenantCommandUseCases_Expecter) ProvisionTenant(ctx any, req any) *MockTenantCommandUseCases_ProvisionTenant_Call {
 	return &MockTenantCommandUseCases_ProvisionTenant_Call{Call: _e.mock.On("ProvisionTenant", ctx, req)}
 }
 
@@ -116,7 +116,7 @@ type MockTenantCommandUseCases_UpdateTenantSettings_Call struct {
 // UpdateTenantSettings is a helper method to define mock.On call
 //   - ctx context.Context
 //   - req port.UpdateTenantSettingsRequest
-func (_e *MockTenantCommandUseCases_Expecter) UpdateTenantSettings(ctx interface{}, req interface{}) *MockTenantCommandUseCases_UpdateTenantSettings_Call {
+func (_e *MockTenantCommandUseCases_Expecter) UpdateTenantSettings(ctx any, req any) *MockTenantCommandUseCases_UpdateTenantSettings_Call {
 	return &MockTenantCommandUseCases_UpdateTenantSettings_Call{Call: _e.mock.On("UpdateTenantSettings", ctx, req)}
 }
 

@@ -22,8 +22,8 @@ func (_m *MockScriptRunner) EXPECT() *MockScriptRunner_Expecter {
 }
 
 // Eval provides a mock function with given fields: ctx, script, keys, args
-func (_m *MockScriptRunner) Eval(ctx context.Context, script string, keys []string, args ...interface{}) (interface{}, error) {
-	var _ca []interface{}
+func (_m *MockScriptRunner) Eval(ctx context.Context, script string, keys []string, args ...any) (any, error) {
+	var _ca []any
 	_ca = append(_ca, ctx, script, keys)
 	_ca = append(_ca, args...)
 	ret := _m.Called(_ca...)
@@ -32,20 +32,20 @@ func (_m *MockScriptRunner) Eval(ctx context.Context, script string, keys []stri
 		panic("no return value specified for Eval")
 	}
 
-	var r0 interface{}
+	var r0 any
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, []string, ...interface{}) (interface{}, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, string, []string, ...any) (any, error)); ok {
 		return rf(ctx, script, keys, args...)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, string, []string, ...interface{}) interface{}); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, string, []string, ...any) any); ok {
 		r0 = rf(ctx, script, keys, args...)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(interface{})
+			r0 = ret.Get(0).(any)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, string, []string, ...interface{}) error); ok {
+	if rf, ok := ret.Get(1).(func(context.Context, string, []string, ...any) error); ok {
 		r1 = rf(ctx, script, keys, args...)
 	} else {
 		r1 = ret.Error(1)
@@ -63,18 +63,18 @@ type MockScriptRunner_Eval_Call struct {
 //   - ctx context.Context
 //   - script string
 //   - keys []string
-//   - args ...interface{}
-func (_e *MockScriptRunner_Expecter) Eval(ctx interface{}, script interface{}, keys interface{}, args ...interface{}) *MockScriptRunner_Eval_Call {
+//   - args ...any
+func (_e *MockScriptRunner_Expecter) Eval(ctx any, script any, keys any, args ...any) *MockScriptRunner_Eval_Call {
 	return &MockScriptRunner_Eval_Call{Call: _e.mock.On("Eval",
-		append([]interface{}{ctx, script, keys}, args...)...)}
+		append([]any{ctx, script, keys}, args...)...)}
 }
 
-func (_c *MockScriptRunner_Eval_Call) Run(run func(ctx context.Context, script string, keys []string, args ...interface{})) *MockScriptRunner_Eval_Call {
+func (_c *MockScriptRunner_Eval_Call) Run(run func(ctx context.Context, script string, keys []string, args ...any)) *MockScriptRunner_Eval_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		variadicArgs := make([]interface{}, len(args)-3)
+		variadicArgs := make([]any, len(args)-3)
 		for i, a := range args[3:] {
 			if a != nil {
-				variadicArgs[i] = a.(interface{})
+				variadicArgs[i] = a.(any)
 			}
 		}
 		run(args[0].(context.Context), args[1].(string), args[2].([]string), variadicArgs...)
@@ -82,12 +82,12 @@ func (_c *MockScriptRunner_Eval_Call) Run(run func(ctx context.Context, script s
 	return _c
 }
 
-func (_c *MockScriptRunner_Eval_Call) Return(_a0 interface{}, _a1 error) *MockScriptRunner_Eval_Call {
+func (_c *MockScriptRunner_Eval_Call) Return(_a0 any, _a1 error) *MockScriptRunner_Eval_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *MockScriptRunner_Eval_Call) RunAndReturn(run func(context.Context, string, []string, ...interface{}) (interface{}, error)) *MockScriptRunner_Eval_Call {
+func (_c *MockScriptRunner_Eval_Call) RunAndReturn(run func(context.Context, string, []string, ...any) (any, error)) *MockScriptRunner_Eval_Call {
 	_c.Call.Return(run)
 	return _c
 }

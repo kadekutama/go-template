@@ -71,6 +71,7 @@ func seedCasbinRows(t *testing.T, db *gorm.DB) {
 }
 
 func TestDBPolicyLoaderRoundTrip(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	type testCase struct {
@@ -106,6 +107,7 @@ func TestDBPolicyLoaderRoundTrip(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			db := openPolicyDB(t)
 
 			if tc.seed {
@@ -124,6 +126,7 @@ func TestDBPolicyLoaderRoundTrip(t *testing.T) {
 }
 
 func TestDBPolicyLoaderHotReload(t *testing.T) {
+	t.Parallel()
 	testcontainers.SkipIfNoDocker(t)
 
 	db := openPolicyDB(t)
@@ -132,7 +135,7 @@ func TestDBPolicyLoaderHotReload(t *testing.T) {
 	loader, err := rbac.NewDBPolicyLoader(db)
 	require.NoError(t, err)
 
-	enforcer, err := rbac.NewEnforcer(rbac.RBACParams{
+	enforcer, err := rbac.NewEnforcer(rbac.Params{
 		Loader:               loader,
 		ThresholdAmountMinor: 100000,
 	})

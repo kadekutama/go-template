@@ -55,6 +55,7 @@ func TestValidateOnboarding(t *testing.T) {
 			req: func() service.OnboardingRequest {
 				r := baseOnboardingRequest()
 				r.Name = "other corp"
+
 				return r
 			}(),
 			expectedCount: 0,
@@ -65,6 +66,7 @@ func TestValidateOnboarding(t *testing.T) {
 			req: func() service.OnboardingRequest {
 				r := baseOnboardingRequest()
 				r.MaxAssets = 0
+
 				return r
 			}(),
 			expectedCount: 0,
@@ -75,6 +77,7 @@ func TestValidateOnboarding(t *testing.T) {
 			req: func() service.OnboardingRequest {
 				r := baseOnboardingRequest()
 				r.Region = "ap-south-1"
+
 				return r
 			}(),
 			expectedCount: 0,
@@ -85,6 +88,7 @@ func TestValidateOnboarding(t *testing.T) {
 			req: func() service.OnboardingRequest {
 				r := baseOnboardingRequest()
 				r.TenantID = ""
+
 				return r
 			}(),
 			expectedCount: 6,
@@ -95,6 +99,7 @@ func TestValidateOnboarding(t *testing.T) {
 			req: func() service.OnboardingRequest {
 				r := baseOnboardingRequest()
 				r.TenantID = "   "
+
 				return r
 			}(),
 			expectedCount: 0,
@@ -105,6 +110,7 @@ func TestValidateOnboarding(t *testing.T) {
 			req: func() service.OnboardingRequest {
 				r := baseOnboardingRequest()
 				r.TenantID = "not-a-uuid"
+
 				return r
 			}(),
 			expectedCount: 0,
@@ -115,6 +121,7 @@ func TestValidateOnboarding(t *testing.T) {
 			req: func() service.OnboardingRequest {
 				r := baseOnboardingRequest()
 				r.LedgerID = ""
+
 				return r
 			}(),
 			expectedCount: 6,
@@ -125,6 +132,7 @@ func TestValidateOnboarding(t *testing.T) {
 			req: func() service.OnboardingRequest {
 				r := baseOnboardingRequest()
 				r.LedgerID = "   "
+
 				return r
 			}(),
 			expectedCount: 0,
@@ -135,6 +143,7 @@ func TestValidateOnboarding(t *testing.T) {
 			req: func() service.OnboardingRequest {
 				r := baseOnboardingRequest()
 				r.LedgerID = "not-a-uuid"
+
 				return r
 			}(),
 			expectedCount: 0,
@@ -145,6 +154,7 @@ func TestValidateOnboarding(t *testing.T) {
 			req: func() service.OnboardingRequest {
 				r := baseOnboardingRequest()
 				r.Settings.Timezone = ""
+
 				return r
 			}(),
 			expectedCount: 0,
@@ -155,6 +165,7 @@ func TestValidateOnboarding(t *testing.T) {
 			req: func() service.OnboardingRequest {
 				r := baseOnboardingRequest()
 				r.Settings.DefaultCurrency = "GBP"
+
 				return r
 			}(),
 			expectedCount: 0,
@@ -165,6 +176,7 @@ func TestValidateOnboarding(t *testing.T) {
 			req: func() service.OnboardingRequest {
 				r := baseOnboardingRequest()
 				r.RequestedBy = ""
+
 				return r
 			}(),
 			expectedCount: 0,
@@ -175,6 +187,7 @@ func TestValidateOnboarding(t *testing.T) {
 			req: func() service.OnboardingRequest {
 				r := baseOnboardingRequest()
 				r.RequestedBy = "   "
+
 				return r
 			}(),
 			expectedCount: 0,
@@ -185,6 +198,7 @@ func TestValidateOnboarding(t *testing.T) {
 			req: func() service.OnboardingRequest {
 				r := baseOnboardingRequest()
 				r.EventID = ""
+
 				return r
 			}(),
 			expectedCount: 0,
@@ -195,6 +209,7 @@ func TestValidateOnboarding(t *testing.T) {
 			req: func() service.OnboardingRequest {
 				r := baseOnboardingRequest()
 				r.EventID = "   "
+
 				return r
 			}(),
 			expectedCount: 0,
@@ -205,6 +220,7 @@ func TestValidateOnboarding(t *testing.T) {
 			req: func() service.OnboardingRequest {
 				r := baseOnboardingRequest()
 				r.Now = time.Time{}
+
 				return r
 			}(),
 			expectedCount: 0,
@@ -214,13 +230,17 @@ func TestValidateOnboarding(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			plan, err := service.ValidateOnboarding(tc.req)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
 				assert.Len(t, plan.Accounts, tc.expectedCount)
 				assert.Equal(t, tc.req.TenantID.String(), plan.Tenant.ID.String())
 				assert.Equal(t, tc.req.LedgerID.String(), plan.LedgerID)
 				assert.Equal(t, "Acme Corp", plan.Event.Name)
+
 				if tc.req.TenantID.String() != "" {
 					assert.NotEmpty(t, plan.Key.KeyID)
 				}
@@ -241,6 +261,7 @@ func TestValidateOnboardingPlanIsolatedFromRequest(t *testing.T) {
 
 	plan, err := service.ValidateOnboarding(baseReq)
 	require.NoError(t, err)
+
 	baseReq.Settings.EnabledFeatures[0] = "MUTATED"
 	baseReq.Settings.EnabledPaymentMethods[0] = "MUTATED"
 	assert.Equal(t, []string{"transfers"}, plan.Tenant.Settings.EnabledFeatures)
@@ -340,9 +361,12 @@ func TestDefaultAccountsForAssets(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			accounts, err := service.DefaultAccountsForAssets(tc.assets, tc.maxAssets)
 			assert.Equal(t, tc.expectedError, err)
 			assert.Len(t, accounts, tc.expectedCount)
+
 			if tc.expectedError == nil {
 				purposes := map[string]bool{}
 				for _, a := range accounts {
@@ -350,6 +374,7 @@ func TestDefaultAccountsForAssets(t *testing.T) {
 					require.NotEmpty(t, a.Number)
 					require.NotEmpty(t, a.Name)
 				}
+
 				assert.True(t, purposes[service.TenantPurposeOperating])
 				assert.True(t, purposes[service.TenantPurposeFee])
 				assert.True(t, purposes[service.TenantPurposeSuspense])
@@ -421,6 +446,8 @@ func TestIsRegionAllowed(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := service.IsRegionAllowed(tc.region, tc.allowed)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -484,6 +511,8 @@ func TestIsNameTaken(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := service.IsNameTaken(tc.tenantName, tc.existing)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -507,6 +536,7 @@ func TestDeriveTenantAlias(t *testing.T) {
 		for attempt := 2; attempt <= 100; attempt++ {
 			taken = append(taken, "acme-"+strconv.Itoa(attempt))
 		}
+
 		return taken
 	}()
 
@@ -555,6 +585,8 @@ func TestDeriveTenantAlias(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			alias, err := service.DeriveTenantAlias(tc.requested, tc.tenantName, tc.taken)
 			assert.Equal(t, tc.expectedError, err)
 			assert.Equal(t, tc.expectedAlias, alias)

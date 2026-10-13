@@ -19,9 +19,10 @@ type ReportGeneratedPayload struct {
 }
 
 // NewReportGenerated builds report.generated.v1.
-func NewReportGenerated(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload ReportGeneratedPayload, meta EventMetadata) (TypedEvent[ReportGeneratedPayload], error) {
+func NewReportGenerated(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload ReportGeneratedPayload, meta Metadata) (TypedEvent[ReportGeneratedPayload], error) {
 	if err := requireIDs(map[string]string{"report_id": payload.ReportID, fieldTenantID: payload.TenantID, "template": payload.Template}); err != nil {
 		return TypedEvent[ReportGeneratedPayload]{}, err
 	}
+
 	return newTyped("report.generated.v1", eventID, aggregateID, "Report", occurredAt, version, seq, payload, meta)
 }

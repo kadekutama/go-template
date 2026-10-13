@@ -82,6 +82,8 @@ func TestAmountWithinTolerance(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := specification.AmountWithinTolerance(tc.ledgerSum, tc.externalSum, tc.toleranceMinor)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -133,6 +135,8 @@ func TestTimingWithinWindow(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := specification.TimingWithinWindow(tc.skew, tc.window)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -206,6 +210,8 @@ func TestCanAutoResolveTiming(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := specification.CanAutoResolveTiming(tc.breakType, tc.allowed, tc.skew, tc.maxSkew)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})

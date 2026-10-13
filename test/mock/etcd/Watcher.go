@@ -60,7 +60,7 @@ type MockWatcher_Cached_Call struct {
 
 // Cached is a helper method to define mock.On call
 //   - key string
-func (_e *MockWatcher_Expecter) Cached(key interface{}) *MockWatcher_Cached_Call {
+func (_e *MockWatcher_Expecter) Cached(key any) *MockWatcher_Cached_Call {
 	return &MockWatcher_Cached_Call{Call: _e.mock.On("Cached", key)}
 }
 
@@ -155,7 +155,7 @@ type MockWatcher_WatchPrefix_Call struct {
 //   - ctx context.Context
 //   - prefix string
 //   - onChange etcd.WatchHandler
-func (_e *MockWatcher_Expecter) WatchPrefix(ctx interface{}, prefix interface{}, onChange interface{}) *MockWatcher_WatchPrefix_Call {
+func (_e *MockWatcher_Expecter) WatchPrefix(ctx any, prefix any, onChange any) *MockWatcher_WatchPrefix_Call {
 	return &MockWatcher_WatchPrefix_Call{Call: _e.mock.On("WatchPrefix", ctx, prefix, onChange)}
 }
 

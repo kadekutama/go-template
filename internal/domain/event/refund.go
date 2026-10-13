@@ -1,7 +1,6 @@
 package event
 
 import (
-	"errors"
 	"time"
 )
 
@@ -15,13 +14,15 @@ type RefundCreatedPayload struct {
 }
 
 // NewRefundCreated builds refund.created.v1.
-func NewRefundCreated(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload RefundCreatedPayload, meta EventMetadata) (TypedEvent[RefundCreatedPayload], error) {
+func NewRefundCreated(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload RefundCreatedPayload, meta Metadata) (TypedEvent[RefundCreatedPayload], error) {
 	if err := requireIDs(map[string]string{fieldRefundID: payload.RefundID, fieldTenantID: payload.TenantID, "original_posting_id": payload.OriginalPostingID}); err != nil {
 		return TypedEvent[RefundCreatedPayload]{}, err
 	}
+
 	if payload.RefundAmountMinor <= 0 {
-		return TypedEvent[RefundCreatedPayload]{}, errors.New("event: refund_amount_minor must be positive")
+		return TypedEvent[RefundCreatedPayload]{}, ErrEventRefundAmountMinorMustBePositive
 	}
+
 	return newTyped("refund.created.v1", eventID, aggregateID, "Refund", occurredAt, version, seq, payload, meta)
 }
 
@@ -33,10 +34,11 @@ type RefundSucceededPayload struct {
 }
 
 // NewRefundSucceeded builds refund.succeeded.v1.
-func NewRefundSucceeded(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload RefundSucceededPayload, meta EventMetadata) (TypedEvent[RefundSucceededPayload], error) {
+func NewRefundSucceeded(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload RefundSucceededPayload, meta Metadata) (TypedEvent[RefundSucceededPayload], error) {
 	if err := requireIDs(map[string]string{fieldRefundID: payload.RefundID, fieldTenantID: payload.TenantID, fieldPostingID: payload.PostingID}); err != nil {
 		return TypedEvent[RefundSucceededPayload]{}, err
 	}
+
 	return newTyped("refund.succeeded.v1", eventID, aggregateID, "Refund", occurredAt, version, seq, payload, meta)
 }
 
@@ -49,9 +51,10 @@ type RefundFailedPayload struct {
 }
 
 // NewRefundFailed builds refund.failed.v1.
-func NewRefundFailed(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload RefundFailedPayload, meta EventMetadata) (TypedEvent[RefundFailedPayload], error) {
+func NewRefundFailed(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload RefundFailedPayload, meta Metadata) (TypedEvent[RefundFailedPayload], error) {
 	if err := requireIDs(map[string]string{fieldRefundID: payload.RefundID, fieldTenantID: payload.TenantID, fieldCode: payload.Code}); err != nil {
 		return TypedEvent[RefundFailedPayload]{}, err
 	}
+
 	return newTyped("refund.failed.v1", eventID, aggregateID, "Refund", occurredAt, version, seq, payload, meta)
 }

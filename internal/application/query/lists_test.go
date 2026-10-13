@@ -23,6 +23,7 @@ func TestListDelegates(t *testing.T) {
 	t.Parallel()
 
 	t.Run("intent list delegates", func(t *testing.T) {
+		t.Parallel()
 		payments := mockapplication.NewMockPaymentQueryUseCases(t)
 		payments.EXPECT().
 			ListIntents(mock.Anything, mock.Anything, mock.Anything).
@@ -38,6 +39,7 @@ func TestListDelegates(t *testing.T) {
 	})
 
 	t.Run("refund list delegates", func(t *testing.T) {
+		t.Parallel()
 		payments := mockapplication.NewMockPaymentQueryUseCases(t)
 		payments.EXPECT().
 			ListRefunds(mock.Anything, mock.Anything, mock.Anything).
@@ -53,6 +55,7 @@ func TestListDelegates(t *testing.T) {
 	})
 
 	t.Run("payout and topup lists delegate", func(t *testing.T) {
+		t.Parallel()
 		payments := mockapplication.NewMockPaymentQueryUseCases(t)
 		payments.EXPECT().
 			ListPayouts(mock.Anything, mock.Anything, mock.Anything).
@@ -71,12 +74,14 @@ func TestListDelegates(t *testing.T) {
 		listed, err := payouts.ListPayouts(context.Background(), "t-1", 10)
 		require.NoError(t, err)
 		assert.Len(t, listed, 1)
+
 		topped, err := payouts.ListTopups(context.Background(), "t-1", 10)
 		require.NoError(t, err)
 		assert.Len(t, topped, 1)
 	})
 
 	t.Run("transfer list reads through store", func(t *testing.T) {
+		t.Parallel()
 		transfers := mockcommand.NewMockTransferStore(t)
 		transfers.EXPECT().
 			ListTransfers(mock.Anything, mock.Anything).
@@ -91,6 +96,7 @@ func TestListDelegates(t *testing.T) {
 	})
 
 	t.Run("transaction list delegates to posting search", func(t *testing.T) {
+		t.Parallel()
 		search := mockapplication.NewMockPostingQuery(t)
 		search.EXPECT().
 			Search(mock.Anything, mock.Anything).
@@ -116,6 +122,7 @@ func TestStatementRead(t *testing.T) {
 	at := time.Date(2026, 9, 15, 12, 0, 0, 0, time.UTC)
 
 	t.Run("statement gathers dated lines", func(t *testing.T) {
+		t.Parallel()
 		search := mockapplication.NewMockPostingQuery(t)
 		search.EXPECT().
 			Search(mock.Anything, mock.Anything).
@@ -154,6 +161,7 @@ func TestStatementRead(t *testing.T) {
 	})
 
 	t.Run("cross-ledger statement rejected", func(t *testing.T) {
+		t.Parallel()
 		accounts := mockdomain.NewMockAccountRepository(t)
 		accounts.EXPECT().
 			FindByID(mock.Anything, valueobject.TenantID("t-1"), valueobject.AccountID("a-1")).
@@ -177,6 +185,7 @@ func TestOpsListReads(t *testing.T) {
 	t.Parallel()
 
 	t.Run("recon run and break lists", func(t *testing.T) {
+		t.Parallel()
 		store := mockcommand.NewMockReconStore(t)
 		store.EXPECT().
 			ListRuns(mock.Anything, valueobject.TenantID("t-1"), 10).
@@ -191,12 +200,14 @@ func TestOpsListReads(t *testing.T) {
 		runs, err := svc.ListRuns(context.Background(), "t-1", 10)
 		require.NoError(t, err)
 		assert.Len(t, runs, 2)
+
 		breaks, err := svc.ListBreaks(context.Background(), "t-1", "", 10)
 		require.NoError(t, err)
 		assert.Len(t, breaks, 1)
 	})
 
 	t.Run("period list reads through", func(t *testing.T) {
+		t.Parallel()
 		store := mockcommand.NewMockPeriodStore(t)
 		store.EXPECT().
 			ListPeriods(mock.Anything, "t-1", "l-1", 10).
@@ -210,6 +221,7 @@ func TestOpsListReads(t *testing.T) {
 	})
 
 	t.Run("report list reads through", func(t *testing.T) {
+		t.Parallel()
 		store := mockcommand.NewMockReportStore(t)
 		store.EXPECT().
 			ListReports(mock.Anything, valueobject.TenantID("t-1"), 10).

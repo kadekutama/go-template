@@ -61,7 +61,7 @@ type MockHoldRepository_Create_Call struct {
 // Create is a helper method to define mock.On call
 //   - ctx context.Context
 //   - hold entity.HoldData
-func (_e *MockHoldRepository_Expecter) Create(ctx interface{}, hold interface{}) *MockHoldRepository_Create_Call {
+func (_e *MockHoldRepository_Expecter) Create(ctx any, hold any) *MockHoldRepository_Create_Call {
 	return &MockHoldRepository_Create_Call{Call: _e.mock.On("Create", ctx, hold)}
 }
 
@@ -121,7 +121,7 @@ type MockHoldRepository_FindActiveByAccount_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - account valueobject.AccountID
-func (_e *MockHoldRepository_Expecter) FindActiveByAccount(ctx interface{}, tenant interface{}, account interface{}) *MockHoldRepository_FindActiveByAccount_Call {
+func (_e *MockHoldRepository_Expecter) FindActiveByAccount(ctx any, tenant any, account any) *MockHoldRepository_FindActiveByAccount_Call {
 	return &MockHoldRepository_FindActiveByAccount_Call{Call: _e.mock.On("FindActiveByAccount", ctx, tenant, account)}
 }
 
@@ -179,7 +179,7 @@ type MockHoldRepository_FindByID_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - id valueobject.HoldID
-func (_e *MockHoldRepository_Expecter) FindByID(ctx interface{}, tenant interface{}, id interface{}) *MockHoldRepository_FindByID_Call {
+func (_e *MockHoldRepository_Expecter) FindByID(ctx any, tenant any, id any) *MockHoldRepository_FindByID_Call {
 	return &MockHoldRepository_FindByID_Call{Call: _e.mock.On("FindByID", ctx, tenant, id)}
 }
 
@@ -227,7 +227,7 @@ type MockHoldRepository_Update_Call struct {
 //   - ctx context.Context
 //   - hold entity.HoldData
 //   - expectedVersion int64
-func (_e *MockHoldRepository_Expecter) Update(ctx interface{}, hold interface{}, expectedVersion interface{}) *MockHoldRepository_Update_Call {
+func (_e *MockHoldRepository_Expecter) Update(ctx any, hold any, expectedVersion any) *MockHoldRepository_Update_Call {
 	return &MockHoldRepository_Update_Call{Call: _e.mock.On("Update", ctx, hold, expectedVersion)}
 }
 

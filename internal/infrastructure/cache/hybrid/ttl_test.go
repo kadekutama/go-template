@@ -1,7 +1,6 @@
 package hybrid_test
 
 import (
-	"errors"
 	"testing"
 	"time"
 
@@ -40,90 +39,102 @@ func TestTTLSetValidate(t *testing.T) {
 		{
 			name:          "zero set rejected",
 			ttlSet:        hybrid.TTLSet{},
-			expectedError: errors.New("cache: ttl balance must be positive"),
+			expectedError: hybrid.ErrCacheTTLBalanceMustBePositive,
 		},
 		{
 			name: "missing balance cursor rejected",
 			ttlSet: func() hybrid.TTLSet {
 				ttl := validSet
 				ttl.BalanceCursor = 0
+
 				return ttl
 			}(),
-			expectedError: errors.New("cache: ttl balance_cursor must be positive"),
+			expectedError: hybrid.ErrCacheTTLBalanceCursorMustBePositive,
 		},
 		{
 			name: "missing config rejected",
 			ttlSet: func() hybrid.TTLSet {
 				ttl := validSet
 				ttl.Config = 0
+
 				return ttl
 			}(),
-			expectedError: errors.New("cache: ttl config must be positive"),
+			expectedError: hybrid.ErrCacheTTLConfigMustBePositive,
 		},
 		{
 			name: "missing config long rejected",
 			ttlSet: func() hybrid.TTLSet {
 				ttl := validSet
 				ttl.ConfigLong = 0
+
 				return ttl
 			}(),
-			expectedError: errors.New("cache: ttl config_long must be positive"),
+			expectedError: hybrid.ErrCacheTTLConfigLongMustBePositive,
 		},
 		{
 			name: "missing fx rejected",
 			ttlSet: func() hybrid.TTLSet {
 				ttl := validSet
 				ttl.FX = 0
+
 				return ttl
 			}(),
-			expectedError: errors.New("cache: ttl fx must be positive"),
+			expectedError: hybrid.ErrCacheTTLFxMustBePositive,
 		},
 		{
 			name: "missing idempotency hint rejected",
 			ttlSet: func() hybrid.TTLSet {
 				ttl := validSet
 				ttl.IdempotencyHint = 0
+
 				return ttl
 			}(),
-			expectedError: errors.New("cache: ttl idempotency_hint must be positive"),
+			expectedError: hybrid.ErrCacheTTLIdempotencyHintMustBePositive,
 		},
 		{
 			name: "missing rate limit rejected",
 			ttlSet: func() hybrid.TTLSet {
 				ttl := validSet
 				ttl.RateLimit = 0
+
 				return ttl
 			}(),
-			expectedError: errors.New("cache: ttl rate_limit must be positive"),
+			expectedError: hybrid.ErrCacheTTLRateLimitMustBePositive,
 		},
 		{
 			name: "missing l1 populate rejected",
 			ttlSet: func() hybrid.TTLSet {
 				ttl := validSet
 				ttl.L1Populate = 0
+
 				return ttl
 			}(),
-			expectedError: errors.New("cache: ttl l1_populate must be positive"),
+			expectedError: hybrid.ErrCacheTTLL1PopulateMustBePositive,
 		},
 		{
 			name: "negative bound rejected",
 			ttlSet: func() hybrid.TTLSet {
 				ttl := validSet
 				ttl.RateLimit = -time.Second
+
 				return ttl
 			}(),
-			expectedError: errors.New("cache: ttl rate_limit must be positive"),
+			expectedError: hybrid.ErrCacheTTLRateLimitMustBePositive,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.ttlSet.Validate()
 			if tc.expectedError != nil {
 				require.Error(t, err)
 				assert.EqualError(t, err, tc.expectedError.Error())
+
 				return
 			}
+
 			require.NoError(t, err)
 		})
 	}

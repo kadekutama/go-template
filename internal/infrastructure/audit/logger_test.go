@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"testing"
 	"time"
 
@@ -41,7 +40,7 @@ func testLogger(t *testing.T) *audit.Logger {
 	clk := mockapplication.NewMockClock(t)
 	clk.EXPECT().Now().Return(time.Date(2026, 9, 23, 0, 0, 0, 0, time.UTC)).Maybe()
 
-	logger, err := audit.NewLogger(audit.AuditParams{
+	logger, err := audit.NewLogger(audit.Params{
 		DB:         lazyDB(t),
 		SigningKey: []byte("0123456789abcdef0123456789abcdef"),
 		Clock:      clk,
@@ -59,15 +58,15 @@ func TestNewLoggerValidation(t *testing.T) {
 
 	type testCase struct {
 		name          string
-		params        audit.AuditParams
+		params        audit.Params
 		expectedError error
 	}
 
 	testCases := []testCase{
 		{
 			name: "missing db rejected",
-			params: func() audit.AuditParams {
-				return audit.AuditParams{
+			params: func() audit.Params {
+				return audit.Params{
 					SigningKey: []byte("0123456789abcdef0123456789abcdef"),
 					Clock:      clk,
 				}
@@ -76,8 +75,8 @@ func TestNewLoggerValidation(t *testing.T) {
 		},
 		{
 			name: "short signing key rejected",
-			params: func() audit.AuditParams {
-				return audit.AuditParams{
+			params: func() audit.Params {
+				return audit.Params{
 					DB:         lazyDB(t),
 					SigningKey: []byte("short"),
 					Clock:      clk,
@@ -87,8 +86,8 @@ func TestNewLoggerValidation(t *testing.T) {
 		},
 		{
 			name: "missing clock rejected",
-			params: func() audit.AuditParams {
-				return audit.AuditParams{
+			params: func() audit.Params {
+				return audit.Params{
 					DB:         lazyDB(t),
 					SigningKey: []byte("0123456789abcdef0123456789abcdef"),
 					Clock:      nil,
@@ -100,6 +99,8 @@ func TestNewLoggerValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			_, err := audit.NewLogger(tc.params)
 			assert.ErrorIs(t, err, tc.expectedError)
 		})
@@ -175,6 +176,7 @@ func TestRecordValidation(t *testing.T) {
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			}(),
 			entry: func() appport.AuditEntry {
@@ -191,6 +193,7 @@ func TestRecordValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			logger := testLogger(t)
 
 			err := logger.Record(tc.ctx, tc.entry)
@@ -245,6 +248,7 @@ func TestRecordTxValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			logger := testLogger(t)
 
 			err := logger.RecordTx(tc.ctx, tc.tx, tc.entry)
@@ -268,6 +272,7 @@ func TestMerkleTreeRoot(t *testing.T) {
 			nodes: nil,
 			expectedRoot: func() string {
 				sum := sha256.Sum256(nil)
+
 				return hex.EncodeToString(sum[:])
 			}(),
 		},
@@ -281,6 +286,7 @@ func TestMerkleTreeRoot(t *testing.T) {
 			nodes: []string{"a", "b"},
 			expectedRoot: func() string {
 				sum := sha256.Sum256([]byte("ab"))
+
 				return hex.EncodeToString(sum[:])
 			}(),
 		},
@@ -291,6 +297,7 @@ func TestMerkleTreeRoot(t *testing.T) {
 				ab := sha256.Sum256([]byte("ab"))
 				cc := sha256.Sum256([]byte("cc"))
 				root := sha256.Sum256([]byte(hex.EncodeToString(ab[:]) + hex.EncodeToString(cc[:])))
+
 				return hex.EncodeToString(root[:])
 			}(),
 		},
@@ -301,6 +308,7 @@ func TestMerkleTreeRoot(t *testing.T) {
 				ab := sha256.Sum256([]byte("ab"))
 				cd := sha256.Sum256([]byte("cd"))
 				root := sha256.Sum256([]byte(hex.EncodeToString(ab[:]) + hex.EncodeToString(cd[:])))
+
 				return hex.EncodeToString(root[:])
 			}(),
 		},
@@ -308,6 +316,8 @@ func TestMerkleTreeRoot(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actual := audit.MerkleTreeRootForTest(tc.nodes)
 			assert.Equal(t, tc.expectedRoot, actual)
 		})
@@ -353,6 +363,8 @@ func TestSignAndVerifyHash(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			sig := audit.SignHashForTest(key, tc.entryHash)
 			if tc.tamperedSig {
 				sig = "00" + sig[2:]
@@ -388,13 +400,14 @@ func TestCheckpointValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			clk := mockapplication.NewMockClock(t)
 			clk.EXPECT().Now().Return(time.Date(2026, 9, 23, 0, 0, 0, 0, time.UTC)).Maybe()
 
 			worm := mockaudit.NewMockWORMExporter(t)
-			worm.EXPECT().ArchiveCheckpoint(mock.Anything, mock.Anything).Return(errors.New("worm error")).Maybe()
+			worm.EXPECT().ArchiveCheckpoint(mock.Anything, mock.Anything).Return(audit.ErrWormError).Maybe()
 
-			logger, err := audit.NewLogger(audit.AuditParams{
+			logger, err := audit.NewLogger(audit.Params{
 				DB:         lazyDB(t),
 				SigningKey: []byte("0123456789abcdef0123456789abcdef"),
 				Clock:      clk,

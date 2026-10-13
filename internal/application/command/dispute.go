@@ -77,34 +77,43 @@ func (s *DisputeService) OpenDispute(ctx context.Context, cmd port.OpenDisputeCo
 	if err := validateDisputeOpen(cmd); err != nil {
 		return port.DisputeResult{}, err
 	}
+
 	subject := port.Subject{ID: cmd.Actor}
 	if err := RequireAuthz(ctx, s.authz, subject, "dispute.open", "payment/"+cmd.PaymentID); err != nil {
 		return port.DisputeResult{}, err
 	}
+
 	policy, err := s.policyFor(cmd.Network)
 	if err != nil {
 		return port.DisputeResult{}, err
 	}
+
 	disputeID := s.ids.NewID()
 	now := s.clock.Now().UTC()
 	rec := port.IdempotencyRecord{
 		Key:         cmd.IdempotencyKey,
 		Fingerprint: Fingerprint(cmd.IdempotencyKey, cmd.PaymentID, cmd.OriginalPostingID, cmd.Network, int64ToString(cmd.AmountMinor)),
 	}
+
 	var result port.DisputeResult
+
 	err = s.uow.Do(ctx, func(ctx context.Context, tx port.Tx) error {
 		outcome, err := tx.Idempotency().Reserve(ctx, rec)
 		if err != nil {
 			return err
 		}
+
 		if outcome.Replay {
 			decoded, err := decodeDisputeResult(outcome.Response)
 			if err != nil {
 				return err
 			}
+
 			result = decoded
+
 			return nil
 		}
+
 		dispute, err := service.OpenDispute(service.OpenDisputeRequest{
 			DisputeID: disputeID, PaymentID: cmd.PaymentID, OriginalPostingID: cmd.OriginalPostingID,
 			Network: cmd.Network, AmountMinor: cmd.AmountMinor, PaymentAt: cmd.PaymentAt, Now: now,
@@ -113,25 +122,31 @@ func (s *DisputeService) OpenDispute(ctx context.Context, cmd port.OpenDisputeCo
 		if err != nil {
 			return err
 		}
+
 		if err := s.disputes.CreateDispute(ctx, dispute); err != nil {
 			return err
 		}
+
 		result = port.DisputeResult{Dispute: dispute, Cursor: tx.Cursor()}
+
 		encoded, err := jsonparser.Marshal(result)
 		if err != nil {
 			return err
 		}
+
 		if err := tx.Outbox().Append(ctx, port.OutboxFact{
 			EventType: EventDisputeOpened, AggregateID: disputeID,
 			Payload: disputePayload(disputeID, string(dispute.Status), ""), OccurredAt: now,
 		}); err != nil {
 			return err
 		}
+
 		return tx.Idempotency().Complete(ctx, rec.Key, encoded)
 	})
 	if err != nil {
 		return port.DisputeResult{}, err
 	}
+
 	return result, nil
 }
 
@@ -141,30 +156,36 @@ func (s *DisputeService) SubmitEvidence(ctx context.Context, cmd port.EvidenceCo
 	if err := validateDisputeKey(cmd.DisputeID, cmd.Actor, cmd.IdempotencyKey); err != nil {
 		return port.DisputeResult{}, err
 	}
+
 	rec := port.IdempotencyRecord{
 		Key:         cmd.IdempotencyKey,
 		Fingerprint: Fingerprint(cmd.IdempotencyKey, cmd.DisputeID, "evidence"),
 	}
 	now := s.clock.Now().UTC()
+
 	return s.runDisputeCommand(ctx, port.Subject{ID: cmd.Actor}, "dispute.evidence", "dispute/"+cmd.DisputeID, rec,
 		func(ctx context.Context, _ port.Tx) (entity.Dispute, *port.OutboxFact, error) {
 			stored, err := s.disputes.FindDispute(ctx, cmd.DisputeID)
 			if err != nil {
 				return entity.Dispute{}, nil, err
 			}
+
 			if stored.Status == valueobject.DisputeOpen {
 				stored, err = service.MarkEvidenceDue(stored)
 				if err != nil {
 					return entity.Dispute{}, nil, err
 				}
 			}
+
 			updated, err := service.SubmitEvidence(stored, now)
 			if err != nil {
 				return entity.Dispute{}, nil, err
 			}
+
 			if err := s.disputes.UpdateDispute(ctx, updated); err != nil {
 				return entity.Dispute{}, nil, err
 			}
+
 			return updated, nil, nil
 		})
 }
@@ -176,27 +197,33 @@ func (s *DisputeService) RepresentDispute(ctx context.Context, cmd port.Represen
 	if err := validateDisputeKey(cmd.DisputeID, cmd.Actor, cmd.IdempotencyKey); err != nil {
 		return port.DisputeResult{}, err
 	}
+
 	rec := port.IdempotencyRecord{
 		Key:         cmd.IdempotencyKey,
 		Fingerprint: Fingerprint(cmd.IdempotencyKey, cmd.DisputeID, "represent"),
 	}
+
 	return s.runDisputeCommand(ctx, port.Subject{ID: cmd.Actor}, "dispute.represent", "dispute/"+cmd.DisputeID, rec,
 		func(ctx context.Context, _ port.Tx) (entity.Dispute, *port.OutboxFact, error) {
 			stored, err := s.disputes.FindDispute(ctx, cmd.DisputeID)
 			if err != nil {
 				return entity.Dispute{}, nil, err
 			}
+
 			policy, err := s.policyFor(stored.Network)
 			if err != nil {
 				return entity.Dispute{}, nil, err
 			}
+
 			if err := service.RepresentmentAllowed(stored, policy); err != nil {
 				return entity.Dispute{}, nil, err
 			}
+
 			stored.RepresentStage++
 			if err := s.disputes.UpdateDispute(ctx, stored); err != nil {
 				return entity.Dispute{}, nil, err
 			}
+
 			return stored, nil, nil
 		})
 }
@@ -208,31 +235,38 @@ func (s *DisputeService) CloseDispute(ctx context.Context, cmd port.CloseDispute
 	if err := validateDisputeKey(cmd.DisputeID, cmd.Actor, cmd.IdempotencyKey); err != nil {
 		return port.DisputeResult{}, err
 	}
+
 	decision, err := parseDisputeOutcome(cmd.Outcome)
 	if err != nil {
 		return port.DisputeResult{}, err
 	}
+
 	now := s.clock.Now().UTC()
 	rec := port.IdempotencyRecord{
 		Key:         cmd.IdempotencyKey,
 		Fingerprint: Fingerprint(cmd.IdempotencyKey, cmd.DisputeID, cmd.Outcome, cmd.Approver),
 	}
+
 	return s.runDisputeCommand(ctx, port.Subject{ID: cmd.Actor}, "dispute.close", "dispute/"+cmd.DisputeID, rec,
 		func(ctx context.Context, _ port.Tx) (entity.Dispute, *port.OutboxFact, error) {
 			stored, err := s.disputes.FindDispute(ctx, cmd.DisputeID)
 			if err != nil {
 				return entity.Dispute{}, nil, err
 			}
+
 			if err := checkDisputeSoD(stored, cmd.Actor, cmd.Approver, s.soDThresholdMinor); err != nil {
 				return entity.Dispute{}, nil, err
 			}
+
 			closed, err := service.CloseDispute(stored, decision)
 			if err != nil {
 				return entity.Dispute{}, nil, err
 			}
+
 			if err := s.disputes.UpdateDispute(ctx, closed); err != nil {
 				return entity.Dispute{}, nil, err
 			}
+
 			return closed, &port.OutboxFact{
 				EventType: EventDisputeClosed, AggregateID: closed.ID,
 				Payload: disputePayload(closed.ID, string(closed.Status), string(decision)), OccurredAt: now,
@@ -249,39 +283,50 @@ func (s *DisputeService) runDisputeCommand(ctx context.Context, subject port.Sub
 	if err := RequireAuthz(ctx, s.authz, subject, action, resource); err != nil {
 		return port.DisputeResult{}, err
 	}
+
 	var result port.DisputeResult
+
 	err := s.uow.Do(ctx, func(ctx context.Context, tx port.Tx) error {
 		outcome, err := tx.Idempotency().Reserve(ctx, rec)
 		if err != nil {
 			return err
 		}
+
 		if outcome.Replay {
 			decoded, err := decodeDisputeResult(outcome.Response)
 			if err != nil {
 				return err
 			}
+
 			result = decoded
+
 			return nil
 		}
+
 		dispute, fact, err := mutate(ctx, tx)
 		if err != nil {
 			return err
 		}
+
 		result = port.DisputeResult{Dispute: dispute, Cursor: tx.Cursor()}
+
 		encoded, err := jsonparser.Marshal(result)
 		if err != nil {
 			return err
 		}
+
 		if fact != nil {
 			if err := tx.Outbox().Append(ctx, *fact); err != nil {
 				return err
 			}
 		}
+
 		return tx.Idempotency().Complete(ctx, rec.Key, encoded)
 	})
 	if err != nil {
 		return port.DisputeResult{}, err
 	}
+
 	return result, nil
 }
 
@@ -291,12 +336,15 @@ func validateDisputeKey(disputeID, actor, key string) error {
 	if strings.TrimSpace(disputeID) == "" {
 		return entity.NewError("DISPUTE_ID_REQUIRED", "dispute id is required")
 	}
+
 	if strings.TrimSpace(actor) == "" {
 		return entity.NewError("ACTOR_REQUIRED", "dispute actor is required")
 	}
+
 	if strings.TrimSpace(key) == "" {
 		return entity.NewError("IDEMPOTENCY_KEY_REQUIRED", "dispute requires an idempotency key")
 	}
+
 	return nil
 }
 
@@ -318,9 +366,11 @@ func checkDisputeSoD(dispute entity.Dispute, actor, approver string, thresholdMi
 	if dispute.AmountMinor <= thresholdMinor {
 		return nil
 	}
+
 	if strings.TrimSpace(approver) == "" || approver == actor {
 		return entity.NewError("SOD_VIOLATION", "above-threshold close requires a different approver")
 	}
+
 	return nil
 }
 
@@ -330,6 +380,7 @@ func (s *DisputeService) policyFor(network string) (service.NetworkPolicy, error
 	if !ok {
 		return service.NetworkPolicy{}, entity.NewError("DISPUTE_POLICY_UNKNOWN", "no network policy for "+network)
 	}
+
 	return policy, nil
 }
 
@@ -338,24 +389,30 @@ func validateDisputeOpen(cmd port.OpenDisputeCommand) error {
 	if strings.TrimSpace(cmd.PaymentID) == "" || strings.TrimSpace(cmd.OriginalPostingID) == "" {
 		return entity.NewError("DISPUTE_ID_REQUIRED", "dispute requires id, payment, and original posting")
 	}
+
 	if strings.TrimSpace(cmd.Network) == "" {
 		return entity.NewError("DISPUTE_NETWORK_REQUIRED", "dispute requires a network")
 	}
+
 	if cmd.AmountMinor <= 0 {
 		return entity.NewError("INVALID_DISPUTE_AMOUNT", "dispute amount must be positive")
 	}
+
 	if strings.TrimSpace(cmd.Actor) == "" {
 		return entity.NewError("ACTOR_REQUIRED", "dispute actor is required")
 	}
+
 	if strings.TrimSpace(cmd.IdempotencyKey) == "" {
 		return entity.NewError("IDEMPOTENCY_KEY_REQUIRED", "dispute requires an idempotency key")
 	}
+
 	return nil
 }
 
 // disputePayload builds the §10-shaped webhook payload: id, status, outcome.
 func disputePayload(id, status, outcome string) []byte {
 	encoded, _ := jsonparser.Marshal(map[string]string{payloadIDKey: id, payloadStatusKey: status, "outcome": outcome})
+
 	return encoded
 }
 
@@ -365,8 +422,10 @@ func decodeDisputeResult(response []byte) (port.DisputeResult, error) {
 	if err := jsonparser.Unmarshal(response, &result); err != nil {
 		return port.DisputeResult{}, entity.NewError("IDEMPOTENCY_RECORD_INVALID", "stored idempotency response is corrupt")
 	}
+
 	if result.Dispute.ID == "" {
 		return port.DisputeResult{}, entity.NewError("IDEMPOTENCY_RECORD_INVALID", "stored idempotency response is corrupt")
 	}
+
 	return result, nil
 }

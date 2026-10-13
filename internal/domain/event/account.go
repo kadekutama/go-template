@@ -1,7 +1,6 @@
 package event
 
 import (
-	"errors"
 	"time"
 )
 
@@ -18,10 +17,11 @@ type AccountCreatedPayload struct {
 }
 
 // NewAccountCreated builds account.created.v1.
-func NewAccountCreated(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload AccountCreatedPayload, meta EventMetadata) (TypedEvent[AccountCreatedPayload], error) {
+func NewAccountCreated(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload AccountCreatedPayload, meta Metadata) (TypedEvent[AccountCreatedPayload], error) {
 	if err := requireIDs(map[string]string{fieldAccountID: payload.AccountID, fieldTenantID: payload.TenantID, "account_number": payload.AccountNumber}); err != nil {
 		return TypedEvent[AccountCreatedPayload]{}, err
 	}
+
 	return newTyped("account.created.v1", eventID, aggregateID, "Account", occurredAt, version, seq, payload, meta)
 }
 
@@ -34,10 +34,11 @@ type AccountUpdatedPayload struct {
 }
 
 // NewAccountUpdated builds account.updated.v1.
-func NewAccountUpdated(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload AccountUpdatedPayload, meta EventMetadata) (TypedEvent[AccountUpdatedPayload], error) {
+func NewAccountUpdated(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload AccountUpdatedPayload, meta Metadata) (TypedEvent[AccountUpdatedPayload], error) {
 	if err := requireIDs(map[string]string{fieldAccountID: payload.AccountID, fieldTenantID: payload.TenantID}); err != nil {
 		return TypedEvent[AccountUpdatedPayload]{}, err
 	}
+
 	return newTyped("account.updated.v1", eventID, aggregateID, "Account", occurredAt, version, seq, payload, meta)
 }
 
@@ -50,13 +51,15 @@ type AccountFrozenPayload struct {
 }
 
 // NewAccountFrozen builds account.frozen.v1.
-func NewAccountFrozen(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload AccountFrozenPayload, meta EventMetadata) (TypedEvent[AccountFrozenPayload], error) {
+func NewAccountFrozen(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload AccountFrozenPayload, meta Metadata) (TypedEvent[AccountFrozenPayload], error) {
 	if err := requireIDs(map[string]string{fieldAccountID: payload.AccountID, fieldTenantID: payload.TenantID}); err != nil {
 		return TypedEvent[AccountFrozenPayload]{}, err
 	}
+
 	if payload.Reason == "" {
-		return TypedEvent[AccountFrozenPayload]{}, errors.New("event: reason is required")
+		return TypedEvent[AccountFrozenPayload]{}, ErrEventReasonIsRequired
 	}
+
 	return newTyped("account.frozen.v1", eventID, aggregateID, "Account", occurredAt, version, seq, payload, meta)
 }
 
@@ -68,10 +71,11 @@ type AccountUnfrozenPayload struct {
 }
 
 // NewAccountUnfrozen builds account.unfrozen.v1.
-func NewAccountUnfrozen(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload AccountUnfrozenPayload, meta EventMetadata) (TypedEvent[AccountUnfrozenPayload], error) {
+func NewAccountUnfrozen(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload AccountUnfrozenPayload, meta Metadata) (TypedEvent[AccountUnfrozenPayload], error) {
 	if err := requireIDs(map[string]string{fieldAccountID: payload.AccountID, fieldTenantID: payload.TenantID}); err != nil {
 		return TypedEvent[AccountUnfrozenPayload]{}, err
 	}
+
 	return newTyped("account.unfrozen.v1", eventID, aggregateID, "Account", occurredAt, version, seq, payload, meta)
 }
 
@@ -84,13 +88,15 @@ type AccountClosedPayload struct {
 }
 
 // NewAccountClosed builds account.closed.v1.
-func NewAccountClosed(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload AccountClosedPayload, meta EventMetadata) (TypedEvent[AccountClosedPayload], error) {
+func NewAccountClosed(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload AccountClosedPayload, meta Metadata) (TypedEvent[AccountClosedPayload], error) {
 	if err := requireIDs(map[string]string{fieldAccountID: payload.AccountID, fieldTenantID: payload.TenantID}); err != nil {
 		return TypedEvent[AccountClosedPayload]{}, err
 	}
+
 	if payload.Reason == "" {
-		return TypedEvent[AccountClosedPayload]{}, errors.New("event: reason is required")
+		return TypedEvent[AccountClosedPayload]{}, ErrEventReasonIsRequired
 	}
+
 	return newTyped("account.closed.v1", eventID, aggregateID, "Account", occurredAt, version, seq, payload, meta)
 }
 
@@ -102,10 +108,11 @@ type AccountVerifiedPayload struct {
 }
 
 // NewAccountVerified builds account.verified.v1.
-func NewAccountVerified(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload AccountVerifiedPayload, meta EventMetadata) (TypedEvent[AccountVerifiedPayload], error) {
+func NewAccountVerified(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload AccountVerifiedPayload, meta Metadata) (TypedEvent[AccountVerifiedPayload], error) {
 	if err := requireIDs(map[string]string{fieldAccountID: payload.AccountID, fieldTenantID: payload.TenantID}); err != nil {
 		return TypedEvent[AccountVerifiedPayload]{}, err
 	}
+
 	return newTyped("account.verified.v1", eventID, aggregateID, "Account", occurredAt, version, seq, payload, meta)
 }
 
@@ -126,10 +133,11 @@ type BalanceChangedPayload struct {
 }
 
 // NewBalanceChanged builds account.balance.changed.v1.
-func NewBalanceChanged(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload BalanceChangedPayload, meta EventMetadata) (TypedEvent[BalanceChangedPayload], error) {
+func NewBalanceChanged(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload BalanceChangedPayload, meta Metadata) (TypedEvent[BalanceChangedPayload], error) {
 	if err := requireIDs(map[string]string{fieldAccountID: payload.AccountID, fieldTenantID: payload.TenantID, "asset_code": payload.AssetCode}); err != nil {
 		return TypedEvent[BalanceChangedPayload]{}, err
 	}
+
 	return newTyped("account.balance.changed.v1", eventID, aggregateID, "Account", occurredAt, version, seq, payload, meta)
 }
 
@@ -144,10 +152,11 @@ type TenantCreatedPayload struct {
 }
 
 // NewTenantCreated builds tenant.created.v1.
-func NewTenantCreated(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TenantCreatedPayload, meta EventMetadata) (TypedEvent[TenantCreatedPayload], error) {
+func NewTenantCreated(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload TenantCreatedPayload, meta Metadata) (TypedEvent[TenantCreatedPayload], error) {
 	if err := requireIDs(map[string]string{fieldTenantID: payload.TenantID, fieldLedgerID: payload.LedgerID}); err != nil {
 		return TypedEvent[TenantCreatedPayload]{}, err
 	}
+
 	return newTyped("tenant.created.v1", eventID, aggregateID, "Tenant", occurredAt, version, seq, payload, meta)
 }
 
@@ -164,9 +173,10 @@ type PIIErasedPayload struct {
 }
 
 // NewPIIErased builds pii.erased.v1.
-func NewPIIErased(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PIIErasedPayload, meta EventMetadata) (TypedEvent[PIIErasedPayload], error) {
+func NewPIIErased(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PIIErasedPayload, meta Metadata) (TypedEvent[PIIErasedPayload], error) {
 	if err := requireIDs(map[string]string{"erasure_id": payload.ErasureID, fieldTenantID: payload.TenantID, "subject_id": payload.SubjectID}); err != nil {
 		return TypedEvent[PIIErasedPayload]{}, err
 	}
+
 	return newTyped("pii.erased.v1", eventID, aggregateID, "PrivacySubject", occurredAt, version, seq, payload, meta)
 }

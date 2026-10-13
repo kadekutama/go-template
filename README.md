@@ -93,7 +93,7 @@ the current stable patch baseline for this audit date.
 | **Distributed Coordination**| etcd v3.7.0 (3-node Raft DCS & config streaming) |
 | **Cache** | Otter v2.3.0 (L1 W-TinyLFU) + Valkey 9.1.2 Cluster (L2) |
 | **Messaging & Streaming** | Redpanda v26.2 (Kafka API Log) + NATS Core 2.14.6 (Edge Fanout) |
-| **Auth** | JWT RS256 (v5.3.1), OAuth2/OIDC, Casbin RBAC (v2.8.0) |
+| **Auth** | JWT RS256 (v5.3.1), OAuth2/OIDC, Casbin RBAC (v3.11.0) |
 | **Feature Flags** | OpenFeature v1.17.2 + Unleash v6.5.1 |
 | **Secrets & Tokenization** | OpenBao v2.6.2 (Dynamic DB creds & Transit PCI-DSS encryption) |
 | **Observability** | OpenTelemetry v1.46.0 + zerolog v1.35.1 + Prometheus 3.14.0 + Grafana 13.0 + Loki 3.7.7 + Tempo 2.9.4 |
@@ -145,8 +145,59 @@ This template includes:
 - **AGENTS.md** - Harness-neutral mandatory agent instructions
 - **tasks/SDD.md** - Task packets, claims, evidence, and takeover protocol
 - **tasks/DELIVERY-SLICES.md** - Vertical financial delivery order
-- **.opencode/agents/** - Thin OpenCode role adapters (Domain, API, DB, DevOps, Test)
-- **.opencode/skills/** - Harness adapter skills (Go, DDD, Clean Architecture, domain specifications)
+- **.opencode/agents/** - SDD-governed OpenCode implementer and reviewer profiles, including OpenCode-specific permission rules
+- **.agents/agents/** - Antigravity 2 implementer and reviewer custom agents; Antigravity also loads the shared root `AGENTS.md`
+- No duplicate project-specific agent skills are bundled; authoritative guidance lives in `AGENTS.md`, `tasks/SDD.md`, and `docs/`
+
+Antigravity agent Markdown provides prompts and metadata, not the enforcement
+boundary. Each custom agent must explicitly allowlist its required tools in
+frontmatter: the reviewer needs file creation/replacement tools to persist its
+report, and `run_command` for approved safe verification. A permission rule
+cannot grant a tool omitted from this list. Set custom agents'
+`commandExecutionPolicy` to `off`; configure the **Request Review** preset to
+ask before every terminal command, and set `write_file(*)` to Ask to prompt
+before every file write. This preset disables the sandbox and does not itself
+restrict workspace writes, so approve reviewer writes only for the authorized
+report path. Once the reviewer confirms the packet requirement, report path in
+`Owns:`, and active claim, it must invoke the appropriate report file tool; the
+tool's Ask prompt is the approval gate. It must not stop at chat-only report text
+or request a second approval in chat. If any authorization check fails, it must
+not invoke a write tool. Review reports are the shared durable implementer/reviewer
+log: reviewers create a full template report when absent; implementers do not
+create one on the reviewer's behalf. On existing reports, both roles append only
+to their authorized section, preserve prior text, and read the report back to
+verify. Antigravity uses `write_to_file` only for a missing report and replacement
+tools with an exact section-end anchor for appends. Under **Request Review**,
+ordinary workspace reads remain available without prompting, matching OpenCode;
+do not configure `read_file(*)` Ask, which would add prompts OpenCode does not.
+External file reads remain approval-gated. Configure Ask for each protected
+`.env`/`.env.*` path and keep `.env.example`
+readable. Do not assume filename-glob support in Antigravity permission targets:
+if a protected path cannot be approval-gated, fail closed and do not read it.
+OpenCode's base policy allows `webfetch` without an extra prompt; Antigravity's
+`read_url_content` defaults to Ask, so configure `read_url(*)` Allow for the same
+read-only behavior. Do not expose URL/browser actuation tools. Keep **Request
+Review** selected: it disables the terminal sandbox, while `read_url` grants may
+otherwise add network access to sandboxed commands.
+OpenCode hard-denies reviewer writes outside review reports and unlisted shell
+commands; Antigravity prompts for approval but cannot enforce those path/command
+denials through agent Markdown, so the agent must not request them and the owner
+must reject any such prompt.
+Reviewers may request approval for Makefile
+targets only after inspecting recipes, and must not run targets that write
+outside the report or mutate external state. They may also request approval for
+standalone read-only shell inspection commands; do not chain commands. Reload
+or reselect custom agents after frontmatter tool changes, and verify the reviewer
+exposes report create/update tools before starting a review. If they remain
+absent, treat that as a platform capability blocker rather than substituting a
+chat-only report. Start a chat with the workspace `reviewer` custom agent selected
+(`mainAgent: true`); a new default Gemini chat does not load that profile just by
+being new. The OpenCode reviewer remains shell-deny-by-default with Ask exceptions
+for Git and task checks, safe Makefile targets, and standalone `pwd`/`ls`/`find`/`head`/
+`tail`/`cat`/`wc`/`file`/`stat` inspection commands.
+See the [Antigravity permissions guide](https://antigravity.google/docs/permissions) and [sandbox
+guide](https://antigravity.google/docs/sandbox). With **Default**, commands
+inside the sandbox run without prompting unless `command(*)` is set to Ask.
 - **SPEC.md** - System specification governed by the normative precedence rules
 
 ## 📚 Documentation

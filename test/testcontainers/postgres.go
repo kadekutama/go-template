@@ -3,6 +3,7 @@ package testcontainers
 import (
 	"context"
 	"fmt"
+	"net"
 	"testing"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	tc "github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	// Blank import registers the pgx stdlib driver for readiness probes.
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -40,21 +42,19 @@ func StartPostgres(t *testing.T, dbname string) (*PostgresHandle, error) {
 	}
 
 	req := tc.GenericContainerRequest{
-		ContainerRequest: tc.ContainerRequest{
-			Image:        PostgresImage,
-			ExposedPorts: []string{"5432/tcp"},
-			Env: map[string]string{
-				"POSTGRES_USER":     "ledger",
-				"POSTGRES_PASSWORD": "ledger_test_pw",
-				"POSTGRES_DB":       dbname,
-			},
-			// SQL-level readiness (not just TCP accept): Postgres opens the
-			// port while still starting up, which flakes first queries.
-			WaitingFor: wait.ForSQL("5432/tcp", "pgx", func(host string, port network.Port) string {
-				return fmt.Sprintf("postgres://ledger:ledger_test_pw@%s:%s/%s?sslmode=disable",
-					host, port.Port(), dbname)
-			}).WithStartupTimeout(StartupTimeout()).WithPollInterval(500 * time.Millisecond),
+		Image:        PostgresImage,
+		ExposedPorts: []string{"5432/tcp"},
+		Env: map[string]string{
+			"POSTGRES_USER":     "ledger",
+			"POSTGRES_PASSWORD": "ledger_test_pw",
+			"POSTGRES_DB":       dbname,
 		},
+		// SQL-level readiness (not just TCP accept): Postgres opens the
+		// port while still starting up, which flakes first queries.
+		WaitingFor: wait.ForSQL("5432/tcp", "pgx", func(host string, port network.Port) string {
+			return fmt.Sprintf("postgres://ledger:ledger_test_pw@%s/%s?sslmode=disable",
+				net.JoinHostPort(host, port.Port()), dbname)
+		}).WithStartupTimeout(StartupTimeout()).WithPollInterval(pollIntervalMs * time.Millisecond),
 		Started: true,
 	}
 
@@ -64,6 +64,7 @@ func StartPostgres(t *testing.T, dbname string) (*PostgresHandle, error) {
 	}
 
 	h := &PostgresHandle{container: container, user: "ledger", password: "ledger_test_pw", dbname: dbname}
+
 	t.Cleanup(func() {
 		_ = h.Terminate(context.Background())
 	})
@@ -71,12 +72,14 @@ func StartPostgres(t *testing.T, dbname string) (*PostgresHandle, error) {
 	mapped, err := container.MappedPort(ctx, "5432")
 	if err != nil {
 		_ = h.Terminate(context.Background())
+
 		return nil, fmt.Errorf("map postgres port: %w", err)
 	}
 
 	host, err := container.Host(ctx)
 	if err != nil {
 		_ = h.Terminate(context.Background())
+
 		return nil, fmt.Errorf("postgres host: %w", err)
 	}
 
@@ -88,7 +91,7 @@ func StartPostgres(t *testing.T, dbname string) (*PostgresHandle, error) {
 
 // ConnectionString returns the pgx-compatible DSN for the container.
 func (h *PostgresHandle) ConnectionString() string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", h.user, h.password, h.host, h.port, h.dbname)
+	return fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable", h.user, h.password, net.JoinHostPort(h.host, h.port), h.dbname)
 }
 
 // Terminate stops the container; double-terminate returns nil.

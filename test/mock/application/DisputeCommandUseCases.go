@@ -59,7 +59,7 @@ type MockDisputeCommandUseCases_CloseDispute_Call struct {
 // CloseDispute is a helper method to define mock.On call
 //   - ctx context.Context
 //   - cmd port.CloseDisputeCommand
-func (_e *MockDisputeCommandUseCases_Expecter) CloseDispute(ctx interface{}, cmd interface{}) *MockDisputeCommandUseCases_CloseDispute_Call {
+func (_e *MockDisputeCommandUseCases_Expecter) CloseDispute(ctx any, cmd any) *MockDisputeCommandUseCases_CloseDispute_Call {
 	return &MockDisputeCommandUseCases_CloseDispute_Call{Call: _e.mock.On("CloseDispute", ctx, cmd)}
 }
 
@@ -116,7 +116,7 @@ type MockDisputeCommandUseCases_OpenDispute_Call struct {
 // OpenDispute is a helper method to define mock.On call
 //   - ctx context.Context
 //   - cmd port.OpenDisputeCommand
-func (_e *MockDisputeCommandUseCases_Expecter) OpenDispute(ctx interface{}, cmd interface{}) *MockDisputeCommandUseCases_OpenDispute_Call {
+func (_e *MockDisputeCommandUseCases_Expecter) OpenDispute(ctx any, cmd any) *MockDisputeCommandUseCases_OpenDispute_Call {
 	return &MockDisputeCommandUseCases_OpenDispute_Call{Call: _e.mock.On("OpenDispute", ctx, cmd)}
 }
 
@@ -173,7 +173,7 @@ type MockDisputeCommandUseCases_RepresentDispute_Call struct {
 // RepresentDispute is a helper method to define mock.On call
 //   - ctx context.Context
 //   - cmd port.RepresentCommand
-func (_e *MockDisputeCommandUseCases_Expecter) RepresentDispute(ctx interface{}, cmd interface{}) *MockDisputeCommandUseCases_RepresentDispute_Call {
+func (_e *MockDisputeCommandUseCases_Expecter) RepresentDispute(ctx any, cmd any) *MockDisputeCommandUseCases_RepresentDispute_Call {
 	return &MockDisputeCommandUseCases_RepresentDispute_Call{Call: _e.mock.On("RepresentDispute", ctx, cmd)}
 }
 
@@ -230,7 +230,7 @@ type MockDisputeCommandUseCases_SubmitEvidence_Call struct {
 // SubmitEvidence is a helper method to define mock.On call
 //   - ctx context.Context
 //   - cmd port.EvidenceCommand
-func (_e *MockDisputeCommandUseCases_Expecter) SubmitEvidence(ctx interface{}, cmd interface{}) *MockDisputeCommandUseCases_SubmitEvidence_Call {
+func (_e *MockDisputeCommandUseCases_Expecter) SubmitEvidence(ctx any, cmd any) *MockDisputeCommandUseCases_SubmitEvidence_Call {
 	return &MockDisputeCommandUseCases_SubmitEvidence_Call{Call: _e.mock.On("SubmitEvidence", ctx, cmd)}
 }
 

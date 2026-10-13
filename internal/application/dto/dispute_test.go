@@ -44,6 +44,7 @@ func TestToDisputeDTO(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Equal(t, tc.expectedResult, dto.ToDisputeDTO(tc.result, tc.outcome))
 		})
 	}

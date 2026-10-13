@@ -2,7 +2,6 @@ package hybrid_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -84,6 +83,8 @@ func TestNew(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			engine, err := hybrid.New(tc.params)
 			assert.ErrorIs(t, err, tc.expectedError)
 			assert.Equal(t, tc.expectedResult, engine != nil)
@@ -141,6 +142,7 @@ func TestHybridCacheSet(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
+
 				return e
 			}(),
 			ctx:           context.Background(),
@@ -160,6 +162,7 @@ func TestHybridCacheSet(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
+
 				return e
 			}(),
 			ctx:           context.Background(),
@@ -180,6 +183,7 @@ func TestHybridCacheSet(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
+
 				return e
 			}(),
 			ctx:           context.Background(),
@@ -200,6 +204,7 @@ func TestHybridCacheSet(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
+
 				return e
 			}(),
 			ctx:           context.Background(),
@@ -220,6 +225,7 @@ func TestHybridCacheSet(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
+
 				return e
 			}(),
 			ctx:           context.Background(),
@@ -240,6 +246,7 @@ func TestHybridCacheSet(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
+
 				return e
 			}(),
 			ctx:           context.Background(),
@@ -260,11 +267,13 @@ func TestHybridCacheSet(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
+
 				return e
 			}(),
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			}(),
 			key:           "balance:t1:a1:USD",
@@ -276,6 +285,8 @@ func TestHybridCacheSet(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.engine.Set(tc.ctx, tc.key, tc.value, tc.ttl)
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
@@ -326,6 +337,7 @@ func TestHybridCacheGetValidation(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
+
 				return e
 			}(),
 			ctx:            context.Background(),
@@ -344,11 +356,13 @@ func TestHybridCacheGetValidation(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
+
 				return e
 			}(),
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			}(),
 			key:            "balance:t1:a1:USD",
@@ -359,12 +373,16 @@ func TestHybridCacheGetValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := tc.engine.Get(tc.ctx, tc.key)
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
 				assert.Equal(t, tc.expectedResult, actualResult)
+
 				return
 			}
+
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -409,6 +427,7 @@ func TestHybridCacheDelete(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
+
 				return e
 			}(),
 			ctx:           context.Background(),
@@ -426,6 +445,7 @@ func TestHybridCacheDelete(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
+
 				return e
 			}(),
 			ctx:           context.Background(),
@@ -443,6 +463,7 @@ func TestHybridCacheDelete(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
+
 				return e
 			}(),
 			ctx:           context.Background(),
@@ -460,11 +481,13 @@ func TestHybridCacheDelete(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
+
 				return e
 			}(),
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			}(),
 			key:           "balance:t1:a1:USD",
@@ -474,6 +497,8 @@ func TestHybridCacheDelete(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.engine.Delete(tc.ctx, tc.key)
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
@@ -503,14 +528,15 @@ func TestHybridCacheDeleteOrder(t *testing.T) {
 		},
 		{
 			name:          "failed l2 delete leaves l1 untouched",
-			l2DeleteErr:   errors.New("l2 down"),
+			l2DeleteErr:   hybrid.ErrL2Down,
 			expectedOrder: []string{"l2.delete"},
-			expectedError: errors.New("l2 down"),
+			expectedError: hybrid.ErrL2Down,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			l1 := mockstore.NewMockStore(t)
 			l2 := mockstore.NewMockExpiringStore(t)
 
@@ -622,7 +648,7 @@ func TestHybridCacheGetFallback(t *testing.T) {
 		{
 			name:          "degraded l2 fails open as miss",
 			key:           "balance:t1:get:USD",
-			l2Error:       errors.New("connection refused"),
+			l2Error:       hybrid.ErrConnectionRefused,
 			expectedError: hybrid.ErrCacheMiss,
 			expectL2Read:  true,
 		},
@@ -632,7 +658,7 @@ func TestHybridCacheGetFallback(t *testing.T) {
 			l2Value:       []byte(`{"minor":5}`),
 			l2Remaining:   30 * time.Second,
 			l2Present:     true,
-			l2TTLError:    errors.New("pttl timeout"),
+			l2TTLError:    hybrid.ErrPttlTimeout,
 			expectedValue: []byte(`{"minor":5}`),
 			expectedError: nil,
 			expectL2Read:  true,
@@ -641,12 +667,16 @@ func TestHybridCacheGetFallback(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			ctx := context.Background()
 			l1 := mockstore.NewMockStore(t)
 			l2 := mockstore.NewMockExpiringStore(t)
 
-			var l2Read bool
-			var l1Populated bool
+			var (
+				l2Read      bool
+				l1Populated bool
+			)
 
 			if tc.l1Present {
 				l1.EXPECT().Get(mock.Anything, tc.key).Return(tc.l1Value, nil).Once()
@@ -698,6 +728,7 @@ func TestHybridCacheGetFallback(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 			}
+
 			assert.Equal(t, getObservation{
 				value:       tc.expectedValue,
 				l2Read:      tc.expectL2Read,
@@ -739,6 +770,8 @@ func TestHybridCacheTypedValue(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			ctx := context.Background()
 			l1 := newMockCacheStore(t)
 			l2 := newMockCacheStore(t)
@@ -808,6 +841,8 @@ func TestTypedCacheValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			_, err := tc.view.Get(tc.ctx, tc.key)
 			assert.ErrorIs(t, err, tc.expectedError)
 
@@ -841,6 +876,7 @@ func TestTypedCacheUnsupportedTypes(t *testing.T) {
 			name: "function kind rejected",
 			action: func() error {
 				view := hybrid.Typed[func()](engine)
+
 				return view.Set(context.Background(), "fn-key", func() {}, time.Minute)
 			},
 			expectedError: hybrid.ErrUnsupportedValueType,
@@ -850,6 +886,7 @@ func TestTypedCacheUnsupportedTypes(t *testing.T) {
 			action: func() error {
 				view := hybrid.Typed[chan int](engine)
 				ch := make(chan int)
+
 				return view.Set(context.Background(), "chan-key", ch, time.Minute)
 			},
 			expectedError: hybrid.ErrUnsupportedValueType,
@@ -858,6 +895,8 @@ func TestTypedCacheUnsupportedTypes(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tc.action()
 			assert.ErrorIs(t, err, tc.expectedError)
 		})

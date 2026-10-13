@@ -37,12 +37,12 @@ type RouterParams struct {
 // NewRouter builds the registry; empty pools are rejected.
 func NewRouter(params RouterParams) (*Router, error) {
 	if len(params.Pools) == 0 {
-		return nil, fmt.Errorf("postgres: router needs at least one region pool")
+		return nil, ErrPostgresRouterNeedsAtLeastOneRegionPool
 	}
 
 	for region, pool := range params.Pools {
 		if region == "" || pool == nil {
-			return nil, fmt.Errorf("postgres: router needs a named pool per region")
+			return nil, ErrPostgresRouterNeedsANamedPoolPerRegion
 		}
 	}
 
@@ -52,16 +52,16 @@ func NewRouter(params RouterParams) (*Router, error) {
 // Resolve returns the pool for the tenant's region or fails closed.
 func (r *Router) Resolve(ctx context.Context, residency Residency) (*gorm.DB, error) {
 	if residency.TenantID.String() == "" {
-		return nil, fmt.Errorf("postgres: tenant is required")
+		return nil, ErrPostgresTenantIsRequired
 	}
 
 	if residency.Region == "" {
-		return nil, fmt.Errorf("postgres: residency region is required")
+		return nil, ErrPostgresResidencyRegionIsRequired
 	}
 
 	pool, ok := r.pools[residency.Region]
 	if !ok || pool == nil {
-		return nil, fmt.Errorf("postgres: unknown region %s", residency.Region)
+		return nil, fmt.Errorf("postgres: unknown region %s: %w", residency.Region, ErrPostgresUnknownRegion)
 	}
 
 	if r.audit != nil {

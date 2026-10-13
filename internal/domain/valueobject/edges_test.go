@@ -88,6 +88,8 @@ func TestMoneyScalarEdges(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, err := tc.op(tc.money)
 			if tc.expectedError {
 				assert.Error(t, err)
@@ -143,6 +145,8 @@ func TestMoneyCompareAndPredicates(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			c, err := tc.m1.Compare(tc.m2)
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expectedResult, c)
@@ -192,6 +196,8 @@ func TestMoneyFormatNegative(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			s, formatErr := tc.money.Format(reg)
 			assert.NoError(t, formatErr)
 			assert.Equal(t, tc.expectedResult, s)
@@ -243,16 +249,20 @@ func TestAllocateEdges(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			shares, err := valueobject.AllocateLargestRemainder(tc.total, tc.weights)
 			if tc.expectedError {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
 				assert.Equal(t, tc.expectedResult, shares)
+
 				var sum int64
 				for _, s := range shares {
 					sum += s
 				}
+
 				assert.Equal(t, tc.total, sum)
 			}
 		})
@@ -263,6 +273,7 @@ func TestRegistryZeroValue(t *testing.T) {
 	t.Parallel()
 
 	var reg valueobject.Registry
+
 	err := reg.Register(valueobject.AssetInfo{Code: "USD", Exponent: 2, Kind: valueobject.AssetKindFiat})
 	assert.NoError(t, err)
 
@@ -287,6 +298,7 @@ func TestAllIDTypesTable(t *testing.T) {
 			name: kindAccount,
 			parse: func(s string) (string, error) {
 				id, err := valueobject.ParseAccountID(s)
+
 				return id.String(), err
 			},
 		},
@@ -294,6 +306,7 @@ func TestAllIDTypesTable(t *testing.T) {
 			name: kindPosting,
 			parse: func(s string) (string, error) {
 				id, err := valueobject.ParsePostingID(s)
+
 				return id.String(), err
 			},
 		},
@@ -301,6 +314,7 @@ func TestAllIDTypesTable(t *testing.T) {
 			name: kindEntry,
 			parse: func(s string) (string, error) {
 				id, err := valueobject.ParseEntryID(s)
+
 				return id.String(), err
 			},
 		},
@@ -308,6 +322,7 @@ func TestAllIDTypesTable(t *testing.T) {
 			name: kindHold,
 			parse: func(s string) (string, error) {
 				id, err := valueobject.ParseHoldID(s)
+
 				return id.String(), err
 			},
 		},
@@ -315,6 +330,7 @@ func TestAllIDTypesTable(t *testing.T) {
 			name: kindTenant,
 			parse: func(s string) (string, error) {
 				id, err := valueobject.ParseTenantID(s)
+
 				return id.String(), err
 			},
 		},
@@ -322,6 +338,7 @@ func TestAllIDTypesTable(t *testing.T) {
 			name: kindLedger,
 			parse: func(s string) (string, error) {
 				id, err := valueobject.ParseLedgerID(s)
+
 				return id.String(), err
 			},
 		},
@@ -329,6 +346,7 @@ func TestAllIDTypesTable(t *testing.T) {
 			name: kindUser,
 			parse: func(s string) (string, error) {
 				id, err := valueobject.ParseUserID(s)
+
 				return id.String(), err
 			},
 		},
@@ -336,6 +354,7 @@ func TestAllIDTypesTable(t *testing.T) {
 			name: kindJournal,
 			parse: func(s string) (string, error) {
 				id, err := valueobject.ParseJournalID(s)
+
 				return id.String(), err
 			},
 		},
@@ -343,6 +362,7 @@ func TestAllIDTypesTable(t *testing.T) {
 			name: kindPeriod,
 			parse: func(s string) (string, error) {
 				id, err := valueobject.ParsePeriodID(s)
+
 				return id.String(), err
 			},
 		},
@@ -350,6 +370,7 @@ func TestAllIDTypesTable(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			gen := newMockIDGenerator(t)
 			a, b := gen.NewID(), gen.NewID()
 			assert.NotEqual(t, a, b, "generated ids must be unique")
@@ -379,60 +400,71 @@ func TestAllIDTypesTable(t *testing.T) {
 
 func checkIDEquivalence(t *testing.T, s1, s2 string) {
 	t.Helper()
+
 	a1, _ := valueobject.ParseAccountID(s1)
 	a1Copy, _ := valueobject.ParseAccountID(s1)
 	a2, _ := valueobject.ParseAccountID(s2)
+
 	assert.True(t, a1.Equals(a1Copy))
 	assert.False(t, a1.Equals(a2))
 
 	p1, _ := valueobject.ParsePostingID(s1)
 	p1Copy, _ := valueobject.ParsePostingID(s1)
 	p2, _ := valueobject.ParsePostingID(s2)
+
 	assert.True(t, p1.Equals(p1Copy))
 	assert.False(t, p1.Equals(p2))
 
 	e1, _ := valueobject.ParseEntryID(s1)
 	e1Copy, _ := valueobject.ParseEntryID(s1)
 	e2, _ := valueobject.ParseEntryID(s2)
+
 	assert.True(t, e1.Equals(e1Copy))
 	assert.False(t, e1.Equals(e2))
 
 	h1, _ := valueobject.ParseHoldID(s1)
 	h1Copy, _ := valueobject.ParseHoldID(s1)
 	h2, _ := valueobject.ParseHoldID(s2)
+
 	assert.True(t, h1.Equals(h1Copy))
 	assert.False(t, h1.Equals(h2))
 }
 
 func checkScopeIDEquivalence(t *testing.T, s1, s2 string) {
 	t.Helper()
+
 	t1, _ := valueobject.ParseTenantID(s1)
 	t1Copy, _ := valueobject.ParseTenantID(s1)
 	t2, _ := valueobject.ParseTenantID(s2)
+
 	assert.True(t, t1.Equals(t1Copy))
 	assert.False(t, t1.Equals(t2))
 
 	l1, _ := valueobject.ParseLedgerID(s1)
 	l1Copy, _ := valueobject.ParseLedgerID(s1)
 	l2, _ := valueobject.ParseLedgerID(s2)
+
 	assert.True(t, l1.Equals(l1Copy))
 	assert.False(t, l1.Equals(l2))
 
 	u1, _ := valueobject.ParseUserID(s1)
 	u1Copy, _ := valueobject.ParseUserID(s1)
 	u2, _ := valueobject.ParseUserID(s2)
+
 	assert.True(t, u1.Equals(u1Copy))
 	assert.False(t, u1.Equals(u2))
 
 	j1, _ := valueobject.ParseJournalID(s1)
 	j1Copy, _ := valueobject.ParseJournalID(s1)
 	j2, _ := valueobject.ParseJournalID(s2)
+
 	assert.True(t, j1.Equals(j1Copy))
 	assert.False(t, j1.Equals(j2))
 
 	d1, _ := valueobject.ParsePeriodID(s1)
 	d1Copy, _ := valueobject.ParsePeriodID(s1)
 	d2, _ := valueobject.ParsePeriodID(s2)
+
 	assert.True(t, d1.Equals(d1Copy))
 	assert.False(t, d1.Equals(d2))
 }
@@ -465,6 +497,8 @@ func TestParseRejectsAlternateUUIDForms(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			_, err := valueobject.ParseAccountID(tc.raw)
 			assert.Error(t, err, "ParseAccountID must reject non-canonical form")
 		})

@@ -119,16 +119,20 @@ func (s *ReconService) TriggerReconRun(ctx context.Context, req port.ReconRunReq
 	if strings.TrimSpace(req.TenantID.String()) == "" {
 		return port.ReconRunResult{}, entity.NewError("TENANT_REQUIRED", "tenant id is required")
 	}
+
 	if strings.TrimSpace(req.Actor) == "" {
 		return port.ReconRunResult{}, entity.NewError("ACTOR_REQUIRED", "reconciliation actor is required")
 	}
+
 	if strings.TrimSpace(req.IdempotencyKey) == "" {
 		return port.ReconRunResult{}, entity.NewError("IDEMPOTENCY_KEY_REQUIRED", "reconciliation requires an idempotency key")
 	}
+
 	subject := port.Subject{ID: req.Actor, TenantID: req.TenantID}
 	if err := RequireAuthz(ctx, s.authz, subject, "recon.trigger", "ledger/"+string(req.LedgerID)); err != nil {
 		return port.ReconRunResult{}, err
 	}
+
 	runID := s.ids.NewID()
 	now := s.clock.Now().UTC()
 	rec := port.IdempotencyRecord{
@@ -136,42 +140,53 @@ func (s *ReconService) TriggerReconRun(ctx context.Context, req port.ReconRunReq
 		Fingerprint: Fingerprint(req.IdempotencyKey, string(req.TenantID), req.Source, req.WindowStart.UTC().Format(time.RFC3339Nano), req.WindowEnd.UTC().Format(time.RFC3339Nano)),
 		TenantID:    req.TenantID,
 	}
+
 	var result port.ReconRunResult
+
 	err := s.uow.Do(ctx, func(ctx context.Context, tx port.Tx) error {
 		outcome, err := tx.Idempotency().Reserve(ctx, rec)
 		if err != nil {
 			return err
 		}
+
 		if outcome.Replay {
 			decoded, err := decodeReconResult(outcome.Response)
 			if err != nil {
 				return err
 			}
+
 			result = decoded
+
 			return nil
 		}
+
 		if err := s.runs.CreateRun(ctx, ReconRunRecord{
 			ID: runID, TenantID: req.TenantID, LedgerID: req.LedgerID, Source: req.Source,
 			WindowStart: req.WindowStart, WindowEnd: req.WindowEnd, Status: ReconRunPending, CreatedAt: now,
 		}); err != nil {
 			return err
 		}
+
 		result = port.ReconRunResult{RunID: runID, Status: ReconRunPending, Cursor: tx.Cursor()}
+
 		encoded, err := jsonparser.Marshal(result)
 		if err != nil {
 			return err
 		}
+
 		if err := tx.Outbox().Append(ctx, port.OutboxFact{
 			TenantID: req.TenantID, LedgerID: req.LedgerID, EventType: EventReconRunStarted,
 			AggregateID: runID, Payload: reconPayload(runID, ReconRunPending), OccurredAt: now,
 		}); err != nil {
 			return err
 		}
+
 		return tx.Idempotency().Complete(ctx, rec.Key, encoded)
 	})
 	if err != nil {
 		return port.ReconRunResult{}, err
 	}
+
 	return result, nil
 }
 
@@ -180,31 +195,40 @@ func (s *ReconService) TriggerReconRun(ctx context.Context, req port.ReconRunReq
 // strong write. The run loads inside, after matching inputs validate.
 func (s *ReconService) ExecuteRun(ctx context.Context, tenant valueobject.TenantID, runID string, input MatchInput) (port.ReconRunResult, error) {
 	now := s.clock.Now().UTC()
+
 	var result port.ReconRunResult
+
 	err := s.uow.Do(ctx, func(ctx context.Context, tx port.Tx) error {
 		run, err := s.runs.FindRun(ctx, tenant, runID)
 		if err != nil {
 			return err
 		}
+
 		if run.Status != ReconRunPending {
 			return entity.NewError("RUN_STATE_INVALID", "only pending runs can execute")
 		}
+
 		_, breaks, err := service.MatchStatements(input.Ledger, input.External, input.Config)
 		if err != nil {
 			return err
 		}
+
 		records := make([]BreakRecord, 0, len(breaks))
 		for _, br := range breaks {
 			records = append(records, BreakRecord{Break: br, Status: valueobject.BreakOpen})
 		}
+
 		if err := s.runs.CreateBreaks(ctx, records); err != nil {
 			return err
 		}
+
 		run.Status = ReconRunCompleted
 		if err := s.runs.UpdateRun(ctx, run); err != nil {
 			return err
 		}
+
 		result = port.ReconRunResult{RunID: runID, Status: ReconRunCompleted, Cursor: tx.Cursor()}
+
 		facts := []port.OutboxFact{{
 			TenantID: run.TenantID, LedgerID: run.LedgerID, EventType: EventReconRunCompleted,
 			AggregateID: runID, Payload: reconPayload(runID, ReconRunCompleted), OccurredAt: now,
@@ -215,11 +239,13 @@ func (s *ReconService) ExecuteRun(ctx context.Context, tenant valueobject.Tenant
 				AggregateID: br.BreakID, Payload: reconPayload(br.BreakID, string(br.Type)), OccurredAt: now,
 			})
 		}
+
 		return tx.Outbox().Append(ctx, facts...)
 	})
 	if err != nil {
 		return port.ReconRunResult{}, err
 	}
+
 	return result, nil
 }
 
@@ -240,36 +266,44 @@ func (s *ReconService) decideBreak(ctx context.Context, req port.BreakResolution
 	if err := validateBreakEnvelope(req); err != nil {
 		return err
 	}
+
 	subject := port.Subject{ID: req.Actor, TenantID: req.TenantID}
 	if err := RequireAuthz(ctx, s.authz, subject, "recon.resolve", "recon/"+req.BreakID); err != nil {
 		return err
 	}
+
 	action := valueobject.ResolveAdjustLedger
 	target := valueobject.BreakResolved
 	eventType := EventReconBreakResolved
+
 	if acknowledge {
 		action = valueobject.ResolveAcknowledge
 		target = valueobject.BreakAcknowledged
 		eventType = EventReconBreakAcknowledged
 	}
+
 	now := s.clock.Now().UTC()
 	rec := port.IdempotencyRecord{
 		Key:         req.IdempotencyKey,
 		Fingerprint: Fingerprint(req.IdempotencyKey, req.BreakID, string(action), req.Decision, req.Approver),
 		TenantID:    req.TenantID,
 	}
+
 	return s.uow.Do(ctx, func(ctx context.Context, tx port.Tx) error {
 		outcome, err := tx.Idempotency().Reserve(ctx, rec)
 		if err != nil {
 			return err
 		}
+
 		if outcome.Replay {
 			return nil
 		}
+
 		stored, err := s.runs.FindBreak(ctx, req.TenantID, req.BreakID)
 		if err != nil {
 			return err
 		}
+
 		if err := service.ValidateResolution(service.ResolutionRequest{
 			BreakID: req.BreakID, Action: action, ReasonCode: req.Decision, EvidenceRef: req.Note,
 			Owner: req.Actor, Actor: req.Actor, Approver: req.Approver, AuditLink: "audit:" + req.BreakID,
@@ -279,18 +313,22 @@ func (s *ReconService) decideBreak(ctx context.Context, req port.BreakResolution
 		}, stored.Status, s.soDThresholdMinor); err != nil {
 			return err
 		}
+
 		stored.Status = target
 		stored.DecidedBy = req.Actor
+
 		stored.DecidedAt = now
 		if err := s.runs.UpdateBreak(ctx, stored); err != nil {
 			return err
 		}
+
 		if err := tx.Outbox().Append(ctx, port.OutboxFact{
 			TenantID: req.TenantID, EventType: eventType,
 			AggregateID: req.BreakID, Payload: reconPayload(req.BreakID, string(target)), OccurredAt: now,
 		}); err != nil {
 			return err
 		}
+
 		return tx.Idempotency().Complete(ctx, rec.Key, []byte(`{"break_id":"`+req.BreakID+`","status":"`+string(target)+`"}`))
 	})
 }
@@ -302,6 +340,7 @@ func adjustmentAmount(br entity.ReconciliationBreak) int64 {
 	if br.ExpectedMinor >= br.ActualMinor {
 		return br.ExpectedMinor - br.ActualMinor
 	}
+
 	return br.ActualMinor - br.ExpectedMinor
 }
 
@@ -310,21 +349,26 @@ func validateBreakEnvelope(req port.BreakResolutionRequest) error {
 	if strings.TrimSpace(req.TenantID.String()) == "" {
 		return entity.NewError("TENANT_REQUIRED", "tenant id is required")
 	}
+
 	if strings.TrimSpace(req.BreakID) == "" {
 		return entity.NewError("BREAK_ID_REQUIRED", "break id is required")
 	}
+
 	if strings.TrimSpace(req.Actor) == "" {
 		return entity.NewError("ACTOR_REQUIRED", "reconciliation actor is required")
 	}
+
 	if strings.TrimSpace(req.IdempotencyKey) == "" {
 		return entity.NewError("IDEMPOTENCY_KEY_REQUIRED", "reconciliation requires an idempotency key")
 	}
+
 	return nil
 }
 
 // reconPayload builds the §3.7-shaped webhook payload: id plus status.
 func reconPayload(id, status string) []byte {
 	encoded, _ := jsonparser.Marshal(map[string]string{payloadIDKey: id, payloadStatusKey: status})
+
 	return encoded
 }
 
@@ -334,8 +378,10 @@ func decodeReconResult(response []byte) (port.ReconRunResult, error) {
 	if err := jsonparser.Unmarshal(response, &result); err != nil {
 		return port.ReconRunResult{}, entity.NewError("IDEMPOTENCY_RECORD_INVALID", "stored idempotency response is corrupt")
 	}
+
 	if result.RunID == "" {
 		return port.ReconRunResult{}, entity.NewError("IDEMPOTENCY_RECORD_INVALID", "stored idempotency response is corrupt")
 	}
+
 	return result, nil
 }

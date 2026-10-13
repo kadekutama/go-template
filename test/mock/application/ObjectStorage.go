@@ -54,7 +54,7 @@ type MockObjectStorage_Delete_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - key string
-func (_e *MockObjectStorage_Expecter) Delete(ctx interface{}, tenant interface{}, key interface{}) *MockObjectStorage_Delete_Call {
+func (_e *MockObjectStorage_Expecter) Delete(ctx any, tenant any, key any) *MockObjectStorage_Delete_Call {
 	return &MockObjectStorage_Delete_Call{Call: _e.mock.On("Delete", ctx, tenant, key)}
 }
 
@@ -112,7 +112,7 @@ type MockObjectStorage_Get_Call struct {
 //   - ctx context.Context
 //   - tenant valueobject.TenantID
 //   - key string
-func (_e *MockObjectStorage_Expecter) Get(ctx interface{}, tenant interface{}, key interface{}) *MockObjectStorage_Get_Call {
+func (_e *MockObjectStorage_Expecter) Get(ctx any, tenant any, key any) *MockObjectStorage_Get_Call {
 	return &MockObjectStorage_Get_Call{Call: _e.mock.On("Get", ctx, tenant, key)}
 }
 
@@ -161,7 +161,7 @@ type MockObjectStorage_Put_Call struct {
 //   - tenant valueobject.TenantID
 //   - key string
 //   - object port.StoredObject
-func (_e *MockObjectStorage_Expecter) Put(ctx interface{}, tenant interface{}, key interface{}, object interface{}) *MockObjectStorage_Put_Call {
+func (_e *MockObjectStorage_Expecter) Put(ctx any, tenant any, key any, object any) *MockObjectStorage_Put_Call {
 	return &MockObjectStorage_Put_Call{Call: _e.mock.On("Put", ctx, tenant, key, object)}
 }
 
@@ -220,7 +220,7 @@ type MockObjectStorage_SignedURL_Call struct {
 //   - tenant valueobject.TenantID
 //   - key string
 //   - ttl time.Duration
-func (_e *MockObjectStorage_Expecter) SignedURL(ctx interface{}, tenant interface{}, key interface{}, ttl interface{}) *MockObjectStorage_SignedURL_Call {
+func (_e *MockObjectStorage_Expecter) SignedURL(ctx any, tenant any, key any, ttl any) *MockObjectStorage_SignedURL_Call {
 	return &MockObjectStorage_SignedURL_Call{Call: _e.mock.On("SignedURL", ctx, tenant, key, ttl)}
 }
 

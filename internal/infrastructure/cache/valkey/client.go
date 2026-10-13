@@ -22,10 +22,10 @@ import (
 // receipts) keep matching one error while the cache path uses store.ErrMiss.
 var ErrMiss = store.ErrMiss
 
-// ValkeyParams carries constructor dependencies (Parameter Object pattern).
+// Params carries constructor dependencies (Parameter Object pattern).
 // Field rules are declared with validator tags and enforced by
 // validateParams; nil-dependency rules stay explicit at the call site.
-type ValkeyParams struct {
+type Params struct {
 	Addr         string        `validate:"required"`
 	Password     string        `validate:"-"`
 	DB           int           `validate:"gte=0,lte=15"`
@@ -36,30 +36,30 @@ type ValkeyParams struct {
 	UseTLS       bool          `validate:"-"`
 }
 
-// ValkeyClient is the L2 handle. All methods are safe for concurrent use.
-type ValkeyClient struct {
+// Client is the L2 handle. All methods are safe for concurrent use.
+type Client struct {
 	client *redis.Client
 }
 
 // Compile-time seam conformance: the client plugs into the shared engine
 // beside the Otter L1 with identical Get/Set/Delete shapes.
 var (
-	_ store.Store         = (*ValkeyClient)(nil)
-	_ store.ExpiringStore = (*ValkeyClient)(nil)
-	_ ScriptRunner        = (*ValkeyClient)(nil)
+	_ store.Store         = (*Client)(nil)
+	_ store.ExpiringStore = (*Client)(nil)
+	_ ScriptRunner        = (*Client)(nil)
 )
 
 // NewValkeyClient builds the client. Addr, PoolSize, DialTimeout, ReadTimeout,
 // and WriteTimeout are required. Dial is lazy so topology tests construct without I/O.
 // Call Ping to verify connectivity.
-func NewValkeyClient(params ValkeyParams) (*ValkeyClient, error) {
+func NewValkeyClient(params Params) (*Client, error) {
 	if err := validate.Struct("valkey", "params", params); err != nil {
 		return nil, err
 	}
 
 	addr := strings.TrimSpace(params.Addr)
 	if addr == "" {
-		return nil, fmt.Errorf("valkey: addr is required")
+		return nil, ErrValkeyAddrIsRequired
 	}
 
 	opts := &redis.Options{
@@ -76,13 +76,13 @@ func NewValkeyClient(params ValkeyParams) (*ValkeyClient, error) {
 		opts.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
 	}
 
-	return &ValkeyClient{client: redis.NewClient(opts)}, nil
+	return &Client{client: redis.NewClient(opts)}, nil
 }
 
 // Ping verifies connectivity within ctx.
-func (c *ValkeyClient) Ping(ctx context.Context) error {
+func (c *Client) Ping(ctx context.Context) error {
 	if c == nil || c.client == nil {
-		return fmt.Errorf("valkey: client is not initialized")
+		return ErrValkeyClientIsNotInitialized
 	}
 
 	if err := ctx.Err(); err != nil {
@@ -99,13 +99,13 @@ func (c *ValkeyClient) Ping(ctx context.Context) error {
 // Get returns the value or store.ErrMiss. Context cancellation aborts the
 // read. It implements the shared store.Store contract with the same shape
 // as the Otter L1.
-func (c *ValkeyClient) Get(ctx context.Context, key string) ([]byte, error) {
+func (c *Client) Get(ctx context.Context, key string) ([]byte, error) {
 	if c == nil || c.client == nil {
-		return nil, fmt.Errorf("valkey: client is not initialized")
+		return nil, ErrValkeyClientIsNotInitialized
 	}
 
 	if key == "" {
-		return nil, fmt.Errorf("valkey: key is required")
+		return nil, ErrValkeyKeyIsRequired
 	}
 
 	if err := ctx.Err(); err != nil {
@@ -127,13 +127,13 @@ func (c *ValkeyClient) Get(ctx context.Context, key string) ([]byte, error) {
 // TTL reports a record's remaining TTL for bounding L1 repopulation: a
 // copied entry must never outlive its source. It returns store.NoExpiry for
 // a persisted key and store.ErrMiss for an absent one.
-func (c *ValkeyClient) TTL(ctx context.Context, key string) (time.Duration, error) {
+func (c *Client) TTL(ctx context.Context, key string) (time.Duration, error) {
 	if c == nil || c.client == nil {
-		return 0, fmt.Errorf("valkey: client is not initialized")
+		return 0, ErrValkeyClientIsNotInitialized
 	}
 
 	if key == "" {
-		return 0, fmt.Errorf("valkey: key is required")
+		return 0, ErrValkeyKeyIsRequired
 	}
 
 	if err := ctx.Err(); err != nil {
@@ -155,6 +155,8 @@ func (c *ValkeyClient) TTL(ctx context.Context, key string) (time.Duration, erro
 	case -2:
 		// The key vanished between calls; treat as expiring now.
 		return 0, nil
+	case time.Nanosecond, time.Microsecond, time.Millisecond, time.Second, time.Minute, time.Hour:
+		return remaining, nil
 	default:
 		return remaining, nil
 	}
@@ -163,17 +165,17 @@ func (c *ValkeyClient) TTL(ctx context.Context, key string) (time.Duration, erro
 // Set stores value with mandatory positive TTL. A nil payload is legal and
 // stored as an empty value: callers use it as a negative-cache marker, and
 // Get cannot distinguish nil from empty on the wire.
-func (c *ValkeyClient) Set(ctx context.Context, key string, value []byte, ttl time.Duration) error {
+func (c *Client) Set(ctx context.Context, key string, value []byte, ttl time.Duration) error {
 	if c == nil || c.client == nil {
-		return fmt.Errorf("valkey: client is not initialized")
+		return ErrValkeyClientIsNotInitialized
 	}
 
 	if key == "" {
-		return fmt.Errorf("valkey: key is required")
+		return ErrValkeyKeyIsRequired
 	}
 
 	if ttl <= 0 {
-		return fmt.Errorf("valkey: ttl must be positive")
+		return ErrValkeyTTLMustBePositive
 	}
 
 	if err := ctx.Err(); err != nil {
@@ -188,13 +190,13 @@ func (c *ValkeyClient) Set(ctx context.Context, key string, value []byte, ttl ti
 }
 
 // Delete invalidates one key. Missing keys succeed.
-func (c *ValkeyClient) Delete(ctx context.Context, key string) error {
+func (c *Client) Delete(ctx context.Context, key string) error {
 	if c == nil || c.client == nil {
-		return fmt.Errorf("valkey: client is not initialized")
+		return ErrValkeyClientIsNotInitialized
 	}
 
 	if key == "" {
-		return fmt.Errorf("valkey: key is required")
+		return ErrValkeyKeyIsRequired
 	}
 
 	if err := ctx.Err(); err != nil {
@@ -209,9 +211,9 @@ func (c *ValkeyClient) Delete(ctx context.Context, key string) error {
 }
 
 // Eval executes a Lua script on the server with the given keys and arguments.
-func (c *ValkeyClient) Eval(ctx context.Context, script string, keys []string, args ...any) (any, error) {
+func (c *Client) Eval(ctx context.Context, script string, keys []string, args ...any) (any, error) {
 	if c == nil || c.client == nil {
-		return nil, fmt.Errorf("valkey: client is not initialized")
+		return nil, ErrValkeyClientIsNotInitialized
 	}
 
 	if err := ctx.Err(); err != nil {
@@ -227,17 +229,17 @@ func (c *ValkeyClient) Eval(ctx context.Context, script string, keys []string, a
 }
 
 // SetNX sets key only when absent with TTL; it reports whether the set won.
-func (c *ValkeyClient) SetNX(ctx context.Context, key string, value []byte, ttl time.Duration) (bool, error) {
+func (c *Client) SetNX(ctx context.Context, key string, value []byte, ttl time.Duration) (bool, error) {
 	if c == nil || c.client == nil {
-		return false, fmt.Errorf("valkey: client is not initialized")
+		return false, ErrValkeyClientIsNotInitialized
 	}
 
 	if key == "" {
-		return false, fmt.Errorf("valkey: key is required")
+		return false, ErrValkeyKeyIsRequired
 	}
 
 	if ttl <= 0 {
-		return false, fmt.Errorf("valkey: ttl must be positive")
+		return false, ErrValkeyTTLMustBePositive
 	}
 
 	if err := ctx.Err(); err != nil {
@@ -253,7 +255,7 @@ func (c *ValkeyClient) SetNX(ctx context.Context, key string, value []byte, ttl 
 }
 
 // Close drains the pool.
-func (c *ValkeyClient) Close() error {
+func (c *Client) Close() error {
 	if c == nil || c.client == nil {
 		return nil
 	}

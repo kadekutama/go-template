@@ -71,10 +71,14 @@ g, bob, viewer, tenant-1
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			loader := rbac.NewCSVLoader(tc.path)
+
 			policies, grouping, err := loader.Load()
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
+
 				return
 			}
 
@@ -110,10 +114,12 @@ func TestDBPolicyLoader(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
+
 				l, err := rbac.NewDBPolicyLoader(db)
 				if err != nil {
 					panic(err)
 				}
+
 				return l
 			}(),
 			expectedError: rbac.ErrPolicyInvalid,
@@ -122,11 +128,14 @@ func TestDBPolicyLoader(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			policies, grouping, err := tc.loader.Load()
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
 				assert.Nil(t, policies)
 				assert.Nil(t, grouping)
+
 				return
 			}
 
@@ -160,6 +169,7 @@ func TestNewDBPolicyLoaderValidation(t *testing.T) {
 				if err != nil {
 					panic(err)
 				}
+
 				return db
 			}(),
 			expectedError: nil,
@@ -168,10 +178,13 @@ func TestNewDBPolicyLoaderValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			loader, err := rbac.NewDBPolicyLoader(tc.db)
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
 				assert.Nil(t, loader)
+
 				return
 			}
 

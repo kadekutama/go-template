@@ -1,7 +1,7 @@
 package valueobject_test
 
 import (
-	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -30,6 +30,8 @@ func TestReturnCodes(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := valueobject.ReturnCodes()
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -177,12 +179,14 @@ func TestDispositionFor(t *testing.T) {
 			name:           "unknown code error",
 			code:           "UNKNOWN_CODE",
 			expectedResult: valueobject.ReturnDisposition(""),
-			expectedError:  errors.New(`payment: unknown return code "UNKNOWN_CODE"`),
+			expectedError:  fmt.Errorf("payment: unknown return code %q: %w", "UNKNOWN_CODE", valueobject.ErrPaymentUnknownReturnCode),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := valueobject.DispositionFor(tc.code)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)

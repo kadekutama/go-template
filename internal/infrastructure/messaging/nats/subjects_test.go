@@ -1,7 +1,6 @@
 package nats_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -83,6 +82,8 @@ func TestEventSubject(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := edgenats.EventSubject(tc.tenant, tc.eventType)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -133,6 +134,8 @@ func TestParseEventSubject(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			tenant, eventType, err := edgenats.ParseEventSubject(tc.subject)
 			assert.Equal(t, tc.expectedTenant, tenant)
 			assert.Equal(t, tc.expectedEventType, eventType)
@@ -198,6 +201,8 @@ func TestBalanceSubject(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			subject, err := edgenats.BalanceSubject(tc.tenant)
 			assert.Equal(t, tc.expectedResult, subject)
 			assert.Equal(t, tc.expectedError, err)
@@ -238,18 +243,20 @@ func TestQueueGroupFor(t *testing.T) {
 			name:           "blank rejected",
 			group:          "",
 			expectedResult: "",
-			expectedError:  errors.New("nats: consumer group is required"),
+			expectedError:  edgenats.ErrNatsConsumerGroupIsRequired,
 		},
 		{
 			name:           "whitespace rejected",
 			group:          "   ",
 			expectedResult: "",
-			expectedError:  errors.New("nats: consumer group is required"),
+			expectedError:  edgenats.ErrNatsConsumerGroupIsRequired,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			group, err := edgenats.QueueGroupFor(tc.group)
 			assert.Equal(t, tc.expectedResult, group)
 			assert.Equal(t, tc.expectedError, err)

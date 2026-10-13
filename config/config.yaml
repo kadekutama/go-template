@@ -85,3 +85,23 @@ coordination:
 tenancy:
   # Maximum assets per onboarding call (E05-T01-R03). Explicit; no default.
   max_onboarding_assets: 8
+
+cron_admin:
+  # Read-only scheduler dashboard (E09.1-T02). Disabled by default; E14-T01
+  # owns the cron process lifecycle around it. Nothing listens unless
+  # enabled is true and the admin config validation passes.
+  enabled: false
+  bind_addr: "127.0.0.1:8443"
+  private_listener: false
+  allowed_origin: ""
+  tls_cert_file: ""
+  tls_key_file: ""
+  tls_client_ca_file: ""
+  rate_limit_budget: 100
+  rate_limit_window_sec: 60
+  session_max_ttl_sec: 300
+  session_scope: "cron:read"
+  session_cookie_name: "__Host-cron_ui_session"
+  limiter_namespace: "cron-ui"
+  anonymous_subject: "anonymous"
+  session_key_file: ""

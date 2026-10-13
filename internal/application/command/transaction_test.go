@@ -13,19 +13,20 @@ import (
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
 )
 
-var reverseUUIDs = []string{
-	"123e4567-e89b-12d3-a456-426614174000",
-	"123e4567-e89b-12d3-a456-426614174001",
-	"123e4567-e89b-12d3-a456-426614174002",
-	"123e4567-e89b-12d3-a456-426614174003",
-	"123e4567-e89b-12d3-a456-426614174004",
-	"123e4567-e89b-12d3-a456-426614174005",
-	"123e4567-e89b-12d3-a456-426614174006",
-	"123e4567-e89b-12d3-a456-426614174007",
-	"123e4567-e89b-12d3-a456-426614174008",
-	"123e4567-e89b-12d3-a456-426614174009",
+func reverseUUIDs() []string {
+	return []string{
+		"123e4567-e89b-12d3-a456-426614174000",
+		"123e4567-e89b-12d3-a456-426614174001",
+		"123e4567-e89b-12d3-a456-426614174002",
+		"123e4567-e89b-12d3-a456-426614174003",
+		"123e4567-e89b-12d3-a456-426614174004",
+		"123e4567-e89b-12d3-a456-426614174005",
+		"123e4567-e89b-12d3-a456-426614174006",
+		"123e4567-e89b-12d3-a456-426614174007",
+		"123e4567-e89b-12d3-a456-426614174008",
+		"123e4567-e89b-12d3-a456-426614174009",
+	}
 }
-
 func reverseOriginal() entity.PostingData {
 	return entity.PostingData{
 		ID: "123e4567-e89b-12d3-a456-426614174010", TenantID: tfrTenant, LedgerID: tfrLedger,
@@ -34,25 +35,27 @@ func reverseOriginal() entity.PostingData {
 			{ID: "123e4567-e89b-12d3-a456-426614174011", PostingID: "123e4567-e89b-12d3-a456-426614174010", AccountID: tfrSrc, Side: valueobject.DirectionDebit, AmountMinor: 5000, AssetCode: tfrAsset, AccountSeq: 1},
 			{ID: "123e4567-e89b-12d3-a456-426614174012", PostingID: "123e4567-e89b-12d3-a456-426614174010", AccountID: tfrDst, Side: valueobject.DirectionCredit, AmountMinor: 5000, AssetCode: tfrAsset, AccountSeq: 1},
 		},
-		EffectiveAt: tfrAt, RecordedAt: tfrAt,
+		EffectiveAt: tfrAt(), RecordedAt: tfrAt(),
 	}
 }
 
 func newTransactionService(t *testing.T, uow port.UnitOfWork, authz port.Authorizer, original entity.PostingData, findErr error) *command.TransactionService {
+	t.Helper()
 	posting := command.NewPostingService(command.PostingServiceParams{
 		UoW:      uow,
 		Accounts: newMockAccountRepository(t, tfrTestAccounts()),
-		Clock:    newMockClock(t, tfrAt),
-		IDs:      newMockIDGenerator(t, reverseUUIDs...),
+		Clock:    newMockClock(t, tfrAt()),
+		IDs:      newMockIDGenerator(t, reverseUUIDs()...),
 		Authz:    authz,
 	})
+
 	return command.NewTransactionService(command.TransactionServiceParams{
 		Posting:  posting,
 		UoW:      uow,
 		Postings: newMockPostingRepository(t, original, findErr),
 		Accounts: newMockAccountRepository(t, tfrTestAccounts()),
-		Clock:    newMockClock(t, tfrAt),
-		IDs:      newMockIDGenerator(t, reverseUUIDs...),
+		Clock:    newMockClock(t, tfrAt()),
+		IDs:      newMockIDGenerator(t, reverseUUIDs()...),
 		Authz:    authz,
 	})
 }
@@ -107,6 +110,7 @@ func TestReverseTransaction(t *testing.T) {
 			req: func() command.ReverseTransactionRequest {
 				r := reverseTestRequest()
 				r.Reason = ""
+
 				return r
 			}(),
 			original:       reverseOriginal(),
@@ -128,15 +132,18 @@ func TestReverseTransaction(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			uow := newMockUOW(t, "cursor-5")
 			authz := newMockAuthorizer(t)
 			svc := newTransactionService(t, uow, authz, tc.original, tc.findErr)
 			tc.preload(svc)
 			actualResult, err := svc.ReverseTransaction(context.Background(), tc.req)
 			assert.Equal(t, tc.expectedError, err)
+
 			if tc.expectedError == nil {
-				assert.Equal(t, reverseUUIDs[0], string(actualResult.PostingID))
+				assert.Equal(t, reverseUUIDs()[0], string(actualResult.PostingID))
 				assert.Equal(t, tc.expectedCursor, actualResult.Cursor)
+
 				facts := outboxFacts(uow)
 				assert.Len(t, facts, 1)
 				assert.Equal(t, "transaction.reversed.v1", facts[0].EventType)
@@ -155,7 +162,7 @@ func TestPostTransactionDelegates(t *testing.T) {
 	posting := command.NewPostingService(command.PostingServiceParams{
 		UoW:      uow,
 		Accounts: newMockAccountRepository(t, postTestAccounts()),
-		Clock:    newMockClock(t, postAt),
+		Clock:    newMockClock(t, postAt()),
 		IDs:      newMockIDGenerator(t, postTestIDs(20)...),
 		Authz:    authz,
 	})

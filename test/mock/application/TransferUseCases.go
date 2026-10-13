@@ -59,7 +59,7 @@ type MockTransferUseCases_CancelTransfer_Call struct {
 // CancelTransfer is a helper method to define mock.On call
 //   - ctx context.Context
 //   - query port.TransferQuery
-func (_e *MockTransferUseCases_Expecter) CancelTransfer(ctx interface{}, query interface{}) *MockTransferUseCases_CancelTransfer_Call {
+func (_e *MockTransferUseCases_Expecter) CancelTransfer(ctx any, query any) *MockTransferUseCases_CancelTransfer_Call {
 	return &MockTransferUseCases_CancelTransfer_Call{Call: _e.mock.On("CancelTransfer", ctx, query)}
 }
 
@@ -116,7 +116,7 @@ type MockTransferUseCases_CreateBatchTransfer_Call struct {
 // CreateBatchTransfer is a helper method to define mock.On call
 //   - ctx context.Context
 //   - req port.BatchTransferRequest
-func (_e *MockTransferUseCases_Expecter) CreateBatchTransfer(ctx interface{}, req interface{}) *MockTransferUseCases_CreateBatchTransfer_Call {
+func (_e *MockTransferUseCases_Expecter) CreateBatchTransfer(ctx any, req any) *MockTransferUseCases_CreateBatchTransfer_Call {
 	return &MockTransferUseCases_CreateBatchTransfer_Call{Call: _e.mock.On("CreateBatchTransfer", ctx, req)}
 }
 
@@ -173,7 +173,7 @@ type MockTransferUseCases_CreateTransfer_Call struct {
 // CreateTransfer is a helper method to define mock.On call
 //   - ctx context.Context
 //   - req port.TransferRequest
-func (_e *MockTransferUseCases_Expecter) CreateTransfer(ctx interface{}, req interface{}) *MockTransferUseCases_CreateTransfer_Call {
+func (_e *MockTransferUseCases_Expecter) CreateTransfer(ctx any, req any) *MockTransferUseCases_CreateTransfer_Call {
 	return &MockTransferUseCases_CreateTransfer_Call{Call: _e.mock.On("CreateTransfer", ctx, req)}
 }
 
@@ -230,7 +230,7 @@ type MockTransferUseCases_GetBatchStatus_Call struct {
 // GetBatchStatus is a helper method to define mock.On call
 //   - ctx context.Context
 //   - query port.BatchStatusQuery
-func (_e *MockTransferUseCases_Expecter) GetBatchStatus(ctx interface{}, query interface{}) *MockTransferUseCases_GetBatchStatus_Call {
+func (_e *MockTransferUseCases_Expecter) GetBatchStatus(ctx any, query any) *MockTransferUseCases_GetBatchStatus_Call {
 	return &MockTransferUseCases_GetBatchStatus_Call{Call: _e.mock.On("GetBatchStatus", ctx, query)}
 }
 
@@ -287,7 +287,7 @@ type MockTransferUseCases_GetTransfer_Call struct {
 // GetTransfer is a helper method to define mock.On call
 //   - ctx context.Context
 //   - query port.TransferQuery
-func (_e *MockTransferUseCases_Expecter) GetTransfer(ctx interface{}, query interface{}) *MockTransferUseCases_GetTransfer_Call {
+func (_e *MockTransferUseCases_Expecter) GetTransfer(ctx any, query any) *MockTransferUseCases_GetTransfer_Call {
 	return &MockTransferUseCases_GetTransfer_Call{Call: _e.mock.On("GetTransfer", ctx, query)}
 }
 
@@ -344,7 +344,7 @@ type MockTransferUseCases_ListTransfers_Call struct {
 // ListTransfers is a helper method to define mock.On call
 //   - ctx context.Context
 //   - filter port.TransferFilter
-func (_e *MockTransferUseCases_Expecter) ListTransfers(ctx interface{}, filter interface{}) *MockTransferUseCases_ListTransfers_Call {
+func (_e *MockTransferUseCases_Expecter) ListTransfers(ctx any, filter any) *MockTransferUseCases_ListTransfers_Call {
 	return &MockTransferUseCases_ListTransfers_Call{Call: _e.mock.On("ListTransfers", ctx, filter)}
 }
 

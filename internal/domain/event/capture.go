@@ -1,7 +1,6 @@
 package event
 
 import (
-	"errors"
 	"time"
 )
 
@@ -16,13 +15,15 @@ type PaymentCapturedPayload struct {
 }
 
 // NewPaymentCaptured builds payment.captured.v1.
-func NewPaymentCaptured(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PaymentCapturedPayload, meta EventMetadata) (TypedEvent[PaymentCapturedPayload], error) {
+func NewPaymentCaptured(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PaymentCapturedPayload, meta Metadata) (TypedEvent[PaymentCapturedPayload], error) {
 	if err := requireIDs(map[string]string{fieldPaymentID: payload.PaymentID, fieldTenantID: payload.TenantID, fieldPostingID: payload.PostingID}); err != nil {
 		return TypedEvent[PaymentCapturedPayload]{}, err
 	}
+
 	if payload.CapturedMinor <= 0 {
-		return TypedEvent[PaymentCapturedPayload]{}, errors.New("event: captured_minor must be positive")
+		return TypedEvent[PaymentCapturedPayload]{}, ErrEventCapturedMinorMustBePositive
 	}
+
 	return newTyped("payment.captured.v1", eventID, aggregateID, "PaymentIntent", occurredAt, version, seq, payload, meta)
 }
 
@@ -41,9 +42,10 @@ type PaymentSettledPayload struct {
 }
 
 // NewPaymentSettled builds payment.settled.v1.
-func NewPaymentSettled(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PaymentSettledPayload, meta EventMetadata) (TypedEvent[PaymentSettledPayload], error) {
+func NewPaymentSettled(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload PaymentSettledPayload, meta Metadata) (TypedEvent[PaymentSettledPayload], error) {
 	if err := requireIDs(map[string]string{fieldPaymentID: payload.PaymentID, fieldTenantID: payload.TenantID, fieldPostingID: payload.PostingID}); err != nil {
 		return TypedEvent[PaymentSettledPayload]{}, err
 	}
+
 	return newTyped("payment.settled.v1", eventID, aggregateID, "PaymentIntent", occurredAt, version, seq, payload, meta)
 }

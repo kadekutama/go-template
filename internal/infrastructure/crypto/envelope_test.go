@@ -30,10 +30,12 @@ func (s *mockKEKState) rotate() (string, error) {
 	if _, err := rand.Read(key); err != nil {
 		return "", err
 	}
+
 	v := s.version.Add(1)
 	id := fmt.Sprintf("v%d", v)
 	s.keys.Store(id, key)
 	s.current.Store(&id)
+
 	return id, nil
 }
 
@@ -42,15 +44,19 @@ func (s *mockKEKState) wrapDEK(_ context.Context, dek []byte) ([]byte, string, e
 	if cur == nil {
 		return nil, "", crypto.ErrUnknownKey
 	}
+
 	val, ok := s.keys.Load(*cur)
 	if !ok {
 		return nil, "", crypto.ErrUnknownKey
 	}
+
 	key := val.([]byte)
+
 	nonce, sealed, err := sealTestDEK(key, dek)
 	if err != nil {
 		return nil, "", err
 	}
+
 	return append(append([]byte(nil), nonce...), sealed...), *cur, nil
 }
 
@@ -59,10 +65,13 @@ func (s *mockKEKState) unwrapDEK(_ context.Context, keyID string, wrapped []byte
 	if !ok {
 		return nil, crypto.ErrShredded
 	}
+
 	key := val.([]byte)
+
 	if len(wrapped) < 12 {
 		return nil, crypto.ErrAuthFailed
 	}
+
 	return openTestDEK(key, wrapped[:12], wrapped[12:], keyID)
 }
 
@@ -71,19 +80,24 @@ func (s *mockKEKState) rewrapDEK(ctx context.Context, keyID string, wrapped []by
 	if err != nil {
 		return nil, err
 	}
+
 	cur := s.current.Load()
 	if cur == nil {
 		return nil, crypto.ErrUnknownKey
 	}
+
 	curVal, ok := s.keys.Load(*cur)
 	if !ok {
 		return nil, crypto.ErrUnknownKey
 	}
+
 	curKey := curVal.([]byte)
+
 	nonce, sealed, err := sealTestDEK(curKey, dek)
 	if err != nil {
 		return nil, err
 	}
+
 	return append(append([]byte(nil), nonce...), sealed...), nil
 }
 
@@ -91,7 +105,9 @@ func (s *mockKEKState) destroyKey(_ context.Context, keyID string) error {
 	if _, ok := s.keys.Load(keyID); !ok {
 		return crypto.ErrUnknownKey
 	}
+
 	s.keys.Delete(keyID)
+
 	return nil
 }
 
@@ -112,7 +128,9 @@ func newMockKEK(t *testing.T) (*mockcrypto.MockKeyEncryptionKey, func() (string,
 	return kek, state.rotate
 }
 
-func sealTestDEK(key, dek []byte) (nonce, sealed []byte, err error) {
+func sealTestDEK(key, dek []byte) ([]byte, []byte, error) {
+	var nonce []byte
+
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, nil, err
@@ -154,7 +172,7 @@ func testEnveloper(t *testing.T) *crypto.Enveloper {
 	t.Helper()
 
 	kek, _ := newMockKEK(t)
-	enveloper, err := crypto.NewEnveloper(crypto.CryptoParams{KEK: kek})
+	enveloper, err := crypto.NewEnveloper(crypto.Params{KEK: kek})
 	require.NoError(t, err)
 
 	return enveloper
@@ -204,6 +222,7 @@ func TestEnvelopeRoundTrip(t *testing.T) {
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
+
 				return ctx
 			}(),
 			tenant:        tenant,
@@ -215,11 +234,13 @@ func TestEnvelopeRoundTrip(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			enveloper := testEnveloper(t)
 
 			envelope, err := enveloper.Encrypt(tc.ctx, tc.tenant, tc.purpose, tc.plaintext)
 			if tc.expectedError != nil {
 				assert.Error(t, err)
+
 				return
 			}
 
@@ -267,6 +288,7 @@ func TestEnvelopeUniquenessTamper(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			enveloper := testEnveloper(t)
 
 			first, err := enveloper.Encrypt(context.Background(), tenant, "pan", []byte("4111111111111111"))
@@ -290,6 +312,7 @@ func TestEnvelopeUniquenessTamper(t *testing.T) {
 			_, err = enveloper.Decrypt(context.Background(), tenantForDecrypt, target)
 			if tc.expectedError != nil {
 				assert.ErrorIs(t, err, tc.expectedError)
+
 				return
 			}
 
@@ -324,9 +347,10 @@ func TestEnvelopeRotationShred(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			kek, rotate := newMockKEK(t)
 
-			enveloper, err := crypto.NewEnveloper(crypto.CryptoParams{KEK: kek})
+			enveloper, err := crypto.NewEnveloper(crypto.Params{KEK: kek})
 			require.NoError(t, err)
 
 			old, err := enveloper.Encrypt(context.Background(), tenant, "email", []byte("a@b.co"))
@@ -346,6 +370,7 @@ func TestEnvelopeRotationShred(t *testing.T) {
 
 				_, err = enveloper.Decrypt(context.Background(), tenant, old)
 				assert.ErrorIs(t, err, crypto.ErrShredded)
+
 				return
 			}
 
@@ -381,11 +406,13 @@ func TestPIIFields(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			enveloper := testEnveloper(t)
 
 			token, err := enveloper.EncryptPIIField(context.Background(), tenant, "user.email", tc.email)
 			if tc.email == "" {
 				assert.Error(t, err)
+
 				return
 			}
 

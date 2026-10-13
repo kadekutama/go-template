@@ -1,7 +1,6 @@
 package event
 
 import (
-	"errors"
 	"time"
 )
 
@@ -17,12 +16,14 @@ type FxRateUpdatedPayload struct {
 }
 
 // NewFxRateUpdated builds fx.rate.updated.v1.
-func NewFxRateUpdated(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload FxRateUpdatedPayload, meta EventMetadata) (TypedEvent[FxRateUpdatedPayload], error) {
+func NewFxRateUpdated(eventID, aggregateID string, occurredAt time.Time, version, seq int64, payload FxRateUpdatedPayload, meta Metadata) (TypedEvent[FxRateUpdatedPayload], error) {
 	if err := requireIDs(map[string]string{"rate_id": payload.RateID, fieldTenantID: payload.TenantID, "from_asset": payload.FromAsset, "to_asset": payload.ToAsset}); err != nil {
 		return TypedEvent[FxRateUpdatedPayload]{}, err
 	}
+
 	if payload.Rate == "" {
-		return TypedEvent[FxRateUpdatedPayload]{}, errors.New("event: rate is required")
+		return TypedEvent[FxRateUpdatedPayload]{}, ErrEventRateIsRequired
 	}
+
 	return newTyped("fx.rate.updated.v1", eventID, aggregateID, "FxRate", occurredAt, version, seq, payload, meta)
 }

@@ -24,6 +24,7 @@ func TestHarnessSmoke(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			testcontainers.SkipIfNoDocker(t)
 
 			pg, err := testcontainers.StartPostgres(t, "ledger_smoke")

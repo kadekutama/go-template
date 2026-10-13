@@ -3,7 +3,7 @@
 **Version:** 1.1.1  
 **Status:** Planning — audited, correctness contract added  
 **Last Updated:** 2026-09-13  
-**Go Version:** 1.27.1 (current stable patch at audit date)  
+**Go Version:** 1.27.2 (current stable patch; owner ruled latest-Go on 2026-10-13)
 
 ---
 
@@ -64,37 +64,38 @@ decisions on 2026-09-13; ADR-011 remains proposed pending benchmark evidence.
 The versions below are reproducible target pins, not a promise that every
 dependency is the newest release. E00/E01 resolve them in `go.mod` and the
 compose manifests, run vulnerability checks, and record any upgrade in an ADR
-or dependency-update PR. Go 1.27.1 is the current stable patch release on the
-audit date; keep the `go` directive and CI toolchain aligned with it.
+or dependency-update PR. Go 1.27.2 is the current stable patch release (owner ruled latest-Go on 2026-10-13; was 1.27.1 at audit date).
 
 | Category | Technology | Version | Notes |
 |----------|------------|---------|-------|
-| **Language** | Go | 1.27.1 | Latest stable (released 2026-09-01) |
+| **Language** | Go | 1.27.2 | Latest stable |
 | **DI Framework** | fx (Uber) | v1.24.0 | Runtime DI with lifecycle |
-| **HTTP Router** | Echo | v5.3.1 | High performance, middleware (v4 EOL 2026-12-31) |
+| **HTTP Router** | Echo | v5.4.0 | High performance, middleware (v4 EOL 2026-12-31) |
 | **gRPC** | grpc-go | v1.66.0 | Protobuf v1.34.0+ |
 | **GraphQL** | gqlgen | v0.17.94 | Schema-first, codegen |
 | **Database** | PostgreSQL + Citus | 18.6 / 14.0 | Citus horizontal tenant sharding (ADR-013), GORM v2 (v1.31.2) |
 | **Database HA** | Patroni / CloudNativePG | v4.1.5 / v1.30.0 | Patroni for bare-metal/VMs, CNPG for K8s (ADR-013) |
-| **Coordination / DCS**| etcd | v3.7.0 | Patroni DCS, gRPC config stream, leader election (ADR-017) |
+| **Coordination / DCS**| etcd | v3.7.2 | Patroni DCS, gRPC config stream, leader election (ADR-017) |
 | **Migration & Linting** | Goose + Atlas | v3.28.0 / v1.3.0 | Goose v3 embed/runtime + Atlas CI safety linter + UTC timestamps (ADR-018) |
 | **Cache L1** | Otter | v2.3.0 | Adaptive W-TinyLFU, Go generics, per-key TTL; supersedes Ristretto (ADR-015) |
-| **Cache L2** | Valkey | 9.1.2 | go-redis v9.22.0 (Sentinel & Cluster HA modes) |
+| **Cache L2** | Valkey | 9.1.2 | go-redis v9.23.0 (Sentinel & Cluster HA modes) |
 | **Messaging (Log)** | Redpanda | v26.2 | Kafka API, Raft-native, durable financial event log (ADR-014) |
 | **Messaging (Edge)**| NATS Core | v2.14.6 | In-memory real-time WebSocket push & microsecond RPC (ADR-014) |
 | **Auth JWT** | golang-jwt | v5.3.1 | RS256 asymmetric |
 | **OAuth2** | golang.org/x/oauth2 | v0.36.0 | Transport is stdlib-only (no SDK types at the port per E09-T02-R04); SDK retained as blank import only |
-| **RBAC** | Casbin | v2.8.0 | ABAC/RBAC hybrid |
+| **RBAC** | Casbin | v3.11.0 | ABAC/RBAC hybrid |
 | **Feature Flags** | OpenFeature + Unleash | v1.17.2 / v6.5.1 | go-sdk + official SDK; etcd dynamic overrides |
 | **Secrets / Crypto** | OpenBao | v2.6.2 | Dynamic DB credentials & Transit encryption; supersedes Bitwarden (ADR-016) |
-| **Circuit Breaker** | gobreaker | v0.5.0 | Sony |
-| **Tracing** | OpenTelemetry | v1.46.0 | Jaeger, Prometheus, OTLP |
+| **Circuit Breaker** | gobreaker/v2 | v2.4.0 | Sony |
+| **Tracing** | OpenTelemetry | v1.47.0 | Jaeger, Prometheus, OTLP |
 | **Logging** | zerolog | v1.35.1 | JSON, structured, leveled; port in `shared/kernel/log` (ADR-012) |
 | **Validation** | validator | v10.22.0 | Struct tags |
 | **JSON** | `pkg/jsonparser` wrapper | Sonic v1.15.4 default (ADR-012); stdlib fallback | One codec seam; benchmark recorded in E01-T07 evidence |
 | **i18n** | go-i18n | v2.7.0 | YAML locale files |
-| **Scheduler** | gocron | v1.5.0 | etcd / Valkey Redlock distributed |
-| **Config** | koanf | v2.3.0 | Multi-source, validation, etcd watcher |
+| **Scheduler** | gocron/v2 | v2.22.0 | etcd / Valkey Redlock distributed |
+| **Scheduler UI** | gocron-ui | v0.3.0 | Internal read-only dashboard (disabled by default) |
+| **Concurrency** | golang.org/x/sync | v0.23.0 | singleflight coalescing (direct) |
+| **Config** | koanf | v2.3.8 | Multi-source, validation, etcd watcher |
 | **Testing** | testify, testcontainers, mockery | Pinned in `go.mod` at bootstrap | Unit, integration, contract |
 | **API Gateway** | Traefik | v3.2.0 | Docker labels, auto-TLS |
 | **Observability Stack** | Prometheus, Grafana, Loki, Tempo | Pinned image tags at bootstrap | Full LGTM target (Prom 3.14.0, Grafana 13.0, Loki 3.7.7, Tempo 2.9.4) |
@@ -650,8 +651,8 @@ can be swapped without touching business logic (dependency inversion):
 - **DataLoader**: N+1 prevention
 
 ### 8.4 Cron (Distributed Scheduler)
-- **Framework**: gocron v1.5.0
-- **Leader Election & Coordination**: Primary single-writer leader election via etcd v3.7.0 (`concurrency.NewElection` / lease renewal; ADR-017) with Valkey 9.1.2 Redlock (go-redis v9.22.0) as fallback coordination lock
+- **Framework**: gocron/v2 v2.22.0
+- **Leader Election & Coordination**: Primary single-writer leader election via etcd v3.7.2 (`concurrency.NewElection` / lease renewal; ADR-017) with Valkey 9.1.2 Redlock (go-redis v9.23.0) as fallback coordination lock
 - **Jobs**: Leader coordination plus a durable unique run key; at-least-once
   invocation, idempotent effects, fencing/lease checks, and automatic failover
 

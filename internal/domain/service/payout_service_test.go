@@ -42,6 +42,7 @@ func TestValidateSubmission(t *testing.T) {
 			sub: func() service.PayoutSubmission {
 				s := baseSub
 				s.Method = "NOPE"
+
 				return s
 			}(),
 			expectedResult: service.PayoutSubmission{},
@@ -52,6 +53,7 @@ func TestValidateSubmission(t *testing.T) {
 			sub: func() service.PayoutSubmission {
 				s := baseSub
 				s.MerchantAccount = ""
+
 				return s
 			}(),
 			expectedResult: service.PayoutSubmission{},
@@ -62,6 +64,7 @@ func TestValidateSubmission(t *testing.T) {
 			sub: func() service.PayoutSubmission {
 				s := baseSub
 				s.MerchantAccount = s.PayoutsPayable
+
 				return s
 			}(),
 			expectedResult: service.PayoutSubmission{},
@@ -72,6 +75,7 @@ func TestValidateSubmission(t *testing.T) {
 			sub: func() service.PayoutSubmission {
 				s := baseSub
 				s.AssetCode = ""
+
 				return s
 			}(),
 			expectedResult: service.PayoutSubmission{},
@@ -82,6 +86,7 @@ func TestValidateSubmission(t *testing.T) {
 			sub: func() service.PayoutSubmission {
 				s := baseSub
 				s.Reference.IdempotencyKey = ""
+
 				return s
 			}(),
 			expectedResult: service.PayoutSubmission{},
@@ -92,6 +97,7 @@ func TestValidateSubmission(t *testing.T) {
 			sub: func() service.PayoutSubmission {
 				s := baseSub
 				s.AmountMinor = 0
+
 				return s
 			}(),
 			expectedResult: service.PayoutSubmission{},
@@ -101,6 +107,8 @@ func TestValidateSubmission(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.ValidateSubmission(tc.sub)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -152,6 +160,7 @@ func TestValidateSettlement(t *testing.T) {
 			stl: func() service.PayoutSettlement {
 				s := baseStl
 				s.AmountMinor = 9999
+
 				return s
 			}(),
 			expectedResult: service.PayoutSettlement{},
@@ -163,6 +172,7 @@ func TestValidateSettlement(t *testing.T) {
 			stl: func() service.PayoutSettlement {
 				s := baseStl
 				s.Method = valueobject.PayoutWire
+
 				return s
 			}(),
 			expectedResult: service.PayoutSettlement{},
@@ -174,6 +184,7 @@ func TestValidateSettlement(t *testing.T) {
 			stl: func() service.PayoutSettlement {
 				s := baseStl
 				s.PayoutsPayable = "other"
+
 				return s
 			}(),
 			expectedResult: service.PayoutSettlement{},
@@ -185,6 +196,7 @@ func TestValidateSettlement(t *testing.T) {
 			stl: func() service.PayoutSettlement {
 				s := baseStl
 				s.BankCash = ""
+
 				return s
 			}(),
 			expectedResult: service.PayoutSettlement{},
@@ -196,6 +208,7 @@ func TestValidateSettlement(t *testing.T) {
 			stl: func() service.PayoutSettlement {
 				s := baseStl
 				s.BankCash = "p-pay"
+
 				return s
 			}(),
 			expectedResult: service.PayoutSettlement{},
@@ -207,6 +220,7 @@ func TestValidateSettlement(t *testing.T) {
 			stl: func() service.PayoutSettlement {
 				s := baseStl
 				s.SettledAt = time.Time{}
+
 				return s
 			}(),
 			expectedResult: service.PayoutSettlement{},
@@ -216,6 +230,8 @@ func TestValidateSettlement(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.ValidateSettlement(tc.sub, tc.stl)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -250,6 +266,8 @@ func TestCancelPayout(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.CancelPayout(tc.status)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -287,6 +305,8 @@ func TestTransitionPayout(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.TransitionPayout(tc.from, tc.to)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)
@@ -327,6 +347,8 @@ func TestIsOverdue(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult := service.IsOverdue(tc.expectedAt, tc.actualAt, tc.grace)
 			assert.Equal(t, tc.expectedResult, actualResult)
 		})
@@ -365,6 +387,8 @@ func TestExpectedSettlementAt(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			actualResult, err := service.ExpectedSettlementAt(tc.method, tc.submittedAt)
 			assert.Equal(t, tc.expectedResult, actualResult)
 			assert.Equal(t, tc.expectedError, err)

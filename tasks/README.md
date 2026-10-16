@@ -60,16 +60,19 @@ tasks/
    and whose applicable promotion gate permits the dependency. Epics group
    ownership; they are not horizontal execution barriers.
 3. Open only that epic, the exact design sections it links, and its task packet.
-4. Complete/approve `tasks/specs/<TASK-ID>.md`, set its `Review Requirement`
-   (`self`, `independent`, or `none`), then create the task claim. Include the
-   review-report path in the Allowed Change Surface when review is required.
+4. Complete/approve `tasks/specs/<TASK-ID>.md`, then create the task claim.
+   Reviewer and Reviewer Harness fields are optional suggestions; any
+   user-selected agent may review without changing the packet or claim first.
+   Review-required packets do not need to list the report path under `Owns:`.
    Do not implement from the short epic summary alone.
 5. Mark it `in_progress`, implement scenarios by stable ID, and keep the handoff current.
 6. Run the task packet's proof commands and record evidence. All must pass.
-7. If required, complete and link the review report from the handoff; resolve or
-   explicitly accept findings with rationale. Then mark the task `**Status:**
-   completed` in the epic file **and** tick it in `tracking/PROGRESS.md`. If
-   blocked, record the reason/evidence in the handoff.
+7. The claim tracks implementation ownership; reviewers do not need claim
+   authorization and may review after a claim is released. Link a required report
+   from the handoff, resolve or explicitly accept findings with rationale, then
+   mark the task `**Status:** completed` in the epic file **and** tick it in
+   `tracking/PROGRESS.md`, and release the claim with a `Released At` timestamp.
+   If implementation changes during review, record which snapshot was reviewed.
 8. When every task in the epic is `completed`, run the epic's gate checks
    (`tracking/GATES.md`), then mark the epic `completed` in `PROGRESS.md`.
 9. Record any architectural deviation as an ADR (`docs/architecture/ADR-xxx.md`)
@@ -141,29 +144,29 @@ Story Points / Depends On / Related Docs / SDD Gate`
 `Related Docs` uses exact section links, e.g. `SPEC.md §7.2`,
 `docs/api-contracts.md §7.5`, `docs/money-flow.md §2.8`, `tasks/epics/E02-ledger-domain.md#E02-T02`.
 
-The task-packet template defaults `Review Requirement` to `self`. Set it to
-`independent` for the high-risk classes in `tasks/SDD.md`; use `none` only with a
-brief rationale. The checker requires a valid `tasks/reviews/<TASK-ID>.md` and
-handoff link before a completed task with `self` or `independent` review passes
-`--sdd`. Self-review is by the task claim owner; independent review is by the
-packet's designated Reviewer, distinct from the packet Author and claim owner.
-The checker also enforces `Owns:` authorization, Base/Reviewed commit binding
-to the claim and handoff, and reviewer identity.
-Legacy packets without this field remain valid.
+Reviewers may create or edit Markdown files anywhere in the repository without
+packet reviewer/harness matching, an `Owns:` entry, active claim, claim reopen,
+or preflight. Reviewer profiles must remain read-only for non-Markdown
+implementation/source/config/test files. Multiple reviewers may contribute to
+the same report; preserve prior text and attribute each contribution. The
+completed-task `--sdd` check validates required report content, verdict, commit
+binding, and handoff linkage, but does not compare reviewer identity/harness with
+the packet or require an active implementation claim. No reviewer authorization
+rows are used.
 
 ## Scripts
 
 - `tasks/scripts/check-tasks.py` — validates the tree (unique IDs, SP sums,
   deps resolve, dependency graph is acyclic, doc links resolve); `--ready` lists
-  the next dependency-ready tasks; opt-in design checks are also available
-  (`--specs --events --handlers --ports --subjects --docs --codes --adrs`;
-   `--sdd` validates packets/claims/evidence/handoffs and required review records
-   for active or completed tasks;
-  implementation-gated ones SKIP gracefully: `--breakers --openapi
+   the next dependency-ready tasks; opt-in design checks are also available
+   (`--specs --events --handlers --ports --subjects --docs --codes --adrs`;
+   `--sdd` validates packets/claims/evidence/handoffs and required review records);
+   implementation-gated ones SKIP gracefully: `--breakers --openapi
   --migrations --dirs --versions`). Run it after editing any task file.
 - `tasks/scripts/test_check_tasks.py` — unit tests for the `--sdd`
-  review-record rules (ownership, reviewer identity, verdict gating, commit
-  binding). Run after changing review validation or templates:
+  review-record rules (content, arbitrary reviewer identity, verdict gating,
+  commit binding, and multiple contributions). Run after changing review
+  validation or templates:
   `python3 tasks/scripts/test_check_tasks.py`.
 - `tasks/scripts/gate-check.sh <G1..G8>` — executable gate checks; reads gate
   names from `tracking/GATES.md`. Self-contained bash, no extra dependencies.

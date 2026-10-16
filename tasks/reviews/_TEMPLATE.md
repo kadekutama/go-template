@@ -5,7 +5,8 @@
 **Base Commit:** full-commit-sha
 **Reviewed Commit:** full-commit-sha
 **Working Tree:** clean or dirty with scope note
-**Reviewer:** reviewer-id (claim owner for self; packet Reviewer for independent)
+**Reviewer:** reviewer-id (informational attribution)
+**Reviewer Harness:** tool and agent/model identity (informational attribution)
 **Review Date:** RFC3339 timestamp
 **Review Requirement:** self or independent
 **Verdict:** PASS / PASS WITH MINOR ISSUES / REVISION REQUIRED / BLOCKED
@@ -20,7 +21,9 @@ this durable report is stored.
 
 Prioritize by severity. Use stable IDs such as `CR-001`; each finding should
 include location, issue, impact, evidence, plan violation, expected behavior,
-recommended fix, and verification. Write “None” when there are no findings.
+recommended fix, and verification. Attribute each reviewer's contribution and
+use unique finding IDs when multiple reviewers append to this record. Preserve
+prior findings. Write “None” when there are no findings.
 
 ## Verification Performed
 
@@ -53,6 +56,7 @@ close each gap. Write “None” if everything applicable was verified.
 
 ## Resolution Notes
 
-Initial state: none. After authorized fixes, append dated notes naming finding
-IDs fixed, still open, or explicitly accepted with rationale, plus verification
-results. Preserve earlier findings and notes; do not replace the review history.
+Initial state: none. After implementation fixes or explicit owner decisions,
+append dated notes naming finding IDs fixed, still open, or explicitly accepted
+with rationale, plus verification results. Preserve earlier findings and notes;
+do not replace the review history.

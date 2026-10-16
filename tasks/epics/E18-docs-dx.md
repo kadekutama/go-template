@@ -402,6 +402,9 @@ analyzers. Preserve existing OpenCode shell and `.env` permission fixes.
   `.agents/agents/implementer.md`, `.agents/agents/reviewer.md`, `AGENTS.md`,
   `docs/development/go-conventions.md`, `.golangci.yml`, `Makefile`,
   `.zed/settings.json`, `README.md`, `tasks/SDD.md`,
+  `tasks/README.md`,
+  `tasks/specs/_TEMPLATE.md`, `tasks/claims/_TEMPLATE.md`,
+  `tasks/scripts/check-tasks.py`, `tasks/scripts/test_check_tasks.py`,
   `tasks/epics/E18-docs-dx.md`, `tasks/EPICS.md`,
   `tasks/tracking/PROGRESS.md`
 - Delete: `.opencode/agents/domain-expert.md`, `.opencode/agents/api-designer.md`,
@@ -438,12 +441,12 @@ analyzers. Preserve existing OpenCode shell and `.env` permission fixes.
    metadata and permission-model translation. Disable command auto-execution and
    document project-level Ask rules for implementer commands/writes and reviewer
    commands. Explicitly allowlist each role's documented read/search tools and
-   required edit/command tools; the reviewer needs create/replace tools to persist
-   its authorized report. Once the review's packet/Owns/active-claim checks pass,
-   require it to invoke the appropriate file tool immediately; the platform Ask
-   prompt gates the exact report operation. It must not stop at chat-only output
-   or ask twice for approval. Explain that tool availability is separate from the
-   platform's Ask permission gate. Preserve OpenCode's shared review-file
+    required edit/command tools; the reviewer needs create/replace tools to persist
+    Markdown review artifacts. Any user-selected agent may write Markdown without
+    packet/Owns/active-claim checks or task-specific authorization. It must invoke
+    the appropriate file tool immediately and must not stop at chat-only output.
+    Explain that tool availability is separate from platform file permissions.
+    Preserve OpenCode's shared review-file
    communication behavior in Antigravity: the reviewer creates a full report
    when absent; the implementer does not create one on the reviewer's behalf.
    When a report exists, append dated implementer replies and reviewer
@@ -476,33 +479,45 @@ analyzers. Preserve existing OpenCode shell and `.env` permission fixes.
       sequential execution only where shared resources/order require it. Expand
       `docs/LINTERS.md` with repository-backed interface-return code and the
       concrete-return tradeoffs, without changing Go tests or signatures.
-  14. Retain `ireturn` with anchored, type-specific exceptions for the audited
-      intentional interfaces; preserve its built-in defaults and generic returns.
-      Remove `paralleltest.ignore-missing-subtests: true` so the refreshed census
-      includes subtest misses for a later safety-reviewed sweep. Do not blindly
-      edit Go tests in this config amendment.
+    14. Retain `ireturn` with anchored, type-specific exceptions for the audited
+        intentional interfaces; preserve its built-in defaults and generic returns.
+        Remove `paralleltest.ignore-missing-subtests: true` so the refreshed census
+        includes subtest misses for a later safety-reviewed sweep. Do not blindly
+        edit Go tests in this config amendment.
+   15. Remove reviewer packet/claim authorization and preflight gates. Allow
+        user-selected reviewers to create/edit Markdown at any repository path,
+        regardless of packet metadata, `Owns`, claim status, or harness; retain a
+        Markdown-only write boundary for reviewer code safety. Allow multiple
+        reviewers to contribute attributed, append-only findings without
+        claim-based serialization. Keep `--sdd` focused on review content,
+        verdict, commit binding, and handoff linkage.
+     16. Remove the OpenCode-to-Antigravity default reviewer designation from
+        new packets. Reviewer and harness fields are optional suggestions only;
+        any user-selected agent may review without packet/claim changes first.
 **Acceptance Criteria:**
 - [ ] Implementer directs tests to follow every applicable `AGENTS.md` table-driven rule and records every changed test function's SUT signature, return arity, assertion count, and assertion placement; reviewer independently audits every changed test function and reports concrete violations without sampling.
 - [ ] Runtime config changes update the typed config, YAML, JSON Schema, and validation/tests; constants are not used as deploy-time settings.
 - [ ] Implementer directs search/reuse of existing clock/error helpers and correct layer-specific error types before adding alternatives.
 - [ ] Implementer/reviewer contain concrete, repository-grounded architecture and receiver-selection checks; reviewer flags only evidenced violations and does not demand interfaces mechanically.
-- [ ] Both profiles preserve their prior shell/edit/subagent protections; `.env` reads ask and `.env.example` remains allowed.
+- [ ] The implementer retains its existing shell/edit/subagent protections; the reviewer can edit Markdown anywhere but cannot edit non-Markdown implementation files. `.env` reads ask and `.env.example` remains allowed where supported.
 - [ ] Only implementer/reviewer OpenCode profiles remain; stale specialist files and `.opencode/permissions/default.json` are deleted, with no live references left.
 - [ ] No `.opencode/skills` files remain; the SDD protocol explanation has no dangling skill reference; README does not advertise bundled skills.
 - [ ] Antigravity adapters exist at `.agents/agents/implementer.md` and `reviewer.md`, use documented Antigravity frontmatter, defer to `AGENTS.md`/`tasks/SDD.md`, and accurately state permission-enforcement limits.
 - [ ] A section-by-section parity review confirms every OpenCode role directive, workflow stage, safeguard, and review checklist is represented in the corresponding Antigravity body; only harness metadata/permission translation differs.
-- [ ] Antigravity roles do not auto-execute commands: implementer actions and reviewer commands are configured to request owner approval; reviewer writes remain report-only and Makefile targets with out-of-scope side effects are blocked in review-only mode.
-- [ ] Antigravity custom-agent tool allowlists expose the role-required file/search/edit and terminal tools; specifically, the reviewer can create/update its durable report, with `write_file(*)` Ask and command approval still gating use. A permission rule is not treated as a substitute for a missing tool.
-- [ ] After its report-path and active-claim checks pass, the Antigravity reviewer invokes the report file tool and then verifies the saved file; it does not substitute chat output or a second chat approval request for the permission-gated tool call. Failed authorization prevents any writer call.
-- [ ] Existing review reports remain append-only shared communication: implementers append per-finding replies, reviewers append adjudications, and both preserve the other role's text and verify their changes.
+- [ ] Antigravity roles do not auto-execute commands: implementer actions and reviewer commands are configured to request owner approval; reviewer writes may target Markdown files anywhere but not non-Markdown files. Makefile targets with disallowed side effects are blocked in review-only mode.
+- [ ] Antigravity custom-agent tool allowlists expose role-required file/search/edit and terminal tools; the reviewer can create/update Markdown review artifacts without a task-specific report-path authorization or write approval requirement. A permission rule is not treated as a substitute for a missing tool.
+- [ ] When a user requests a review, the Antigravity reviewer invokes its file tool and verifies the saved report without packet/claim/preflight checks; it does not substitute chat output for persistence. Its first response begins with the exact workspace-reviewer profile-load canary, which is diagnostic only and never a persistence gate. Genuine tool/platform failures are reported accurately.
+- [ ] Existing review reports remain append-only shared communication: implementers append per-finding replies, any number of reviewers append attributed findings/adjudications, and all preserve prior text and verify their changes.
 - [ ] Antigravity ordinary workspace reads match OpenCode's non-prompting read behavior; it does not recommend `read_file(*) Ask`, and protected-file reads fail closed if the platform cannot provide the required approval boundary. ACL enforcement differences are stated accurately.
 - [ ] OpenCode `webfetch` and Antigravity `read_url_content` have equivalent read-only access without extra prompts; Antigravity guidance documents `read_url(*)` Allow and does not expose URL/browser actuation.
-- [ ] Reviewer shell access allows only approval-gated Git/task-validator commands, safe Makefile targets, and the narrow standalone read-only inspection list; arbitrary commands, command composition, protected secret reads, and report-external writes remain disallowed.
+- [ ] Reviewer shell access allows only approval-gated Git/task-validator commands, safe Makefile targets, and the narrow standalone read-only inspection list; arbitrary commands, command composition, protected secret reads, and non-Markdown writes remain disallowed.
 - [ ] `.golangci.yml` enables the full `modernize` suite without analyzer disables/exclusions; Zed explicitly enables gopls modernize and `make gopls-check` includes Hint-level diagnostics.
 - [ ] All four role profiles carry matching full-modernization instructions in their OpenCode/Antigravity role pairs; in-scope findings are addressed and out-of-scope findings are recorded without disabling analyzers or editing unowned files.
 - [ ] `.golangci.yml` matches the owner-approved disable set and targeted analyzer rules; depguard enforces the documented production import direction with composition-root exceptions, JSON tags use snake_case for API/database compatibility, and `docs/LINTERS.md` reflects a fresh full scan with direct policy answers.
 - [ ] `AGENTS.md`, Go conventions, and both OpenCode/Antigravity role pairs teach safe parent and table-subtest parallelism from the upstream README, `t.Cleanup` lifetime guidance, and current Go loop-variable semantics; sequential exceptions are reasoned. The linter report includes source-backed interface-return examples and risks of blanket concrete returns without source refactors.
 - [ ] `ireturn` remains enabled with exact package-qualified exceptions for reviewed interface contracts and the refreshed full scan has no baseline ireturn findings; `paralleltest` does not ignore missing subtests and its expanded findings are recorded for a safety-reviewed sweep, without blanket test edits.
+- [ ] Any user-selected reviewer on any harness can contribute Markdown without reviewer/packet identity matching, `Owns` membership, active claims, or authorization preflight. The validator accepts arbitrary reviewer/harness metadata and released/absent claim state when required report content, verdict, commit binding, and handoff linkage are valid.
+- [ ] New task packets do not default to a specific reviewer identity or harness; optional suggestions never block review. Multiple reviewers can append attributed contributions with unique IDs and preserve prior report content.
 - [ ] `AGENTS.md` describes specializations as harness-neutral ownership areas and README lists both harnesses accurately; the existing Casbin version change is preserved.
 - [ ] G1 and full SDD structural validation pass; evidence records the prompt probe and repository verification.
 **Story Points:** 5

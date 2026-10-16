@@ -17,17 +17,32 @@ profiles may add operating instructions but cannot override the task packet,
 accepted ADRs, or `docs/ledger-core.md`.
 
 **Multi-Harness Governance & Collision Avoidance:**
-- **Shared filesystem is NEVER permission to edit:** Access to the local workspace
-  or repository clone does not grant permission to modify files without an active
-  claim in `tasks/claims/<TASK-ID>.md` (`Status: active`) that matches the agent's
-  harness identifier.
-- **No out-of-band edits:** When all task claims in an epic/branch are released,
-  the working tree is frozen. Post-release polish or review fixes require either
-  reopening the claim (transitioning to `active` with amendment rationale) or
-  recording a formal takeover claim under `tasks/SDD.md §4`.
+- **Implementation claims versus reviewer Markdown access:** An active,
+  unexpired claim in `tasks/claims/<TASK-ID>.md` governs implementation/code
+  ownership. It does not restrict review writing: any user-selected reviewer
+  may create or edit Markdown files (`*.md`) anywhere in the repository without
+  packet designation, `Owns` listing, claim authorization, or preflight. This
+  does not authorize reviewer edits to non-Markdown implementation/source files.
+  Multiple reviewers may contribute to the same task while preserving prior
+  content and attributing their findings. This global rule supersedes legacy
+  reviewer checklists: packet reviewer/`Owns` metadata and claim status are
+  context, never Markdown-write authorization. For a user-requested review,
+  invoke the available Markdown file tool immediately; only a genuine
+  file-tool/platform denial may block persistence, and it must be reported as
+  that concrete failure.
+- **No out-of-band implementation edits:** When all task claims in an epic/branch
+  are released, the implementation working tree is frozen. Post-release code
+  changes require either reopening the claim (transitioning to `active` with
+  amendment rationale) or recording a formal takeover claim under
+  `tasks/SDD.md §4`. This does not block user-requested reviewer Markdown edits.
 - **Parallel Work Isolation:** For parallel tasks (e.g. Phase 3 / E03+), harnesses
   MUST operate in separate Git worktrees (`git worktree add ../go-template-<TASK-ID>`)
   and must not declare overlapping change surfaces.
+
+**Reviewer selection:** Packets may record a suggested Reviewer and Reviewer
+Harness, but these fields do not restrict who may review or write Markdown.
+Choose any agent or harness when requesting a review; multiple reviewers may
+review the same task. See `tasks/SDD.md` §§3.1–3.2.
 
 **Review response duty:** After implementation and before marking complete,
 check `tasks/reviews/<TASK-ID>.md`. If a review exists with non-terminal

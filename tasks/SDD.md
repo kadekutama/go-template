@@ -63,23 +63,26 @@ outputs stay in `tasks/evidence/<TASK-ID>.md`; the review record links findings
 and conclusions to the exact base/reviewed commits. Link a required review record
 from the task handoff. The packet's `Review Requirement` determines whether a
 completion record is required (`self`, `independent`, or `none`); legacy packets
-without this field are not retroactively required to create reports. The report
-path must be in the packet's Allowed Change Surface and authorized by the active
-claim. A designated reviewer named by the packet may write only that review
-artifact under this authorization; this does not transfer task ownership or
-permit implementation edits. A `self` report's reviewer identity must match the
-task claim owner. An `independent` report's reviewer must match the packet's
-designated Reviewer and differ from both its Author and the task claim owner.
-After revisions, append a dated resolution note,
-retaining the original findings and recording fixed/open/accepted IDs and
-verification. The report path must be listed under the packet's `**Owns:**`
-entry as a whole path token; a substring or a mention elsewhere in Change
-Surface does not authorize it. The report's Base Commit must equal the claim's
-Base Commit, and its Reviewed Commit must be a SHA on the handoff's
-Base / Head line; the checker enforces both. Independent reviews must name a
-reviewer identity distinct from the claim owner and packet author — for
-example, include the reviewer's harness or model rather than a case-variant
-of the claim owner's name.
+without this field are not retroactively required to create reports. Any
+user-selected reviewer may create or edit Markdown files anywhere in the
+repository, without packet designation, `Owns` listing, active claim, claim
+reopen, or write preflight. Reviewers remain read-only for non-Markdown
+implementation/source/config/test files. Reviewer and Reviewer Harness fields
+are informational attribution/suggestions, not identity gates; multiple
+reviewers may contribute to the same report. The report's Base Commit must equal
+the claim's Base Commit, and its Reviewed Commit must be a SHA on the handoff's
+Base / Head line; the checker enforces content and commit binding, not reviewer
+identity or claim status. Preserve prior review history when appending findings,
+replies, and adjudications.
+
+This global write rule applies across task-packet versions. A legacy checklist
+or packet field that makes reviewer Markdown persistence conditional on reviewer
+identity, packet `Owns`, active claim, claim reopen, a grant, or preflight is
+superseded for that write. On a user-requested review, invoke the available
+Markdown file tool immediately and verify the saved result; do not stop with
+chat-only findings. Only an actual tool/platform denial may block persistence,
+and the reviewer must report that concrete failure rather than inventing an SDD
+authorization blocker.
 
 A report is **accepted** for task completion only when its current Verdict and
 Final Review Status are both PASS or both PASS WITH MINOR ISSUES, and every
@@ -106,14 +109,18 @@ Before production code is written:
    open and every dependency is satisfied or represented by an approved stub.
 
 Financial postings, authorization, cryptography, migrations, public contracts,
-and destructive operations require a reviewer different from the spec author.
-Other tasks may use self-review, but must record it explicitly.
+and destructive operations require independent review. The user chooses the
+reviewer; packet identity fields do not authorize or restrict Markdown writes.
+Other tasks may use self-review or independent review, recorded in the packet.
 
 Set `Review Requirement` to `self`, `independent`, or `none`. Use `independent`
-for the high-risk classes above; `self` is the template default for ordinary
-tasks. `none` requires a brief rationale in packet Notes. A task requiring self
-or independent review is not complete until its report is accepted and linked
-from its handoff.
+for the high-risk classes above. Other tasks may use self-review or independent
+review. Reviewer and Reviewer Harness packet fields are optional suggestions;
+they do not designate or restrict the reviewer and may be omitted. Any
+user-selected agent or harness may review, including multiple agents reviewing
+the same task. `none` requires a brief rationale in packet Notes. A task
+requiring self or independent review is not complete until its report is accepted
+and linked from its handoff.
 
 ### 3.2 Claim
 
@@ -121,14 +128,35 @@ Create `tasks/claims/<TASK-ID>.md` before changing implementation files. A valid
 claim names the owner, harness, branch/worktree, exact base commit, start time,
 and lease expiry. One agent owns one task at a time. Shared filesystem access is
 not permission to edit another task's owned files — nor to edit any implementation
-files without an active claim.
+files without an active, unexpired claim.
+
+When releasing a claim, record an RFC3339 `Released At` timestamp. Each later
+reopen/release round appends its timestamped history; never erase prior rounds.
+
+The task claim's owner/harness identifies implementation ownership only.
+Reviewers do not take implementation ownership, and no packet or claim
+authorization is required before a reviewer creates or edits Markdown. Review
+reports conventionally live at `tasks/reviews/<TASK-ID>.md`, but that path need
+not appear in packet `Owns`. Reviewers may update other Markdown artifacts such
+as a handoff when useful; they must not modify non-Markdown implementation files.
+Multiple reviewers may contribute without claim-based serialization. For a
+useful review, identify the candidate commit/snapshot in the handoff when
+available; if implementation is changing, review the observed snapshot and
+record that limitation rather than blocking the write or requiring an exclusive
+review window.
 
 Claim creation must be serialized by the team's shared Git/PR workflow. If two
 claims race, the earliest merged claim wins; the other agent stops and selects a
 different task. Lease takeover requires recording the previous claim and reason.
-Once all claims on an epic/branch are released, the working tree is frozen; any
-subsequent refinement or post-release edit requires reopening a claim or following
-the takeover protocol (§4).
+Once all claims on an epic/branch are released, implementation edits are frozen;
+reviewer Markdown edits remain permitted without reopening a claim. Post-release
+implementation changes require reopening a claim or following the takeover
+protocol (§4).
+
+A task claim may be released according to the implementation lifecycle in §3.4.
+A later or additional review does not require reopening the claim; reviewers may
+continue writing Markdown after release. Reopen/take over only when further
+implementation changes are needed.
 
 ### 3.3 Implement
 
@@ -164,12 +192,12 @@ Completion requires all of the following:
    linking it from the handoff. A report with `REVISION REQUIRED` or `BLOCKED`
    does not satisfy completion; findings must be fixed or explicitly accepted
    with rationale and recorded in a dated resolution note.
-   When the implementer disagrees with a finding, both sides converse in the
-   same review file under strict section ownership: the implementer appends a
+    When the implementer disagrees with a finding, both sides converse in the
+    same review file while preserving section ownership: the implementer appends a
    dated `### Implementer reply` entry stating the disposition (`fixed` with
    the verifying commit/test, or `contested` with reason and counter-evidence)
-   and never edits findings, metadata, or adjudication; new implementer
-   packets coordinate the review path for such replies. The reviewer
+    and never edits reviewer findings or adjudication; new implementer packets
+    may coordinate the report path for replies. The reviewer
    adjudicates each contested finding in `## Resolution Notes` (withdrawn with
    reason, or held with rebuttal grounded in the packet or normative sources),
    quotes reply text rather than editing it, and may reject an implementer
@@ -179,10 +207,13 @@ Completion requires all of the following:
    history. Every finding must reach a terminal state — FIXED,
    WITHDRAWN, ACCEPTED (with named acceptor), or OPEN — and any OPEN finding
    above Low blocks completion.
-4. The handoff contains no remaining required work and links the final review
-   record when one is required.
-5. Only then mark the epic task and progress checkbox `completed` and release the
-   claim. Gate completion is separate from task completion.
+4. The handoff contains no remaining implementation work and links the final
+   review record when one is required.
+5. Release the implementation claim when implementation ownership ends; review
+   Markdown writes do not require reopening it. Mark the epic task and progress
+   checkbox `completed` only after all verification passes and any required review
+   is persisted, accepted, and linked. Gate completion is separate from task
+   completion.
 
 “Implemented,” screenshots, code review approval, or an agent's narrative are not
 proof unless the specified checks also pass.
@@ -202,6 +233,10 @@ A replacement agent starts without trusting previous chat context:
 7. If review is required, read the review record and resolution history before
    treating findings as closed; verify its reviewed commit matches the candidate
    being resumed.
+8. For a requested review, use packet, claim, handoff, evidence, and
+   implementation artifacts as review context. Reviewer identity, packet `Owns`,
+   and claim status are not prerequisites to write Markdown findings; do not
+   modify non-Markdown implementation files.
 
 If the handoff is missing or stale, reconstruct state from the diff and tests and
 record that fact. Never infer completion from a prior agent's prose.
@@ -227,22 +262,27 @@ control when a capability may be depended on or exposed.
 
 ## 6. Parallel Work Rules
 
-- **Shared filesystem ≠ permission:** An agent or harness operating in a shared
-  repository workspace MUST NOT modify files without an active, non-expired claim
-  owning that task.
-- **Physical worktree isolation:** When multiple agents or harnesses run in
-  parallel (e.g. Phase 3 parallel tasks across E03, E04, E05), each harness MUST
-  operate in an isolated Git worktree:
+- **Implementation claims versus review writing:** Shared filesystem access does
+  not authorize implementation/code changes without an active claim owning that
+  task. User-selected reviewers may write Markdown files anywhere without a
+  packet/claim authorization; they must not modify non-Markdown implementation
+  files.
+- **Physical worktree isolation:** When multiple agents or harnesses implement
+  parallel tasks (e.g. Phase 3 across E03, E04, E05), each harness MUST operate
+  in an isolated Git worktree:
   `git worktree add ../go-template-<TASK-ID> -b feat/<TASK-ID>-short-name`.
-  Two active harnesses must NEVER share an uncommitted working directory.
+  Two implementation harnesses must NEVER share an uncommitted working
+  directory. Multiple review-only agents may review the same task without a
+  claim or worktree reservation; they should append attributed findings with
+  unique IDs and reconcile any concurrent Markdown edits without dropping text.
 - **Branch and claim naming:** One branch/worktree per task; branch names include
   the task ID.
 - **Strict Change Surface isolation:** Avoid two active tasks declaring overlapping
   files in `Allowed Change Surface`. If unavoidable, designate one owner and make
   the other consume a committed contract/stub.
-- **Review artifact authorization:** The review path must be included in the
-  packet's allowed surface. A designated reviewer may write only that report under
-  the active task claim; they do not gain permission to edit implementation files.
+- **Review artifact access:** Reviewers may create/edit Markdown files at any
+  repository path, regardless of packet `Owns` or claim state. Their permissions
+  do not include non-Markdown implementation changes.
 - **Generated files:** Generated files have one source-of-truth owner; consumers
   do not edit them.
 - **Migrations:** Database migration numbers are reserved in the claim before authoring.

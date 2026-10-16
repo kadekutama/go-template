@@ -151,50 +151,68 @@ This template includes:
 
 Antigravity agent Markdown provides prompts and metadata, not the enforcement
 boundary. Each custom agent must explicitly allowlist its required tools in
-frontmatter: the reviewer needs file creation/replacement tools to persist its
-report, and `run_command` for approved safe verification. A permission rule
-cannot grant a tool omitted from this list. Set custom agents'
-`commandExecutionPolicy` to `off`; configure the **Request Review** preset to
-ask before every terminal command, and set `write_file(*)` to Ask to prompt
-before every file write. This preset disables the sandbox and does not itself
-restrict workspace writes, so approve reviewer writes only for the authorized
-report path. Once the reviewer confirms the packet requirement, report path in
-`Owns:`, and active claim, it must invoke the appropriate report file tool; the
-tool's Ask prompt is the approval gate. It must not stop at chat-only report text
-or request a second approval in chat. If any authorization check fails, it must
-not invoke a write tool. Review reports are the shared durable implementer/reviewer
-log: reviewers create a full template report when absent; implementers do not
-create one on the reviewer's behalf. On existing reports, both roles append only
-to their authorized section, preserve prior text, and read the report back to
-verify. Antigravity uses `write_to_file` only for a missing report and replacement
-tools with an exact section-end anchor for appends. Under **Request Review**,
-ordinary workspace reads remain available without prompting, matching OpenCode;
-do not configure `read_file(*)` Ask, which would add prompts OpenCode does not.
-External file reads remain approval-gated. Configure Ask for each protected
-`.env`/`.env.*` path and keep `.env.example`
-readable. Do not assume filename-glob support in Antigravity permission targets:
-if a protected path cannot be approval-gated, fail closed and do not read it.
-OpenCode's base policy allows `webfetch` without an extra prompt; Antigravity's
-`read_url_content` defaults to Ask, so configure `read_url(*)` Allow for the same
-read-only behavior. Do not expose URL/browser actuation tools. Keep **Request
-Review** selected: it disables the terminal sandbox, while `read_url` grants may
-otherwise add network access to sandboxed commands.
-OpenCode hard-denies reviewer writes outside review reports and unlisted shell
-commands; Antigravity prompts for approval but cannot enforce those path/command
-denials through agent Markdown, so the agent must not request them and the owner
-must reject any such prompt.
-Reviewers may request approval for Makefile
-targets only after inspecting recipes, and must not run targets that write
-outside the report or mutate external state. They may also request approval for
-standalone read-only shell inspection commands; do not chain commands. Reload
-or reselect custom agents after frontmatter tool changes, and verify the reviewer
-exposes report create/update tools before starting a review. If they remain
-absent, treat that as a platform capability blocker rather than substituting a
-chat-only report. Start a chat with the workspace `reviewer` custom agent selected
-(`mainAgent: true`); a new default Gemini chat does not load that profile just by
-being new. The OpenCode reviewer remains shell-deny-by-default with Ask exceptions
-for Git and task checks, safe Makefile targets, and standalone `pwd`/`ls`/`find`/`head`/
-`tail`/`cat`/`wc`/`file`/`stat` inspection commands.
+frontmatter: the reviewer needs file creation/replacement tools and `run_command`
+for safe verification. A permission rule cannot grant a tool omitted from this
+list. Set custom agents' `commandExecutionPolicy` to `off` and configure the
+**Request Review** preset to ask before terminal commands. Ensure the platform
+allows Markdown writes when a user requests a review.
+
+Reviewers may create or edit Markdown files at any repository path without
+packet reviewer/harness matching, a packet `Owns` entry, an active claim, claim
+reopen, or `--review-preflight`. Reviewer profiles remain read-only for
+non-Markdown implementation/source/config/test files. Multiple agents may review
+the same task and append attributed findings to one durable report; preserve
+prior content and use unique finding IDs. `check-tasks.py --sdd` validates
+required report content, verdict, commit binding, and handoff linkage, but does
+not gate writes by reviewer identity or claim status. No reviewer authorization
+rows are used. OpenCode's reviewer ACL allows `*.md` edits anywhere and denies
+other edit targets; Antigravity prompts cannot hard-enforce this extension
+boundary, so its reviewer must follow the Markdown-only role instruction.
+
+Antigravity's workspace `reviewer` custom agent is available as one option; any
+user-selected agent or harness may review. The model name and custom-agent name
+are attribution, not authorization credentials. When requested, invoke the
+available file tool immediately, create a missing report with `write_to_file`,
+update an existing report with replacement tools, and read back the saved
+content. A genuine tool/platform denial should be reported as such, not as an
+SDD authorization blocker. Reviewers may update relevant Markdown handoffs as
+well as reports; they must not modify code or other non-Markdown files.
+
+Antigravity may hide agent descriptions in its picker. The workspace reviewer
+therefore starts each review conversation with the diagnostic line
+`[WORKSPACE-REVIEWER-CANARY: no-claim-gate-v1]`. If that line is absent, the
+workspace reviewer prompt was not observably loaded; reselect/reload the
+workspace agent and retry. The canary is diagnostic only, not a permission check
+or reason to delay a review write. Even when it appears, actual file-tool
+availability and platform permission remain separate checks.
+
+Under **Request Review**, ordinary workspace reads remain available without
+prompting, matching OpenCode; do not configure `read_file(*)` Ask, which would
+add prompts OpenCode does not. External file reads remain approval-gated.
+Configure approval for protected `.env`/`.env.*` paths and keep `.env.example`
+readable where supported. Do not assume filename-glob support in Antigravity
+permission targets: if a protected path cannot be approval-gated, fail closed
+and do not read it. OpenCode's base policy allows `webfetch` without an extra
+prompt; Antigravity's `read_url_content` defaults to Ask, so configure
+`read_url(*)` Allow for the same read-only behavior. Do not expose URL/browser
+actuation tools. Keep **Request Review** selected: it disables the terminal
+sandbox, while `read_url` grants may otherwise add network access to sandboxed
+commands.
+
+Reviewers may request approval for Makefile targets only after inspecting
+recipes, and must not run targets that mutate external state or project files.
+They may also request approval for standalone read-only shell inspection
+commands; do not chain commands. Reload or reselect custom agents after any
+prompt or frontmatter change, then start a fresh review conversation and verify
+the active workspace reviewer exposes report create/update and read tools. Since
+Antigravity may hide descriptions in the agent picker, use the first-response
+canary above to confirm which prompt is active. If a reviewer still cites an
+active-claim, packet-`Owns`, claim-reopen, or preflight checklist as a write
+blocker, treat the instructions as stale: do not reopen the claim; reload/reselect
+`.agents/agents/reviewer.md`, start a fresh conversation, and retry. The OpenCode
+reviewer remains shell-deny-by-default with Ask exceptions for Git and task
+checks, safe Makefile targets, and standalone
+`pwd`/`ls`/`find`/`head`/`tail`/`cat`/`wc`/`file`/`stat` inspection commands.
 See the [Antigravity permissions guide](https://antigravity.google/docs/permissions) and [sandbox
 guide](https://antigravity.google/docs/sandbox). With **Default**, commands
 inside the sandbox run without prompting unless `command(*)` is set to Ask.

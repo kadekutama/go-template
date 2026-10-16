@@ -11,7 +11,7 @@ epic file). Exits non-zero with a list on failure.
 Design-content flags (docs-vs-docs, safe to run anytime):
   --graph     report task-DAG validation (cycles are rejected even without flag)
   --ready     list pending tasks whose task-level dependencies are completed
-  --sdd       validate active/completed packets, claims, evidence, handoffs, required reviews
+  --sdd       validate packets/claims/evidence/handoffs/reviews
   --specs     every money-flow §8 rule has a spec task
   --events    every api-contracts §10 webhook maps to a domain-events §3 type
   --handlers  every api-contracts §7 endpoint group has E06/E11 handler tasks
@@ -31,6 +31,7 @@ Implementation-gated flags (SKIP gracefully until the code exists):
 import pathlib
 import re
 import sys
+from datetime import datetime
 
 BASE = pathlib.Path(__file__).resolve().parents[2]
 TASKS = BASE / "tasks"
@@ -42,6 +43,11 @@ EVIDENCE = TASKS / "evidence"
 HANDOFFS = TASKS / "handoffs"
 REVIEWS = TASKS / "reviews"
 FLAGS = set(sys.argv[1:])
+SUPPORTED_FLAGS = {
+    "--adrs", "--breakers", "--codes", "--dirs", "--docs", "--events",
+    "--format", "--graph", "--handlers", "--migrations", "--openapi",
+    "--ports", "--ready", "--sdd", "--specs", "--subjects", "--versions",
+}
 
 errors: list[str] = []
 warns: list[str] = []
@@ -69,6 +75,14 @@ def parse_epic(path: pathlib.Path):
 
 
 def main() -> int:
+    unknown_flags = sorted(
+        argument for argument in sys.argv[1:]
+        if argument.startswith("--") and argument not in SUPPORTED_FLAGS
+    )
+    if unknown_flags:
+        print("unknown option(s): " + ", ".join(unknown_flags))
+        return 2
+
     epics = sorted(EPICS_DIR.glob("E*.md"))
     all_tasks: dict[str, dict] = {}
     # 1. unique IDs + required fields
@@ -284,10 +298,10 @@ def packet_review_issues(packet_text: str) -> tuple[str | None, list[str]]:
     version = _review_field(packet_text, "SDD Packet Version")
     mode = packet_review_requirement(packet_text)
     issues: list[str] = []
-    if version and version != "2":
+    if version and version not in {"2", "3"}:
         issues.append(f"unsupported SDD Packet Version '{version}'")
-    if version == "2" and mode is None:
-        issues.append("version 2 packet has no Review Requirement")
+    if version in {"2", "3"} and mode is None:
+        issues.append(f"version {version} packet has no Review Requirement")
     if mode and mode.startswith("invalid:"):
         issues.append(f"invalid Review Requirement '{mode[8:]}'")
     if mode == "none":
@@ -297,31 +311,21 @@ def packet_review_issues(packet_text: str) -> tuple[str | None, list[str]]:
     return mode, issues
 
 
-def _owns_stanza_authorizes(packet_text: str, report_path: str) -> bool:
-    """Check the report path is listed as a whole token under Owns."""
-    surface = re.search(
-        r"^## Change Surface\s*\n(.*?)(?=^## |\Z)",
-        packet_text,
-        re.M | re.S,
-    )
-    if not surface:
-        return False
-    body = surface.group(1)
-    start = body.find("**Owns:**")
-    if start < 0:
-        return False
-    end = len(body)
-    for marker in ("**Coordinates:**", "**Must Not Touch:**"):
-        idx = body.find(marker, start)
-        if idx >= 0:
-            end = min(end, idx)
-    stanza = body[start:end]
-    escaped = re.escape(report_path)
-    return re.search(
-        r"(?:^|[\s`,;*()])" + escaped + r"(?=$|[\s`,;*.)])",
-        stanza,
-        re.M,
-    ) is not None
+def _parse_review_time(value: str | None) -> datetime | None:
+    """Parse an RFC3339 timestamp into an aware datetime."""
+    if not value:
+        return None
+    normalized = value.strip()
+    if not re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})",
+        normalized,
+    ):
+        return None
+    try:
+        parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else None
 
 
 def review_record_issues(
@@ -359,6 +363,12 @@ def review_record_issues(
         if not _review_field(report_text, field):
             issues.append(f"{task_id} review report missing {field} metadata")
 
+    packet_version = _review_field(packet_text, "SDD Packet Version")
+    if packet_version == "3":
+        report_harness = _review_field(report_text, "Reviewer Harness")
+        if not report_harness:
+            issues.append(f"{task_id} version 3 review report missing Reviewer Harness metadata")
+
     sha_pattern = re.compile(r"^[0-9a-fA-F]{40}$")
     for field in ("Base Commit", "Reviewed Commit"):
         value = _review_field(report_text, field)
@@ -366,10 +376,7 @@ def review_record_issues(
             issues.append(f"{task_id} review report has invalid {field} SHA")
 
     review_date = _review_field(report_text, "Review Date")
-    if review_date and not re.fullmatch(
-        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})",
-        review_date,
-    ):
+    if review_date and _parse_review_time(review_date) is None:
         issues.append(f"{task_id} review report has invalid RFC3339 Review Date")
 
     verdict = _review_field(report_text, "Verdict")
@@ -408,8 +415,6 @@ def review_record_issues(
             issues.append(f"{task_id} review report missing '## {section}'")
 
     report_path = f"tasks/reviews/{task_id}.md"
-    if not _owns_stanza_authorizes(packet_text, report_path):
-        issues.append(f"{task_id} packet Change Surface does not authorize {report_path}")
     if report_path not in handoff_text:
         issues.append(f"{task_id} handoff does not link {report_path}")
 
@@ -426,27 +431,6 @@ def review_record_issues(
         head_shas = set(re.findall(r"[0-9a-fA-F]{40}", head_line.group(0))) if head_line else set()
         if reviewed not in head_shas:
             issues.append(f"{task_id} Reviewed Commit not in handoff Base / Head line")
-
-    author = _review_field(packet_text, "Author")
-    packet_reviewer = _review_field(packet_text, "Reviewer")
-    claim_owner = _review_field(claim_text, "Owner")
-    reviewer = _review_field(report_text, "Reviewer")
-    if mode == "self":
-        if not claim_owner or claim_owner.lower() in {"unassigned", "none"}:
-            issues.append(f"{task_id} self-review requires an assigned claim owner")
-        elif reviewer and claim_owner.casefold() != reviewer.casefold():
-            issues.append(f"{task_id} self-reviewer must match the task claim owner")
-    if mode == "independent":
-        if not author or author.lower() in {"unassigned", "none"}:
-            issues.append(f"{task_id} independent review requires an assigned packet author")
-        elif reviewer and author.casefold() == reviewer.casefold():
-            issues.append(f"{task_id} independent reviewer must differ from packet author")
-        if not packet_reviewer or packet_reviewer.lower() in {"unassigned", "none"}:
-            issues.append(f"{task_id} independent review requires a designated packet reviewer")
-        elif reviewer and packet_reviewer.casefold() != reviewer.casefold():
-            issues.append(f"{task_id} independent report reviewer does not match packet Reviewer")
-        if claim_owner and reviewer and claim_owner.casefold() == reviewer.casefold():
-            issues.append(f"{task_id} independent reviewer must differ from task claim owner")
 
     return issues
 
@@ -497,8 +481,6 @@ def check_sdd(all_tasks: dict[str, dict]) -> None:
         if spec_status and spec_status.group(1) == "ready":
             if not re.search(r"^\*\*Decision:\*\*\s*approved\s*$", text, re.M):
                 errors.append(f"--sdd: ready packet {tid} is not approved")
-            if re.search(r"^\*\*Reviewer:\*\*\s*(?:unassigned|none)\s*$", text, re.M | re.I):
-                errors.append(f"--sdd: ready packet {tid} has no reviewer")
             open_questions = re.search(
                 r"^## Open Questions\s*$\n(.*?)(?=^## |\Z)", text, re.M | re.S
             )

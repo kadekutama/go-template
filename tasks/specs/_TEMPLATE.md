@@ -1,12 +1,18 @@
 # Task Specification: TASK-ID — Title
 
 **Task:** TASK-ID  
-**SDD Packet Version:** 2
+**SDD Packet Version:** 3
 **Spec Status:** draft  
 **Author:** unassigned  
-**Reviewer:** unassigned  
-**Review Requirement:** self
+**Reviewer:** optional suggestion
+**Reviewer Harness:** optional suggestion
+**Review Requirement:** independent
 **Last Updated:** YYYY-MM-DD
+
+Reviewer and Reviewer Harness are informational suggestions only. Any reviewer
+selected by the user may review without matching those fields or changing the
+packet/claim first. Set `Author` for task history; it does not authorize or block
+review writes.
 
 ## Objective
 
@@ -55,7 +61,9 @@ and migration behavior. State “none” when the task has no interface change.
 
 ## Change Surface
 
-**Owns:** files/directories this task may create or modify.  
+**Owns:** files/directories this task may create or modify. A required review
+report conventionally lives at `tasks/reviews/<TASK-ID>.md`; Markdown review
+writes do not depend on listing that path here.
 **Coordinates:** shared/generated files requiring another owner's agreement.  
 **Must Not Touch:** explicit boundaries.
 
@@ -83,4 +91,5 @@ implementation.
 **Date:** YYYY-MM-DD  
 **Notes:** Use `independent` review for high-risk tasks; `none` requires rationale.
 Required review outcomes are recorded at `tasks/reviews/<TASK-ID>.md` and linked
-from the task handoff. See `tasks/SDD.md` §§2–3.4.
+from the task handoff. Reviewer identity and claim status do not gate Markdown
+review writes. See `tasks/SDD.md` §§2–3.4.

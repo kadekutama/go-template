@@ -1,6 +1,6 @@
 # Epic E10: Platform Integrations (Flags, FX, Payments, Statements, SMTP)
 
-**Status:** pending
+**Status:** in_progress
 **Story Points:** 17
 **Phase:** 5.2 (after E09.1)
 **Dependencies:** E06 (ports), E07.1 (distributed persistence), E09.1 (scheduler/egress resilience)
@@ -15,7 +15,7 @@
 ## Tasks
 
 ### E10-T01: Feature-flag provider (OpenFeature + Unleash, Valkey/in-memory fallback)
-**Status:** pending
+**Status:** in_progress
 **Background:** Runtime flags for payment methods, currencies, HTTP/3, kill switches.
 **Files:**
 - Create: `internal/infrastructure/featureflag/{openfeature.go,unleash.go,redis_fallback.go}`, `config/egress/unleash.yaml`

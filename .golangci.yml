@@ -215,6 +215,15 @@ linters:
         linters:
           - gochecknoglobals
         text: (registry|configureShape|transferStoreStatsMap|uowTrackerMap|authzStatsMap|testCodeCounter)
+      # Gochecknoglobals on the featureflag integration TestMain singleton
+      # (E10-T01): one shared container harness + one evaluator are shared per
+      # test binary across -count runs, because OpenFeature binds providers
+      # process-wide. No production global is added; unit tests carry parallel
+      # coverage without shared state.
+      - path: test/integration/featureflag/featureflag_test\.go$
+        linters:
+          - gochecknoglobals
+        text: (sharedEvaluator|sharedHarness)
 issues:
   # Every issue fails the run: no warnings-only mode.
   max-issues-per-linter: 0

@@ -4,9 +4,9 @@ go 1.27.2
 
 require (
 	github.com/99designs/gqlgen v0.17.95
+	github.com/Unleash/unleash-go-sdk/v6 v6.5.1
 	github.com/bytedance/sonic v1.15.4
 	github.com/casbin/casbin/v3 v3.11.0
-	github.com/dgraph-io/ristretto/v2 v2.4.2
 	github.com/go-co-op/gocron-ui v0.3.0
 	github.com/go-co-op/gocron/v2 v2.22.0
 	github.com/go-playground/validator/v10 v10.30.5
@@ -59,6 +59,7 @@ require (
 require (
 	dario.cat/mergo v1.0.2 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
+	github.com/Masterminds/semver/v3 v3.4.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.6.1 // indirect
 	github.com/bytedance/gopkg v0.1.3 // indirect
@@ -78,7 +79,6 @@ require (
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/go-connections v0.8.1 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
-	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/ebitengine/purego v0.10.1 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
@@ -92,6 +92,7 @@ require (
 	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect
+	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
@@ -101,6 +102,7 @@ require (
 	github.com/klauspost/compress v1.20.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.4.0 // indirect
 	github.com/knadh/koanf/maps v0.1.2 // indirect
+	github.com/launchdarkly/eventsource v1.11.0 // indirect
 	github.com/leodido/go-urn v1.5.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20260330125221-c963978e514e // indirect
 	github.com/magiconair/properties v1.8.10 // indirect
@@ -133,6 +135,7 @@ require (
 	github.com/tklauser/numcpus v0.12.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/twmb/franz-go/pkg/kmsg v1.14.0 // indirect
+	github.com/twmb/murmur3 v1.1.8 // indirect
 	github.com/vektah/gqlparser/v2 v2.5.37 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.7.2 // indirect

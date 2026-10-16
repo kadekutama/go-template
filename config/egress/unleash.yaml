@@ -1,0 +1,6 @@
+policies:
+  - provider: unleash
+    operation: flags
+    budget: 100
+    window: 1m
+    max_wait: 5s

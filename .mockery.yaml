@@ -115,3 +115,15 @@ packages:
       filename: "{{.InterfaceName}}.go"
       dir: test/mock/webhook
       pkgname: mockwebhook
+  github.com/kadekutama/go-template/internal/infrastructure/featureflag:
+    config:
+      all: true
+      filename: "{{.InterfaceName}}.go"
+      dir: test/mock/featureflag
+      pkgname: mockfeatureflag
+  github.com/kadekutama/go-template/internal/shared/kernel/resilience:
+    config:
+      all: true
+      filename: "{{.InterfaceName}}.go"
+      dir: test/mock/resilience
+      pkgname: mockresilience

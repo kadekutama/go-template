@@ -11,7 +11,6 @@ import (
 	// Blank imports pin SPEC §2 modules until real code imports them; see package doc.
 	_ "github.com/99designs/gqlgen/graphql"
 	_ "github.com/casbin/casbin/v3"
-	_ "github.com/dgraph-io/ristretto/v2"
 	_ "github.com/go-co-op/gocron/v2"
 	_ "github.com/golang-jwt/jwt/v5"
 	_ "github.com/labstack/echo/v5"

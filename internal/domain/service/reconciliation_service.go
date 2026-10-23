@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/samber/lo"
+
 	"github.com/kadekutama/go-template/internal/domain/entity"
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
 )
@@ -316,9 +318,12 @@ func duplicateBreaks(duplicates []entity.ExternalStatementLine, cfg MatchConfig)
 }
 
 func matchByReference(ledger []LedgerFact, external []entity.ExternalStatementLine, cfg MatchConfig) ([]MatchGroup, []entity.ReconciliationBreak, error) {
-	ledgerByRef := groupLedger(ledger)
-	externalByRef := groupExternal(external)
-	refs := unionRefs(ledgerByRef, externalByRef)
+	ledgerByRef := lo.GroupBy(ledger, func(f LedgerFact) string { return f.Reference })
+	externalByRef := lo.GroupBy(external, func(l entity.ExternalStatementLine) string { return l.Reference })
+	refs := lo.Union(lo.Keys(ledgerByRef), lo.Keys(externalByRef))
+	// lo.Keys reads map iteration order, so sort to keep the deterministic
+	// reference walk that break ordering depends on.
+	slices.Sort(refs)
 
 	var (
 		matched []MatchGroup
@@ -347,44 +352,6 @@ func matchByReference(ledger []LedgerFact, external []entity.ExternalStatementLi
 	}
 
 	return matched, breaks, nil
-}
-
-func groupLedger(ledger []LedgerFact) map[string][]LedgerFact {
-	out := make(map[string][]LedgerFact)
-	for _, f := range ledger {
-		out[f.Reference] = append(out[f.Reference], f)
-	}
-
-	return out
-}
-
-func groupExternal(external []entity.ExternalStatementLine) map[string][]entity.ExternalStatementLine {
-	out := make(map[string][]entity.ExternalStatementLine)
-	for _, l := range external {
-		out[l.Reference] = append(out[l.Reference], l)
-	}
-
-	return out
-}
-
-func unionRefs(a map[string][]LedgerFact, b map[string][]entity.ExternalStatementLine) []string {
-	set := make(map[string]struct{})
-	for k := range a {
-		set[k] = struct{}{}
-	}
-
-	for k := range b {
-		set[k] = struct{}{}
-	}
-
-	refs := make([]string, 0, len(set))
-	for k := range set {
-		refs = append(refs, k)
-	}
-
-	slices.Sort(refs)
-
-	return refs
 }
 
 func matchOneReference(ref string, lfacts []LedgerFact, elines []entity.ExternalStatementLine, cfg MatchConfig) ([]MatchGroup, []entity.ReconciliationBreak, error) {

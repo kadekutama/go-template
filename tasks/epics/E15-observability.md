@@ -1,16 +1,16 @@
 # Epic E15: Observability + Resilience
 
 **Status:** pending
-**Story Points:** 18
+**Story Points:** 21
 **Phase:** 7
-**Dependencies:** E11, E12, E13, E14 (live traffic to observe; basic middleware already in E11–E13)
+**Dependencies:** E09.2, E11, E12, E13, E14 (live traffic to observe; basic middleware already in E11–E13; profiling SDK in E09.2-T04)
 **SDD Gate:** G6
-**Design refs:** `SPEC.md §7.9`, `SPEC.md §9.4`, `SPEC.md §9.7–§9.8`,
-`docs/money-flow.md §9`, `docs/domain-events.md §10`, `docs/data-flow.md §3`
+**Design refs:** `SPEC.md §7.9`, `SPEC.md §9.4`, `SPEC.md §9.7–§9.8`, `SPEC.md §12.4`,
+`docs/money-flow.md §9`, `docs/domain-events.md §10`, `docs/data-flow.md §3`, `docs/architecture/ADR-027-continuous-profiling-pyroscope-pprof.md`
 
-> Scope note: E01 bootstrapped tracing/logging SDKs; E11–E13 installed the
+> Scope note: E01 bootstrapped tracing/logging SDKs; E09.2-T04 wired the Pyroscope Go profiler and OTel span-profile bridge; E11–E13 installed the
 > middleware chain. This epic completes the *pipeline* (collector → backends →
-> dashboards → alerts) and wires resilience behaviors (breakers, limits, panic
+> Pyroscope server → dashboards → alerts), adds the default-off loopback-only `net/http/pprof` diagnostics server, and wires resilience behaviors (breakers, limits, panic
 > recovery verification, HTTP/3 enablement).
 
 ## Tasks
@@ -128,9 +128,34 @@ other external adapters must all use it. This audit closes the loop.
 **Related Docs:** `SPEC.md §7.8`, `docs/fintech-ledger-features.md §11.2`
 **SDD Gate:** G6
 
+---
+
+### E15-T07: Continuous profiling stack (`grafana/pyroscope:2.4.0`), Tempo span-profile correlation & loopback-only `net/http/pprof` server
+**Status:** pending
+**Background:** E09.2-T04 added the `internal/infrastructure/profiling/` push adapter (`pyroscope-go v1.4.3` + `otel-profiling-go v0.7.0`). This task completes the LGTMP observability backend by adding `grafana/pyroscope:2.4.0` to `deployments/docker/docker-compose.observability.yml` (`SPEC.md §12.4`), provisioning Grafana's Pyroscope datasource and Tempo `tracesToProfiles` correlation, and providing a default-off, loopback-only (`127.0.0.1:6060`) `net/http/pprof` diagnostic server for on-demand local/port-forwarded `google/pprof` inspection (`ADR-027`).
+**Files:**
+- Modify: `deployments/docker/docker-compose.observability.yml`, `deployments/observability/grafana/datasources/datasources.yaml`, `internal/infrastructure/config/config.go`, `config/config.yaml`, `config/schemas/config.json`
+- Create: `internal/infrastructure/profiling/pprof_server.go`, `internal/infrastructure/profiling/pprof_server_test.go`, `deployments/observability/pyroscope/config.yaml`
+**Steps:**
+1. Add `pyroscope` (`image: grafana/pyroscope:2.4.0`, port `4040:4040`, healthcheck `/ready`, volume `pyroscope_data:/data`) to `deployments/docker/docker-compose.observability.yml` (`SPEC.md §12.4`).
+2. Provision `grafana-pyroscope-datasource` (`url: http://pyroscope:4040`) in Grafana datasources and configure Tempo's `tracesToProfiles` block (`datasourceUid: pyroscope`, `tags: [{key: 'service.name', value: 'service_name'}]`, `profileTypeId: 'process_cpu:cpu:nanoseconds:cpu:nanoseconds'`, `customQuery: true`) so clicking any traced span in Grafana opens the matching Pyroscope flamegraph.
+3. Implement `PprofServer` (`PprofServerParams` + `NewPprofServer`) in `internal/infrastructure/profiling/pprof_server.go`:
+   - Disabled by default (`observability.pprof.enabled: false`).
+   - Binds strictly to loopback (`127.0.0.1:6060` by default); reject any non-loopback bind address (`0.0.0.0`, `::`, or external interface IPs) at construction time with a typed validation error so `/debug/pprof/*` can never be exposed on public networks or mounted on Echo/gRPC/GraphQL/Traefik routers.
+   - Registers `/debug/pprof/`, `/debug/pprof/cmdline`, `/debug/pprof/profile`, `/debug/pprof/symbol`, `/debug/pprof/trace`, and `/debug/pprof/heap` on a dedicated private `http.ServeMux` with explicit `ReadHeaderTimeout` / `WriteTimeout` and `fx.Lifecycle` `OnStart`/`OnStop` graceful shutdown.
+4. Write table-driven unit tests in `internal/infrastructure/profiling/pprof_server_test.go` proving default-off no-op, rejection of non-loopback bind addresses (`0.0.0.0:6060`, `:6060`), and valid loopback `/debug/pprof/heap` capture.
+**Acceptance Criteria:**
+- [ ] `docker-compose.observability.yml` runs `grafana/pyroscope:2.4.0` on port `4040` and Grafana provisions both the Pyroscope datasource and Tempo `tracesToProfiles` linkage.
+- [ ] `PprofServer` is disabled by default, rejects non-loopback bind addresses (`0.0.0.0`, `:6060`), and is never mounted on public Echo/gRPC/GraphQL/Traefik ingress.
+- [ ] `go test -v -race ./internal/infrastructure/profiling/...` and `make lint` pass with 0 issues.
+**Story Points:** 3
+**Depends On:** E09.2-T04, E15-T01, E15-T02
+**Related Docs:** `SPEC.md §2`, `SPEC.md §7.9`, `SPEC.md §12.4`, `docs/architecture/ADR-027-continuous-profiling-pyroscope-pprof.md`
+**SDD Gate:** G6
+
 ## Acceptance Criteria
 
-- [ ] E15-T01 … E15-T06 all `completed` (count 18 SP in `tasks/tracking/PROGRESS.md`)
-- [ ] Request→Tempo trace demo recorded; alerts fire to channels
-- [ ] Panic/rate-limit suites green; breaker audit clean
+- [ ] E15-T01 … E15-T07 all `completed` (count 21 SP in `tasks/tracking/PROGRESS.md`)
+- [ ] Request→Tempo trace demo and Tempo→Pyroscope span flamegraph correlation recorded; alerts fire to channels
+- [ ] Panic/rate-limit suites green; breaker audit clean; loopback-only `net/http/pprof` isolation verified
 - [ ] SDD gate G6 checks pass — `tasks/tracking/GATES.md#G6`

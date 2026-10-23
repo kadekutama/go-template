@@ -186,6 +186,7 @@ GO_TOOLS=(
   "oapi-codegen:github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest"
   "air:github.com/air-verse/air@latest"
   "goose:github.com/pressly/goose/v3/cmd/goose@latest"
+  "nilaway:go.uber.org/nilaway/cmd/nilaway@latest"
 )
 
 get_gobin() {

@@ -7,6 +7,8 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/samber/lo"
+
 	"github.com/kadekutama/go-template/internal/domain/entity"
 	"github.com/kadekutama/go-template/internal/domain/repository"
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
@@ -106,10 +108,7 @@ func (r *HoldRepository) FindActiveByAccount(
 		return nil, fmt.Errorf("postgres: list active holds: %w", err)
 	}
 
-	out := make([]entity.HoldData, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, holdToEntity(row))
-	}
+	out := lo.Map(rows, func(row models.HoldModel, _ int) entity.HoldData { return holdToEntity(row) })
 
 	return out, nil
 }

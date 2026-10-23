@@ -7,6 +7,8 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/samber/lo"
+
 	"github.com/kadekutama/go-template/internal/domain/entity"
 	"github.com/kadekutama/go-template/internal/domain/repository"
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
@@ -84,10 +86,7 @@ func (s *EntryStore) FindByAccount(
 		rows = rows[:limit]
 	}
 
-	out := make([]entity.Entry, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, entryToEntity(row))
-	}
+	out := lo.Map(rows, func(row models.EntryModel, _ int) entity.Entry { return entryToEntity(row) })
 
 	return out, next, nil
 }

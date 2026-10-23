@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"strconv"
 
+	"github.com/samber/lo"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -145,18 +146,9 @@ type accountLock struct {
 // lockPostingAccounts locks every involved account in deterministic (sorted)
 // order and verifies same tenant/ledger scope plus ACTIVE status.
 func lockPostingAccounts(ctx context.Context, tx *gorm.DB, posting entity.PostingData) error {
-	ids := make([]string, 0, len(posting.Entries))
-	seen := make(map[string]bool)
+	ids := lo.UniqMap(posting.Entries, func(entry entity.Entry, _ int) string { return entry.AccountID.String() })
 
-	for _, entry := range posting.Entries {
-		id := entry.AccountID.String()
-		if !seen[id] {
-			seen[id] = true
-			ids = append(ids, id)
-		}
-	}
-
-	sort.Strings(ids)
+	slices.Sort(ids)
 
 	var rows []accountLock
 
@@ -169,10 +161,7 @@ func lockPostingAccounts(ctx context.Context, tx *gorm.DB, posting entity.Postin
 		return fmt.Errorf("postgres: lock accounts: %w", err)
 	}
 
-	byID := make(map[string]accountLock, len(rows))
-	for _, row := range rows {
-		byID[row.ID] = row
-	}
+	byID := lo.KeyBy(rows, func(row accountLock) string { return row.ID })
 
 	for _, id := range ids {
 		row, ok := byID[id]
@@ -332,15 +321,7 @@ func (r *PostingRepository) FindByAccount(
 		refs = refs[:limit]
 	}
 
-	ids := make([]string, 0, len(refs))
-	seen := make(map[string]bool)
-
-	for _, ref := range refs {
-		if !seen[ref.PostingID] {
-			seen[ref.PostingID] = true
-			ids = append(ids, ref.PostingID)
-		}
-	}
+	ids := lo.UniqMap(refs, func(ref entryRef, _ int) string { return ref.PostingID })
 
 	if len(ids) == 0 {
 		return []entity.PostingData{}, "", nil
@@ -375,10 +356,7 @@ func assemblePage(
 		byPosting[row.PostingID] = append(byPosting[row.PostingID], entryToEntity(row))
 	}
 
-	byID := make(map[string]models.PostingModel, len(postingRows))
-	for _, row := range postingRows {
-		byID[row.ID] = row
-	}
+	byID := lo.KeyBy(postingRows, func(row models.PostingModel) string { return row.ID })
 
 	out := make([]entity.PostingData, 0, len(ids))
 
@@ -437,10 +415,7 @@ func findEntriesByPosting(
 		return nil, fmt.Errorf("postgres: list entries: %w", err)
 	}
 
-	out := make([]entity.Entry, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, entryToEntity(row))
-	}
+	out := lo.Map(rows, func(row models.EntryModel, _ int) entity.Entry { return entryToEntity(row) })
 
 	return out, nil
 }

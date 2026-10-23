@@ -8,7 +8,9 @@ GO ?= go
 GOLANGCI_LINT ?= golangci-lint
 GOPLS ?= gopls
 GOIMPORTS ?= goimports
+NILAWAY ?= nilaway
 LOCAL_MODULE := github.com/kadekutama/go-template
+NILAWAY_ARGS := -include-pkgs="$(LOCAL_MODULE)" -test=false ./internal/... ./pkg/... ./cmd/...
 BIN_DIR := bin
 MIGRATE ?= migrate
 
@@ -76,6 +78,10 @@ gopls-check: ## Run gopls diagnostics, including Hint-level modernization sugges
 	@out="$$(find . -name '*.go' -not -path './vendor/*' | xargs $(GOPLS) check -severity=hint 2>&1)"; \
 	if [ -n "$$out" ]; then printf '%s\n' "$$out" >&2; echo "gopls-check failed: resolve every diagnostic above (no analyzer filtering)" >&2; exit 1; fi
 
+.PHONY: nilaway
+nilaway: ## Interprocedural nil-safety analysis across production packages (ADR-026).
+	$(NILAWAY) $(NILAWAY_ARGS)
+
 .PHONY: fmt
 fmt: ## Format all Go code (gofmt -s + goimports with local module grouping).
 	gofmt -s -w .
@@ -87,8 +93,9 @@ fmt-check: ## Check that all Go files are formatted with gofmt -s and goimports.
 	@test -z "$$($(GOIMPORTS) -local $(LOCAL_MODULE) -l .)" || (echo "goimports check failed on files:" >&2; $(GOIMPORTS) -local $(LOCAL_MODULE) -l . >&2; exit 1)
 
 .PHONY: lint
-lint: fmt-check gopls-check ## Strict lint (fmt check + gopls check + golangci-lint) + shellcheck on scripts.
+lint: fmt-check gopls-check ## Strict lint (fmt check + gopls check + golangci-lint + nilaway) + shellcheck on scripts.
 	CGO_ENABLED=0 $(GOLANGCI_LINT) run ./... && shellcheck scripts/**/*.sh
+	$(NILAWAY) $(NILAWAY_ARGS)
 
 .PHONY: verify
 verify: fmt lint test-race ## Full pre-commit verification: fmt, lint, race tests, and SDD checks.

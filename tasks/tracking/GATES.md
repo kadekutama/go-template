@@ -29,7 +29,7 @@ the capability is not stable or externally exposed until its gate passes.
 - [ ] Property/model tests prove positive minor units, checked arithmetic,
   per-currency balance, normal-side display, reversal linkage, and hold state machines.
 - [ ] Every webhook in `api-contracts.md §10` maps to a domain event (`check-tasks.py --events`).
-- [ ] No external imports in `internal/domain/...`.
+- [ ] No external imports in `internal/domain/...` except the pure generic root collection combinators (`github.com/samber/lo` per `ADR-026`; `lo/mutable` and `lo/parallel` denied).
 - [ ] `make generate-mocks` compiles against all ports.
 
 ## G3 — Application complete
@@ -53,6 +53,7 @@ the capability is not stable or externally exposed until its gate passes.
 - [ ] Provider fakes allow zero-vendor-credential test runs.
 - [ ] E09.1-T05 proves gocron v2 lifecycle, read-only UI auth, Valkey egress admission, retry-permit composition, and local single-flight.
 - [ ] E09.1-T06 proves Casbin v2.8.0-to-v3 authorization parity; model, loader, migration, and stored policy data remain unchanged.
+- [ ] E09.2-T01…T04 prove `samber/lo v1.53.0` collection refactoring + `depguard`/`forbidigo` guardrails, `fx.ValidateApp` + `fxtest.New` coverage across all infrastructure modules, zero `nilaway` (installed via `@latest`) findings, and default-off `pyroscope-go v1.4.3` + `otel-profiling-go v0.7.0` lifecycle wiring.
 
 **E08 slice status (2026-09-19):** cache invalidation/cursor labeling, Redlock
 coordination, dual-broker topology, outbox-relay publisher, idempotent consumer
@@ -70,14 +71,10 @@ handshakes in Valkey via the `store.Store` seam, JWT keys as OpenBao-backed
 RCU snapshots, RBAC on `casbin.SyncedEnforcer`, crypto on OpenBao Transit with
 Argon2id (`t=3/m=64MiB/p=4`) in BYTEA columns. Unit + Testcontainers PG
 integration + `-race` green; `make lint` 0 issues. Remaining before G4
-closes: E09.1 scheduler/egress slice, E10 provider fakes, and the E14 durable
+closes: E09.1 scheduler/egress slice, E09.2 DX/static-safety/profiling slice, E10 provider fakes, and the E14 durable
 inbox binding.
 
-**Planned E09.1 G4 slice:** before E10 provider integration, prove gocron v2
-lifecycle, the default-off read-only authenticated UI, Valkey-backed egress
-admission, local single-flight, and Casbin v2-to-v3 authorization parity
-(`E09.1-T01`…`T06`). E10 then proves every provider attempt consumes its
-configured egress quota and eligible FX cache misses use single-flight.
+**Planned E09.1 & E09.2 G4 slices:** E09.1 (`E09.1-T01`…`T06`) is completed. Next, `E09.2-T01`…`T04` adopt `samber/lo v1.53.0`, standardize `fx.ValidateApp` + `fxtest.New`, enforce zero `nilaway` findings, and wire `pyroscope-go v1.4.3` + `otel-profiling-go v0.7.0` before E10-T02…E10-T06 complete provider integrations.
 
 **Round-2 revisions (2026-09-27, plan `tasks/plans/E09-round2-revision-plan.md`):**
 zero-panic boot (stderr+exit-1, `FxLogger(logger)`), contract rejections + code
@@ -100,9 +97,9 @@ Re-verified: lint 0, unit `-race` exit 0 (56 pkgs), full `check-tasks` OK.
 **Status:** pending
 **Promotes capability for:** cross-cutting verification
 **Checks:**
-- [ ] Request→Tempo trace demo recorded.
+- [ ] Request→Tempo trace demo recorded; Tempo→Pyroscope (`v2.4.0`) span-to-flamegraph correlation verified (`E15-T07`).
 - [ ] Test alert reaches its channel; dashboards provisioned.
-- [ ] Panic suite (6 boundaries) green; rate-limit suite green.
+- [ ] Panic suite (6 boundaries) green; rate-limit suite green; loopback-only `net/http/pprof` isolation verified (`E15-T07`).
 - [ ] Breaker audit clean (`check-tasks.py --breakers`).
 
 ## G7 — Verification + delivery green
@@ -119,5 +116,5 @@ Re-verified: lint 0, unit `-race` exit 0 (56 pkgs), full `check-tasks` OK.
 **Checks:**
 - [ ] Zero pending ADRs; docs link-check clean; onboarding ≤10 min timed.
 - [ ] Header/TLS scans clean; vuln scans zero HIGH/CRITICAL; SBOM + licenses attached.
-- [ ] Perf baselines committed with regression gate; DR drill measured inside RPO/RTO; NFR table signed.
+- [ ] Perf baselines, `google/pprof` flamegraphs, and Go 1.27 PGO (`default.pgo`) profiles (`E19-T05`) committed with regression gate; DR drill measured inside RPO/RTO; NFR table signed.
 - [ ] Release checklist fully ticked.

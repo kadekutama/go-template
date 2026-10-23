@@ -107,7 +107,9 @@ func merkleTreeRoot(nodes []string) string {
 	copy(current, nodes)
 
 	for len(current) > 1 {
-		var next []string
+		// Allocate a non-nil level buffer so the final current[0] dereference
+		// cannot be a nil flow for the interprocedural nil analysis.
+		next := make([]string, 0, len(current))
 
 		for i := 0; i < len(current); i += 2 {
 			if i+1 < len(current) {

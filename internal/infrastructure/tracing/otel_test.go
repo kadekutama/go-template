@@ -113,9 +113,10 @@ func TestBootstrapValidation(t *testing.T) {
 	t.Parallel()
 
 	type testCase struct {
-		name          string
-		cfg           Config
-		expectedError bool
+		name                string
+		cfg                 Config
+		expectedProviderNil bool
+		expectedError       error
 	}
 
 	testCases := []testCase{
@@ -127,7 +128,8 @@ func TestBootstrapValidation(t *testing.T) {
 				SampleRatio:    0.1,
 				ExcludedRoutes: []string{"/healthz"},
 			},
-			expectedError: true,
+			expectedProviderNil: true,
+			expectedError:       ErrTracingServiceNameIsRequired,
 		},
 		{
 			name: "missing service version",
@@ -137,7 +139,8 @@ func TestBootstrapValidation(t *testing.T) {
 				SampleRatio:    0.1,
 				ExcludedRoutes: []string{"/healthz"},
 			},
-			expectedError: true,
+			expectedProviderNil: true,
+			expectedError:       ErrTracingServiceVersionIsRequired,
 		},
 		{
 			name: "sample ratio greater than 1",
@@ -148,7 +151,8 @@ func TestBootstrapValidation(t *testing.T) {
 				SampleRatio:    9,
 				ExcludedRoutes: []string{"/healthz"},
 			},
-			expectedError: true,
+			expectedProviderNil: true,
+			expectedError:       ErrTracingSampleRatioOutOf01,
 		},
 		{
 			name: "sample ratio less than 0",
@@ -159,7 +163,8 @@ func TestBootstrapValidation(t *testing.T) {
 				SampleRatio:    -0.5,
 				ExcludedRoutes: []string{"/healthz"},
 			},
-			expectedError: true,
+			expectedProviderNil: true,
+			expectedError:       ErrTracingSampleRatioOutOf01,
 		},
 		{
 			name: "sample ratio zero rejected",
@@ -170,7 +175,8 @@ func TestBootstrapValidation(t *testing.T) {
 				SampleRatio:    0,
 				ExcludedRoutes: []string{"/healthz"},
 			},
-			expectedError: true,
+			expectedProviderNil: true,
+			expectedError:       ErrTracingSampleRatioOutOf01,
 		},
 		{
 			name: "missing excluded routes",
@@ -181,7 +187,8 @@ func TestBootstrapValidation(t *testing.T) {
 				SampleRatio:    0.1,
 				ExcludedRoutes: nil,
 			},
-			expectedError: true,
+			expectedProviderNil: true,
+			expectedError:       ErrTracingExcludedRoutesIsRequired,
 		},
 		{
 			name: "blank excluded route item",
@@ -192,7 +199,8 @@ func TestBootstrapValidation(t *testing.T) {
 				SampleRatio:    0.1,
 				ExcludedRoutes: []string{"/healthz", "   "},
 			},
-			expectedError: true,
+			expectedProviderNil: true,
+			expectedError:       ErrTracingExcludedRouteMustNotBeBlank,
 		},
 		{
 			name: "bad otlp endpoint",
@@ -204,7 +212,8 @@ func TestBootstrapValidation(t *testing.T) {
 				SampleRatio:    0.1,
 				ExcludedRoutes: []string{"/healthz"},
 			},
-			expectedError: true,
+			expectedProviderNil: true,
+			expectedError:       ErrTracingInvalidOTLPEndpointWantHTTPSHostPort,
 		},
 		{
 			name: "production requires endpoint",
@@ -215,7 +224,21 @@ func TestBootstrapValidation(t *testing.T) {
 				SampleRatio:    0.1,
 				ExcludedRoutes: []string{"/healthz"},
 			},
-			expectedError: true,
+			expectedProviderNil: true,
+			expectedError:       ErrTracingProductionRequiresOTLPEndpointRefusingSilentNoOp,
+		},
+		{
+			name: "valid local with profiling enabled",
+			cfg: Config{
+				ServiceName:      testServiceName,
+				ServiceVersion:   testServiceVersion,
+				Env:              testEnv,
+				SampleRatio:      0.1,
+				ExcludedRoutes:   []string{"/healthz", "/readyz", "/livez"},
+				ProfilingEnabled: true,
+			},
+			expectedProviderNil: false,
+			expectedError:       nil,
 		},
 		{
 			name: "valid local without endpoint",
@@ -226,7 +249,8 @@ func TestBootstrapValidation(t *testing.T) {
 				SampleRatio:    0.1,
 				ExcludedRoutes: []string{"/healthz", "/readyz", "/livez"},
 			},
-			expectedError: false,
+			expectedProviderNil: false,
+			expectedError:       nil,
 		},
 	}
 
@@ -235,15 +259,13 @@ func TestBootstrapValidation(t *testing.T) {
 			t.Parallel()
 
 			provider, err := Bootstrap(tc.cfg)
-			if tc.expectedError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
+			assert.Equal(t, tc.expectedProviderNil, provider == nil)
+			assert.ErrorIs(t, err, tc.expectedError)
 
-				if assert.NotNil(t, provider) {
-					assert.False(t, provider.Exporting())
+			if provider != nil {
+				t.Cleanup(func() {
 					_ = provider.Shutdown(context.Background())
-				}
+				})
 			}
 		})
 	}

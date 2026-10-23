@@ -7,6 +7,8 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/samber/lo"
+
 	appport "github.com/kadekutama/go-template/internal/application/port"
 	"github.com/kadekutama/go-template/internal/domain/entity"
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
@@ -83,10 +85,7 @@ func (s *PostingSearch) Search(ctx context.Context, filter appport.PostingFilter
 		return appport.PostingSearchPage{Postings: []entity.PostingData{}}, nil
 	}
 
-	ids := make([]string, 0, len(postingRows))
-	for _, row := range postingRows {
-		ids = append(ids, row.ID)
-	}
+	ids := lo.Map(postingRows, func(row models.PostingModel, _ int) string { return row.ID })
 
 	out, err := assembleSearchEntries(ctx, s.db, filter.TenantID, postingRows, ids)
 	if err != nil {
@@ -177,11 +176,9 @@ func assembleSearchEntries(
 		byPosting[row.PostingID] = append(byPosting[row.PostingID], entryToEntity(row))
 	}
 
-	out := make([]entity.PostingData, 0, len(postingRows))
-
-	for _, row := range postingRows {
-		out = append(out, postingToEntity(row, byPosting[row.ID]))
-	}
+	out := lo.Map(postingRows, func(row models.PostingModel, _ int) entity.PostingData {
+		return postingToEntity(row, byPosting[row.ID])
+	})
 
 	return out, nil
 }

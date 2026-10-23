@@ -66,10 +66,35 @@ nats:
   url: nats://127.0.0.1:4222
 observability:
   log_level: info
+  # Local runs keep stdout visible. Server overlays switch to a rotating file
+  # that a log-processor sidecar tails (ADR-028).
+  log_output: stdout
+  log_file: ""
+  log_max_size_mb: 100
+  log_max_backups: 7
+  log_max_age_days: 30
+  log_compress: true
   otlp_endpoint: ""
   sample_ratio: 0.1
   # Routes never traced (health probes). Required; blank entries rejected.
   excluded_routes: ["/healthz", "/readyz", "/livez"]
+  # Continuous profiling (ADR-027). Disabled by default: no network and no
+  # runtime sampling until enabled. Tags are static and low-cardinality only;
+  # tenant/account/user/email/pan keys are rejected by the adapter.
+  profiling:
+    enabled: false
+    server_address: "http://localhost:4040"
+    application_name: "fintech-ledger"
+    environment: "local"
+    upload_rate: 15s
+    mutex_profile_fraction: 5
+    block_profile_rate: 5
+    disable_gc_runs: false
+    tags:
+      service: "fintech-ledger"
+      env: "local"
+      region: "local"
+      version: "dev"
 feature_flags:
   unleash_url: ""
 secrets:

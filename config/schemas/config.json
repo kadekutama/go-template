@@ -253,6 +253,32 @@
             "error"
           ]
         },
+        "log_output": {
+          "type": "string",
+          "enum": [
+            "stdout",
+            "file",
+            "both"
+          ]
+        },
+        "log_file": {
+          "type": "string"
+        },
+        "log_max_size_mb": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "log_max_backups": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "log_max_age_days": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "log_compress": {
+          "type": "boolean"
+        },
         "otlp_endpoint": {
           "type": "string"
         },
@@ -267,6 +293,43 @@
           "items": {
             "type": "string",
             "minLength": 1
+          }
+        },
+        "profiling": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "server_address": {
+              "type": "string"
+            },
+            "application_name": {
+              "type": "string"
+            },
+            "environment": {
+              "type": "string"
+            },
+            "upload_rate": {
+              "type": "string"
+            },
+            "mutex_profile_fraction": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "block_profile_rate": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "disable_gc_runs": {
+              "type": "boolean"
+            },
+            "tags": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
           }
         }
       }

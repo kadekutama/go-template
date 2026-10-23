@@ -401,6 +401,46 @@ flowchart TD
 * **Loki v3.7.7 HA**: High-volume log aggregation using S3/MinIO chunk storage with separated ingest and query paths.
 * **Tempo v2.9.4**: Distributed tracing backend storing trace blocks in MinIO / S3 object storage with sub-second lookups.
 
+### 9.1 Application Log Delivery: Terminal vs. Rotating Files (ADR-028)
+
+The application emits one JSON object per line through the kernel
+`log.Logger` port. The adapter selects its sink from the process environment:
+
+| Environment | Default sink | Required settings |
+|---|---|---|
+| `APP_ENV=local` (or unset) | `stdout` | `APP_LOG_LEVEL` |
+| `APP_ENV=staging` / `production` | rotating file | `APP_LOG_LEVEL`, `APP_LOG_FILE`, and a writable parent directory |
+| Any environment with an explicit override | `APP_LOG_OUTPUT=stdout`, `file`, or `both` | `APP_LOG_FILE` for `file`/`both` |
+
+Local runs keep logs visible in the terminal. Server runs write JSON lines to
+`APP_LOG_FILE` (default sample: `/var/log/go-template/app.log`) and rotate by
+size, backup count, and age with optional compression:
+
+```text
+APP_LOG_OUTPUT=file
+APP_LOG_FILE=/var/log/go-template/app.log
+APP_LOG_MAX_SIZE_MB=100
+APP_LOG_MAX_BACKUPS=7
+APP_LOG_MAX_AGE_DAYS=30
+APP_LOG_COMPRESS=true
+```
+
+`APP_LOG_OUTPUT=both` mirrors the same stream to stdout and the file. A file
+path is mandatory; missing paths, unknown modes, malformed integers, and
+negative rotation bounds fail startup instead of silently downgrading to
+stdout. `APP_OBSERVABILITY__LOG_*` remains a fallback namespace for koanf-style
+deployments.
+
+The application owns durable file production only. A log-processor sidecar
+tails the file and performs network delivery. The repository includes
+[`deployments/logging/vector.yaml`](../../deployments/logging/vector.yaml), a
+minimal Vector source/transform/sink sample that sets the processor endpoint
+from `LOG_PROCESSOR_URL`. Add the selected processor's TLS, credentials,
+buffering, retry, and schema policy in the deployment layer. Multiple replicas
+must each write their own file (or use a node/pod-local collector); do not share
+one writable log file across pods. The full OTel collector/Loki pipeline remains
+E15-T01's responsibility.
+
 ---
 
 ## 10. Complete Multi-Node Infrastructure Topology & Network Map
@@ -499,7 +539,7 @@ Decoupled migration tooling gives the release pipeline explicit control over thi
 ### 12.2 Comprehensive Evaluation Matrix: Why Goose + Atlas Over Alternatives
 
 We conducted a technical evaluation of database migration approaches:
-- **`pressly/goose/v3`** (v3.28.0)
+- **`pressly/goose/v3`** (v3.29.0)
 - **`ariga/atlas`** (CLI v1.3.0 community edition)
 - **Bespoke stdlib runner + `golang-migrate` CLI** (previous baseline)
 - **`dbmate`**

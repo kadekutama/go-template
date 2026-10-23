@@ -2,13 +2,14 @@ package etcd_test
 
 import (
 	"context"
-	"io"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/fx"
+	"go.uber.org/fx/fxtest"
 
 	coordination "github.com/kadekutama/go-template/internal/infrastructure/coordination/etcd"
 	"github.com/kadekutama/go-template/internal/infrastructure/logging"
@@ -389,14 +390,32 @@ func TestEtcdModule(t *testing.T) {
 	t.Parallel()
 
 	type testCase struct {
-		name          string
-		expectedError bool
+		name             string
+		options          []fx.Option
+		expectedHasError bool
 	}
 
 	testCases := []testCase{
 		{
-			name:          "fx resolves client watcher and election",
-			expectedError: false,
+			name: "valid graph exposes client watcher and election",
+			options: []fx.Option{
+				coordination.Module(),
+				fx.Provide(testEtcdConfig),
+				fx.Provide(func() log.Logger {
+					return logging.New(os.Stderr, logging.Config{Level: "info"})
+				}),
+				fx.Invoke(func(_ *coordination.Client, _ coordination.Watcher, _ coordination.LeaderElector) {
+				}),
+			},
+			expectedHasError: false,
+		},
+		{
+			name: "missing config fails validation",
+			options: []fx.Option{
+				coordination.Module(),
+				fx.Invoke(func(_ *coordination.Client) {}),
+			},
+			expectedHasError: true,
 		},
 	}
 
@@ -404,20 +423,8 @@ func TestEtcdModule(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			app := fx.New(
-				coordination.Module(),
-				fx.Provide(testEtcdConfig),
-				fx.Provide(func() log.Logger { return logging.New(io.Discard, logging.Config{Level: "disabled"}) }),
-				fx.Invoke(func(_ *coordination.Client, _ coordination.Watcher, _ coordination.LeaderElector) {
-				}),
-			)
-			if tc.expectedError {
-				require.Error(t, app.Err())
-
-				return
-			}
-
-			require.NoError(t, app.Err())
+			err := fx.ValidateApp(tc.options...)
+			assert.Equal(t, tc.expectedHasError, err != nil)
 		})
 	}
 }
@@ -426,14 +433,14 @@ func TestEtcdModuleDrainsClient(t *testing.T) {
 	t.Parallel()
 
 	type testCase struct {
-		name          string
-		expectedError bool
+		name                string
+		expectedHealthError bool
 	}
 
 	testCases := []testCase{
 		{
-			name:          "start then stop closes the client without a live server",
-			expectedError: false,
+			name:                "stop closes the client without a live server",
+			expectedHealthError: true,
 		},
 	}
 
@@ -441,25 +448,24 @@ func TestEtcdModuleDrainsClient(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			app := fx.New(
+			var client *coordination.Client
+
+			app := fxtest.New(t,
 				coordination.Module(),
 				fx.Provide(testEtcdConfig),
-				fx.Provide(func() log.Logger { return logging.New(io.Discard, logging.Config{Level: "disabled"}) }),
-				fx.Invoke(func(_ *coordination.Client) {}),
+				fx.Provide(func() log.Logger {
+					return logging.New(os.Stderr, logging.Config{Level: "info"})
+				}),
+				fx.Populate(&client),
 			)
-			require.NoError(t, app.Err())
+			app.RequireStart()
+			app.RequireStop()
 
-			ctx := context.Background()
-			require.NoError(t, app.Start(ctx))
+			healthCtx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+			defer cancel()
 
-			err := app.Stop(ctx)
-			if tc.expectedError {
-				require.Error(t, err)
-
-				return
-			}
-
-			require.NoError(t, err)
+			require.NotNil(t, client)
+			assert.Equal(t, tc.expectedHealthError, client.Health(healthCtx) != nil)
 		})
 	}
 }

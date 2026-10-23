@@ -32,6 +32,15 @@ linters:
           allow:
             - $gostd
             - github.com/kadekutama/go-template/internal/domain
+            # ADR-026: pure stateless collection combinators only (domain stays I/O-free).
+            - github.com/samber/lo
+          deny:
+            - pkg: github.com/samber/lo/parallel
+              desc: lo/parallel spawns unrecovered goroutines; use internal/shared/kernel/safe or golang.org/x/sync/errgroup.
+            - pkg: github.com/samber/lo/mutable
+              desc: lo/mutable mutates shared slice backing arrays in place, violating value-object immutability; build a new slice instead.
+            - pkg: github.com/samber/lo/it
+              desc: lo/it iterators are not approved (ADR-026); its channel adapters spawn unmanaged goroutines.
         application:
           list-mode: strict
           files:
@@ -44,6 +53,15 @@ linters:
             # Existing application-level JSON and error translation seams.
             - github.com/kadekutama/go-template/pkg/jsonparser
             - github.com/kadekutama/go-template/internal/shared/kernel/error
+            # ADR-026: pure stateless collection combinators only.
+            - github.com/samber/lo
+          deny:
+            - pkg: github.com/samber/lo/parallel
+              desc: lo/parallel spawns unrecovered goroutines; use internal/shared/kernel/safe or golang.org/x/sync/errgroup.
+            - pkg: github.com/samber/lo/mutable
+              desc: lo/mutable mutates shared slice backing arrays in place, violating value-object immutability; build a new slice instead.
+            - pkg: github.com/samber/lo/it
+              desc: lo/it iterators are not approved (ADR-026); its channel adapters spawn unmanaged goroutines.
         interface:
           list-mode: lax
           files:
@@ -56,6 +74,12 @@ linters:
               desc: Dependency wiring belongs in composition roots, not delivery adapters.
             - pkg: github.com/kadekutama/go-template/cmd
               desc: Command packages are composition roots, not delivery dependencies.
+            - pkg: github.com/samber/lo/parallel
+              desc: lo/parallel spawns unrecovered goroutines; use internal/shared/kernel/safe or golang.org/x/sync/errgroup.
+            - pkg: github.com/samber/lo/mutable
+              desc: lo/mutable mutates shared slice backing arrays in place, violating value-object immutability; build a new slice instead.
+            - pkg: github.com/samber/lo/it
+              desc: lo/it iterators are not approved (ADR-026); its channel adapters spawn unmanaged goroutines.
         infrastructure:
           list-mode: lax
           files:
@@ -68,6 +92,12 @@ linters:
               desc: Dependency wiring belongs in composition roots, not infrastructure adapters.
             - pkg: github.com/kadekutama/go-template/cmd
               desc: Command packages are composition roots, not infrastructure dependencies.
+            - pkg: github.com/samber/lo/parallel
+              desc: lo/parallel spawns unrecovered goroutines; use internal/shared/kernel/safe or golang.org/x/sync/errgroup.
+            - pkg: github.com/samber/lo/mutable
+              desc: lo/mutable mutates shared slice backing arrays in place, violating value-object immutability; build a new slice instead.
+            - pkg: github.com/samber/lo/it
+              desc: lo/it iterators are not approved (ADR-026); its channel adapters spawn unmanaged goroutines.
         shared:
           list-mode: lax
           files:
@@ -87,6 +117,12 @@ linters:
               desc: Shared kernel primitives must not depend on delivery adapters.
             - pkg: github.com/kadekutama/go-template/cmd
               desc: Shared kernel primitives must not depend on composition roots.
+            - pkg: github.com/samber/lo/parallel
+              desc: lo/parallel spawns unrecovered goroutines; use internal/shared/kernel/safe or golang.org/x/sync/errgroup.
+            - pkg: github.com/samber/lo/mutable
+              desc: lo/mutable mutates shared slice backing arrays in place, violating value-object immutability; build a new slice instead.
+            - pkg: github.com/samber/lo/it
+              desc: lo/it iterators are not approved (ADR-026); its channel adapters spawn unmanaged goroutines.
         composition-roots:
           list-mode: lax
           files:
@@ -96,6 +132,29 @@ linters:
           # Composition roots intentionally select concrete adapters and frameworks.
           allow:
             - $gostd
+            # ADR-026: pure stateless collection combinators only.
+            - github.com/samber/lo
+          deny:
+            - pkg: github.com/samber/lo/parallel
+              desc: lo/parallel spawns unrecovered goroutines; use internal/shared/kernel/safe or golang.org/x/sync/errgroup.
+            - pkg: github.com/samber/lo/mutable
+              desc: lo/mutable mutates shared slice backing arrays in place, violating value-object immutability; build a new slice instead.
+            - pkg: github.com/samber/lo/it
+              desc: lo/it iterators are not approved (ADR-026); its channel adapters spawn unmanaged goroutines.
+    forbidigo:
+      # ADR-026: `lo` retry/goroutine/channel/transaction helpers must never
+      # bypass internal/infrastructure/resilience, internal/application/workflow,
+      # or internal/shared/kernel/safe, and lo.Must* must never panic production
+      # code (return a typed error).
+      analyze-types: true
+      exclude-godoc-examples: true
+      forbid:
+        - pattern: '^lo\.(Attempt|AttemptWithDelay|AttemptWhile|AttemptWhileWithDelay|Async|Async0|Async1|Async2|Async3|Async4|Async5|Async6|NewDebounce|NewDebounceBy|Synchronize|WaitFor|WaitForWithContext)$'
+          msg: "lo retry/goroutine helpers are banned (ADR-026); use internal/infrastructure/resilience, internal/shared/kernel/safe, or golang.org/x/sync/errgroup."
+        - pattern: '^lo\.(NewTransaction|Transaction|ChannelDispatcher|SliceToChannel|ChannelToSlice|Generator|Buffer|BufferWithContext|BufferWithTimeout|FanIn|FanOut)$'
+          msg: "lo transaction/channel/goroutine helpers are banned (ADR-026); use internal/application/workflow, internal/shared/kernel/safe, or golang.org/x/sync/errgroup."
+        - pattern: '^lo\.(Must|Must0|Must1|Must2|Must3|Must4|Must5|Must6)$'
+          msg: "lo.Must* panics on error (ADR-026); return a typed error instead."
     goconst:
       ignore-tests: true
     ireturn:

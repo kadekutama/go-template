@@ -31,7 +31,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: "1.27.2"
+          go-version: "1.27.3"
           cache: true
 
       # Pinned per SPEC §2 reproducibility; setup-go puts ~/go/bin on PATH.
@@ -48,6 +48,12 @@ jobs:
 
       - name: Install gopls
         run: go install golang.org/x/tools/gopls@latest
+
+      # Follows the other developer CLI tools; setup.sh installs this @latest.
+      # `make lint` runs nilaway over production packages
+      # (./internal/... ./pkg/... ./cmd/...) with -test=false.
+      - name: Install nilaway
+        run: go install go.uber.org/nilaway/cmd/nilaway@latest
 
       - name: Verify modules
         run: go mod verify

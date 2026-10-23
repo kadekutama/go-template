@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/samber/lo"
+
 	"github.com/kadekutama/go-template/internal/domain/entity"
 	"github.com/kadekutama/go-template/internal/domain/event"
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
@@ -57,18 +59,15 @@ func DeriveTenantAlias(requested, name string, taken []string) (string, error) {
 		return "", nil
 	}
 
-	occupied := make(map[string]bool, len(taken))
-	for _, alias := range taken {
-		occupied[alias] = true
-	}
+	occupied := lo.Keyify(taken)
 
-	if !occupied[base] {
+	if _, exists := occupied[base]; !exists {
 		return base, nil
 	}
 
 	for attempt := 2; attempt <= 100; attempt++ {
 		candidate := base + "-" + strconv.Itoa(attempt)
-		if !occupied[candidate] {
+		if _, exists := occupied[candidate]; !exists {
 			return candidate, nil
 		}
 	}
@@ -144,13 +143,9 @@ func IsRegionAllowed(region string, allowed []string) bool {
 		return false
 	}
 
-	for _, a := range allowed {
-		if strings.EqualFold(strings.TrimSpace(a), trimmed) {
-			return true
-		}
-	}
-
-	return false
+	return slices.ContainsFunc(allowed, func(a string) bool {
+		return strings.EqualFold(strings.TrimSpace(a), trimmed)
+	})
 }
 
 // IsNameTaken reports case-insensitive trimmed name collision.
@@ -160,13 +155,9 @@ func IsNameTaken(name string, existing []string) bool {
 		return false
 	}
 
-	for _, e := range existing {
-		if strings.EqualFold(strings.TrimSpace(e), trimmed) {
-			return true
-		}
-	}
-
-	return false
+	return slices.ContainsFunc(existing, func(e string) bool {
+		return strings.EqualFold(strings.TrimSpace(e), trimmed)
+	})
 }
 
 // DefaultAccountsForAssets expands operating + fee + suspense per asset with

@@ -26,6 +26,9 @@ For architectural patterns, layers, and DDD structure, see the [Clean Architectu
 | [ADR-023](./ADR-023-gocron-ui-security.md) | gocron-ui read-only security boundary | Proposed |
 | [ADR-024](./ADR-024-provider-egress-rate-limits.md) | Provider egress rate limits over the shared token bucket | Proposed |
 | [ADR-025](./ADR-025-casbin-v3.md) | Casbin v2.8.0 → v3 authorization pin (path-only major) | Proposed |
+| [ADR-026](./ADR-026-samber-lo-pure-collection-helpers.md) | Pure generic collection helpers (`samber/lo` v1.53.0) & static safety (`nilaway`, `fxtest`) | Accepted |
+| [ADR-027](./ADR-027-continuous-profiling-pyroscope-pprof.md) | Continuous profiling (`grafana/pyroscope` v2.4.0) & offline PGO (`google/pprof`) | Proposed |
+| [ADR-028](./ADR-028-file-based-log-delivery.md) | File-based log delivery with rotation for server environments | Accepted |
 
 ## How to add an ADR
 

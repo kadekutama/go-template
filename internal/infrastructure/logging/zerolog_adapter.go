@@ -10,12 +10,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/kadekutama/go-template/internal/shared/kernel/log"
 
 	"github.com/rs/zerolog"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 // configureShape pins the process-wide zerolog JSON shape once (the sanctioned
@@ -53,6 +55,63 @@ func New(w io.Writer, cfg Config) log.Logger {
 	configureShape()
 
 	return &zerologLogger{inner: zerolog.New(w).Level(parseLevel(cfg.Level)), exit: os.Exit}
+}
+
+// NewFromConfig builds the writer selected by cfg and returns a JSON logger over
+// it. stdout is for local/terminal use; file writes newline-delimited JSON via
+// lumberjack; both mirrors the same stream to stdout and the rotating file. The
+// returned error is suitable for fail-fast startup.
+func NewFromConfig(cfg Config) (log.Logger, error) {
+	cfg = cfg.Normalized()
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
+	writer, err := outputWriter(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return New(writer, cfg), nil
+}
+
+// outputWriter selects the concrete sink for cfg.Output.
+func outputWriter(cfg Config) (io.Writer, error) {
+	switch cfg.Output {
+	case OutputStdout:
+		return os.Stdout, nil
+	case OutputFile:
+		return newRotatingWriter(cfg)
+	case OutputBoth:
+		rotating, err := newRotatingWriter(cfg)
+		if err != nil {
+			return nil, err
+		}
+
+		return io.MultiWriter(os.Stdout, rotating), nil
+	default:
+		return nil, fmt.Errorf("logging: unknown output mode %q: %w", cfg.Output, ErrLoggingUnknownOutputMode)
+	}
+}
+
+// newRotatingWriter creates the log directory and returns a size/age/backup
+// limited JSON-lines writer. lumberjack writes records synchronously; the
+// process owns the file until exit.
+func newRotatingWriter(cfg Config) (*lumberjack.Logger, error) {
+	dir := filepath.Dir(cfg.FilePath)
+	if dir != "." && dir != "" {
+		if err := os.MkdirAll(dir, logDirectoryPermissions); err != nil {
+			return nil, fmt.Errorf("logging: create log directory %q: %w", dir, err)
+		}
+	}
+
+	return &lumberjack.Logger{
+		Filename:   cfg.FilePath,
+		MaxSize:    cfg.MaxSizeMB,
+		MaxBackups: cfg.MaxBackups,
+		MaxAge:     cfg.MaxAgeDays,
+		Compress:   cfg.Compress,
+	}, nil
 }
 
 // fields merges context correlation fields (SPEC §9.5) with call args into one

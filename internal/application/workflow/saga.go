@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/samber/lo"
+
 	"github.com/kadekutama/go-template/internal/application/port"
 	"github.com/kadekutama/go-template/internal/domain/entity"
 )
@@ -152,10 +154,7 @@ func (r *Runner) Resume(ctx context.Context, tenantID, sagaID string, steps []St
 // A canceled context abandons the run WITHOUT compensating (crash): the
 // persisted record keeps completed steps for Resume.
 func (r *Runner) drive(ctx context.Context, record SagaRecord, steps []Step) (SagaRecord, error) {
-	byName := make(map[string]Step, len(steps))
-	for _, step := range steps {
-		byName[step.Name] = step
-	}
+	byName := lo.KeyBy(steps, func(step Step) string { return step.Name })
 
 	for i := range record.Steps {
 		if err := ctx.Err(); err != nil {

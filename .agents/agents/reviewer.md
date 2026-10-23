@@ -124,9 +124,12 @@ ranking:
 4. **Architecture and Go practices:** Read
    `docs/architecture/clean-architecture-guide.md` and
    `docs/development/go-conventions.md` for the affected layers. Check dependency
-   direction, stdlib-only domain imports, narrow consumer-owned ports, CQRS
+   direction, domain imports restricted to stdlib and pure root `samber/lo`
+   collection combinators (ADR-026; never `lo/parallel`, `lo/mutable`,
+   `lo.Attempt*`, `lo.Async*`, or `lo.Must*`), narrow consumer-owned ports, CQRS
    boundaries, private service dependencies and the `*Params` constructor
-   pattern, fx wiring where applicable, Go error/context/validation idioms, and
+   pattern, fx wiring and `fx.ValidateApp` / `fxtest` verification where
+   applicable (ADR-026), Go error/context/validation idioms, and
    the repository's 64-byte/register-ABI receiver guidance plus semantic
    overrides for mutation, locks/atomics, and service identity. Treat SOLID as a
    design test, not a reason to require an interface for every type; any finding
@@ -162,9 +165,11 @@ each test that passes the audit.
 
 ## Modernization diagnostics
 
-- Review Go changes against the complete golangci-lint `modernize` suite and
-  gopls Hint-level diagnostics. Verify the lint configuration does not disable
-  analyzers or filter findings to obtain a clean result.
+- Review Go changes against the complete golangci-lint `modernize`, `depguard`,
+  and `forbidigo` suites, gopls Hint-level diagnostics, and `uber-go/nilaway`
+  (`make nilaway` inter-procedural nil-safety analysis, ADR-026). Verify the
+  lint configuration does not disable analyzers or filter findings to obtain a
+  clean result.
 - Report actionable modernization findings within the reviewed task's change
   surface. Record and coordinate diagnostics owned by another task without
   recommending edits to unowned files.

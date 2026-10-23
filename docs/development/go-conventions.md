@@ -1,7 +1,7 @@
 # Go Implementation Conventions
 
 **Status:** Normative implementation guidance  
-**Baseline:** Go 1.27.1, pinned by `go.mod` and the CI toolchain
+**Baseline:** Go 1.27.3, pinned by `go.mod` and the CI toolchain
 
 This document turns the architectural intent in `SPEC.md` into rules an agent
 can check while implementing. It supplements, but does not replace, the Go
@@ -9,11 +9,14 @@ language specification and the task packet.
 
 ## Layer and dependency rules
 
-- `internal/domain/` imports the standard library only. Domain code does not
-  know about SQL, HTTP, JSON codecs, logging, configuration, clocks, brokers,
-  or provider SDKs.
-- `internal/application/` imports domain packages and its own small ports. It
-  does not import infrastructure or protocol packages.
+- `internal/domain/` imports the Go standard library and pure, stateless, generic
+  root collection combinators from `github.com/samber/lo` (`v1.53.0`) per
+  [ADR-026](../architecture/ADR-026-samber-lo-pure-collection-helpers.md). Domain
+  code does not know about SQL, HTTP, JSON codecs, logging, configuration,
+  clocks, brokers, concurrency primitives, or provider SDKs.
+- `internal/application/` imports domain packages, its own small ports, and pure
+  `github.com/samber/lo` root combinators. It does not import infrastructure or
+  protocol packages.
 - Cross-cutting ports (clock, logger, tracer, meter, secrets, flags) belong to
   an inner/shared or application package; infrastructure adapts SDKs to them.
 - `internal/infrastructure/` implements ports and owns SDK/database details.
@@ -86,11 +89,66 @@ database splitting or event sourcing:
   and make timeout/cancellation behavior explicit. Every goroutine has an owner,
   cancellation path, and bounded work; use `errgroup` for bounded fan-out.
 - Prefer standard-library `slices`, `maps`, `cmp`, `log/slog`, and `testing`
-  facilities before adding a dependency. Keep `sonic` behind the repository's
-  JSON wrapper and prove compatibility/performance before using it broadly.
+  facilities first; use `github.com/samber/lo` (`v1.53.0`) for higher-order
+  keyed indexing, grouping, partitioning, deduplication by key, and pure DTO
+  slice projections (see **Pure collection combinators (`samber/lo`)** below).
+  Keep `sonic` behind the repository's JSON wrapper and prove
+  compatibility/performance before using it broadly.
 - CI runs `go test`, `go test -race`, `go vet`, `staticcheck`, `govulncheck`,
-  and the configured linter. Generated code is reproducible and is never edited
-  by hand.
+  `make nilaway` (`uber-go/nilaway`), and the configured linter. Generated code
+  is reproducible and is never edited by hand.
+
+## Pure collection combinators (`github.com/samber/lo` v1.53.0, ADR-026)
+
+Per [ADR-026](../architecture/ADR-026-samber-lo-pure-collection-helpers.md), the root package `github.com/samber/lo` (`v1.53.0`) is permitted across all layers (`domain`, `application`, `infrastructure`, `interface`, `shared`, `pkg`) **strictly for pure, synchronous, deterministic collection combinators**:
+
+1. **Where to use `samber/lo`:**
+   - **Keyed Lookup Maps (`lo.KeyBy`, `lo.SliceToMap`, `lo.Associate`):** Indexing accounts by `AccountID`, settlement items by `PaymentID`, or outbox records by `EventID`.
+   - **Multi-Bucket Grouping & Partitioning (`lo.GroupBy`, `lo.PartitionBy`):** Grouping posting lines by currency/asset code, or partitioning batch transfer items by status (`SETTLED`, `PENDING`, `FAILED`).
+   - **Key-Projected Deduplication & Set Algebra (`lo.UniqBy`, `lo.Difference`, `lo.Intersect`, `lo.Without`):** Deduplicating account IDs prior to deterministic lock ordering or finding missing reconciliation IDs.
+   - **Pure Infallible Projections (`lo.Map`, `lo.Filter`, `lo.FilterMap`, `lo.FlatMap`):** Mapping domain entities to application/REST/gRPC DTOs or filtering immutable value objects when no `(T, error)` return is needed.
+   - **Pointer / Fallback Helpers (`lo.ToPtr`, `lo.FromPtr`, `lo.FromPtrOr`, `lo.CoalesceOrEmpty`):** Constructing optional DTO fields cleanly.
+
+2. **Where to prefer Go 1.27 `stdlib` instead of `lo`:**
+   - Use `slices.Contains` / `slices.ContainsFunc` (not `lo.Contains`).
+   - Use `slices.SortFunc` / `slices.IsSortedFunc` / `slices.MinFunc` / `slices.MaxFunc`.
+   - Use `slices.Compact` / `slices.CompactFunc` for sorted slices.
+   - Use `maps.Keys`, `maps.Values`, `maps.Collect`, `maps.Clone` where `iter.Seq` fits naturally.
+   - Use `cmp.Or(a, b, c)` for comparable scalar fallbacks.
+
+3. **Hot-Path Financial Arithmetic Rule (Use Explicit `for` Loops):**
+   - **Never** wrap checked `int64` minor-unit balance accumulation, basis-point fee/interest math, or functions that return `(T, error)` inside `lo.Reduce` or closure-allocating chains. Keep hot-path accounting loops as explicit `for` loops so integer overflow checks and early error returns remain zero-allocation and immediately readable.
+
+4. **Banned `samber/lo` Subpackages & Impure Functions (Enforced by `depguard` + `forbidigo`):**
+   - **Banned subpackages (`depguard`):**
+     - `github.com/samber/lo/parallel` (`lop.Map`, `lop.ForEach`, `lop.GroupBy`, `lop.PartitionBy`, `lop.Times`): spawns unowned, uncancellable goroutines without `context.Context` or `shared/kernel/safe.Go` panic containment.
+     - `github.com/samber/lo/mutable`: mutates slices in place, violating value-object immutability.
+   - **Banned root functions (`forbidigo`):**
+     - `lo.Attempt`, `lo.AttemptWithDelay`, `lo.AttemptWhile`, `lo.AttemptWhileWithDelay` (non-context-aware `time.Sleep` retries without jitter or circuit breaker).
+     - `lo.Async*`, `lo.WaitFor*`, `lo.ChannelDispatcher`, `lo.Buffer*`, `lo.FanIn`, `lo.FanOut`, `lo.Synchronize` (unmanaged goroutines/channels/locks).
+     - `lo.Must*` in non-test production code (`!_test.go`) — production code must return typed errors, never panic.
+
+## Dependency injection graph verification (`fx.ValidateApp` & `fxtest`, ADR-026)
+
+Per [ADR-026](../architecture/ADR-026-samber-lo-pure-collection-helpers.md):
+- Every `fx.Module` (`internal/shared/di` and layer/adapter `module.go` files) must have a deterministic, table-driven unit test invoking `fx.ValidateApp(Module, ...)` with lightweight in-memory stubs for external ports. `fx.ValidateApp` verifies constructor parameter objects (`*Params`), interface bindings (`fx.As`), value groups, and cycle absence in $< 50\text{ms}$ without starting network listeners or containers.
+- Tests that verify component `OnStart` / `OnStop` lifecycle hooks must use `go.uber.org/fx/fxtest` (`fxtest.New(t, ...)` followed by `app.RequireStart()` and `app.RequireStop()`) so lifecycle failures fail `testing.TB` immediately.
+
+## Static nil-safety verification (`uber-go/nilaway`, ADR-026)
+
+Per [ADR-026](../architecture/ADR-026-samber-lo-pure-collection-helpers.md):
+- `make nilaway` runs `nilaway -include-pkgs="github.com/kadekutama/go-template" -test=false ./internal/... ./pkg/... ./cmd/...` to perform inter-procedural nil-flow analysis across package boundaries.
+- `make lint` runs the same nilaway invocation as its final step (after `golangci-lint` and `shellcheck`), so `make verify` enforces zero nil-flow findings as well.
+- Never return `(nil, nil)` from repository or service methods where the caller dereferences the returned pointer on `err == nil`; return a typed domain/application not-found error (`ErrNotFound`) instead.
+- All nilaway diagnostics must be resolved in code (no blanket analyzer suppression).
+
+## Continuous profiling & diagnostics (`pyroscope-go` & `google/pprof`, ADR-027)
+
+Per [ADR-027](../architecture/ADR-027-continuous-profiling-pyroscope-pprof.md):
+- Continuous profiling is encapsulated in `internal/infrastructure/profiling/` (`github.com/grafana/pyroscope-go` `v1.4.3` + `github.com/grafana/otel-profiling-go` `v0.7.0`) and controlled via `config.yaml` (`profiling.enabled: false` by default).
+- When `profiling.otel_span_profiling: true`, the OpenTelemetry `TracerProvider` is wrapped with `otelpyroscope.NewTracerProvider` so spans automatically attach `pyroscope.profile.id` for Trace-to-Profile drill-down in Grafana.
+- **Security invariant:** Never register `net/http/pprof` handlers on public Echo (`pkg/httpserver`) or Traefik ingress routers. On-demand `pprof` endpoints may only bind to a dedicated loopback server (`127.0.0.1:6060`) when `profiling.pprof_http.enabled: true`.
+- Never attach high-cardinality or PII labels (`tenant_id`, `account_id`, `user_id`, `request_id`) to `pyroscope.Config.Tags` or `pprof.Labels`; use only static low-cardinality deployment tags (`service`, `env`, `version`, `region`).
 
 ## Constructor validation
 
@@ -540,7 +598,8 @@ export PATH="$HOME/.pixi/bin:$PATH"
 go mod verify
 go mod tidy -diff
 gofmt -s -w .
-make lint
+make lint            # fmt, gopls, golangci-lint, shellcheck, nilaway
+make nilaway         # focused nilaway rerun (also available standalone)
 go test -v -race ./...
 go vet ./...
 ./tasks/scripts/gate-check.sh <GATE>

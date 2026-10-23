@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/samber/lo"
+
 	"github.com/kadekutama/go-template/internal/domain/entity"
 )
 
@@ -12,10 +14,7 @@ import (
 // saga never claims compensation it did not perform. Compensation writes
 // hold/notify-style effects only — never partial ledger state.
 func (r *Runner) compensate(ctx context.Context, record SagaRecord, steps []Step, failedIndex int, cause error) (SagaRecord, error) {
-	byName := make(map[string]Step, len(steps))
-	for _, step := range steps {
-		byName[step.Name] = step
-	}
+	byName := lo.KeyBy(steps, func(step Step) string { return step.Name })
 
 	for i := failedIndex - 1; i >= 0; i-- {
 		if record.Steps[i].State != StepCompleted {

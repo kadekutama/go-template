@@ -12,4 +12,7 @@ var (
 	ErrNetworkFailure                             = errors.New("network failure")
 	ErrLoggingFxLoggerRequiresANonNilKernelLogger = errors.New("logging: fx logger requires a non-nil kernel logger")
 	ErrLoggingUnknownLogLevel                     = errors.New("logging: unknown log level")
+	ErrLoggingUnknownOutputMode                   = errors.New("logging: unknown output mode")
+	ErrLoggingFilePathIsRequired                  = errors.New("logging: file path is required for file output")
+	ErrLoggingInvalidRotation                     = errors.New("logging: max size must be positive; backups and age must be non-negative")
 )

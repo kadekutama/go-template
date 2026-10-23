@@ -2,15 +2,25 @@ package testcontainers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
+	"time"
 
+	natsgo "github.com/nats-io/nats.go"
 	tc "github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 // NATSImage is the pinned NATS image for integration suites.
 const NATSImage = "nats:2.14.6"
+
+const (
+	natsPort         = "4222"
+	natsPortTCP      = natsPort + "/tcp"
+	natsReadyTimeout = 10 * time.Second
+	natsProbeTimeout = 500 * time.Millisecond
+)
 
 // NATSHandle is one isolated NATS container (supports NATS Core edge fanout and JetStream).
 type NATSHandle struct {
@@ -29,10 +39,13 @@ func StartNATS(t *testing.T) (*NATSHandle, error) {
 
 	req := tc.GenericContainerRequest{
 		Image:        NATSImage,
-		ExposedPorts: []string{"4222/tcp"},
+		ExposedPorts: []string{natsPortTCP},
 		Cmd:          []string{"-js"},
-		WaitingFor:   wait.ForLog("Server is ready"),
-		Started:      true,
+		WaitingFor: wait.ForAll(
+			wait.ForLog("Server is ready"),
+			wait.ForListeningPort(natsPortTCP),
+		),
+		Started: true,
 	}
 
 	container, err := tc.GenericContainer(ctx, req)
@@ -46,7 +59,7 @@ func StartNATS(t *testing.T) (*NATSHandle, error) {
 		_ = h.Terminate(context.Background())
 	})
 
-	mapped, err := container.MappedPort(ctx, "4222")
+	mapped, err := container.MappedPort(ctx, natsPort)
 	if err != nil {
 		_ = h.Terminate(context.Background())
 
@@ -62,7 +75,39 @@ func StartNATS(t *testing.T) (*NATSHandle, error) {
 
 	h.url = "nats://" + host + ":" + mapped.Port()
 
+	if err := waitForNATSConnection(ctx, h.url); err != nil {
+		_ = h.Terminate(context.Background())
+
+		return nil, fmt.Errorf("wait for nats client readiness at %s: %w", h.url, err)
+	}
+
 	return h, nil
+}
+
+// waitForNATSConnection proves the host-mapped endpoint accepts a real NATS
+// client handshake before callers receive the handle.
+func waitForNATSConnection(ctx context.Context, url string) error {
+	waitCtx, cancel := context.WithTimeout(ctx, natsReadyTimeout)
+	defer cancel()
+
+	var lastErr error
+
+	for {
+		conn, err := natsgo.Connect(url, natsgo.Timeout(natsProbeTimeout))
+		if err == nil {
+			conn.Close()
+
+			return nil
+		}
+
+		lastErr = err
+
+		select {
+		case <-waitCtx.Done():
+			return fmt.Errorf("nats did not accept a client connection: %w", errors.Join(waitCtx.Err(), lastErr))
+		case <-time.After(time.Duration(pollIntervalMs) * time.Millisecond):
+		}
+	}
 }
 
 // URL returns the client URL of the container.

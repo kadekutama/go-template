@@ -61,6 +61,12 @@ nats:
   url: nats://nats.staging.svc:4222
 observability:
   log_level: info
+  log_output: file
+  log_file: /var/log/go-template/app.log
+  log_max_size_mb: 100
+  log_max_backups: 7
+  log_max_age_days: 30
+  log_compress: true
   otlp_endpoint: https://tempo.staging.svc:4317
   sample_ratio: 0.1
   # Routes never traced (health probes). Required; blank entries rejected.

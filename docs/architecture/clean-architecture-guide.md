@@ -59,7 +59,7 @@ When deciding whether a piece of logic belongs in **Domain** or **Application**,
 
 ```
 internal/
-├── domain/                  # PURE BUSINESS RULES (Go stdlib only, zero I/O)
+├── domain/                  # PURE BUSINESS RULES (Go stdlib + pure samber/lo root combinators per ADR-026; zero I/O)
 │   ├── aggregate/           # Transactional consistency boundaries protecting invariants
 │   ├── entity/              # Objects with mutable state and a distinct identity
 │   ├── valueobject/         # Immutable, self-validating data structures without identity
@@ -82,6 +82,7 @@ internal/
 │   ├── messaging/           # Redpanda (Kafka API), NATS Core (Edge)
 │   ├── secrets/             # OpenBao (Dynamic DB creds & Transit tokenization)
 │   ├── coordination/        # etcd (Consensus DCS & Config streaming)
+│   ├── profiling/           # Pyroscope continuous profiler, OTel span correlation & loopback pprof (ADR-027)
 │   └── resilience/          # Outbox dispatchers, circuit breakers, rate limiters
 │
 └── interface/ (or api/)     # PROTOCOL ADAPTERS & DELIVERY
@@ -94,7 +95,7 @@ internal/
 
 ## 4. `internal/domain/` — Granular Subdirectory Guide
 
-**Golden Rule for Domain**: Zero imports outside the Go standard library (`math`, `strings`, `time`, etc.). Never import database drivers, JSON serialization libraries, web frameworks, or application packages.
+**Golden Rule for Domain**: Zero I/O, zero stateful dependencies, and zero imports outside the Go standard library (`math`, `strings`, `time`, `slices`, `maps`, `cmp`, etc.) and the root `github.com/samber/lo` (`v1.53.0`) package for pure, stateless, generic collection combinators (`lo.KeyBy`, `lo.GroupBy`, `lo.PartitionBy`, `lo.UniqBy`, `lo.Map`, `lo.Filter`, `lo.FilterMap`, `lo.Chunk`) per [ADR-026](ADR-026-samber-lo-pure-collection-helpers.md). Never import `github.com/samber/lo/parallel`, `github.com/samber/lo/mutable`, database drivers, JSON serialization libraries, web frameworks, or application packages.
 
 ### 4.1. `valueobject/` (Value Objects)
 - **Definition**: Data structures that represent a descriptive aspect of the domain with **no conceptual identity**. Two Value Objects with identical attributes are equal. They are **immutable** and **self-validating**.

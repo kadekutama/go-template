@@ -1,0 +1,43 @@
+# Sample log-processor sidecar for the Go template's file-based log delivery.
+#
+# The application writes newline-delimited JSON to APP_LOG_FILE. Run this
+# Vector configuration in the same pod (or on the same node) with the log
+# directory mounted at /var/log/go-template. Set LOG_PROCESSOR_URL to the
+# HTTP ingestion endpoint supplied by your log processor.
+#
+# Production hardening is intentionally left to the deployment layer: add TLS,
+# authentication, disk buffering, rate limits, and the processor-specific
+# request schema required by the selected vendor.
+
+data_dir: /var/lib/vector
+
+sources:
+  application_file:
+    type: file
+    include:
+      - /var/log/go-template/*.log
+    read_from: beginning
+    ignore_older_secs: 86400
+
+transforms:
+  application_json:
+    type: remap
+    inputs:
+      - application_file
+    source: |
+      . = parse_json!(.message)
+
+sinks:
+  log_processor:
+    type: http
+    inputs:
+      - application_json
+    uri: "${LOG_PROCESSOR_URL}"
+    method: post
+    encoding:
+      codec: json
+    framing:
+      method: newline_delimited
+    request:
+      headers:
+        Content-Type: application/x-ndjson

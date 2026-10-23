@@ -1,6 +1,6 @@
 # Progress Dashboard (single source of truth for progress)
 
-**Last updated:** 2026-10-05
+**Last updated:** 2026-10-23
 **How to update:** flip task `**Status:**` in the epic file, then tick the box here.
 Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 
@@ -20,18 +20,20 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | E08 | Cache + messaging adapters | 24 | 24/24 | completed | G4 |
 | E09 | Identity + security adapters | 22 | 22/22 | completed | G4 |
 | E09.1 | Scheduler + egress resilience (gocron v2, secure read-only UI, egress limiter, single-flight, casbin v3) | 20 | 20/20 | completed | G4 |
+| E09.2 | DX, static safety, DI validation & continuous profiling (samber/lo, fxtest, nilaway, pyroscope-go) | 16 | 16/16 | completed | G4 |
+| E09.3 | Log delivery, dependency & test-harness maintenance (Go 1.27.3, rotating file logs, NATS readiness) | 7 | 7/7 | completed | G4 |
 | E10 | Platform integrations | 17 | 0/17 | in_progress | G4 |
 | E11 | REST API | 43 | 0/43 | pending | G5 |
 | E12 | gRPC API | 16 | 0/16 | pending | G5 |
 | E13 | GraphQL API | 18 | 0/18 | pending | G5 |
 | E14 | Workers (cron + consumer) | 17 | 0/17 | pending | G5 |
-| E15 | Observability + resilience | 18 | 0/18 | pending | G6 |
+| E15 | Observability + resilience | 21 | 0/21 | pending | G6 |
 | E16 | Verification (contract, perf, chaos) | 14 | 0/14 | pending | G7 |
 | E17 | Delivery (CI/CD, images, K8s) | 16 | 0/16 | pending | G7 |
 | E18 | Docs + DX | 32 | 11/32 | in_progress | G8 |
-| E19 | Hardening + release | 13 | 0/13 | pending | G8 |
+| E19 | Hardening + release | 16 | 0/16 | pending | G8 |
 
-**Total:** 308/501 SP completed.
+**Total:** 319/530 SP completed.
 
 ## Task checklists (tick as epic files flip to completed)
 
@@ -156,6 +158,16 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 - [x] E09.1-T05 G4 integration + verification slice
 - [x] E09.1-T06 casbin v2 to v3 upgrade
 
+### E09.2 — DX, static safety, DI validation & continuous profiling
+- [x] E09.2-T01 pure generic collection helpers (`samber/lo` v1.53.0) + guardrails + refactoring
+- [x] E09.2-T02 DI graph validation (`fx.ValidateApp`) + `fxtest` standardization across all modules
+- [x] E09.2-T03 interprocedural static nil-safety (`uber-go/nilaway`) + zero-finding remediation
+- [x] E09.2-T04 continuous profiling adapter (`grafana/pyroscope-go` v1.4.3 + `otel-profiling-go` v0.7.0)
+
+### E09.3 — Log delivery, dependency & test-harness maintenance
+- [x] E09.3-T01 Go 1.27.3 refresh + environment-aware rotating log delivery
+- [x] E09.3-T02 NATS testcontainer host-connect readiness
+
 ### E10 — Integrations
 - [ ] E10-T01 feature flags
 - [ ] E10-T02 FX provider
@@ -207,6 +219,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 - [ ] E15-T04 rate-limit verification
 - [ ] E15-T05 HTTP/3 enablement
 - [ ] E15-T06 breaker audit
+- [ ] E15-T07 Pyroscope v2.4.0 stack + Tempo span-profile correlation + loopback pprof server
 
 ### E16 — Verification
 - [ ] E16-T02 contract suite
@@ -241,6 +254,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 - [ ] E19-T02 SBOM + licenses
 - [ ] E19-T03 perf tuning + baselines
 - [ ] E19-T04 DR drills + NFR sign-off + checklist
+- [ ] E19-T05 offline `google/pprof` CLI + `graphviz` + Go 1.27 PGO (`default.pgo`) pipeline
 
 ## Gates
 

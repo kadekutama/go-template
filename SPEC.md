@@ -3,7 +3,7 @@
 **Version:** 1.1.1  
 **Status:** Planning — audited, correctness contract added  
 **Last Updated:** 2026-09-13  
-**Go Version:** 1.27.2 (current stable patch; owner ruled latest-Go on 2026-10-13)
+**Go Version:** 1.27.3 (current stable patch; owner ruled latest-Go on 2026-10-13)
 
 ---
 
@@ -64,19 +64,21 @@ decisions on 2026-09-13; ADR-011 remains proposed pending benchmark evidence.
 The versions below are reproducible target pins, not a promise that every
 dependency is the newest release. E00/E01 resolve them in `go.mod` and the
 compose manifests, run vulnerability checks, and record any upgrade in an ADR
-or dependency-update PR. Go 1.27.2 is the current stable patch release (owner ruled latest-Go on 2026-10-13; was 1.27.1 at audit date).
+or dependency-update PR. Go 1.27.3 is the current stable patch release (owner ruled latest-Go on 2026-10-13; was 1.27.1 at audit date).
 
 | Category | Technology | Version | Notes |
 |----------|------------|---------|-------|
-| **Language** | Go | 1.27.2 | Latest stable |
-| **DI Framework** | fx (Uber) | v1.24.0 | Runtime DI with lifecycle |
+| **Language** | Go | 1.27.3 | Latest stable |
+| **DI Framework** | fx (Uber) | v1.24.0 | Runtime DI with lifecycle, `fx.ValidateApp` & `fxtest` graph verification (ADR-026) |
+| **Pure Collection Helpers** | samber/lo | v1.53.0 | Pure generic slice/map/tuple combinators (ADR-026; `lo/parallel`, `lo/mutable`, `lo/it` denied by `depguard`; `lo.Attempt*`/`lo.Async*`/`lo.Transaction*`/`lo.Must*` and `lo` channel/goroutine helpers banned by `forbidigo`) |
+| **Static Nil Verifier** | uber-go/nilaway | latest | Inter-procedural compile-time nilness static analyzer; installed via `@latest` like the other developer CLI tools, run inside `make lint` and CI over `./internal/... ./pkg/... ./cmd/...` with `-test=false` (ADR-026) |
 | **HTTP Router** | Echo | v5.4.0 | High performance, middleware (v4 EOL 2026-12-31) |
 | **gRPC** | grpc-go | v1.66.0 | Protobuf v1.34.0+ |
 | **GraphQL** | gqlgen | v0.17.94 | Schema-first, codegen |
 | **Database** | PostgreSQL + Citus | 18.6 / 14.0 | Citus horizontal tenant sharding (ADR-013), GORM v2 (v1.31.2) |
 | **Database HA** | Patroni / CloudNativePG | v4.1.5 / v1.30.0 | Patroni for bare-metal/VMs, CNPG for K8s (ADR-013) |
 | **Coordination / DCS**| etcd | v3.7.2 | Patroni DCS, gRPC config stream, leader election (ADR-017) |
-| **Migration & Linting** | Goose + Atlas | v3.28.0 / v1.3.0 | Goose v3 embed/runtime + Atlas CI safety linter + UTC timestamps (ADR-018) |
+| **Migration & Linting** | Goose + Atlas | v3.29.0 / v1.3.0 | Goose v3 embed/runtime + Atlas CI safety linter + UTC timestamps (ADR-018) |
 | **Cache L1** | Otter | v2.3.0 | Adaptive W-TinyLFU, Go generics, per-key TTL; supersedes Ristretto (ADR-015) |
 | **Cache L2** | Valkey | 9.1.2 | go-redis v9.23.0 (Sentinel & Cluster HA modes) |
 | **Messaging (Log)** | Redpanda | v26.2 | Kafka API, Raft-native, durable financial event log (ADR-014) |
@@ -88,17 +90,19 @@ or dependency-update PR. Go 1.27.2 is the current stable patch release (owner ru
 | **Secrets / Crypto** | OpenBao | v2.6.2 | Dynamic DB credentials & Transit encryption; supersedes Bitwarden (ADR-016) |
 | **Circuit Breaker** | gobreaker/v2 | v2.4.0 | Sony |
 | **Tracing** | OpenTelemetry | v1.47.0 | Jaeger, Prometheus, OTLP |
-| **Logging** | zerolog | v1.35.1 | JSON, structured, leveled; port in `shared/kernel/log` (ADR-012) |
+| **Continuous Profiling** | Pyroscope + OTel Profiling | v2.4.0 / v1.4.3 / v0.7.0 | `grafana/pyroscope:2.4.0` server, `pyroscope-go` v1.4.3, `otel-profiling-go` v0.7.0 span correlation (ADR-027) |
+| **Diagnostics & PGO** | google/pprof | v0.0.0-20261014150452-c3b4e57cab2c | Loopback-only `net/http/pprof` (`127.0.0.1:6060`), `pprof` CLI + `graphviz`, Go 1.27 PGO (ADR-027) |
+| **Logging** | zerolog + lumberjack | v1.35.1 / v2.2.1 | JSON, structured, leveled; port in `shared/kernel/log` (ADR-012); local stdout and rotated server files (ADR-028) |
 | **Validation** | validator | v10.22.0 | Struct tags |
 | **JSON** | `pkg/jsonparser` wrapper | Sonic v1.15.4 default (ADR-012); stdlib fallback | One codec seam; benchmark recorded in E01-T07 evidence |
 | **i18n** | go-i18n | v2.7.0 | YAML locale files |
 | **Scheduler** | gocron/v2 | v2.22.0 | etcd / Valkey Redlock distributed |
 | **Scheduler UI** | gocron-ui | v0.3.0 | Internal read-only dashboard (disabled by default) |
-| **Concurrency** | golang.org/x/sync | v0.23.0 | singleflight coalescing (direct) |
+| **Concurrency** | golang.org/x/sync | v0.24.0 | singleflight coalescing (direct) |
 | **Config** | koanf | v2.3.8 | Multi-source, validation, etcd watcher |
 | **Testing** | testify, testcontainers, mockery | Pinned in `go.mod` at bootstrap | Unit, integration, contract |
 | **API Gateway** | Traefik | v3.2.0 | Docker labels, auto-TLS |
-| **Observability Stack** | Prometheus, Grafana, Loki, Tempo | Pinned image tags at bootstrap | Full LGTM target (Prom 3.14.0, Grafana 13.0, Loki 3.7.7, Tempo 2.9.4) |
+| **Observability Stack** | Prometheus, Grafana, Loki, Tempo, Pyroscope | Pinned image tags at bootstrap | Full LGTM + Profiling target (Prom 3.14.0, Grafana 13.0, Loki 3.7.7, Tempo 2.9.4, Pyroscope 2.4.0) |
 
 ---
 
@@ -216,6 +220,7 @@ go-template/
 │   │   ├── grafana/
 │   │   ├── loki/
 │   │   ├── tempo/
+│   │   ├── pyroscope/
 │   │   └── Dockerfile*                     # Multi-stage
 │   └── k8s/                          # Kustomize/Helm/ArgoCD
 ├── docs/                             # Documentation (MD per layer)
@@ -226,7 +231,7 @@ go-template/
 │   ├── api/
 │   └── development/
 ├── internal/                         # Private application code
-│   ├── domain/                       # DDD Core (NO external deps)
+│   ├── domain/                       # DDD Core (stdlib + pure samber/lo root combinators per ADR-026; zero I/O)
 │   │   ├── entity/
 │   │   ├── valueobject/
 │   │   ├── aggregate/
@@ -266,6 +271,7 @@ go-template/
 │   │   ├── audit/
 │   │   ├── crypto/
 │   │   ├── tracing/
+│   │   ├── profiling/                # Pyroscope continuous profiler + OTel span correlation + loopback pprof (ADR-027)
 │   │   ├── logging/
 │   │   ├── validator/
 │   │   └── middleware/
@@ -507,7 +513,7 @@ type Config struct {
 - **ORM**: GORM v2 with interfaces
 - **Horizontal Sharding**: Citus 14.0 sharding on `tenant_id` (`create_distributed_table` on accounts, entries, postings, holds, outbox_facts, idempotency_keys; `create_reference_table` on currencies). See ADR-013.
 - **High Availability**: Patroni v4.1.5 + etcd v3.7.0 (bare-metal/compose) or CloudNativePG v1.30.0 (Kubernetes). See ADR-013.
-- **Migrations**: Pressly Goose v3 (v3.28.0; embedded FS + CLI, preserved 1..4 baseline versions + 14-digit UTC timestamps `YYYYMMDDHHMMSS_<name>.sql` for new migrations, out-of-order execution `-allow-missing`, one-time ledger bootstrap from `schema_migrations` to `goose_db_version`, Up/Down reversible, `-- +goose NO TRANSACTION` at top of file for Citus sharding and concurrent indexing, pure-compute programmatic `.go` migrations with service backfills deferred to E14 jobs) + Ariga Atlas CLI (v1.3.0; `atlas.sum` Merkle tree integrity validation + pre-deployment ephemeral container safety linting `atlas migrate lint`). Supersedes the bespoke stdlib runner and `golang-migrate` CLI to eliminate merge conflicts, lock contention, and silent DDL table lockouts. See ADR-018 and `docs/infrastructure/README.md §12`.
+- **Migrations**: Pressly Goose v3 (v3.29.0; embedded FS + CLI, preserved 1..4 baseline versions + 14-digit UTC timestamps `YYYYMMDDHHMMSS_<name>.sql` for new migrations, out-of-order execution `-allow-missing`, one-time ledger bootstrap from `schema_migrations` to `goose_db_version`, Up/Down reversible, `-- +goose NO TRANSACTION` at top of file for Citus sharding and concurrent indexing, pure-compute programmatic `.go` migrations with service backfills deferred to E14 jobs) + Ariga Atlas CLI (v1.3.0; `atlas.sum` Merkle tree integrity validation + pre-deployment ephemeral container safety linting `atlas migrate lint`). Supersedes the bespoke stdlib runner and `golang-migrate` CLI to eliminate merge conflicts, lock contention, and silent DDL table lockouts. See ADR-018 and `docs/infrastructure/README.md §12`.
 - **Connection Pool**: Native Go `database/sql` with `jackc/pgx/v5/stdlib` pool (configurable max_open, max_idle, max_lifetime; Citus coordinator manages worker connections directly)
 - **Ledger write path**: explicit, reviewable SQL transaction or stored procedure;
   database-enforced per-currency balance, immutability, tenant/ledger scope,
@@ -596,7 +602,8 @@ type Breaker interface {
 ### 7.9 Observability
 - **Tracing**: OpenTelemetry → Jaeger/Tempo
 - **Metrics**: Prometheus (RED + USE)
-- **Logging**: zerolog JSON + correlation ID (ADR-012; port unchanged)
+- **Logging**: zerolog JSON + correlation ID (ADR-012; port unchanged); local stdout, server rotating JSON-lines files with an external log-processor handoff (ADR-028)
+- **Continuous Profiling**: Pyroscope (`pyroscope-go` v1.4.3) with `otel-profiling-go` v0.7.0 span correlation, disabled by default (`observability.profiling.enabled: false`); Pyroscope server stack in §12.4 (ADR-027)
 - **Health**: Liveness/Readiness/Startup probes
 
 ### 7.10 Third-Party Abstractions (Ports)
@@ -816,11 +823,12 @@ TLS, and load-balancer support:
 ```yaml
 # .github/workflows/ci.yml
 stages:
-  - lint:           golangci-lint (strict)
+  - lint:           make lint (golangci-lint strict + gopls Hint + shellcheck)
+  - nilaway:        make nilaway (inter-procedural nil safety; runs inside make lint)
   - test-unit:      go test ./internal/... ./pkg/...
   - test-integration: testcontainers (docker-compose.ci.yml)
   - test-contract:  pact verification
-  - build:          Multi-binary, multi-arch
+  - build:          Multi-binary, multi-arch (Go 1.27 PGO enabled)
   - security:       govulncheck, gosec, trivy (container)
   - sbom:           syft → spdx.json
   - license:        go-licenses check
@@ -916,7 +924,7 @@ volumes:
 
 ### 12.4 Observability (`docker-compose.observability.yml`)
 ```yaml
-# Extends docker-compose.yml - adds LGTM Stack
+# Extends docker-compose.yml - adds LGTM + Continuous Profiling Stack
 services:
   prometheus:
     image: prom/prometheus:v3.14.0
@@ -939,11 +947,17 @@ services:
     ports: ["3200:3200", "4317:4317", "9411:9411"]
     volumes: [./tempo:/etc/tempo, tempo_data:/tempo]
 
+  pyroscope:
+    image: grafana/pyroscope:2.4.0
+    ports: ["4040:4040"]
+    volumes: [./pyroscope:/etc/pyroscope, pyroscope_data:/data]
+
 volumes:
   prom_data:
   grafana_data:
   loki_data:
   tempo_data:
+  pyroscope_data:
 ```
 
 ### 12.5 CI Minimal (`docker-compose.ci.yml`)
@@ -982,7 +996,7 @@ services:
 # Core: postgres, valkey, nats, jaeger, maildev
 # + FeatureFlags: unleash
 # + Gateway: traefik
-# + Observability: prometheus, grafana, loki, tempo
+# + Observability: prometheus, grafana, loki, tempo, pyroscope
 ```
 
 ### 12.7 Production (`docker-compose.prod.yml`)

@@ -20,7 +20,7 @@ ATLAS_DIR_URL="file://$MIGRATIONS_DIR?format=goose"
 
 need_goose() {
   command -v goose >/dev/null 2>&1 || {
-    echo "goose CLI not found; install v3.28.0 (go install github.com/pressly/goose/v3/cmd/goose@v3.28.0) or run ./scripts/dev/setup.sh" >&2
+    echo "goose CLI not found; install v3.29.0 (go install github.com/pressly/goose/v3/cmd/goose@v3.29.0) or run ./scripts/dev/setup.sh" >&2
     exit 1
   }
 }

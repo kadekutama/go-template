@@ -10,8 +10,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/fx"
+	"go.uber.org/fx/fxtest"
 
 	"github.com/kadekutama/go-template/internal/infrastructure/logging"
+	"github.com/kadekutama/go-template/internal/infrastructure/profiling"
+	"github.com/kadekutama/go-template/internal/shared/kernel"
+	"github.com/kadekutama/go-template/internal/shared/kernel/log"
 )
 
 // errTestWorkFailed marks the failing-work scenario.
@@ -53,24 +57,166 @@ func (b *testLogBuffer) lines() string {
 	return string(*old)
 }
 
-// TestGraphValidates proves the composed fx graph has no dependency cycles.
-// Every binary module must appear here; a cycle fails the test before any
-// binary is built.
-func TestGraphValidates(t *testing.T) {
+// TestCompositeGraphsValid validates every production module composition with
+// fx.ValidateApp. Validation mode never executes constructors or invoke
+// targets, so the logging level is deliberately absent: ProvideLoggingConfig
+// would fail if it ran, proving the check has zero side effects.
+func TestCompositeGraphsValid(t *testing.T) {
 	t.Parallel()
 
-	err := fx.ValidateApp(
-		DomainModule(),
-		ApplicationModule(),
-		InfrastructureModule(),
-		RestModule(),
-		GrpcModule(),
-		GraphQLModule(),
-		CronModule(),
-		ConsumerModule(),
-		fx.NopLogger,
-	)
-	assert.NoError(t, err)
+	type testCase struct {
+		name    string
+		options []fx.Option
+	}
+
+	testCases := []testCase{
+		{
+			name: "shared layers validate",
+			options: []fx.Option{
+				DomainModule(),
+				ApplicationModule(),
+				InfrastructureModule(),
+				fx.Invoke(func(_ logging.Config, _ log.Logger, _ kernel.Clock, _ kernel.IDGenerator, _ *profiling.Profiler) {
+				}),
+				fx.NopLogger,
+			},
+		},
+		{
+			name: "all binary modules compose",
+			options: []fx.Option{
+				DomainModule(),
+				ApplicationModule(),
+				InfrastructureModule(),
+				RestModule(),
+				GrpcModule(),
+				GraphQLModule(),
+				CronModule(),
+				ConsumerModule(),
+				fx.Invoke(func(_ logging.Config, _ log.Logger, _ kernel.Clock, _ kernel.IDGenerator, _ *profiling.Profiler) {
+				}),
+				fx.NopLogger,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.NoError(t, fx.ValidateApp(tc.options...))
+		})
+	}
+}
+
+// TestCompositeGraphsInvalid proves a broken module composition is rejected by
+// fx.ValidateApp. Graph errors have no exported sentinel, so this table asserts
+// the error return directly rather than a concrete error value.
+func TestCompositeGraphsInvalid(t *testing.T) {
+	t.Parallel()
+
+	type testCase struct {
+		name    string
+		options []fx.Option
+	}
+
+	testCases := []testCase{
+		{
+			name: "missing infrastructure dependency fails validation",
+			options: []fx.Option{
+				DomainModule(),
+				ApplicationModule(),
+				fx.Invoke(func(_ kernel.Clock) {}),
+				fx.NopLogger,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Error(t, fx.ValidateApp(tc.options...))
+		})
+	}
+}
+
+// TestCompositeLifecycle starts and stops the production module composition
+// through the fxtest harness. Appending ordered probe hooks proves start order
+// is preserved and teardown runs in reverse order with every hook succeeding.
+func TestCompositeLifecycle(t *testing.T) {
+	t.Parallel()
+
+	type testCase struct {
+		name               string
+		options            []fx.Option
+		hookNames          []string
+		expectedStartOrder []string
+		expectedStopOrder  []string
+	}
+
+	testCases := []testCase{
+		{
+			name: "composite graph starts in order and stops in reverse",
+			options: []fx.Option{
+				DomainModule(),
+				ApplicationModule(),
+				InfrastructureModule(),
+				RestModule(),
+				GrpcModule(),
+				GraphQLModule(),
+				CronModule(),
+				ConsumerModule(),
+				// The lifecycle test constructs log.Logger through the
+				// environment-backed provider. Replace just that config value
+				// so hook ordering is testable without APP_LOG_LEVEL; the
+				// graph-validation case above still covers the real provider.
+				fx.Replace(logging.Config{Level: "info"}),
+			},
+			hookNames:          []string{"first", "second", "third"},
+			expectedStartOrder: []string{"first", "second", "third"},
+			expectedStopOrder:  []string{"third", "second", "first"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			type lifecycleTrace struct {
+				started []string
+				stopped []string
+			}
+
+			var trace lifecycleTrace
+
+			appOptions := append([]fx.Option{}, tc.options...)
+			appOptions = append(appOptions, fx.Invoke(func(lifecycle fx.Lifecycle) {
+				for _, hookName := range tc.hookNames {
+					lifecycle.Append(fx.Hook{
+						OnStart: func(context.Context) error {
+							trace.started = append(trace.started, hookName)
+
+							return nil
+						},
+						OnStop: func(context.Context) error {
+							trace.stopped = append(trace.stopped, hookName)
+
+							return nil
+						},
+					})
+				}
+			}))
+
+			app := fxtest.New(t, appOptions...)
+			app.RequireStart()
+			app.RequireStop()
+
+			assert.Equal(t,
+				lifecycleTrace{started: tc.expectedStartOrder, stopped: tc.expectedStopOrder},
+				trace,
+			)
+		})
+	}
 }
 
 func TestFxLifecycle(t *testing.T) {
@@ -230,6 +376,53 @@ func TestProvidersConstructInstances(t *testing.T) {
 		_, err := ProvideLoggingConfig()
 		require.Error(t, err)
 	})
+}
+
+// TestRunAppReusesEntrypointLoggerInGraph proves the fx graph consumes the
+// entrypoint logger instead of constructing another one from environment
+// configuration. With no APP_LOG_LEVEL, the infrastructure provider would fail
+// if the replacement incorrectly targeted only the concrete logger type.
+func TestRunAppReusesEntrypointLoggerInGraph(t *testing.T) {
+	type testCase struct {
+		name         string
+		logger       log.Logger
+		binary       string
+		version      string
+		work         func(context.Context) error
+		opts         []fx.Option
+		expectedCode int
+	}
+
+	testCases := []testCase{
+		{
+			name:    "entrypoint logger replaces the infrastructure provider",
+			logger:  logging.New(&testLogBuffer{}, logging.Config{Level: "trace"}),
+			binary:  "test-binary",
+			version: "v0",
+			work: func(context.Context) error {
+				return nil
+			},
+			opts: []fx.Option{
+				InfrastructureModule(),
+				fx.Invoke(func(log.Logger) {}),
+			},
+			expectedCode: 0,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("APP_FX_START_TIMEOUT", "30s")
+			t.Setenv("APP_FX_STOP_TIMEOUT", "30s")
+			t.Setenv("APP_LOG_LEVEL", "")
+			t.Setenv("APP_OBSERVABILITY__LOG_LEVEL", "")
+			t.Setenv("APP_ENV", "production")
+			t.Setenv("APP_LOG_FILE", t.TempDir()+"/app.log")
+
+			code := RunApp(tc.logger, tc.binary, tc.version, tc.work, tc.opts...)
+			assert.Equal(t, tc.expectedCode, code)
+		})
+	}
 }
 
 func TestRunAppLifecycle(t *testing.T) {

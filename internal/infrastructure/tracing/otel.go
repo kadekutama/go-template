@@ -19,14 +19,17 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	oteltrace "go.opentelemetry.io/otel/trace"
+
+	"github.com/kadekutama/go-template/internal/infrastructure/profiling"
 )
 
 // Provider is the bootstrapped tracing handle.
 type Provider struct {
-	tracerProvider *sdktrace.TracerProvider
-	exporting      bool
-	excludedRoutes map[string]struct{}
-	routesList     []string
+	tracerProvider    oteltrace.TracerProvider
+	sdkTracerProvider *sdktrace.TracerProvider
+	exporting         bool
+	excludedRoutes    map[string]struct{}
+	routesList        []string
 }
 
 // Tracer returns a kernel-port tracer backed by the SDK provider.
@@ -60,7 +63,11 @@ func (p *Provider) ExcludedRoutes() []string {
 
 // Shutdown flushes buffered spans with the caller's context.
 func (p *Provider) Shutdown(ctx context.Context) error {
-	return p.tracerProvider.Shutdown(ctx)
+	if p == nil || p.sdkTracerProvider == nil {
+		return nil
+	}
+
+	return p.sdkTracerProvider.Shutdown(ctx)
 }
 
 // Bootstrap builds the SDK provider per cfg. It sets the global OTel provider
@@ -102,7 +109,12 @@ func Bootstrap(cfg Config) (*Provider, error) {
 
 	tp := sdktrace.NewTracerProvider(opts...)
 
-	otel.SetTracerProvider(tp)
+	var tracerProvider oteltrace.TracerProvider = tp
+	if cfg.ProfilingEnabled {
+		tracerProvider = profiling.WrapTracerProvider(tp)
+	}
+
+	otel.SetTracerProvider(tracerProvider)
 	otel.SetTextMapPropagator(trace.Propagator())
 
 	routesMap := make(map[string]struct{}, len(cfg.ExcludedRoutes))
@@ -111,10 +123,11 @@ func Bootstrap(cfg Config) (*Provider, error) {
 	}
 
 	return &Provider{
-		tracerProvider: tp,
-		exporting:      exporting,
-		excludedRoutes: routesMap,
-		routesList:     append([]string(nil), cfg.ExcludedRoutes...),
+		tracerProvider:    tracerProvider,
+		sdkTracerProvider: tp,
+		exporting:         exporting,
+		excludedRoutes:    routesMap,
+		routesList:        append([]string(nil), cfg.ExcludedRoutes...),
 	}, nil
 }
 

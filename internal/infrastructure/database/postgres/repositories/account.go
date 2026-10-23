@@ -8,6 +8,8 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/samber/lo"
+
 	"github.com/kadekutama/go-template/internal/domain/entity"
 	"github.com/kadekutama/go-template/internal/domain/repository"
 	"github.com/kadekutama/go-template/internal/domain/valueobject"
@@ -136,10 +138,7 @@ func (r *AccountRepository) FindByTenant(
 		rows = rows[:limit]
 	}
 
-	out := make([]entity.AccountData, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, accountToEntity(row))
-	}
+	out := lo.Map(rows, func(row models.AccountModel, _ int) entity.AccountData { return accountToEntity(row) })
 
 	return out, next, nil
 }

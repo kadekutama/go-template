@@ -20,6 +20,10 @@ type Config struct {
 	SampleRatio float64
 	// ExcludedRoutes defines routes that must never be traced (e.g., health probes). Required.
 	ExcludedRoutes []string
+	// ProfilingEnabled wraps the SDK provider with the Pyroscope/OTel bridge so
+	// sampled root spans carry pyroscope.profile.id (ADR-027). Disabled keeps
+	// the plain SDK provider.
+	ProfilingEnabled bool
 }
 
 // Validate ensures all required configuration values are present and well-formed.

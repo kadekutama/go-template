@@ -1,6 +1,6 @@
 # Go Clean Architecture Template
 
-[![Go Version](https://img.shields.io/badge/Go-1.27.1-00ADD8?logo=go)](https://go.dev/)
+[![Go Version](https://img.shields.io/badge/Go-1.27.3-00ADD8?logo=go)](https://go.dev/)
 [![Architecture](https://img.shields.io/badge/Architecture-Clean%20%2B%20DDD%20%2B%20SDD-blue)](SPEC.md)
 
 A planning-stage, AI-friendly specification for a Go template implementing
@@ -77,18 +77,18 @@ make test-all
 
 These are reproducible target pins, not a blanket “latest” claim. E00/E01
 resolve and verify them in `go.mod` and the container manifests; automated
-dependency updates must keep the files and evidence synchronized. Go 1.27.1 is
+dependency updates must keep the files and evidence synchronized. Go 1.27.3 is
 the current stable patch baseline for this audit date.
 
 | Category | Technology |
 |----------|------------|
-| **Language** | Go 1.27.1 |
+| **Language** | Go 1.27.3 |
 | **DI** | fx (Uber) v1.24.0 |
 | **HTTP** | Echo v5.3.1 |
 | **gRPC** | grpc-go v1.66.0 |
 | **GraphQL** | gqlgen v0.17.94 |
 | **Database & Sharding** | PostgreSQL 18.x + Citus 14.0 + GORM v1.31.2 |
-| **Database Migrations & Safety** | Pressly Goose v3.28.0 (runtime) + Ariga Atlas v1.3.0 (CI linter) (ADR-018) |
+| **Database Migrations & Safety** | Pressly Goose v3.29.0 (runtime) + Ariga Atlas v1.3.0 (CI linter) (ADR-018) |
 | **High Availability** | Patroni v4.1.5 (Bare-metal/VM) / CloudNativePG v1.30.0 (K8s) |
 | **Distributed Coordination**| etcd v3.7.0 (3-node Raft DCS & config streaming) |
 | **Cache** | Otter v2.3.0 (L1 W-TinyLFU) + Valkey 9.1.2 Cluster (L2) |

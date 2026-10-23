@@ -187,9 +187,13 @@ decisions; they never override them.
 
 - Read `docs/architecture/clean-architecture-guide.md` and
   `docs/development/go-conventions.md` for the affected layer before editing.
-- Verify dependency direction: domain remains stdlib-only; application depends
-  inward on domain/consumer-owned ports; infrastructure implements ports; the
-  composition root selects concrete adapters. Do not move business rules into
+- Verify dependency direction: domain imports only the standard library and
+  pure, stateless root collection combinators from `github.com/samber/lo`
+  (`v1.53.0`, ADR-026; never `lo/parallel`, `lo/mutable`, `lo.Attempt*`,
+  `lo.Async*`, or `lo.Must*`); application depends inward on
+  domain/consumer-owned ports; infrastructure implements ports; the composition
+  root selects concrete adapters and verifies `fx.Module` graphs with
+  `fx.ValidateApp` / `fxtest` (ADR-026). Do not move business rules into
   transport or infrastructure code.
 - Application/infrastructure services encapsulate dependencies in private
   fields and use the repository's `*Params` + `New*Service` pattern. Define
@@ -199,18 +203,21 @@ decisions; they never override them.
   ABI guidance and semantic overrides (mutation, locks/atomics, and service
   identity); do not copy synchronization primitives.
 - Prefer focused functions, descriptive names, ordinary Go error wrapping with
-  `%w`, standard-library facilities, and existing validation/DI conventions.
-  Avoid duplicate branches, speculative abstractions, and new dependencies
-  without a requirement and evidence.
+  `%w`, standard-library facilities (`slices`, `maps`, `cmp`), pure `samber/lo`
+  keyed/grouping combinators where appropriate (keeping hot-path `int64`
+  minor-unit financial loops as explicit `for` loops), and existing
+  validation/DI conventions. Avoid duplicate branches, speculative abstractions,
+  and new dependencies without a requirement and evidence.
 - Before handoff, perform a concrete layer/dependency and duplication review. If
   a design tradeoff is ambiguous or conflicts with the packet, stop and resolve
   it instead of citing “SOLID” generically.
 
 ### Modernization diagnostics
 
-- Run `make lint` with the complete golangci-lint `modernize` suite and gopls
-  Hint-level diagnostics enabled. Do not disable analyzers or filter findings to
-  make a check pass.
+- Run `make lint` with the complete golangci-lint `modernize`, `depguard`, and
+  `forbidigo` suites and gopls Hint-level diagnostics enabled, plus
+  `make nilaway` (`uber-go/nilaway` inter-procedural nil-safety analysis,
+  ADR-026). Do not disable analyzers or filter findings to make a check pass.
 - Apply behavior-preserving modernization fixes only within the active packet's
   change surface. Record and coordinate findings owned by another task without
   editing those files.

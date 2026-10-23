@@ -3,6 +3,7 @@ package testcontainers_test
 import (
 	"testing"
 
+	natsgo "github.com/nats-io/nats.go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -38,6 +39,10 @@ func TestHarnessSmoke(t *testing.T) {
 			nc, err := testcontainers.StartNATS(t)
 			require.NoError(t, err)
 			assert.NotEmpty(t, nc.URL())
+
+			conn, err := natsgo.Connect(nc.URL())
+			require.NoError(t, err)
+			conn.Close()
 		})
 	}
 }

@@ -103,7 +103,16 @@ func RunApp(logger log.Logger, binary, version string, work func(context.Context
 		return 1
 	}
 
-	app := fx.New(append(opts, FxLogger(logger), fx.StartTimeout(startTimeout), fx.StopTimeout(stopTimeout))...)
+	// Reuse the entrypoint logger in the graph. The fx.As annotation is
+	// required: fx.Replace(logger) would target the concrete zerolog type and
+	// leave the log.Logger provider active, opening a second writer (and, in
+	// file mode, a second rotator) for the same process.
+	app := fx.New(append(opts,
+		fx.Replace(fx.Annotate(logger, fx.As(new(log.Logger)))),
+		FxLogger(logger),
+		fx.StartTimeout(startTimeout),
+		fx.StopTimeout(stopTimeout),
+	)...)
 
 	if err := app.Start(ctx); err != nil {
 		logger.Error(ctx, "app failed to start", append(fields, log.Err(err))...)

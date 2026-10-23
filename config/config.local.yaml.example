@@ -63,6 +63,12 @@ nats:
   url: nats://127.0.0.1:4222
 observability:
   log_level: debug
+  log_output: stdout
+  log_file: ""
+  log_max_size_mb: 100
+  log_max_backups: 7
+  log_max_age_days: 30
+  log_compress: true
   otlp_endpoint: ""
   sample_ratio: 1.0
   # Routes never traced (health probes). Required; blank entries rejected.

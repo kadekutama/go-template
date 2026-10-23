@@ -64,10 +64,10 @@ The following are responsibility areas for assigning work across people or
 harnesses; they are not a list of selectable OpenCode profile files.
 
 ### 1. Domain Expertise
-- **Focus**: `internal/domain/` - Pure domain logic, no external dependencies
+- **Focus**: `internal/domain/` - Pure domain logic, zero I/O
 - **Tasks**: Entities, Value Objects, Aggregates, Domain Events, domain Specifications, Domain Services
 - **Rules**: 
-  - Zero external dependencies (stdlib only)
+  - Zero I/O and zero external dependencies except pure, stateless, generic collection combinators from the root `github.com/samber/lo` (`v1.53.0`) package per [ADR-026](docs/architecture/ADR-026-samber-lo-pure-collection-helpers.md) (`lo/parallel`, `lo/mutable`, `lo.Attempt*`, `lo.Async*`, and `lo.Must*` are banned)
   - All business rules as executable Specifications
   - Domain Events record facts; application handlers dispatch side effects
   - Aggregate roots enforce invariants
@@ -126,32 +126,35 @@ The audit and open risks are recorded in `docs/repository-audit.md`.
 
 - Domain Expert: E02–E05
 - API Designer: E06 and E11–E14
-- Database Engineer: E07–E10
+- Database & Platform Engineer: E07–E10 (including E09.1 and E09.2)
 - DevOps Engineer: E00–E01, E15, E17, E19
 - Test Engineer: E16 and verification support in every epic
 - E18 documentation is cross-functional; the coordinating agent owns the index
   and each specialist owns docs/ADRs for its changes.
 
 ### Code Standards
-- **Go Version**: 1.27.2 (owner ruled latest-Go on 2026-10-13; pin in `go.mod` and CI)
+- **Go Version**: 1.27.3 (owner ruled latest-Go on 2026-10-13; pin in `go.mod` and CI)
 - **Linting**: `golangci-lint` strict mode (`.golangci.yml`); keep the complete
   `modernize` suite enabled. `make lint` also requests Hint-level diagnostics
   from `gopls`, including modernization suggestions; do not disable analyzers to
   silence findings.
+- **Static Nil Safety (`nilaway`)**: `go.uber.org/nilaway` (`@latest`, [ADR-026](docs/architecture/ADR-026-samber-lo-pure-collection-helpers.md)) runs via `make lint`/`make nilaway` across `./internal/... ./pkg/... ./cmd/...`. Never return `(nil, nil)` on pointer-returning contracts; return a typed domain/application error instead.
 - **Formatting**: `gofmt` / `goimports`
 - **Dependencies**: Reproducible target pins in `SPEC.md`; verify/update through Renovate/Dependabot and evidence
 - **Go idioms**: Follow [`docs/development/go-conventions.md`](docs/development/go-conventions.md); structured logging uses `rs/zerolog` (ADR-012)
+- **Pure Collection Combinators (`samber/lo`)**: Import `github.com/samber/lo` (`v1.53.0`, [ADR-026](docs/architecture/ADR-026-samber-lo-pure-collection-helpers.md)) for pure keyed indexing (`lo.KeyBy`), grouping (`lo.GroupBy`), partitioning (`lo.PartitionBy`), key deduplication (`lo.UniqBy`), and infallible DTO slice mapping (`lo.Map`, `lo.Filter`, `lo.FilterMap`). Prefer Go 1.27 `slices`/`maps`/`cmp` when a direct stdlib function exists (`slices.Contains`, `slices.SortFunc`, `cmp.Or`). Keep hot-path `int64` minor-unit financial loops and error-returning loops as explicit `for` statements. Never import `github.com/samber/lo/parallel` or `github.com/samber/lo/mutable`, and never call `lo.Attempt*`, `lo.Async*`, or `lo.Must*` in production code.
 - **JSON**: import the repository's `pkg/jsonparser` wrapper; it is
   encoding/json-compatible and may use Sonic only when benchmark evidence
   justifies it (never import jsoniter or a codec directly from domain code)
 - **Cache**: Valkey 9.1.2 (OSS fork of Redis) instead of Redis
+- **Continuous Profiling & Diagnostics**: `internal/infrastructure/profiling/` integrates `github.com/grafana/pyroscope-go` (`v1.4.3`) and `github.com/grafana/otel-profiling-go` (`v0.7.0`) with `grafana/pyroscope:2.4.0` ([ADR-027](docs/architecture/ADR-027-continuous-profiling-pyroscope-pprof.md)). On-demand `net/http/pprof` endpoints must bind strictly to loopback (`127.0.0.1:6060`) and never mount on public Echo/Traefik routers. Offline profile analysis and Go 1.27 PGO use `github.com/google/pprof` (`v0.0.0-20261014150452-c3b4e57cab2c`) + `graphviz`.
 - **SMTP Testing**: maildev instead of MailHog
 
 ### Architecture Compliance
 - **Dependency Direction**: Interface → Application → Domain ← Infrastructure
 - **No circular imports** between layers
-- **Domain layer**: Zero external imports
-- **fx Modules**: Each layer registers its own fx.Option
+- **Domain layer**: Zero I/O and zero external imports except pure, stateless root combinators from `github.com/samber/lo` (`v1.53.0`, [ADR-026](docs/architecture/ADR-026-samber-lo-pure-collection-helpers.md))
+- **fx Modules**: Each layer registers its own `fx.Option` (`go.uber.org/fx` `v1.24.0`), verified in unit tests via `fx.ValidateApp` and `go.uber.org/fx/fxtest` ([ADR-026](docs/architecture/ADR-026-samber-lo-pure-collection-helpers.md))
 - **Service Encapsulation**: Application and infrastructure services must encapsulate dependencies in private fields and use the Parameter Object Pattern (`*Params` + `New*Service`).
 - **Struct Receivers**: Follow quantitative 64-byte / register ABI metric in [`docs/development/go-conventions.md`](docs/development/go-conventions.md).
 
@@ -444,20 +447,20 @@ No task claim may be released (`Status: released`) and no work may be considered
      ```
      This script automatically:
      1. Checks and installs `pixi` (`https://pixi.sh/install.sh`) if absent.
-     2. Installs core toolchains via Pixi (`go`, `clang`, `clangxx`, `make`, `shellcheck`, `docker-cli`, `docker-compose`, `kubernetes-client`, `k6`, `syft`, `atlasgo`).
+     2. Installs core toolchains via Pixi (`go`, `clang`, `clangxx`, `make`, `shellcheck`, `docker-cli`, `docker-compose`, `kubernetes-client`, `k6`, `syft`, `atlasgo`, `graphviz`).
      3. Configures CGO persistently (`go env -w CGO_ENABLED=1 CC=clang`).
      4. Downloads and verifies Go modules (`go mod download && go mod verify`).
-     5. Installs Go developer tools (`goimports`, `golangci-lint` v2.13.2, `govulncheck`, `gosec`, `go-licenses`, `mockery`, `buf`, `oapi-codegen`, `air`, `goose`) and links them into `~/.pixi/bin`.
+     5. Installs Go developer tools (`goimports`, `golangci-lint` v2.13.2, `nilaway` via `@latest`, `pprof` v0.0.0-20261014150452-c3b4e57cab2c, `govulncheck`, `gosec`, `go-licenses`, `mockery`, `buf`, `oapi-codegen`, `air`, `goose`) and links them into `~/.pixi/bin`.
 2. **Formatting**:
    - Run `gofmt -s -w .` and `goimports -l -w .`.
-3. **Strict Linting**:
-   - Run `make lint` (executes `gopls check -severity=hint`, `golangci-lint run ./...` with the complete configured analyzer set including `modernize`, and `shellcheck`). Do not disable analyzers to silence findings; fix those in the active change surface and report findings owned by other tasks.
+3. **Strict Linting & Inter-Procedural Nil Analysis**:
+   - Run `make lint` (executes `gopls check -severity=hint`, `golangci-lint run ./...` with the complete configured analyzer set including `modernize`, `depguard`, and `forbidigo`, `shellcheck`, and `nilaway`). Do not disable analyzers to silence findings; fix those in the active change surface and report findings owned by other tasks.
    - Must exit with **0 issues**.
 4. **Race-Detector Test Suite**:
    - Run `go test -v -race ./...` (or `make test-race`).
    - Must pass with **zero data races**.
 5. **Gate Check**:
-   - Run `./tasks/scripts/gate-check.sh <GATE>` (e.g., `G2` for domain layer).
+   - Run `./tasks/scripts/gate-check.sh <GATE>` (e.g., `G2` for domain layer, `G4` for adapters/DX).
    - Statement coverage must meet or exceed the gate threshold (Domain >= 90%).
 6. **SDD Specification Validation**:
    - Run `python3 tasks/scripts/check-tasks.py --format --graph --sdd --specs --events --codes`.
@@ -477,7 +480,7 @@ No task claim may be released (`Status: released`) and no work may be considered
 - CI must pass before merge
 
 ## Phase Tracking
-Current Phase: **Phase 2 Complete / Phase 3 Start** (E00, E01, E02 completed; next: `tasks/epics/E03-money-movement.md`, `tasks/epics/E04-compliance.md`, `tasks/epics/E05-tenancy.md`)
+Current Phase: **Phase 5.3** (E00–E09.2 completed; [`tasks/epics/E09.3-logging-dependency-maintenance.md`](tasks/epics/E09.3-logging-dependency-maintenance.md) `E09.3-T01` in progress; `E10-T01` remains in progress under its existing claim)
 
 Agents should:
 1. Follow `tasks/SDD.md` and select one dependency-ready task (`python3 tasks/scripts/check-tasks.py --ready`).

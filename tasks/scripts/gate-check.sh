@@ -63,7 +63,17 @@ case "${GATE}" in
         fi
         python3 "${TASK_CHECK}" --specs --events || { echo "FAIL: domain documentation traceability failed"; exit 1; }
         MODULE=$(go list -m)
-        if go list -deps ./internal/domain/... | grep -v "^${MODULE}" | grep -q '^github.com/\|^go.uber.org/\|^golang.org/'; then
+        # ADR-026 permits only the pure stateless generic collection
+        # combinators of the github.com/samber/lo root package as DIRECT
+        # domain imports; every other external import stays forbidden,
+        # including lo/mutable (in-place mutation of shared backing arrays)
+        # and lo/parallel. Direct imports are checked so that lo's own
+        # transitive dependencies (golang.org/x/text) are not mistaken for
+        # domain imports, while a direct x/text import still fails.
+        if go list -f '{{range .Imports}}{{println .}}{{end}}' ./internal/domain/... \
+            | grep -v "^${MODULE}" \
+            | grep -v '^github.com/samber/lo$' \
+            | grep -q '^github.com/\|^go.uber.org/\|^golang.org/'; then
             echo "FAIL: domain imports external modules"
             exit 1
         fi

@@ -8,6 +8,8 @@ package redpanda
 import (
 	"fmt"
 	"strings"
+
+	"github.com/samber/lo"
 )
 
 // TopicsConfig carries the configurable durable-topic names and topology.
@@ -102,19 +104,15 @@ func NewTopicRegistry(cfg TopicsConfig) (*TopicRegistry, error) {
 
 // Registry returns the durable topic specs with per-group DLQ names.
 func (r *TopicRegistry) Registry() []TopicSpec {
-	specs := make([]TopicSpec, 0, len(r.names))
-
-	for _, name := range r.names {
-		specs = append(specs, TopicSpec{
+	return lo.Map(r.names, func(name string, _ int) TopicSpec {
+		return TopicSpec{
 			Name:          name,
 			Partitions:    r.cfg.Partitions,
 			RetentionHrs:  r.cfg.RetentionHrs,
 			PartitionKeys: r.cfg.PartitionKeys,
 			DLQ:           name + r.cfg.DLQSuffix,
-		})
-	}
-
-	return specs
+		}
+	})
 }
 
 // AllTopics returns a copy of every durable topic in delivery order.

@@ -155,12 +155,13 @@ func (c APIKeyConfig) HasherParams() (apikey.HasherParams, error) {
 // else comes from config. Validation failures name the offending field.
 func (c Config) Tracing(serviceVersion string) (tracing.Config, error) {
 	cfg := tracing.Config{
-		ServiceName:    c.App.Name,
-		ServiceVersion: serviceVersion,
-		Env:            c.App.Env,
-		OTLPEndpoint:   c.Observability.OTLPEndpoint,
-		SampleRatio:    c.Observability.SampleRatio,
-		ExcludedRoutes: append([]string(nil), c.Observability.ExcludedRoutes...),
+		ServiceName:      c.App.Name,
+		ServiceVersion:   serviceVersion,
+		Env:              c.App.Env,
+		OTLPEndpoint:     c.Observability.OTLPEndpoint,
+		SampleRatio:      c.Observability.SampleRatio,
+		ExcludedRoutes:   append([]string(nil), c.Observability.ExcludedRoutes...),
+		ProfilingEnabled: c.Observability.Profiling.Enabled,
 	}
 	if err := cfg.Validate(); err != nil {
 		return tracing.Config{}, err

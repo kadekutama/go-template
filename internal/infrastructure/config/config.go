@@ -7,7 +7,12 @@
 // produced by splitting on __; a single _ stays literal.
 package config
 
-import "time"
+import (
+	"maps"
+	"time"
+
+	"github.com/kadekutama/go-template/internal/infrastructure/profiling"
+)
 
 // Config is the single validated configuration contract for every binary.
 // Sections marked `validate:"required"` must be present; scalar fields carry
@@ -135,10 +140,55 @@ type NATSConfig struct {
 
 // ObservabilityConfig tunes tracing/metrics endpoints (E15 owns the pipeline).
 type ObservabilityConfig struct {
-	LogLevel       string   `koanf:"log_level"       validate:"required,oneof=debug info warn error"`
-	OTLPEndpoint   string   `koanf:"otlp_endpoint"   validate:"omitempty,url"`
-	SampleRatio    float64  `koanf:"sample_ratio"    validate:"gt=0,lte=1"`
-	ExcludedRoutes []string `koanf:"excluded_routes" validate:"required,min=1,dive,required"`
+	LogLevel       string          `koanf:"log_level"        validate:"required,oneof=debug info warn error"`
+	LogOutput      string          `koanf:"log_output"       validate:"omitempty,oneof=stdout file both"`
+	LogFile        string          `koanf:"log_file"         validate:"omitempty"`
+	LogMaxSizeMB   int             `koanf:"log_max_size_mb"  validate:"omitempty,min=1"`
+	LogMaxBackups  int             `koanf:"log_max_backups"  validate:"omitempty,min=0"`
+	LogMaxAgeDays  int             `koanf:"log_max_age_days" validate:"omitempty,min=0"`
+	LogCompress    bool            `koanf:"log_compress"`
+	OTLPEndpoint   string          `koanf:"otlp_endpoint"    validate:"omitempty,url"`
+	SampleRatio    float64         `koanf:"sample_ratio"     validate:"gt=0,lte=1"`
+	ExcludedRoutes []string        `koanf:"excluded_routes"  validate:"required,min=1,dive,required"`
+	Profiling      ProfilingConfig `koanf:"profiling"`
+}
+
+// ProfilingConfig is the validated observability.profiling section. It maps
+// onto the profiling adapter's constructor contract; profiling is disabled by
+// default and no runtime sampling starts until explicitly enabled.
+type ProfilingConfig struct {
+	Enabled              bool              `json:"enabled"                koanf:"enabled"`
+	ServerAddress        string            `json:"server_address"         koanf:"server_address"         validate:"required_if=Enabled true,omitempty,url"`
+	ApplicationName      string            `json:"application_name"       koanf:"application_name"       validate:"required_if=Enabled true"`
+	Environment          string            `json:"environment"            koanf:"environment"`
+	UploadRate           time.Duration     `json:"upload_rate"            koanf:"upload_rate"            validate:"min=0"`
+	MutexProfileFraction int               `json:"mutex_profile_fraction" koanf:"mutex_profile_fraction" validate:"min=0"`
+	BlockProfileRate     int               `json:"block_profile_rate"     koanf:"block_profile_rate"     validate:"min=0"`
+	DisableGCRuns        bool              `json:"disable_gc_runs"        koanf:"disable_gc_runs"`
+	Tags                 map[string]string `json:"tags"                   koanf:"tags"`
+}
+
+// Profiling maps the validated app section onto the profiling adapter's
+// Parameter Object. The adapter re-validates the result, so direct callers get
+// the same tag policy and bounds as the YAML loader.
+func (c ProfilingConfig) Profiling() (profiling.Config, error) {
+	cfg := profiling.Config{
+		Enabled:              c.Enabled,
+		ServerAddress:        c.ServerAddress,
+		ApplicationName:      c.ApplicationName,
+		Environment:          c.Environment,
+		UploadRate:           c.UploadRate,
+		MutexProfileFraction: c.MutexProfileFraction,
+		BlockProfileRate:     c.BlockProfileRate,
+		DisableGCRuns:        c.DisableGCRuns,
+		Tags:                 maps.Clone(c.Tags),
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return profiling.Config{}, err
+	}
+
+	return cfg, nil
 }
 
 // FeatureFlagConfig points at Unleash (E10 owns the provider).

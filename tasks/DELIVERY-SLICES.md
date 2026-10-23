@@ -43,12 +43,16 @@ Valkey/NATS/provider credentials. This interface is local/test-only until S2.
 E07-T10/T02, core E08 Otter L1 + Valkey L2 cache policy and Redpanda/NATS messaging,
 E09 OpenBao secrets/Transit encryption/authentication/authorization/API keys,
 then E09.1 scheduler v2, secured read-only admin UI, distributed provider egress
-limits, and local single-flight; E10 integrations (including E10-T01) follow the
-E09.1 task DAG, then E11-T15.
+limits, and local single-flight; then E09.2 (`samber/lo v1.53.0` pure collection helpers,
+`fx.ValidateApp` + `fxtest.New` module standardization, `uber-go/nilaway` static nil-safety,
+and `grafana/pyroscope-go` + `otel-profiling-go` continuous profiling adapter);
+E10 integrations (`E10-T01` followed by `E10-T02`…`E10-T06` after `E09.2-T04`) follow the
+task DAG, then E11-T15.
 
 **Exit:** RLS and application authorization fail closed across tenants; Citus
 distributed tables partition cleanly by `tenant_id`; secrets and dynamic DB
-credentials are managed by OpenBao; public middleware and transport controls pass.
+credentials are managed by OpenBao; `samber/lo`, `fxtest`, `nilaway`, and `pyroscope-go`
+guardrails pass; public middleware and transport controls pass.
 Only then may S1 endpoints be exposed outside the trusted test environment.
 
 ## S3 — Capture, Settlement, Refund, and Payout
@@ -79,8 +83,9 @@ proven against the S3 postings.
 ## S5 — Extended Product and Scale
 
 **Focus:** FX after ADR-007, disputes, platform splits, reserves, top-ups,
-GraphQL/gRPC parity, replicas/residency, performance, chaos, delivery, and release
-hardening. P2 white-label/search/reporting features must not delay S1–S4.
+GraphQL/gRPC parity, replicas/residency, Pyroscope LGTMP stack + loopback `pprof`
+diagnostics (`E15-T07`), performance, chaos, delivery, and release
+hardening including `google/pprof` flamegraphs and Go 1.27 PGO (`E19-T05`). P2 white-label/search/reporting features must not delay S1–S4.
 
 **Exit:** Gates G5–G8 pass with workload/topology evidence. Availability,
 performance, recovery, and compliance remain targets until their evidence files

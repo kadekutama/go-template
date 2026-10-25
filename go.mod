@@ -7,7 +7,7 @@ require (
 	github.com/Unleash/unleash-go-sdk/v6 v6.5.1
 	github.com/bytedance/sonic v1.15.4
 	github.com/casbin/casbin/v3 v3.11.0
-	github.com/go-co-op/gocron-ui v0.3.0
+	github.com/go-co-op/gocron-ui v0.4.0
 	github.com/go-co-op/gocron/v2 v2.22.0
 	github.com/go-playground/validator/v10 v10.30.5
 	github.com/go-viper/mapstructure/v2 v2.5.0

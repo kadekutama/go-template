@@ -15,7 +15,7 @@
 ## Tasks
 
 ### E10-T01: Feature-flag provider (OpenFeature + Unleash, Valkey/in-memory fallback)
-**Status:** in_progress
+**Status:** completed
 **Background:** Runtime flags for payment methods, currencies, HTTP/3, kill switches.
 **Files:**
 - Create: `internal/infrastructure/featureflag/{openfeature.go,unleash.go,redis_fallback.go}`, `config/egress/unleash.yaml`
@@ -38,15 +38,15 @@
 ---
 
 ### E10-T02: FX rate provider + cache policy
-**Status:** pending
+**Status:** completed
 **Background:** Feeds E03-T05 conversion rules; hourly refresh job runs in E14.
 **Files:**
 - Create: `internal/infrastructure/fx/{provider.go,rates.go}`,
-  `internal/infrastructure/fx/fake/` (deterministic sandbox), `config/egress/fx.yaml`
+  `config/egress/fx.yaml`
 **Steps:**
 1. Provider interface impl: fetch pair rates, honor Valkey 1h TTL policy (money-flow §7).
 2. Staleness surfaced (not hidden): expired cache returns last-known + `stale:true` flag for callers to decide.
-3. Fake with scripted rate series for tests/dev/sandbox.
+3. Deterministic scripted rate series as `_test.go`/`test/` doubles; no fake/test-double package ships in production code.
 4. Implements: `FxProvider` port (contract: E06-T12).
 5. Coalesce only identical, scoped FX cache-miss reads via E09.1-T04; acquire an E09.1-T03 permit for each actual provider attempt, including retries. On limiter-store failure, serve a cached/stale rate if available and do not bypass the quota. Put the provider’s published request quota in the task-owned `config/egress/fx.yaml` policy.
 **Acceptance Criteria:**

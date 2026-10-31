@@ -32,6 +32,7 @@ type Config struct {
 	Secrets       SecretsConfig       `koanf:"secrets"`
 	Coordination  CoordinationConfig  `koanf:"coordination"  validate:"required"`
 	Tenancy       TenancyConfig       `koanf:"tenancy"       validate:"required"`
+	FX            FXConfig            `koanf:"fx"            validate:"required"`
 }
 
 // AppConfig identifies the deployment.
@@ -200,6 +201,23 @@ type FeatureFlagConfig struct {
 // any {{ secret:… }} value fails closed in the E01-T03 loader).
 type SecretsConfig struct {
 	Provider string `koanf:"provider" validate:"omitempty,oneof=openbao bitwarden env"`
+}
+
+// FXConfig pins the FX rate provider adapter (E10-T02). APIKeyEnv names the
+// environment variable holding the provider credential; the value itself is
+// never stored in Config, YAML, or logs. Every runtime adapter setting lives
+// here so no Go constant shadows an operator-owned value.
+type FXConfig struct {
+	BaseURL           string `koanf:"base_url"            validate:"required,url"`
+	APIKeyEnv         string `koanf:"api_key_env"         validate:"required"`
+	Source            string `koanf:"source"              validate:"required,min=1,max=64"`
+	LivePath          string `koanf:"live_path"           validate:"required,startswith=/"`
+	FetchTimeoutSec   int    `koanf:"fetch_timeout_sec"   validate:"required,min=1"`
+	MaxResponseBytes  int64  `koanf:"max_response_bytes"  validate:"required,min=1"`
+	MaxFutureSkewSec  int    `koanf:"max_future_skew_sec" validate:"min=0"`
+	MaxDecimalLen     int    `koanf:"max_decimal_len"     validate:"required,min=1"`
+	StaleRetentionSec int    `koanf:"stale_retention_sec" validate:"required,min=1"`
+	MaxQuoteAgeSec    int    `koanf:"max_quote_age_sec"   validate:"required,min=1"`
 }
 
 // CoordinationConfig points at the etcd coordination plane.

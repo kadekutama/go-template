@@ -1,0 +1,13 @@
+# FX rate provider egress quota (E10-T02).
+#
+# exchangerate.host free plan: 100 requests per month. The adapter makes one
+# request per actual HTTP attempt (retries included) and never bypasses this
+# policy. Production MUST raise `budget` (and choose a matching window) for the
+# purchased plan before enabling FX traffic; this file is deliberately
+# conservative so the default deployment can never exceed the free tier.
+policies:
+  - provider: fx
+    operation: rates
+    budget: 100
+    window: 720h
+    max_wait: 5s

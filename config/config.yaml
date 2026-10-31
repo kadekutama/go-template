@@ -30,6 +30,19 @@ cache:
     idempotency_hint_sec: 86400
     rate_limit_sec: 60
     l1_populate_sec: 60
+fx:
+  # Exchangerate.host-compatible adapter (E10-T02). The key is an environment
+  # variable NAME; the secret value is never written to this file.
+  base_url: "https://api.exchangerate.host"
+  api_key_env: "FX_API_KEY"
+  source: "exchangerate.host"
+  live_path: "/live"
+  fetch_timeout_sec: 5
+  max_response_bytes: 1048576
+  max_future_skew_sec: 300
+  max_decimal_len: 40
+  stale_retention_sec: 86400
+  max_quote_age_sec: 172800
 redpanda:
   brokers:
     - 127.0.0.1:9092

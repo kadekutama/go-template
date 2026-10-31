@@ -197,6 +197,84 @@ func TestUnmarshal(t *testing.T) {
 	}
 }
 
+// numberPayload mirrors an FX quote map: Number must accept a bare JSON number
+// and a numeric string, preserve the literal spelling, and never round-trip
+// through a float.
+type numberPayload struct {
+	Quotes map[string]Number `json:"quotes"`
+}
+
+func TestNumberDecodesNumberAndNumericString(t *testing.T) {
+	t.Parallel()
+
+	type testCase struct {
+		name           string
+		data           []byte
+		expectedQuotes map[string]Number
+		expectedError  error
+	}
+
+	testCases := []testCase{
+		{
+			name:           "bare number preserves literal",
+			data:           []byte(`{"quotes":{"USDEUR":0.92}}`),
+			expectedQuotes: map[string]Number{"USDEUR": "0.92"},
+			expectedError:  nil,
+		},
+		{
+			name:           "numeric string preserves literal",
+			data:           []byte(`{"quotes":{"USDEUR":"0.92"}}`),
+			expectedQuotes: map[string]Number{"USDEUR": "0.92"},
+			expectedError:  nil,
+		},
+		{
+			name:           "exponent and trailing zeros are preserved",
+			data:           []byte(`{"quotes":{"A":1e-3,"B":1.2300}}`),
+			expectedQuotes: map[string]Number{"A": "1e-3", "B": "1.2300"},
+			expectedError:  nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			var payload numberPayload
+
+			err := Unmarshal(tc.data, &payload)
+			assert.Equal(t, tc.expectedQuotes, payload.Quotes)
+			assert.Equal(t, tc.expectedError, err)
+		})
+	}
+}
+
+func TestNumberRejectsNonNumericString(t *testing.T) {
+	t.Parallel()
+
+	type testCase struct {
+		name string
+		data []byte
+	}
+
+	testCases := []testCase{
+		{
+			name: "non-numeric string rejected at decode",
+			data: []byte(`{"quotes":{"USDEUR":"abc"}}`),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			var payload numberPayload
+
+			err := Unmarshal(tc.data, &payload)
+			assert.Error(t, err)
+		})
+	}
+}
+
 func BenchmarkMarshal(b *testing.B) {
 	in := moneyShape{AccountID: "acc_bench", AmountMinor: 123456, AssetCode: "USD"}
 

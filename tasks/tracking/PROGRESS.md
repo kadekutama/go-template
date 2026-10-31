@@ -1,6 +1,6 @@
 # Progress Dashboard (single source of truth for progress)
 
-**Last updated:** 2026-10-23
+**Last updated:** 2026-10-28
 **How to update:** flip task `**Status:**` in the epic file, then tick the box here.
 Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 
@@ -22,7 +22,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | E09.1 | Scheduler + egress resilience (gocron v2, secure read-only UI, egress limiter, single-flight, casbin v3) | 20 | 20/20 | completed | G4 |
 | E09.2 | DX, static safety, DI validation & continuous profiling (samber/lo, fxtest, nilaway, pyroscope-go) | 16 | 16/16 | completed | G4 |
 | E09.3 | Log delivery, dependency & test-harness maintenance (Go 1.27.3, rotating file logs, NATS readiness) | 7 | 7/7 | completed | G4 |
-| E10 | Platform integrations | 17 | 0/17 | in_progress | G4 |
+| E10 | Platform integrations | 17 | 6/17 | in_progress | G4 |
 | E11 | REST API | 43 | 0/43 | pending | G5 |
 | E12 | gRPC API | 16 | 0/16 | pending | G5 |
 | E13 | GraphQL API | 18 | 0/18 | pending | G5 |
@@ -33,7 +33,7 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 | E18 | Docs + DX | 32 | 11/32 | in_progress | G8 |
 | E19 | Hardening + release | 16 | 0/16 | pending | G8 |
 
-**Total:** 319/530 SP completed.
+**Total:** 334/530 SP completed.
 
 ## Task checklists (tick as epic files flip to completed)
 
@@ -169,8 +169,8 @@ Run `python3 tasks/scripts/check-tasks.py` to verify consistency.
 - [x] E09.3-T02 NATS testcontainer host-connect readiness
 
 ### E10 — Integrations
-- [ ] E10-T01 feature flags
-- [ ] E10-T02 FX provider
+- [x] E10-T01 feature flags
+- [x] E10-T02 FX provider
 - [ ] E10-T03 payment processor + sandbox
 - [ ] E10-T04 statement parsers
 - [ ] E10-T05 SMTP/maildev

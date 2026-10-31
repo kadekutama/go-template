@@ -15,7 +15,8 @@
     "redpanda",
     "webhook",
     "coordination",
-    "tenancy"
+    "tenancy",
+    "fx"
   ],
   "properties": {
     "app": {
@@ -339,6 +340,64 @@
       "properties": {
         "unleash_url": {
           "type": "string"
+        }
+      }
+    },
+    "fx": {
+      "type": "object",
+      "required": [
+        "base_url",
+        "api_key_env",
+        "source",
+        "live_path",
+        "fetch_timeout_sec",
+        "max_response_bytes",
+        "max_future_skew_sec",
+        "max_decimal_len",
+        "stale_retention_sec",
+        "max_quote_age_sec"
+      ],
+      "properties": {
+        "base_url": {
+          "type": "string",
+          "minLength": 1
+        },
+        "api_key_env": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "live_path": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "fetch_timeout_sec": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_response_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_future_skew_sec": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_decimal_len": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "stale_retention_sec": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_quote_age_sec": {
+          "type": "integer",
+          "minimum": 1
         }
       }
     },

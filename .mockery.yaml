@@ -1,9 +1,13 @@
 # Mockery v3 configuration (upgraded v2.53.7 → v3.8.0, 2026-10-07; see tasks/plans/SWEEP-modernize-exception.md).
 # Regenerate with `make generate-mocks` (requires mockery v3, see scripts/dev/setup.sh).
 # Mocks cover the domain repository ports and the application ports so every
-# E06 handler and E07–E10 adapter builds against compiling fakes.
+# E06 handler and E07–E10 adapter builds against generated testify mocks.
 
 template: testify
+formatter: goimports
+formatter-options:
+  goimports:
+    local-prefix: github.com/kadekutama/go-template
 template-data:
   unroll-variadic: true
 packages:
@@ -85,6 +89,18 @@ packages:
       filename: "{{.InterfaceName}}.go"
       dir: test/mock/seed
       pkgname: mockseed
+  github.com/kadekutama/go-template/internal/infrastructure/egress:
+    config:
+      all: true
+      filename: "{{.InterfaceName}}.go"
+      dir: test/mock/egress
+      pkgname: mockegress
+  github.com/kadekutama/go-template/internal/infrastructure/fx:
+    config:
+      all: true
+      filename: "{{.InterfaceName}}.go"
+      dir: test/mock/fx
+      pkgname: mockfx
   github.com/kadekutama/go-template/internal/infrastructure/httpclient:
     config:
       all: true

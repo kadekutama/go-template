@@ -10,11 +10,19 @@
 package jsonparser
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 
 	"github.com/bytedance/sonic"
 )
+
+// Number is the stdlib JSON number literal type re-exported at the codec seam.
+// It lets callers decode a bare JSON number or a valid numeric string without
+// importing encoding/json outside this package. The literal spelling is
+// preserved (including exponent and trailing zeros), so callers own grammar
+// validation instead of receiving a float.
+type Number = json.Number
 
 // Marshal encodes v exactly as encoding/json does (via the compatible profile).
 func Marshal(v any) ([]byte, error) {

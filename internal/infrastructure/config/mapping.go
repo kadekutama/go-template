@@ -2,12 +2,15 @@ package config
 
 import (
 	"math"
+	"regexp"
 	"strings"
 	"time"
 
+	"github.com/kadekutama/go-template/internal/domain/entity"
 	"github.com/kadekutama/go-template/internal/infrastructure/auth/apikey"
 	"github.com/kadekutama/go-template/internal/infrastructure/cache/hybrid"
 	"github.com/kadekutama/go-template/internal/infrastructure/coordination/etcd"
+	"github.com/kadekutama/go-template/internal/infrastructure/fx"
 	"github.com/kadekutama/go-template/internal/infrastructure/httpclient"
 	"github.com/kadekutama/go-template/internal/infrastructure/logging"
 	"github.com/kadekutama/go-template/internal/infrastructure/messaging/redpanda"
@@ -182,4 +185,34 @@ func (c ObservabilityConfig) Logging() (logging.Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// APIKey resolves the FX provider credential from the environment variable
+// named by fx.api_key_env. The secret value never enters Config, YAML, or
+// logs; an unset/empty value or an invalid variable name fails closed.
+func (c FXConfig) APIKey(lookup func(string) (string, bool)) (string, error) {
+	if lookup == nil {
+		return "", entity.NewError(fx.CodeInvalidConfig, "fx: environment lookup is required")
+	}
+
+	name := strings.TrimSpace(c.APIKeyEnv)
+	if !isEnvVarName(name) {
+		return "", entity.NewError(fx.CodeInvalidConfig, "fx: api_key_env must be an uppercase environment variable name")
+	}
+
+	value, ok := lookup(name)
+	if !ok || strings.TrimSpace(value) == "" {
+		return "", entity.NewError(fx.CodeInvalidConfig, "fx: provider api key is not configured")
+	}
+
+	return value, nil
+}
+
+// envVarNamePattern matches an uppercase POSIX-style environment variable
+// name: A-Z, 0-9, and underscore, not starting with a digit.
+var envVarNamePattern = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
+
+// isEnvVarName reports whether name is an uppercase environment variable name.
+func isEnvVarName(name string) bool {
+	return envVarNamePattern.MatchString(name)
 }

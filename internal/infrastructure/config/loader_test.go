@@ -93,7 +93,7 @@ func TestMissingRequiredListsAllViolations(t *testing.T) {
 		t.Fatal("expected validation error, got nil")
 	}
 
-	for _, want := range []string{"Server", "Database", "Cache", "Auth", "NATS", "Redpanda", "Webhook", "Coordination", "Tenancy"} {
+	for _, want := range []string{"Server", "Database", "Cache", "Auth", "NATS", "Redpanda", "Webhook", "Coordination", "Tenancy", "FX"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error should name missing section %s, got: %v", want, err)
 		}
@@ -261,7 +261,7 @@ func TestSchemaAlignsWithStruct(t *testing.T) {
 		have[name] = true
 	}
 
-	for _, section := range []string{"app", "server", "database", "cache", "auth", "nats", "redpanda", "webhook", "coordination", "tenancy"} {
+	for _, section := range []string{"app", "server", "database", "cache", "auth", "nats", "redpanda", "webhook", "coordination", "tenancy", "fx"} {
 		if !have[section] {
 			t.Errorf("schema root required[] missing section %q", section)
 		}

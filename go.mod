@@ -3,7 +3,7 @@ module github.com/kadekutama/go-template
 go 1.27.3
 
 require (
-	github.com/99designs/gqlgen v0.17.97
+	github.com/99designs/gqlgen v0.17.98
 	github.com/Unleash/unleash-go-sdk/v6 v6.5.1
 	github.com/bytedance/sonic v1.15.4
 	github.com/casbin/casbin/v3 v3.11.0
@@ -141,7 +141,7 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/twmb/franz-go/pkg/kmsg v1.15.0 // indirect
 	github.com/twmb/murmur3 v1.1.8 // indirect
-	github.com/vektah/gqlparser/v2 v2.5.63 // indirect
+	github.com/vektah/gqlparser/v2 v2.5.64 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.7.2 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect

@@ -22,7 +22,7 @@ require (
 	github.com/knadh/koanf/providers/env/v2 v2.0.2
 	github.com/knadh/koanf/providers/file v1.2.1
 	github.com/knadh/koanf/v2 v2.4.1
-	github.com/labstack/echo/v5 v5.4.0
+	github.com/labstack/echo/v5 v5.4.2
 	github.com/maypok86/otter/v2 v2.4.0
 	github.com/moby/moby/api v1.56.1
 	github.com/nats-io/nats.go v1.54.0

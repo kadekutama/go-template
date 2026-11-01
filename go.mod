@@ -27,7 +27,7 @@ require (
 	github.com/moby/moby/api v1.56.1
 	github.com/nats-io/nats.go v1.54.0
 	github.com/nats-io/nkeys v0.4.16
-	github.com/nicksnyder/go-i18n/v2 v2.6.1
+	github.com/nicksnyder/go-i18n/v2 v2.7.0
 	github.com/open-feature/go-sdk v1.19.0
 	github.com/pressly/goose/v3 v3.29.0
 	github.com/redis/go-redis/v9 v9.23.0
